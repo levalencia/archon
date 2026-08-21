@@ -1,4 +1,5 @@
 """Unit tests for LLM adapters. All use MockLLM or mock httpx responses."""
+
 from __future__ import annotations
 
 import json
@@ -54,9 +55,7 @@ class TestOpenAIAdapter:
             "usage": {"prompt_tokens": 10, "completion_tokens": 5},
         }
 
-        transport = httpx.MockTransport(
-            lambda request: httpx.Response(200, json=mock_response)
-        )
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=mock_response))
         adapter = OpenAIAdapter(api_key="test-key", model="gpt-4o")
         adapter._client = httpx.AsyncClient(
             transport=transport, base_url="https://api.openai.com/v1"
@@ -91,9 +90,7 @@ class TestAnthropicAdapter:
             "usage": {"input_tokens": 10, "output_tokens": 5},
         }
 
-        transport = httpx.MockTransport(
-            lambda request: httpx.Response(200, json=mock_response)
-        )
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=mock_response))
         adapter = AnthropicAdapter(api_key="test-key")
         adapter._client = httpx.AsyncClient(
             transport=transport, base_url="https://api.anthropic.com/v1"
@@ -125,10 +122,12 @@ class TestAnthropicAdapter:
             transport=transport, base_url="https://api.anthropic.com/v1"
         )
 
-        await adapter.chat([
-            {"role": "system", "content": "You are helpful"},
-            {"role": "user", "content": "hi"},
-        ])
+        await adapter.chat(
+            [
+                {"role": "system", "content": "You are helpful"},
+                {"role": "user", "content": "hi"},
+            ]
+        )
 
         payload = received_payloads[0]
         assert payload["system"] == "You are helpful"
@@ -147,9 +146,7 @@ class TestFoundryAdapter:
             "usage": {"input_tokens": 10, "output_tokens": 5},
         }
 
-        transport = httpx.MockTransport(
-            lambda request: httpx.Response(200, json=mock_response)
-        )
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=mock_response))
         adapter = FoundryAdapter(
             api_key="test-key",
             base_url="https://foundry.example.com/anthropic",
@@ -209,13 +206,9 @@ class TestOllamaAdapter:
             "eval_count": 42,
         }
 
-        transport = httpx.MockTransport(
-            lambda request: httpx.Response(200, json=mock_response)
-        )
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=mock_response))
         adapter = OllamaAdapter(model="llama3")
-        adapter._client = httpx.AsyncClient(
-            transport=transport, base_url="http://localhost:11434"
-        )
+        adapter._client = httpx.AsyncClient(transport=transport, base_url="http://localhost:11434")
 
         result = await adapter.chat([{"role": "user", "content": "hi"}])
         assert result == "Hello from Ollama!"
