@@ -1,4 +1,4 @@
-"""FastAPI application with structured lifespan."""
+"""Archon: Production AI Agent Webapp — FastAPI application."""
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
+from app.middleware.correlation import CorrelationIdMiddleware
+from app.observability.logging import setup_logging
 
 logger = structlog.get_logger()
 
@@ -17,6 +20,9 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: startup and shutdown."""
     settings = get_settings()
+
+    # Configure structured logging
+    setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
 
     logger.info(
         "archon_starting",
@@ -46,7 +52,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Health check endpoints
+    # --- Middleware (order matters: last added = first executed) ---
+
+    # CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://localhost:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["X-Correlation-ID"],
+    )
+
+    # Correlation ID injection
+    app.add_middleware(CorrelationIdMiddleware)
+
+    # --- Routes ---
+
     @app.get("/healthz")
     async def healthz() -> dict:
         """Liveness probe."""

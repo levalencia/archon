@@ -1,4 +1,5 @@
 """Tests for structured logging and correlation ID management."""
+
 from __future__ import annotations
 
 import pytest

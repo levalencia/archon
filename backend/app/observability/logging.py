@@ -10,6 +10,7 @@ Every log entry includes:
 See: https://github.com/levalencia/production-ai-agents/articles/day-01-anatomy-of-production-agent/
 Concept: Layer 6 - Observability
 """
+
 from __future__ import annotations
 
 import uuid
