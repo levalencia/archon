@@ -40,70 +40,69 @@ Think: **Perplexity meets ChatGPT meets an enterprise audit dashboard** — a co
 
 ### 2.1 System Overview
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (Svelte/SvelteKit)               │
-│  ┌──────────┐  ┌──────────────┐  ┌───────────┐  ┌────────────┐  │
-│  │ Chat UI  │  │ Trace Viewer │  │ Doc Upload│  │ Admin Panel│  │
-│  │(streaming│  │ (OTel spans) │  │ & RAG     │  │ (metrics,  │  │
-│  │ SSE)     │  │              │  │ explorer  │  │  audit)    │  │
-│  └────┬─────┘  └──────┬───────┘  └─────┬─────┘  └─────┬──────┘  │
-│       │               │                │              │          │
-│       └───────────────┴────────────────┴──────────────┘          │
-│                              │ REST + SSE                        │
-└──────────────────────────────┼────────────────────────────────────┘
-                               │
-┌──────────────────────────────┼────────────────────────────────────┐
-│                     API GATEWAY (FastAPI)                         │
-│  ┌─────────┐  ┌──────────┐  ┌───────────┐  ┌─────────────────┐  │
-│  │ Auth    │  │ Rate     │  │ CORS/CSRF │  │ Request         │  │
-│  │ (JWT +  │  │ Limiter  │  │ + Input   │  │ Correlation ID  │  │
-│  │ API Key)│  │ (Redis)  │  │ Sanitize  │  │ Injection       │  │
-│  └─────────┘  └──────────┘  └───────────┘  └─────────────────┘  │
-└──────────────────────────────┼────────────────────────────────────┘
-                               │
-┌──────────────────────────────┼────────────────────────────────────┐
-│                    AGENT ORCHESTRATOR                             │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐     │
-│  │              Coordinator Agent (ReAct Loop)              │     │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐  │     │
-│  │  │ Planner  │ │Retriever │ │Validator │ │Synthesizer│  │     │
-│  │  │ Agent    │ │ Agent    │ │ Agent    │ │ Agent     │  │     │
-│  │  │(query    │ │(RAG +    │ │(fact     │ │(answer +  │  │     │
-│  │  │ decomp)  │ │ search)  │ │ check +  │ │ citations │  │     │
-│  │  │          │ │          │ │ PII +    │ │ + XAI)    │  │     │
-│  │  │          │ │          │ │ guardrail│ │           │  │     │
-│  │  └──────────┘ └──────────┘ └──────────┘ └───────────┘  │     │
-│  └─────────────────────────────────────────────────────────┘     │
-│                                                                  │
-│  Cross-Cutting:                                                  │
-│  ┌───────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐     │
-│  │ Circuit   │ │ Tool     │ │ Memory   │ │ Audit Logger   │     │
-│  │ Breaker   │ │ Registry │ │ Manager  │ │ (correlation   │     │
-│  │ (per LLM  │ │ (secure, │ │ (tiered, │ │  IDs, SQLite   │     │
-│  │  provider)│ │  timeout) │ │  encrypt)│ │  + Log Analyt.)│     │
-│  └───────────┘ └──────────┘ └──────────┘ └────────────────┘     │
-└──────────────────────────────┼────────────────────────────────────┘
-                               │
-┌──────────────────────────────┼────────────────────────────────────┐
-│                    INFRASTRUCTURE LAYER                           │
-│  ┌───────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────────┐    │
-│  │PostgreSQL │ │ Redis    │ │ Vector   │ │ Azure Blob      │    │
-│  │(state,    │ │(rate     │ │ DB       │ │ (documents,     │    │
-│  │ audit,    │ │ limit,   │ │(pgvector │ │  uploads)       │    │
-│  │ memory)   │ │ cache,   │ │ or       │ │                 │    │
-│  │           │ │ circuit  │ │ Qdrant)  │ │                 │    │
-│  │           │ │ breaker) │ │          │ │                 │    │
-│  └───────────┘ └──────────┘ └──────────┘ └─────────────────┘    │
-│                                                                  │
-│  ┌───────────────────────────────────────────────────────────┐   │
-│  │              OpenTelemetry Collector                       │   │
-│  │  → Azure Monitor / Jaeger (traces)                        │   │
-│  │  → Prometheus (metrics)                                   │   │
-│  │  → Azure Log Analytics (structured logs)                  │   │
-│  └───────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Frontend["Frontend - SvelteKit"]
+        CHAT[Chat UI - SSE Streaming]
+        TRACE[Trace Viewer - OTel Spans]
+        DOCS[Document Upload and RAG Explorer]
+        ADMIN[Admin Panel - Metrics and Audit]
+    end
+
+    subgraph Gateway["API Gateway - FastAPI"]
+        AUTH[JWT and API Key Auth]
+        RATE[Redis Rate Limiter]
+        CORS[CORS and CSRF and Input Sanitization]
+        CORR[Correlation ID Injection]
+    end
+
+    subgraph Orchestrator["Agent Orchestrator"]
+        COORD[Coordinator Agent - ReAct Loop]
+        PLAN[Planner Agent - query decomposition]
+        RET[Retriever Agent - RAG and search]
+        VAL[Validator Agent - fact check and PII and guardrails]
+        SYNTH[Synthesizer Agent - answer and citations]
+    end
+
+    subgraph CrossCutting["Cross-Cutting Concerns"]
+        CB[Circuit Breaker - per provider]
+        TOOLS[Secure Tool Registry - timeout enforced]
+        MEM[Tiered Memory Manager - encrypted]
+        AUDIT[Structured Audit Logger - correlation IDs]
+    end
+
+    subgraph Infra["Infrastructure"]
+        PG[(PostgreSQL + pgvector)]
+        REDIS[(Redis)]
+        BLOB[(Azure Blob Storage)]
+        OTEL[OpenTelemetry Collector]
+        JAEGER[Jaeger - traces]
+        PROM[Prometheus - metrics]
+    end
+
+    Frontend -->|REST and SSE| Gateway
+    Gateway --> Orchestrator
+    COORD --> PLAN
+    COORD --> RET
+    COORD --> VAL
+    COORD --> SYNTH
+    Orchestrator --> CrossCutting
+    TOOLS --> AUDIT
+    MEM --> PG
+    MEM --> REDIS
+    CB --> REDIS
+    RATE --> REDIS
+    RET --> PG
+    AUDIT --> PG
+    CrossCutting --> Infra
+    OTEL --> JAEGER
+    OTEL --> PROM
+
+    style Frontend fill:#1a1a2e,stroke:#58a6ff,color:#c9d1d9
+    style Gateway fill:#1a1a2e,stroke:#f39c12,color:#c9d1d9
+    style Orchestrator fill:#1a1a2e,stroke:#e94560,color:#c9d1d9
+    style CrossCutting fill:#1a1a2e,stroke:#2ecc71,color:#c9d1d9
+    style Infra fill:#1a1a2e,stroke:#9b59b6,color:#c9d1d9
 ```
 
 ### 2.2 The 5-Layer Architecture (from Course 1 Day 1)
@@ -119,13 +118,20 @@ Think: **Perplexity meets ChatGPT meets an enterprise audit dashboard** — a co
 ### 2.3 Agent Architecture Detail
 
 #### Coordinator Agent (ReAct Loop)
-```
-Input → [Plan] → [Act] → [Observe] → [Reflect] → [Act...] → Output
-          │          │         │            │
-          │          │         │            └─ Self-correction (Reflexion, Adv L33)
-          │          │         └─ Tool result observation
-          │          └─ Dispatch to specialist or call tool
-          └─ Query decomposition into sub-tasks
+
+```mermaid
+flowchart LR
+    INPUT[User Input] --> PLAN_STEP[Plan - decompose query]
+    PLAN_STEP --> ACT[Act - dispatch to specialist or call tool]
+    ACT --> OBSERVE[Observe - tool result]
+    OBSERVE --> REFLECT{Reflect - done?}
+    REFLECT -->|Need more data| ACT
+    REFLECT -->|Quality issue| CORRECT[Self-correction via Reflexion]
+    CORRECT --> ACT
+    REFLECT -->|Satisfied| OUTPUT[Final Output]
+
+    style REFLECT fill:#1a1a2e,stroke:#f39c12,color:#f39c12
+    style CORRECT fill:#1a1a2e,stroke:#e94560,color:#e94560
 ```
 
 The Coordinator implements:
