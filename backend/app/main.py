@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import Settings, get_settings
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.observability.logging import setup_logging
+from app.routes.chat import router as chat_router
 
 logger = structlog.get_logger()
 
@@ -68,6 +69,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(CorrelationIdMiddleware)
 
     # --- Routes ---
+
+    app.include_router(chat_router)
 
     @app.get("/healthz")
     async def healthz() -> dict:
