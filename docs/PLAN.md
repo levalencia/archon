@@ -159,6 +159,51 @@ The Coordinator implements:
 
 ## 3. Tech Stack Decisions
 
+### 3.0 Architecture Principles (Non-Negotiable)
+
+| Principle | What it means | How we enforce it |
+|---|---|---|
+| **Zero framework lock-in** | No LangChain, no AutoGen, no CrewAI. Pure Python + Protocols. | Code review rejects any langchain/autogen/crewai import |
+| **100% local first** | Everything runs with `docker compose up`. No cloud dependencies until explicitly deploying. | CI tests run against Docker Compose, not cloud services |
+| **Provider swappable** | User changes LLM provider via .env (Foundry, OpenAI, Anthropic, Ollama). Core never imports SDK. | LLMClient Protocol + adapter factory from env |
+| **Skills and MCP native** | Agent can load skills from GitHub repos and connect to MCP tool servers | Skill registry + MCP client built into agent core |
+
+### 3.0.1 Skills System
+
+The agent can discover and use **skills** (structured knowledge files) at runtime:
+
+- User can add skill repos (GitHub URLs) in settings
+- Agent searches skills by relevance to the current query
+- Skills provide domain expertise, tool configurations, and procedures
+- Output shows which skills were used and why (transparency)
+- Similar to god-mode search but integrated into the agent reasoning loop
+
+### 3.0.2 MCP Tool Integration
+
+The agent can connect to **MCP (Model Context Protocol) servers**:
+
+- User configures MCP servers in settings (stdio or HTTP)
+- Agent discovers available tools at startup
+- Tools are registered in the SecureToolRegistry with permissions
+- Any MCP-compatible tool server works (Foundry, custom, community)
+
+### 3.0.3 Local-First Docker Compose
+
+One command runs everything:
+
+```yaml
+# docker-compose.yml
+services:
+  backend:     # FastAPI on port 8000
+  frontend:    # SvelteKit on port 3000
+  postgres:    # PostgreSQL + pgvector on port 5432
+  redis:       # Rate limiter, cache, circuit breaker on port 6379
+  jaeger:      # Trace viewer UI on port 16686
+  prometheus:  # Metrics on port 9090
+```
+
+No Azure, no AWS, no cloud accounts needed. Deploy to cloud is Phase 8 (optional).
+
 ### 3.1 Frontend
 
 | Choice | Rationale |
