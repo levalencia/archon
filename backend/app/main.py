@@ -19,6 +19,7 @@ from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
 from app.routes.documents import router as documents_router
 from app.routes.images import router as images_router
+from app.routes.red_team import router as red_team_router
 from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
 
@@ -83,6 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(documents_router)
     app.include_router(admin_router)
     app.include_router(security_router)
+    app.include_router(red_team_router)
     app.include_router(skills_router)
     app.include_router(auth_router)
     app.include_router(artifacts_router)

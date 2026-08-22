@@ -1,4 +1,5 @@
 """Tests for new features: auth, context optimizer, eval upgrades, metrics."""
+
 from __future__ import annotations
 
 import pytest
@@ -119,7 +120,9 @@ class TestEvaluators:
     @pytest.mark.unit
     def test_faithfulness_grounded(self) -> None:
         answer = "Python is a programming language for web development."
-        context = "Python is a popular programming language used for web development and data science."
+        context = (
+            "Python is a popular programming language used for web development and data science."
+        )
         score = evaluate_faithfulness(answer, context)
         assert score.score > 0.5
 
