@@ -24,7 +24,7 @@ class CircuitState(Enum):
     HALF_OPEN = "half_open"
 
 
-class CircuitBreakerOpen(Exception):
+class CircuitBreakerOpenError(Exception):
     """Raised when circuit is open and rejecting calls."""
 
     def __init__(self, recovery_time: float) -> None:
@@ -78,7 +78,7 @@ class CircuitBreaker:
                 state="open",
                 recovery_in=round(remaining, 1),
             )
-            raise CircuitBreakerOpen(remaining)
+            raise CircuitBreakerOpenError(remaining)
 
         if current_state == CircuitState.HALF_OPEN:
             logger.info("circuit_breaker_trial", name=self.name)
@@ -92,7 +92,7 @@ class CircuitBreaker:
             self._on_success()
             return result
 
-        except CircuitBreakerOpen:
+        except CircuitBreakerOpenError:
             raise
         except Exception:
             self._on_failure()

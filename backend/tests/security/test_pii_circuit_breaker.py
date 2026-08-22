@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.security.circuit_breaker import CircuitBreaker, CircuitBreakerOpen, CircuitState
+from app.security.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, CircuitState
 from app.security.pii_detector import PIIDetector
 
 
@@ -107,7 +107,7 @@ class TestCircuitBreaker:
         with pytest.raises(ConnectionError):
             await cb.call(lambda: (_ for _ in ()).throw(ConnectionError("fail")))
 
-        with pytest.raises(CircuitBreakerOpen):
+        with pytest.raises(CircuitBreakerOpenError):
             await cb.call(lambda: "should not run")
 
     @pytest.mark.unit

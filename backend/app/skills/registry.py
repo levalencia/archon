@@ -67,7 +67,6 @@ class SkillRegistry:
         scored: list[tuple[float, Skill]] = []
         for skill in self._skills.values():
             score = 0.0
-            text = f"{skill.name} {skill.description} {' '.join(skill.tags)}".lower()
 
             for word in query_words:
                 if word in skill.name.lower():
@@ -156,7 +155,7 @@ def create_default_skills() -> SkillRegistry:
         Skill(
             name="research-assistant",
             description="Help users research topics with web search and document analysis",
-            content="Use web_search tool for current information. Use document query for uploaded docs.",
+            content="Use web_search for current info. Use document query for uploads.",
             tags=["research", "search", "rag"],
         )
     )

@@ -158,7 +158,7 @@ class SecureToolRegistry:
                     correlation_id=correlation_id,
                     security_level="error",
                 )
-            raise TimeoutError(f"Tool '{tool_name}' timed out after {tool.timeout}s")
+            raise TimeoutError(f"Tool '{tool_name}' timed out after {tool.timeout}s") from None
         except Exception as e:
             logger.error(
                 "tool_error",

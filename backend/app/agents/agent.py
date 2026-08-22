@@ -269,7 +269,10 @@ class ProductionAgent:
             correlation_id=correlation_id,
         )
 
-        fallback = "I reached the maximum number of reasoning steps. Here is what I found so far based on the tool results."
+        fallback = (
+            "I reached the maximum number of reasoning steps. "
+            "Here is what I found so far based on the tool results."
+        )
 
         if self.memory:
             await self.memory.store(conversation_id, "user", user_input)

@@ -203,7 +203,7 @@ def register_builtin_tools(registry: object) -> None:
     registry.register(
         name="calculator",
         handler=calculator_tool,
-        description="Evaluate mathematical expressions (supports +, -, *, /, sqrt, sin, cos, log, pi)",
+        description="Evaluate math expressions (+, -, *, /, sqrt, sin, cos, log, pi)",
         input_schema={"required": ["expression"]},
         timeout=5,
     )

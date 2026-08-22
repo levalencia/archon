@@ -73,7 +73,7 @@ class TestTracer:
 
     @pytest.mark.unit
     def test_nested_spans(self, tracer: Tracer) -> None:
-        with tracer.start_span("parent") as parent, tracer.start_span("child") as child:
+        with tracer.start_span("parent") as _parent, tracer.start_span("child") as child:
             child.set_attribute("level", "child")
 
         spans = tracer.get_recent_spans()

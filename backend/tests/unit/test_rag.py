@@ -233,7 +233,7 @@ class TestRAGPipeline:
         result = await pipeline.ingest_document(
             document_id="doc-1",
             title="Python Guide",
-            content="Python is a programming language. It is used for web development, data science, and AI.",
+            content="Python is a programming language. Used for web dev, data science, AI.",
             source="guide.pdf",
         )
         assert result["document_id"] == "doc-1"

@@ -115,13 +115,13 @@ class Tracer:
 
             @functools.wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-                with self.start_span(span_name, attributes) as span:
+                with self.start_span(span_name, attributes) as _span:
                     result = await func(*args, **kwargs)
                     return result
 
             @functools.wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-                with self.start_span(span_name, attributes) as span:
+                with self.start_span(span_name, attributes) as _span:
                     result = func(*args, **kwargs)
                     return result
 

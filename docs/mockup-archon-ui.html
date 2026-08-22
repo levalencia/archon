@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Archon — AI Research Assistant</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #1c2128;
+    --bg-hover: #21262d;
+    --bg-input: #0d1117;
+    --border: #30363d;
+    --border-light: #21262d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --accent-glow: rgba(88, 166, 255, 0.15);
+    --success: #3fb950;
+    --warning: #d29922;
+    --error: #f85149;
+    --purple: #bc8cff;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* === SIDEBAR === */
+  .sidebar {
+    width: 280px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    color: white;
+  }
+
+  .sidebar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .sidebar-subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  .new-chat-btn {
+    margin: 12px 16px;
+    padding: 10px 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+  }
+
+  .new-chat-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+  }
+
+  .conversations {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .conv-item {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: background 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .conv-item:hover { background: var(--bg-hover); }
+  .conv-item.active { background: var(--accent-glow); border: 1px solid rgba(88,166,255,0.2); }
+
+  .conv-icon { color: var(--text-muted); font-size: 14px; }
+  .conv-title { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .conv-item.active .conv-title { color: var(--text-primary); }
+
+  .sidebar-section {
+    padding: 12px 16px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+  }
+
+  .sidebar-footer-btn {
+    flex: 1;
+    padding: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+
+  .sidebar-footer-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  /* === MAIN CONTENT === */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* === TOP BAR === */
+  .topbar {
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    background: var(--bg-secondary);
+  }
+
+  .model-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .model-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+
+  .topbar-spacer { flex: 1; }
+
+  .topbar-btn {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+  }
+
+  .topbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .topbar-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+
+  /* === CHAT AREA === */
+  .chat-container {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .message {
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 24px;
+    margin-bottom: 24px;
+  }
+
+  .message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .message-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .message-avatar.user { background: var(--accent); color: white; }
+  .message-avatar.assistant { background: linear-gradient(135deg, var(--accent), var(--purple)); color: white; }
+
+  .message-sender {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .message-time {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .message-content {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    padding-left: 36px;
+  }
+
+  .message-content p { margin-bottom: 12px; }
+  .message-content code {
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--accent);
+  }
+
+  .message-content pre {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+
+  .message-content pre code {
+    background: none;
+    padding: 0;
+    color: var(--text-primary);
+  }
+
+  /* === THINKING PANEL === */
+  .thinking-panel {
+    margin: 8px 0 12px 36px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .thinking-header {
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .thinking-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--warning);
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .thinking-steps {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .thinking-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .step-icon { font-size: 12px; margin-top: 1px; }
+  .step-icon.done { color: var(--success); }
+  .step-icon.active { color: var(--warning); }
+  .step-label { color: var(--text-secondary); }
+  .step-detail { color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; }
+
+  /* === SOURCES === */
+  .sources {
+    margin: 12px 0 0 36px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .source-chip {
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .source-chip:hover { border-color: var(--accent); color: var(--accent); }
+  .source-score { color: var(--success); font-family: var(--font-mono); font-size: 11px; }
+
+  /* === INPUT BAR === */
+  .input-container {
+    padding: 16px 24px 24px;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .input-bar {
+    display: flex;
+    align-items: flex-end;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 8px;
+    transition: border-color 0.2s;
+    box-shadow: var(--shadow-md);
+  }
+
+  .input-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+
+  .input-textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    resize: none;
+    padding: 8px 12px;
+    max-height: 200px;
+    line-height: 1.5;
+  }
+
+  .input-textarea::placeholder { color: var(--text-muted); }
+
+  .input-actions {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .input-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.15s;
+  }
+
+  .input-btn.attach { background: transparent; color: var(--text-muted); }
+  .input-btn.attach:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .input-btn.send { background: var(--accent); color: white; }
+  .input-btn.send:hover { background: var(--accent-hover); }
+
+  .input-hints {
+    display: flex;
+    gap: 12px;
+    padding: 8px 4px 0;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .input-hint { display: flex; align-items: center; gap: 4px; }
+  .hint-key { padding: 1px 5px; background: var(--bg-tertiary); border-radius: 3px; font-family: var(--font-mono); font-size: 10px; }
+
+  /* === RIGHT PANEL (TRACE VIEWER) === */
+  .right-panel {
+    width: 340px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-tab {
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .panel-tab.active { background: var(--accent-glow); color: var(--accent); }
+  .panel-tab:hover { color: var(--text-primary); }
+
+  .panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  /* Trace waterfall */
+  .trace-entry {
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 4px;
+    font-size: 12px;
+    border-left: 3px solid transparent;
+  }
+
+  .trace-entry.llm { border-left-color: var(--accent); background: rgba(88,166,255,0.05); }
+  .trace-entry.tool { border-left-color: var(--success); background: rgba(63,185,80,0.05); }
+  .trace-entry.security { border-left-color: var(--warning); background: rgba(210,153,34,0.05); }
+  .trace-entry.error { border-left-color: var(--error); background: rgba(248,81,73,0.05); }
+
+  .trace-name { font-weight: 500; color: var(--text-primary); margin-bottom: 2px; }
+  .trace-meta { color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; display: flex; gap: 8px; }
+
+  .trace-bar {
+    height: 4px;
+    border-radius: 2px;
+    margin-top: 4px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .trace-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    position: absolute;
+    left: 0;
+  }
+
+  .trace-bar-fill.llm { background: var(--accent); }
+  .trace-bar-fill.tool { background: var(--success); }
+
+  /* Stats cards */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .stat-card {
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .stat-value { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+  .stat-value.success { color: var(--success); }
+  .stat-value.warning { color: var(--warning); }
+
+  /* Security badges */
+  .security-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .security-badge.safe { background: rgba(63,185,80,0.15); color: var(--success); }
+  .security-badge.warning { background: rgba(210,153,34,0.15); color: var(--warning); }
+  .security-badge.blocked { background: rgba(248,81,73,0.15); color: var(--error); }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">A</div>
+    <div>
+      <div class="sidebar-title">Archon</div>
+      <div class="sidebar-subtitle">Production AI Agent</div>
+    </div>
+  </div>
+
+  <button class="new-chat-btn">+ New Conversation</button>
+
+  <div class="sidebar-section">Today</div>
+  <div class="conversations">
+    <div class="conv-item active">
+      <span class="conv-icon">💬</span>
+      <span class="conv-title">Research: AI Agent Patterns</span>
+    </div>
+    <div class="conv-item">
+      <span class="conv-icon">📄</span>
+      <span class="conv-title">Analyze quarterly report</span>
+    </div>
+    <div class="conv-item">
+      <span class="conv-icon">🔍</span>
+      <span class="conv-title">Python best practices</span>
+    </div>
+  </div>
+
+  <div class="sidebar-section">Yesterday</div>
+  <div class="conversations">
+    <div class="conv-item">
+      <span class="conv-icon">🧮</span>
+      <span class="conv-title">Revenue calculations</span>
+    </div>
+    <div class="conv-item">
+      <span class="conv-icon">🛡️</span>
+      <span class="conv-title">Security audit review</span>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <button class="sidebar-footer-btn">📊 Dashboard</button>
+    <button class="sidebar-footer-btn">⚙️ Settings</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="model-selector">
+      <div class="model-dot"></div>
+      Claude Opus 4.6 (Foundry)
+      <span style="color: var(--text-muted)">▾</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <button class="topbar-btn">📎 Upload</button>
+    <button class="topbar-btn active">🔍 Trace</button>
+    <button class="topbar-btn">🛡️ Security</button>
+  </div>
+
+  <div class="chat-container">
+    <!-- CHAT MESSAGES -->
+    <div class="chat-area">
+
+      <!-- User message -->
+      <div class="message">
+        <div class="message-header">
+          <div class="message-avatar user">L</div>
+          <span class="message-sender">Luis</span>
+          <span class="message-time">2 min ago</span>
+        </div>
+        <div class="message-content">
+          <p>What are the key architecture patterns for production AI agents in 2026? I uploaded a research paper about it.</p>
+        </div>
+      </div>
+
+      <!-- Assistant message -->
+      <div class="message">
+        <div class="message-header">
+          <div class="message-avatar assistant">A</div>
+          <span class="message-sender">Archon</span>
+          <span class="message-time">1 min ago</span>
+          <span class="security-badge safe">✓ PII-free</span>
+          <span class="security-badge safe">✓ Grounded</span>
+        </div>
+
+        <!-- Thinking panel -->
+        <div class="thinking-panel">
+          <div class="thinking-header">
+            <span class="step-icon done">✓</span>
+            <span>Reasoning complete — 4 steps, 3 tools, 1.2s</span>
+          </div>
+          <div class="thinking-steps">
+            <div class="thinking-step">
+              <span class="step-icon done">✓</span>
+              <span class="step-label">Planner:</span>
+              <span class="step-detail">Decomposed into 3 sub-questions</span>
+            </div>
+            <div class="thinking-step">
+              <span class="step-icon done">✓</span>
+              <span class="step-label">Retriever:</span>
+              <span class="step-detail">Searched 12 chunks, found 5 relevant (score > 0.82)</span>
+            </div>
+            <div class="thinking-step">
+              <span class="step-icon done">✓</span>
+              <span class="step-label">Validator:</span>
+              <span class="step-detail">Fact-checked against sources ✓ PII scan clean ✓</span>
+            </div>
+            <div class="thinking-step">
+              <span class="step-icon done">✓</span>
+              <span class="step-label">Synthesizer:</span>
+              <span class="step-detail">Generated answer with 3 citations</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="message-content">
+          <p>Based on your uploaded paper and current research, there are <strong>six key architecture patterns</strong> that have emerged for production AI agents in 2026:</p>
+
+          <p><strong>1. Layered Architecture (6-Layer Stack)</strong><br>
+          The O'Reilly "AI Agents Stack" identifies six layers: Model Serving, Tools (MCP), Memory, Frameworks/Orchestration, Eval, and Guardrails. Every successful deployment implements all six.</p>
+
+          <p><strong>2. ReAct Reasoning Loops</strong><br>
+          The <code>Think → Act → Observe → Repeat</code> pattern remains the production standard, with <strong>circuit breakers</strong> and <strong>iteration caps</strong> to prevent runaway execution.</p>
+
+          <p><strong>3. Multi-Agent Orchestration</strong><br>
+          Coordinator agents delegate to specialists (Planner, Retriever, Validator, Synthesizer) via typed capability contracts and a coordination bus.</p>
+
+          <pre><code>coordinator = AgentCoordinator(
+    planner=PlannerAgent(llm),
+    retriever=RetrieverAgent(llm),
+    validator=ValidatorAgent(llm),
+    synthesizer=SynthesizerAgent(llm),
+)</code></pre>
+
+          <p><strong>4. Agentic RAG</strong><br>
+          Moving beyond naive retrieval to agent-driven search: the agent decides when to search, what to search for, and whether results are sufficient before answering.</p>
+
+          <p><strong>5. Protocol-Based DI</strong><br>
+          Using Python Protocols (not inheritance) for vendor-neutral components. Every adapter satisfies an interface — swap providers without changing agent code.</p>
+
+          <p><strong>6. Observability-First</strong><br>
+          OpenTelemetry traces with <strong>correlation IDs</strong> linking every step: LLM call → tool execution → permission check → audit log. Without this, production debugging is impossible.</p>
+        </div>
+
+        <!-- Sources -->
+        <div class="sources">
+          <div class="source-chip">
+            📄 research-paper.pdf (p.12)
+            <span class="source-score">0.94</span>
+          </div>
+          <div class="source-chip">
+            📄 research-paper.pdf (p.28)
+            <span class="source-score">0.87</span>
+          </div>
+          <div class="source-chip">
+            📄 research-paper.pdf (p.5)
+            <span class="source-score">0.82</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spacer for input -->
+      <div style="height: 120px;"></div>
+    </div>
+
+    <!-- RIGHT PANEL: TRACE VIEWER -->
+    <div class="right-panel">
+      <div class="panel-header">
+        <div class="panel-tab active">Trace</div>
+        <div class="panel-tab">Audit</div>
+        <div class="panel-tab">Metrics</div>
+      </div>
+
+      <div class="panel-content">
+        <!-- Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Latency</div>
+            <div class="stat-value">1.2s</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Tokens</div>
+            <div class="stat-value">1,847</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Tools</div>
+            <div class="stat-value success">3</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Iterations</div>
+            <div class="stat-value">4</div>
+          </div>
+        </div>
+
+        <!-- Trace waterfall -->
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">TRACE WATERFALL</div>
+
+        <div class="trace-entry llm">
+          <div class="trace-name">LLM: Planning</div>
+          <div class="trace-meta">
+            <span>claude-opus-4-6</span>
+            <span>320 tokens</span>
+            <span>180ms</span>
+          </div>
+          <div class="trace-bar"><div class="trace-bar-fill llm" style="width: 15%; left: 0;"></div></div>
+        </div>
+
+        <div class="trace-entry tool">
+          <div class="trace-name">Tool: vector_search</div>
+          <div class="trace-meta">
+            <span>pgvector</span>
+            <span>12 chunks</span>
+            <span>45ms</span>
+          </div>
+          <div class="trace-bar"><div class="trace-bar-fill tool" style="width: 4%; left: 15%;"></div></div>
+        </div>
+
+        <div class="trace-entry llm">
+          <div class="trace-name">LLM: Reranking</div>
+          <div class="trace-meta">
+            <span>claude-opus-4-6</span>
+            <span>890 tokens</span>
+            <span>420ms</span>
+          </div>
+          <div class="trace-bar"><div class="trace-bar-fill llm" style="width: 35%; left: 19%;"></div></div>
+        </div>
+
+        <div class="trace-entry security">
+          <div class="trace-name">Security: PII Scan</div>
+          <div class="trace-meta">
+            <span>0 entities</span>
+            <span>8ms</span>
+            <span class="security-badge safe" style="font-size: 10px;">clean</span>
+          </div>
+          <div class="trace-bar"><div class="trace-bar-fill tool" style="width: 1%; left: 54%;"></div></div>
+        </div>
+
+        <div class="trace-entry llm">
+          <div class="trace-name">LLM: Synthesis</div>
+          <div class="trace-meta">
+            <span>claude-opus-4-6</span>
+            <span>637 tokens</span>
+            <span>540ms</span>
+          </div>
+          <div class="trace-bar"><div class="trace-bar-fill llm" style="width: 45%; left: 55%;"></div></div>
+        </div>
+
+        <div style="margin-top: 16px; font-size: 11px; color: var(--text-muted); font-weight: 600;">CORRELATION ID</div>
+        <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px; margin-top: 4px;">
+          f9d50fdd-c105-4745-a0b8
+        </div>
+
+        <div style="margin-top: 16px; font-size: 11px; color: var(--text-muted); font-weight: 600;">CIRCUIT BREAKERS</div>
+        <div style="margin-top: 6px;">
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--success);"></span>
+            claude-opus — CLOSED (0 failures)
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--success);"></span>
+            pgvector — CLOSED (0 failures)
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; font-size: 11px; color: var(--text-muted); font-weight: 600;">SKILLS USED</div>
+        <div style="margin-top: 6px;">
+          <div class="source-chip" style="margin-bottom: 4px;">
+            🔍 research-assistant
+          </div>
+          <div class="source-chip">
+            📊 data-extraction
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INPUT -->
+  <div class="input-container">
+    <div class="input-bar">
+      <textarea class="input-textarea" rows="1" placeholder="Ask Archon anything... (uploads, research, analysis)"></textarea>
+      <div class="input-actions">
+        <button class="input-btn attach" title="Upload document">📎</button>
+        <button class="input-btn send" title="Send message">↑</button>
+      </div>
+    </div>
+    <div class="input-hints">
+      <span class="input-hint"><span class="hint-key">Enter</span> Send</span>
+      <span class="input-hint"><span class="hint-key">Shift+Enter</span> New line</span>
+      <span class="input-hint">Model: Claude Opus 4.6 via Azure Foundry</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

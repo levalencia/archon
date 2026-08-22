@@ -142,7 +142,7 @@ class EvalHarness:
 
         try:
             # Call the agent function
-            if hasattr(self._agent_fn, "__call__"):
+            if callable(self._agent_fn):
                 response = await self._agent_fn(case.input)  # type: ignore[misc]
             else:
                 response = str(self._agent_fn)
@@ -171,10 +171,7 @@ class EvalHarness:
                 checks["latency"] = latency_ms <= case.max_latency_ms
 
             # Calculate score
-            if checks:
-                score = sum(1 for v in checks.values() if v) / len(checks)
-            else:
-                score = 1.0  # No checks = pass by default
+            score = sum(1 for v in checks.values() if v) / len(checks) if checks else 1.0
 
             passed = all(checks.values()) if checks else True
 

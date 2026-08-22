@@ -219,7 +219,7 @@ class TestAgentMemory:
         memory = SimpleMemory()
         agent = ProductionAgent(llm=llm, memory=memory)
 
-        result = await agent.run("Hello!", conversation_id="conv-1")
+        await agent.run("Hello!", conversation_id="conv-1")
 
         history = await memory.retrieve("conv-1")
         assert len(history) == 2

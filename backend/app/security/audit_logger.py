@@ -65,7 +65,8 @@ class StructuredAuditLogger:
         """Log an auditable action."""
         self._conn.execute(
             """INSERT INTO audit_log
-               (timestamp, agent_id, action, resource, parameters, result, security_level, correlation_id)
+               (timestamp, agent_id, action, resource,
+                parameters, result, security_level, correlation_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 time.time(),
