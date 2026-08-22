@@ -20,6 +20,7 @@ from app.agents.agent import ProductionAgent
 from app.agents.llm_factory import create_llm_client
 from app.memory.in_memory import InMemoryStore
 from app.observability.logging import get_correlation_id
+from app.routes.admin import get_skills_top_k
 from app.routes.skills import get_skill_registry
 from app.tools.builtin import (
     calculator_tool,
@@ -102,7 +103,8 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
 
     # Search for relevant skills
     skill_registry = get_skill_registry()
-    relevant_skills = skill_registry.search(body.message, limit=2)
+    top_k = get_skills_top_k()
+    relevant_skills = skill_registry.search(body.message, limit=top_k)
     skills_context = ""
     skills_used = []
     for skill in relevant_skills:
@@ -199,7 +201,8 @@ async def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
     tools = _create_tool_registry()
     skill_registry = get_skill_registry()
 
-    relevant_skills = skill_registry.search(body.message, limit=2)
+    top_k = get_skills_top_k()
+    relevant_skills = skill_registry.search(body.message, limit=top_k)
     skills_context = ""
     for skill in relevant_skills:
         skills_context += f"\n\n[Skill: {skill.name}]\n{skill.content}"

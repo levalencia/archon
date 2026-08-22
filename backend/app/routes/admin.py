@@ -12,6 +12,7 @@ import time
 
 import structlog
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
 from app.security.audit_logger import StructuredAuditLogger
 from app.security.circuit_breaker import CircuitBreaker
@@ -106,3 +107,33 @@ async def reset_circuit_breaker(name: str) -> dict:
     _circuit_breakers[name].reset()
     logger.info("circuit_breaker_manual_reset", name=name)
     return {"status": "reset", "name": name}
+
+
+# --- Settings ---
+
+_settings: dict = {
+    "skills_top_k": 3,
+}
+
+
+class SettingsUpdate(BaseModel):
+    skills_top_k: int = Field(default=3, ge=1, le=10)
+
+
+@router.get("/settings")
+async def get_settings() -> dict:
+    """Get admin settings."""
+    return {"settings": _settings}
+
+
+@router.put("/settings")
+async def update_settings(body: SettingsUpdate) -> dict:
+    """Update admin settings (e.g., skills_top_k)."""
+    _settings["skills_top_k"] = body.skills_top_k
+    logger.info("settings_updated", skills_top_k=body.skills_top_k)
+    return {"settings": _settings, "updated": True}
+
+
+def get_skills_top_k() -> int:
+    """Get current skills_top_k setting."""
+    return _settings.get("skills_top_k", 3)

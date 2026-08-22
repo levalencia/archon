@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     llm_model: str = "mock-model"
     llm_api_key: str = ""
     llm_base_url: str = ""
+
+    # Skills
+    skills_top_k: int = 3  # How many skills to search per query (1-10)
     llm_max_tokens: int = 4096
 
     # Database
