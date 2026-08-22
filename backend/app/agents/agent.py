@@ -32,7 +32,7 @@ When you have enough information to answer, respond with plain text (no JSON).
 
 ARTIFACT GENERATION:
 When the user asks you to create, write, or generate code, HTML, SVG, or any document:
-- Always wrap code in triple backtick blocks with the language: ```python, ```html, ```javascript, etc.
+- Always wrap code in triple backtick blocks with the language identifier.
 - For complete HTML pages, include the full <!DOCTYPE html> document.
 - For diagrams, use ```mermaid blocks.
 - Be thorough: generate complete, runnable code, not snippets.

@@ -22,7 +22,16 @@ class Settings(BaseSettings):
     # Skills
     skills_top_k: int = 3
     image_gen_provider: str = "mock"  # mock | together | openai
-    image_gen_api_key: str = ""  # How many skills to search per query (1-10)
+    image_gen_api_key: str = ""
+
+    # Database
+    database_url: str = "sqlite+aiosqlite:///archon.db"
+    redis_url: str = "redis://localhost:6379/0"
+
+    # Auth
+    jwt_secret: str = (
+        "archon-dev-secret-change-in-prod"  # How many skills to search per query (1-10)
+    )
     llm_max_tokens: int = 4096
 
     # Database

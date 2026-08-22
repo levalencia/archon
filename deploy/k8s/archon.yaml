@@ -1,0 +1,156 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: archon-backend
+  labels:
+    app: archon
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: archon
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: archon
+        component: backend
+    spec:
+      containers:
+        - name: backend
+          image: archon-backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: ARCHON_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: archon-secrets
+                  key: database-url
+            - name: ARCHON_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: archon-secrets
+                  key: redis-url
+            - name: ARCHON_LLM_PROVIDER
+              valueFrom:
+                configMapKeyRef:
+                  name: archon-config
+                  key: llm-provider
+            - name: ARCHON_LLM_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: archon-config
+                  key: llm-model
+            - name: ARCHON_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: archon-secrets
+                  key: jwt-secret
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: archon-backend
+spec:
+  selector:
+    app: archon
+    component: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: archon-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  rules:
+    - host: archon.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: archon-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: archon-frontend
+                port:
+                  number: 3000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: archon-backend-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: archon-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: archon-backend-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: archon
+      component: backend
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: archon-config
+data:
+  llm-provider: "ollama"
+  llm-model: "llama3.1:8b"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: archon-secrets
+type: Opaque
+stringData:
+  database-url: "postgresql+asyncpg://archon:archon@postgres:5432/archon"
+  redis-url: "redis://redis:6379/0"
+  jwt-secret: "change-me-in-production"

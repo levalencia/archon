@@ -19,6 +19,8 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "sse-starlette>=2.1.0",
     "aiosqlite>=0.22.1",
+    "tiktoken>=0.14.0",
+    "pyjwt>=2.13.0",
 ]
 
 [project.optional-dependencies]
