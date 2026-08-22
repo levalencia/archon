@@ -1,78 +1,196 @@
-# Archon — Production AI Agent Webapp
+<div align="center">
 
-> Enterprise AI Research & Operations Assistant
-> Perplexity meets ChatGPT meets audit dashboard
+# 🏛️ Archon
 
-**Built by:** Luis Valencia — Microsoft MVP | AI & Data Practice Lead at element61
-**Status:** Planning → Phase 0
+### Production AI Agent Webapp
 
-## What is Archon?
+**ReAct reasoning · Multi-agent orchestration · RAG · Tools · Skills · Vision · Artifacts**
+**Guardrails · PII Detection · Circuit Breakers · OpenTelemetry · 100% Local**
 
-A production-grade, multi-agent AI assistant that demonstrates every pattern a Founding AI Engineer needs: ReAct reasoning loops, encrypted memory, PII detection, circuit breakers, distributed rate limiters, RAG pipelines, multi-agent orchestration, OpenTelemetry observability, and evaluation harness — all deployed on Azure.
+[![CI](https://github.com/levalencia/archon/actions/workflows/ci.yml/badge.svg)](https://github.com/levalencia/archon/actions)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-277%20passed-brightgreen.svg)]()
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-This is not a tutorial. This is a working webapp that proves I can build production AI agent systems.
+<img src="docs/mockup-archon-ui.html" alt="Archon UI" width="800">
 
-## Architecture
+*A complete AI agent system you can run locally with zero API keys.*
 
-```
-Svelte Frontend (chat + trace viewer + security demo + admin)
-    ↓ REST + SSE
-FastAPI API Gateway (auth, rate limiter, CORS, correlation IDs)
-    ↓
-Agent Orchestrator (Coordinator + 4 specialist agents)
-    ↓
-Cross-cutting (circuit breaker, tool registry, memory, audit)
-    ↓
-Infrastructure (PostgreSQL + Redis + pgvector + Azure Blob)
-```
+[Quick Start](#-quick-start) · [Features](#-features) · [Architecture](#-architecture) · [API Docs](#-api) · [Deploy](#-deploy)
 
-## Tech Stack
+</div>
 
-| Layer | Technology | Why |
-|---|---|---|
-| Frontend | SvelteKit + Tailwind | Professional chat UI (Claude/Perplexity style) |
-| Backend | FastAPI + Python 3.11 | Async, typed, production-proven |
-| LLM | Azure AI Foundry (Claude/GPT) | Vendor-neutral via Protocol adapters |
-| Database | PostgreSQL + pgvector | Memory + vector search in one DB |
-| Cache/State | Redis | Rate limiting, circuit breaker state, sessions |
-| Observability | OpenTelemetry + Jaeger | Distributed tracing with PII scrubbing |
-| Evaluation | Promptfoo + custom harness | Quality gates in CI |
-| Deploy | Azure App Service → Container Apps → K8s | Progressive deployment |
+---
 
-## Development Phases (12 weeks)
-
-| Phase | Week | What |
-|---|---|---|
-| 0 | 1 | Scaffold: monorepo, Docker Compose, CI/CD, Makefile |
-| 1 | 2-3 | Core chat: ReAct agent + Svelte UI with SSE streaming |
-| 2 | 4 | Security: PII detection, guardrails, sandboxing, permissions |
-| 3 | 5-6 | RAG: upload → chunk → embed → pgvector → answer with citations |
-| 4 | 7-8 | Multi-agent: Coordinator + Planner + Retriever + Validator + Synthesizer |
-| 5 | 9 | Observability: OpenTelemetry, Jaeger, cost tracking |
-| 6 | 10 | Advanced memory: tiered, context compression, encrypted |
-| 7 | 11 | Eval harness: batch eval, quality gates, regression detection |
-| 8 | 12 | Deploy: Azure App Service → Container Apps → K8s |
-
-## Documentation
-
-- [Full Development Plan](docs/PLAN.md) — 910 lines, phase-by-phase with course concept mapping
-- [God Mode Skill Additions](docs/GOD-MODE-ADDITIONS.md) — 1,091 lines, patterns from 2,404-skill vault
-- [Pocock Engineering Disciplines](docs/POCOCK-SKILLS-ADDITIONS.md) — 622 lines, how to work (TDD, code review, domain modeling)
-
-## Related
-
-- **Article Series:** [production-ai-agents](https://github.com/levalencia/production-ai-agents) — 41-article "From Prompt to Production" series with runnable code
-- **Course Notes:** AIAMastery (30 days) + Advanced Architectures (90 lessons) — gap registry with 27 documented gaps between course claims and code reality
-
-## Quick Start
+## ⚡ Quick Start
 
 ```bash
-# Coming in Phase 0
+# Clone
 git clone https://github.com/levalencia/archon.git
 cd archon
-make dev  # Docker Compose: PostgreSQL + Redis + Jaeger + backend + frontend
+
+# Start infrastructure (PostgreSQL, Redis, Jaeger)
+docker compose up -d
+
+# Pull a local LLM
+ollama pull llama3.1:8b
+ollama pull llava:7b  # optional: for image analysis
+
+# Backend
+cd backend
+uv sync --extra dev
+cp .env.example .env  # defaults to Ollama
+uv run uvicorn app.main:app --reload
+
+# Frontend (new terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-## License
+Open **http://localhost:3000** — start chatting. Zero API keys needed.
 
-MIT
+---
+
+## 🎯 Features
+
+| Feature | Description |
+|---|---|
+| 🧠 **ReAct Agent** | Think → Act → Observe reasoning loop with tool calling |
+| 🤖 **Multi-Agent** | Coordinator + Planner + Retriever + Validator + Synthesizer |
+| 📄 **RAG Pipeline** | Upload docs → chunk → embed → vector search → grounded answers |
+| 🔧 **5 Built-in Tools** | Calculator, datetime, web search (DuckDuckGo), file reader, image gen |
+| 📚 **Skills System** | Import skills from any GitHub repo, auto-match per query |
+| 🎨 **Artifacts** | Claude-style artifact viewer: HTML, code, SVG, Mermaid rendered in iframe |
+| 👁️ **Vision** | Upload images → auto-switch to llava for analysis |
+| 🛡️ **Security** | PII detection, input/output guardrails, prompt injection blocking |
+| ⚡ **Circuit Breaker** | CLOSED/OPEN/HALF_OPEN per provider, auto-recovery |
+| 🚦 **Rate Limiter** | Redis sliding window, per-user limits |
+| 🔐 **Auth** | JWT tokens + API keys, register/login |
+| 📊 **Observability** | Structured logging, Prometheus metrics, trace waterfall |
+| 🔄 **Provider Swappable** | Ollama, OpenAI, Anthropic, Azure Foundry — change in `.env` |
+| 🐳 **100% Local** | Docker Compose: PostgreSQL + Redis + Jaeger + Ollama |
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Svelte Frontend                     │
+│  Chat · Artifacts · Trace · Dashboard · Settings     │
+├──────────────────────┬──────────────────────────────┤
+│    FastAPI Backend    │     Observability Layer       │
+│                      │  structlog · Prometheus       │
+│  ReAct Agent ◄──►    │  OTel Tracing · Cost Tracker  │
+│  Multi-Agent         │  Correlation IDs              │
+│  RAG Pipeline        ├──────────────────────────────┤
+│  Tool Registry       │     Security Layer            │
+│  Skills Engine       │  Guardrails · PII · Auth      │
+│  Artifact Detector   │  Circuit Breaker · Rate Limit │
+├──────────────────────┴──────────────────────────────┤
+│              Infrastructure                          │
+│  PostgreSQL (pgvector) · Redis · Jaeger · Ollama     │
+└─────────────────────────────────────────────────────┘
+```
+
+**50 Python source files · 10 Svelte components · 277 tests · 30+ API endpoints**
+
+---
+
+## 🔌 API
+
+All endpoints at `http://localhost:8000`:
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/chat` | Send message, get agent response with tools + thinking |
+| POST | `/api/chat/stream` | SSE streaming response |
+| GET/POST | `/api/conversations` | List / create conversations |
+| POST | `/api/documents/upload` | Upload and index a document (RAG) |
+| POST | `/api/documents/query` | Query documents with RAG |
+| GET/POST | `/api/skills` | List / create / import skills |
+| POST | `/api/skills/import` | Import skill from GitHub repo |
+| POST | `/api/security/pii-scan` | Scan text for PII |
+| POST | `/api/security/guardrail` | Test guardrails |
+| GET | `/api/admin/health` | Detailed health + uptime |
+| GET | `/api/admin/metrics` | System metrics |
+| GET | `/metrics` | Prometheus format metrics |
+| POST | `/api/auth/register` | Register new user |
+| POST | `/api/auth/login` | Login, get JWT token |
+
+Full OpenAPI docs: `http://localhost:8000/docs`
+
+---
+
+## 🚀 Deploy
+
+### Docker Compose (Production)
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### Kubernetes
+```bash
+helm install archon ./deploy/helm/archon \
+  --set config.llmProvider=ollama \
+  --set config.llmModel=llama3.1:8b
+```
+
+### Azure App Service
+```bash
+az webapp up --name archon --resource-group my-rg
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+cd backend
+uv run pytest -m unit -q          # 277 tests, ~20s
+uv run pytest -m security -v      # Security probe tests
+uv run ruff check app/ tests/     # Lint
+```
+
+---
+
+## 📦 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | SvelteKit + Tailwind CSS |
+| Backend | FastAPI + Python 3.11 |
+| LLM | Ollama (llama3.1, llava) · OpenAI · Anthropic · Azure Foundry |
+| Database | PostgreSQL + pgvector |
+| Cache | Redis |
+| Tracing | Jaeger + OpenTelemetry |
+| Metrics | Prometheus + Grafana |
+| Deploy | Docker Compose · Kubernetes · Helm |
+
+---
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+1. Fork the repo
+2. Create a feature branch
+3. Write tests (RED → GREEN)
+4. Submit a PR
+
+---
+
+## 📝 License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+Built by [Luis Valencia](https://github.com/levalencia) — Microsoft MVP · AI & Data Practice Lead
+
+**Zero frameworks. Pure Python. Production-ready.**
+
+</div>
