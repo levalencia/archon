@@ -1,4 +1,5 @@
 """Ollama adapter. Uses Ollama's /api/chat endpoint with tool support."""
+
 from __future__ import annotations
 
 import json
@@ -44,17 +45,22 @@ class OllamaAdapter:
         if tools:
             ollama_tools = []
             for tool in tools:
-                ollama_tools.append({
-                    "type": "function",
-                    "function": {
-                        "name": tool["name"],
-                        "description": tool.get("description", ""),
-                        "parameters": tool.get("parameters", {
-                            "type": "object",
-                            "properties": {},
-                        }),
-                    },
-                })
+                ollama_tools.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": tool["name"],
+                            "description": tool.get("description", ""),
+                            "parameters": tool.get(
+                                "parameters",
+                                {
+                                    "type": "object",
+                                    "properties": {},
+                                },
+                            ),
+                        },
+                    }
+                )
             payload["tools"] = ollama_tools
 
         response = await self._client.post(
@@ -72,10 +78,12 @@ class OllamaAdapter:
             tool_calls = []
             for tc in msg["tool_calls"]:
                 fn = tc.get("function", {})
-                tool_calls.append({
-                    "tool": fn.get("name", ""),
-                    "args": fn.get("arguments", {}),
-                })
+                tool_calls.append(
+                    {
+                        "tool": fn.get("name", ""),
+                        "args": fn.get("arguments", {}),
+                    }
+                )
 
             logger.info(
                 "ollama_tool_call",
@@ -84,9 +92,11 @@ class OllamaAdapter:
             )
 
             # Return as JSON string for the agent to parse
-            return json.dumps({
-                "tool_calls": tool_calls,
-            })
+            return json.dumps(
+                {
+                    "tool_calls": tool_calls,
+                }
+            )
 
         content = msg.get("content", "")
 
@@ -94,9 +104,7 @@ class OllamaAdapter:
             "ollama_chat",
             model=self.model,
             tokens=data.get("eval_count", 0),
-            duration_ms=round(
-                data.get("total_duration", 0) / 1_000_000, 2
-            ),
+            duration_ms=round(data.get("total_duration", 0) / 1_000_000, 2),
         )
 
         return content

@@ -20,7 +20,7 @@ from app.agents.agent import ProductionAgent
 from app.agents.llm_factory import create_llm_client
 from app.memory.in_memory import InMemoryStore
 from app.observability.logging import get_correlation_id
-from app.skills.registry import SkillRegistry, create_default_skills
+from app.routes.skills import get_skill_registry
 from app.tools.builtin import (
     calculator_tool,
     datetime_tool,
@@ -35,14 +35,6 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # Module-level stores (replaced by DI in production)
 _memory = InMemoryStore()
-_skill_registry: SkillRegistry | None = None
-
-
-def _get_skills() -> SkillRegistry:
-    global _skill_registry
-    if _skill_registry is None:
-        _skill_registry = create_default_skills()
-    return _skill_registry
 
 
 def _create_tool_registry() -> SecureToolRegistry:
@@ -109,7 +101,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     tools = _create_tool_registry()
 
     # Search for relevant skills
-    skill_registry = _get_skills()
+    skill_registry = get_skill_registry()
     relevant_skills = skill_registry.search(body.message, limit=2)
     skills_context = ""
     skills_used = []
@@ -205,7 +197,7 @@ async def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
     settings = request.app.state.settings
     llm = create_llm_client(settings)
     tools = _create_tool_registry()
-    skill_registry = _get_skills()
+    skill_registry = get_skill_registry()
 
     relevant_skills = skill_registry.search(body.message, limit=2)
     skills_context = ""
