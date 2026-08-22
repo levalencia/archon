@@ -5,94 +5,59 @@
   import ChatInput from '$lib/components/ChatInput.svelte';
   import TracePanel from '$lib/components/TracePanel.svelte';
 
-  let activeConversationId = $state('1');
+  let activeConversationId = $state('');
   let showTrace = $state(true);
   let isLoading = $state(false);
 
-  let messages = $state([
-    {
-      id: '1',
-      role: 'user' as const,
-      content: 'What are the key architecture patterns for production AI agents in 2026?',
-      timestamp: '2 min ago',
-    },
-    {
-      id: '2',
-      role: 'assistant' as const,
-      content: `Based on current research, there are **six key architecture patterns** for production AI agents:
+  interface Message {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: string;
+    piiClean?: boolean;
+    grounded?: boolean;
+    iterations?: number;
+    tokensUsed?: number;
+    toolCalls?: any[];
+    sources?: any[];
+    thinkingSteps?: any[];
+    skillsUsed?: any[];
+  }
 
-**1. Layered Architecture (6-Layer Stack)**
-The O'Reilly "AI Agents Stack" identifies six layers: Model Serving, Tools (MCP), Memory, Orchestration, Eval, and Guardrails.
-
-**2. ReAct Reasoning Loops**
-The \`Think → Act → Observe → Repeat\` pattern with **circuit breakers** and **iteration caps**.
-
-**3. Multi-Agent Orchestration**
-Coordinator agents delegate to specialists via typed capability contracts.
-
-\`\`\`python
-coordinator = AgentCoordinator(
-    planner=PlannerAgent(llm),
-    retriever=RetrieverAgent(llm),
-    validator=ValidatorAgent(llm),
-    synthesizer=SynthesizerAgent(llm),
-)
-\`\`\`
-
-**4. Agentic RAG**
-Agent-driven search: decides when, what, and whether results suffice.
-
-**5. Protocol-Based DI**
-Python Protocols for vendor-neutral components. Swap providers without changing agent code.
-
-**6. Observability-First**
-OpenTelemetry traces with **correlation IDs** linking every step.`,
-      timestamp: '1 min ago',
-      piiClean: true,
-      grounded: true,
-      iterations: 4,
-      tokensUsed: 1847,
-      toolCalls: [
-        { tool: 'vector_search', status: 'success' },
-        { tool: 'web_search', status: 'success' },
-        { tool: 'calculator', status: 'success' },
-      ],
-      sources: [
-        { title: 'research-paper.pdf (p.12)', score: 0.94, excerpt: '' },
-        { title: 'research-paper.pdf (p.28)', score: 0.87, excerpt: '' },
-        { title: 'research-paper.pdf (p.5)', score: 0.82, excerpt: '' },
-      ],
-      thinkingSteps: [
-        { agent: 'Planner', detail: 'Decomposed into 3 sub-questions', done: true },
-        { agent: 'Retriever', detail: 'Searched 12 chunks, found 5 relevant (score > 0.82)', done: true },
-        { agent: 'Validator', detail: 'Fact-checked against sources ✓ PII scan clean ✓', done: true },
-        { agent: 'Synthesizer', detail: 'Generated answer with 3 citations', done: true },
-      ],
-    },
-  ]);
+  let messages: Message[] = $state([]);
 
   let traceData = $state({
-    stats: { latency: '1.2s', tokens: '1,847', tools: 3, iterations: 4 },
-    correlationId: 'f9d50fdd-c105-4745-a0b8',
-    traces: [
-      { name: 'LLM: Planning', type: 'llm' as const, meta: ['claude-opus-4-6', '320 tokens', '180ms'], barStart: 0, barWidth: 15 },
-      { name: 'Tool: vector_search', type: 'tool' as const, meta: ['pgvector', '12 chunks', '45ms'], barStart: 15, barWidth: 4 },
-      { name: 'LLM: Reranking', type: 'llm' as const, meta: ['claude-opus-4-6', '890 tokens', '420ms'], barStart: 19, barWidth: 35 },
-      { name: 'Security: PII Scan', type: 'security' as const, meta: ['0 entities', '8ms', 'clean'], barStart: 54, barWidth: 1 },
-      { name: 'LLM: Synthesis', type: 'llm' as const, meta: ['claude-opus-4-6', '637 tokens', '540ms'], barStart: 55, barWidth: 45 },
-    ],
+    stats: { latency: '—', tokens: '—', tools: 0, iterations: 0 },
+    correlationId: '',
+    traces: [] as any[],
   });
 
+  function formatTime(): string {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
   async function handleSend(message: string) {
-    // Add user message
-    const userMsg = {
+    const userMsg: Message = {
       id: String(Date.now()),
-      role: 'user' as const,
+      role: 'user',
       content: message,
-      timestamp: 'Just now',
+      timestamp: formatTime(),
     };
     messages = [...messages, userMsg];
     isLoading = true;
+
+    // Add loading message
+    const loadingId = String(Date.now() + 1);
+    const loadingMsg: Message = {
+      id: loadingId,
+      role: 'assistant',
+      content: '⏳ Thinking...',
+      timestamp: formatTime(),
+      thinkingSteps: [{ agent: 'Archon', detail: 'Processing your request...', done: false }],
+    };
+    messages = [...messages, loadingMsg];
+
+    const startTime = performance.now();
 
     try {
       const response = await fetch('/api/chat', {
@@ -100,67 +65,146 @@ OpenTelemetry traces with **correlation IDs** linking every step.`,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message,
-          conversation_id: activeConversationId,
+          conversation_id: activeConversationId || undefined,
         }),
       });
 
+      const elapsed = Math.round(performance.now() - startTime);
+
       if (response.ok) {
         const data = await response.json();
-        const assistantMsg = {
-          id: String(Date.now() + 1),
-          role: 'assistant' as const,
+
+        if (!activeConversationId) {
+          activeConversationId = data.conversation_id;
+        }
+
+        // Build thinking steps from real response
+        const steps = (data.thinking_steps || []).map((s: any) => ({
+          agent: s.agent || 'Archon',
+          detail: s.detail || '',
+          done: true,
+        }));
+
+        const assistantMsg: Message = {
+          id: loadingId,
+          role: 'assistant',
           content: data.response,
-          timestamp: 'Just now',
+          timestamp: formatTime(),
           piiClean: true,
-          grounded: data.tool_calls?.length > 0,
+          grounded: (data.tool_calls?.length || 0) > 0,
           iterations: data.iterations,
           tokensUsed: data.tokens_used,
           toolCalls: data.tool_calls || [],
-          sources: [],
-          thinkingSteps: data.tool_calls?.map((tc: any) => ({
-            agent: tc.tool,
-            detail: tc.status === 'success' ? 'Completed successfully' : tc.status,
-            done: true,
-          })) || [],
+          thinkingSteps: steps,
+          skillsUsed: data.skills_used || [],
         };
-        messages = [...messages, assistantMsg];
 
-        traceData.stats = {
-          latency: '—',
-          tokens: String(data.tokens_used),
-          tools: data.tool_calls?.length || 0,
-          iterations: data.iterations,
+        // Replace loading message
+        messages = messages.map(m => m.id === loadingId ? assistantMsg : m);
+
+        // Update trace panel
+        const traces = [];
+        for (const step of data.thinking_steps || []) {
+          if (step.type === 'skills') {
+            traces.push({
+              name: `Skills: ${step.detail}`,
+              type: 'security' as const,
+              meta: [step.detail],
+              barStart: 0,
+              barWidth: 5,
+            });
+          } else if (step.type === 'tool_call') {
+            traces.push({
+              name: `Tool: ${step.detail}`,
+              type: 'tool' as const,
+              meta: [step.detail],
+              barStart: traces.length * 15,
+              barWidth: 15,
+            });
+          } else {
+            traces.push({
+              name: `LLM: ${step.agent}`,
+              type: 'llm' as const,
+              meta: [step.detail],
+              barStart: traces.length * 15,
+              barWidth: 30,
+            });
+          }
+        }
+
+        traceData = {
+          stats: {
+            latency: `${elapsed}ms`,
+            tokens: String(data.tokens_used || 0),
+            tools: data.tool_calls?.length || 0,
+            iterations: data.iterations || 1,
+          },
+          correlationId: data.correlation_id || '',
+          traces,
         };
-        traceData.correlationId = data.correlation_id;
       } else {
-        messages = [...messages, {
-          id: String(Date.now() + 1),
-          role: 'assistant' as const,
-          content: 'Sorry, something went wrong. Please try again.',
-          timestamp: 'Just now',
-        }];
+        messages = messages.map(m =>
+          m.id === loadingId
+            ? { ...m, content: `Error: ${response.status} ${response.statusText}`, thinkingSteps: [] }
+            : m
+        );
       }
-    } catch {
-      messages = [...messages, {
-        id: String(Date.now() + 1),
-        role: 'assistant' as const,
-        content: 'Cannot connect to the backend. Make sure `make dev` is running on port 8000.',
-        timestamp: 'Just now',
-      }];
+    } catch (err) {
+      messages = messages.map(m =>
+        m.id === loadingId
+          ? {
+              ...m,
+              content: 'Cannot connect to backend. Run `make dev` in the backend directory.',
+              thinkingSteps: [],
+            }
+          : m
+      );
     } finally {
       isLoading = false;
     }
   }
+
+  function handleNewConversation() {
+    messages = [];
+    activeConversationId = '';
+    traceData = { stats: { latency: '—', tokens: '—', tools: 0, iterations: 0 }, correlationId: '', traces: [] };
+  }
 </script>
 
-<Sidebar activeId={activeConversationId} onSelect={(id) => activeConversationId = id} />
+<Sidebar activeId={activeConversationId} onSelect={(id) => activeConversationId = id} onNew={handleNewConversation} />
 
 <div class="flex-1 flex flex-col min-w-0">
   <TopBar {showTrace} onToggleTrace={() => showTrace = !showTrace} />
 
   <div class="flex-1 flex overflow-hidden">
     <div class="flex-1 flex flex-col">
-      <ChatMessages {messages} />
+      {#if messages.length === 0}
+        <!-- Empty state -->
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--purple)] flex items-center justify-center text-3xl font-bold text-white mx-auto mb-4">
+              A
+            </div>
+            <h1 class="text-2xl font-semibold text-[var(--text-primary)] mb-2">Archon</h1>
+            <p class="text-[var(--text-secondary)] mb-6 max-w-md">
+              Production AI agent with ReAct reasoning, multi-agent orchestration,
+              RAG, guardrails, and full observability.
+            </p>
+            <div class="flex gap-3 justify-center flex-wrap max-w-lg">
+              {#each ['What architecture patterns do AI agents use?', 'Calculate sqrt(144) + pi * 2', "What's the current date and time?", 'Search the web for SvelteKit tutorials'] as prompt}
+                <button
+                  onclick={() => handleSend(prompt)}
+                  class="px-4 py-2 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-all cursor-pointer text-left"
+                >
+                  {prompt}
+                </button>
+              {/each}
+            </div>
+          </div>
+        </div>
+      {:else}
+        <ChatMessages {messages} />
+      {/if}
       <ChatInput onSend={handleSend} disabled={isLoading} />
     </div>
 
