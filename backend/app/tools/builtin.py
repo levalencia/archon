@@ -1,7 +1,7 @@
-"""Built-in tools for the agent: web search, calculator, datetime, file operations.
+"""Built-in tools for the agent: calculator, datetime, file operations, web search.
 
-These are the default tools available to every Archon agent.
 Each tool is a plain async function — no framework dependency.
+Web search uses real DuckDuckGo via app/tools/web_search.py.
 
 See: https://github.com/levalencia/production-ai-agents/
 Concept: Layer 3 - Tools (registered, validated, timeout-enforced)
@@ -15,6 +15,8 @@ from pathlib import Path
 
 import structlog
 
+from app.tools.web_search import web_search_tool  # noqa: F401 — re-exported
+
 logger = structlog.get_logger()
 
 
@@ -24,11 +26,9 @@ async def calculator_tool(expression: str) -> dict:
     Supports: +, -, *, /, **, sqrt, sin, cos, tan, log, pi, e
     Does NOT use eval() — parses and computes safely.
     """
-    # Whitelist of allowed characters and functions
     allowed = set("0123456789.+-*/() ")
     clean = expression.strip()
 
-    # Replace math functions with their values
     replacements = {
         "pi": str(math.pi),
         "e": str(math.e),
@@ -45,27 +45,33 @@ async def calculator_tool(expression: str) -> dict:
     for name, replacement in replacements.items():
         clean = clean.replace(name, replacement)
 
-    # Validate: only allowed characters after replacement
     stripped = clean
-    for func in ["math.sqrt", "math.sin", "math.cos", "math.tan", "math.log", "abs", "round"]:
+    for func in [
+        "math.sqrt",
+        "math.sin",
+        "math.cos",
+        "math.tan",
+        "math.log",
+        "abs",
+        "round",
+    ]:
         stripped = stripped.replace(func, "")
 
     if not all(c in allowed or c == "." for c in stripped):
         return {"error": f"Invalid characters in expression: {expression}"}
 
     try:
-        # Safe evaluation with restricted namespace
-        result = eval(clean, {"__builtins__": {}, "math": math, "abs": abs, "round": round})  # noqa: S307
+        result = eval(  # noqa: S307
+            clean,
+            {"__builtins__": {}, "math": math, "abs": abs, "round": round},
+        )
         return {"result": float(result), "expression": expression}
     except Exception as e:
         return {"error": f"Calculation error: {e}", "expression": expression}
 
 
 async def datetime_tool(query: str = "now") -> dict:
-    """Get current date, time, or timezone information.
-
-    Queries: "now", "date", "time", "utc", "timestamp"
-    """
+    """Get current date, time, or timezone information."""
     now = datetime.now(tz=UTC)
 
     if query in ("now", "current"):
@@ -83,76 +89,28 @@ async def datetime_tool(query: str = "now") -> dict:
     if query == "timestamp":
         return {"timestamp": now.timestamp()}
 
-    return {
-        "datetime": now.isoformat(),
-        "timezone": "UTC",
-        "query": query,
-    }
-
-
-async def web_search_tool(query: str, max_results: int = 3) -> dict:
-    """Search the web using a simple API.
-
-    In production: uses Tavily, SearXNG, or Brave Search API.
-    In mock/dev: returns simulated results.
-    """
-    # Mock results for development (no API key needed)
-    mock_results = [
-        {
-            "title": f"Result {i + 1} for: {query}",
-            "url": f"https://example.com/result-{i + 1}",
-            "snippet": f"This is a simulated search result about {query}. "
-            f"It contains relevant information for testing purposes.",
-        }
-        for i in range(min(max_results, 5))
-    ]
-
-    logger.info("web_search", query=query, results=len(mock_results))
-
-    return {
-        "query": query,
-        "results": mock_results,
-        "total": len(mock_results),
-        "source": "mock",
-    }
+    return {"datetime": now.isoformat(), "timezone": "UTC", "query": query}
 
 
 async def read_file_tool(path: str) -> dict:
-    """Read a file's contents. Path must be within allowed directory.
-
-    Permission checking is handled by the SecureToolRegistry,
-    not by this function.
-    """
+    """Read a file's contents."""
     file_path = Path(path)
-
     if not file_path.exists():
         return {"error": f"File not found: {path}"}
-
     if not file_path.is_file():
         return {"error": f"Not a file: {path}"}
-
     try:
         content = file_path.read_text(encoding="utf-8")
-        return {
-            "content": content,
-            "path": str(file_path),
-            "size": len(content),
-            "name": file_path.name,
-        }
+        return {"content": content, "path": str(file_path), "size": len(content)}
     except Exception as e:
         return {"error": f"Error reading file: {e}"}
 
 
 async def list_directory_tool(path: str) -> dict:
-    """List files in a directory.
-
-    Permission checking is handled by the SecureToolRegistry.
-    """
+    """List files in a directory."""
     dir_path = Path(path)
-
     if not dir_path.exists():
         return {"error": f"Directory not found: {path}"}
-
     if not dir_path.is_dir():
         return {"error": f"Not a directory: {path}"}
 
@@ -165,36 +123,22 @@ async def list_directory_tool(path: str) -> dict:
                 "size": item.stat().st_size if item.is_file() else 0,
             }
         )
-
     return {"path": str(dir_path), "items": items, "count": len(items)}
 
 
 async def write_file_tool(path: str, content: str) -> dict:
-    """Write content to a file.
-
-    Permission checking is handled by the SecureToolRegistry.
-    """
+    """Write content to a file."""
     file_path = Path(path)
-
     try:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding="utf-8")
-        return {
-            "path": str(file_path),
-            "size": len(content),
-            "status": "written",
-        }
+        return {"path": str(file_path), "size": len(content), "status": "written"}
     except Exception as e:
         return {"error": f"Error writing file: {e}"}
 
 
 def register_builtin_tools(registry: object) -> None:
-    """Register all built-in tools with a SecureToolRegistry.
-
-    Usage:
-        registry = SecureToolRegistry(permissions=perms, audit=audit)
-        register_builtin_tools(registry)
-    """
+    """Register all built-in tools with a SecureToolRegistry."""
     from app.tools.registry import SecureToolRegistry
 
     if not isinstance(registry, SecureToolRegistry):
@@ -203,27 +147,24 @@ def register_builtin_tools(registry: object) -> None:
     registry.register(
         name="calculator",
         handler=calculator_tool,
-        description="Evaluate math expressions (+, -, *, /, sqrt, sin, cos, log, pi)",
+        description="Evaluate math expressions (+, -, *, /, sqrt, pi)",
         input_schema={"required": ["expression"]},
         timeout=5,
     )
-
     registry.register(
         name="datetime",
         handler=datetime_tool,
-        description="Get current date, time, timestamp, or timezone info",
+        description="Get current date, time, timestamp info",
         input_schema={"required": ["query"]},
         timeout=5,
     )
-
     registry.register(
         name="web_search",
         handler=web_search_tool,
-        description="Search the web for information (returns title, URL, snippet)",
+        description="Search the web for information",
         input_schema={"required": ["query"]},
         timeout=30,
     )
-
     registry.register(
         name="read_file",
         handler=read_file_tool,
@@ -232,16 +173,14 @@ def register_builtin_tools(registry: object) -> None:
         input_schema={"required": ["path"]},
         timeout=10,
     )
-
     registry.register(
         name="list_directory",
         handler=list_directory_tool,
-        description="List files and subdirectories in a directory",
+        description="List files and subdirectories",
         required_permissions=["list_directory"],
         input_schema={"required": ["path"]},
         timeout=10,
     )
-
     registry.register(
         name="write_file",
         handler=write_file_tool,
@@ -250,5 +189,4 @@ def register_builtin_tools(registry: object) -> None:
         input_schema={"required": ["path", "content"]},
         timeout=10,
     )
-
     logger.info("builtin_tools_registered", count=6)

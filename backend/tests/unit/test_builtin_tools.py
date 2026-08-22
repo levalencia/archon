@@ -13,10 +13,10 @@ from app.tools.builtin import (
     list_directory_tool,
     read_file_tool,
     register_builtin_tools,
-    web_search_tool,
     write_file_tool,
 )
 from app.tools.registry import SecureToolRegistry
+from app.tools.web_search import web_search_tool
 
 
 class TestCalculatorTool:
@@ -103,7 +103,7 @@ class TestWebSearchTool:
     @pytest.mark.asyncio
     async def test_max_results(self) -> None:
         result = await web_search_tool("test", max_results=2)
-        assert len(result["results"]) == 2
+        assert len(result["results"]) <= 2  # Real search may return fewer
 
 
 class TestFileTool:

@@ -1,169 +1,271 @@
-"""Chat API routes with SSE streaming.
+"""Chat API routes with real agent execution, tools, skills, and thinking steps.
 
-POST /api/chat — Send a message and get a streaming response
+POST /api/chat — Send a message, agent reasons with tools, returns thinking steps
+POST /api/chat/stream — SSE streaming version
 GET /api/chat/history/{conversation_id} — Get conversation history
 """
 
 from __future__ import annotations
 
 import json
+import time
+import uuid
 
 import structlog
 from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sse_starlette.sse import EventSourceResponse
 
 from app.agents.agent import ProductionAgent
 from app.agents.llm_factory import create_llm_client
 from app.memory.in_memory import InMemoryStore
-from app.observability.logging import new_correlation_id
+from app.observability.logging import get_correlation_id
+from app.skills.registry import SkillRegistry, create_default_skills
+from app.tools.builtin import (
+    calculator_tool,
+    datetime_tool,
+    read_file_tool,
+)
 from app.tools.registry import SecureToolRegistry
+from app.tools.web_search import web_search_tool
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # Module-level stores (replaced by DI in production)
-_memory_store = InMemoryStore()
-_tool_registry = SecureToolRegistry()
+_memory = InMemoryStore()
+_skill_registry: SkillRegistry | None = None
+
+
+def _get_skills() -> SkillRegistry:
+    global _skill_registry
+    if _skill_registry is None:
+        _skill_registry = create_default_skills()
+    return _skill_registry
+
+
+def _create_tool_registry() -> SecureToolRegistry:
+    """Create a tool registry with real tools wired in."""
+    registry = SecureToolRegistry()
+
+    registry.register(
+        name="calculator",
+        handler=calculator_tool,
+        description="Evaluate math expressions: +, -, *, /, sqrt, sin, cos, log, pi",
+        input_schema={"required": ["expression"]},
+        timeout=5,
+    )
+    registry.register(
+        name="datetime",
+        handler=datetime_tool,
+        description="Get current date, time, timestamp, timezone info",
+        input_schema={"required": ["query"]},
+        timeout=5,
+    )
+    registry.register(
+        name="web_search",
+        handler=web_search_tool,
+        description="Search the web for current information. Returns titles, URLs, snippets.",
+        input_schema={"required": ["query"]},
+        timeout=30,
+    )
+    registry.register(
+        name="read_file",
+        handler=read_file_tool,
+        description="Read the contents of a file by path",
+        input_schema={"required": ["path"]},
+        timeout=10,
+    )
+
+    return registry
 
 
 class ChatRequest(BaseModel):
-    """Chat request body."""
-
     message: str = Field(..., min_length=1, max_length=10000)
-    conversation_id: str | None = None
+    conversation_id: str = ""
 
 
 class ChatResponse(BaseModel):
-    """Chat response body (non-streaming)."""
-
     response: str
     conversation_id: str
     correlation_id: str
     iterations: int
     tool_calls: list[dict]
     tokens_used: int
-
-
-def _build_agent(request: Request) -> ProductionAgent:
-    """Build an agent from app state settings."""
-    settings = request.app.state.settings
-    llm = create_llm_client(settings)
-
-    return ProductionAgent(
-        llm=llm,
-        memory=_memory_store,
-        tools=_tool_registry if _tool_registry.list_tools() else None,
-        agent_id="archon",
-        max_iterations=settings.agent_max_iterations,
-        token_budget=settings.agent_token_budget,
-    )
+    thinking_steps: list[dict]
+    skills_used: list[dict]
 
 
 @router.post("", response_model=ChatResponse)
 async def chat(body: ChatRequest, request: Request) -> ChatResponse:
-    """Send a message and get a complete response."""
-    correlation_id = new_correlation_id()
-    agent = _build_agent(request)
+    """Send a message. The agent reasons with tools and skills, returns thinking steps."""
+    cid = get_correlation_id()
+    start_time = time.monotonic()
+    settings = request.app.state.settings
+    llm = create_llm_client(settings)
+
+    # Create tool registry
+    tools = _create_tool_registry()
+
+    # Search for relevant skills
+    skill_registry = _get_skills()
+    relevant_skills = skill_registry.search(body.message, limit=2)
+    skills_context = ""
+    skills_used = []
+    for skill in relevant_skills:
+        skills_context += f"\n\n[Skill: {skill.name}]\n{skill.content}"
+        skills_used.append(
+            {
+                "name": skill.name,
+                "description": skill.description,
+                "reason": "Matched query keywords",
+            }
+        )
+
+    # Build agent with tools and skill context
+    conv_id = body.conversation_id or str(uuid.uuid4())
+    agent = ProductionAgent(
+        llm=llm,
+        tools=tools,
+        memory=_memory,
+        system_prompt_extra=skills_context,
+    )
 
     logger.info(
         "chat_request",
         message_length=len(body.message),
-        conversation_id=body.conversation_id,
-        correlation_id=correlation_id,
+        conversation_id=conv_id,
+        tools_available=len(tools.list_tools()),
+        skills_found=len(skills_used),
+        correlation_id=cid,
     )
 
-    result = await agent.run(
-        user_input=body.message,
-        conversation_id=body.conversation_id,
+    # Run the agent
+    result = await agent.run(body.message, conversation_id=conv_id)
+
+    elapsed_ms = (time.monotonic() - start_time) * 1000
+
+    # Build thinking steps from agent execution trace
+    thinking_steps = []
+    for i, step in enumerate(result.steps):
+        thinking_steps.append(
+            {
+                "step": i + 1,
+                "type": step.get("type", "reasoning"),
+                "agent": step.get("agent", "archon"),
+                "detail": step.get("detail", step.get("content", "")[:100]),
+                "done": True,
+                "duration_ms": step.get("duration_ms", 0),
+            }
+        )
+
+    # Add skills step if any were used
+    if skills_used:
+        thinking_steps.insert(
+            0,
+            {
+                "step": 0,
+                "type": "skills",
+                "agent": "skill_search",
+                "detail": (
+                    f"Found {len(skills_used)} relevant skills: "
+                    f"{', '.join(s['name'] for s in skills_used)}"
+                ),
+                "done": True,
+                "duration_ms": 0,
+            },
+        )
+
+    logger.info(
+        "chat_response",
+        conversation_id=conv_id,
+        iterations=result.iterations,
+        tool_calls=len(result.tool_calls),
+        skills_used=len(skills_used),
+        elapsed_ms=round(elapsed_ms, 2),
+        correlation_id=cid,
     )
 
     return ChatResponse(
         response=result.response,
-        conversation_id=result.conversation_id,
-        correlation_id=result.correlation_id,
+        conversation_id=conv_id,
+        correlation_id=cid,
         iterations=result.iterations,
         tool_calls=result.tool_calls,
         tokens_used=result.tokens_used,
+        thinking_steps=thinking_steps,
+        skills_used=skills_used,
     )
 
 
 @router.post("/stream")
-async def chat_stream(body: ChatRequest, request: Request) -> EventSourceResponse:
-    """Send a message and get a streaming SSE response.
+async def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
+    """SSE streaming chat with thinking steps."""
+    settings = request.app.state.settings
+    llm = create_llm_client(settings)
+    tools = _create_tool_registry()
+    skill_registry = _get_skills()
 
-    Events:
-    - type=thinking: agent is reasoning (iteration info)
-    - type=tool_call: agent is calling a tool
-    - type=token: streaming response token
-    - type=done: final result with metadata
-    - type=error: error occurred
-    """
-    correlation_id = new_correlation_id()
-    agent = _build_agent(request)
+    relevant_skills = skill_registry.search(body.message, limit=2)
+    skills_context = ""
+    for skill in relevant_skills:
+        skills_context += f"\n\n[Skill: {skill.name}]\n{skill.content}"
 
-    async def event_generator():  # type: ignore[no-untyped-def]
-        try:
-            # For now, run the full agent and stream the result
-            # TODO: Implement true token-by-token streaming with LLM provider
-            yield {
-                "event": "thinking",
-                "data": json.dumps(
-                    {
-                        "status": "processing",
-                        "correlation_id": correlation_id,
-                    }
-                ),
-            }
+    conv_id = body.conversation_id or str(uuid.uuid4())
+    agent = ProductionAgent(
+        llm=llm,
+        tools=tools,
+        memory=_memory,
+        system_prompt_extra=skills_context,
+    )
 
-            result = await agent.run(
-                user_input=body.message,
-                conversation_id=body.conversation_id,
+    async def event_stream():
+        # Skills step
+        if relevant_skills:
+            data = json.dumps(
+                {
+                    "step": "skills",
+                    "detail": f"Found {len(relevant_skills)} relevant skills",
+                }
             )
+            yield f"event: thinking\ndata: {data}\n\n"
 
-            # Stream tool calls as events
-            for tc in result.tool_calls:
-                yield {
-                    "event": "tool_call",
-                    "data": json.dumps(
-                        {
-                            "tool": tc["tool"],
-                            "status": tc["status"],
-                        }
-                    ),
-                }
-
-            # Stream the response in chunks (simulate token streaming)
-            words = result.response.split()
-            chunk_size = 5
-            for i in range(0, len(words), chunk_size):
-                chunk = " ".join(words[i : i + chunk_size])
-                yield {
-                    "event": "token",
-                    "data": json.dumps({"text": chunk}),
-                }
-
-            # Final done event
-            yield {
-                "event": "done",
-                "data": json.dumps(result.to_dict()),
+        data = json.dumps(
+            {
+                "step": "reasoning",
+                "detail": "Starting ReAct loop...",
             }
+        )
+        yield f"event: thinking\ndata: {data}\n\n"
 
-        except Exception as e:
-            logger.error("chat_stream_error", error=str(e), correlation_id=correlation_id)
-            yield {
-                "event": "error",
-                "data": json.dumps({"error": str(e)}),
+        result = await agent.run(body.message, conversation_id=conv_id)
+
+        # Stream thinking steps
+        for step in result.steps:
+            yield f"event: thinking\ndata: {json.dumps(step)}\n\n"
+
+        # Stream response token by token (simulated from complete response)
+        words = result.response.split()
+        for word in words:
+            yield f"event: token\ndata: {json.dumps({'token': word + ' '})}\n\n"
+
+        done_data = json.dumps(
+            {
+                "iterations": result.iterations,
+                "tool_calls": result.tool_calls,
+                "tokens_used": result.tokens_used,
             }
+        )
+        yield f"event: done\ndata: {done_data}\n\n"
 
-    return EventSourceResponse(event_generator())
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get("/history/{conversation_id}")
 async def get_history(conversation_id: str) -> dict:
     """Get conversation history."""
-    messages = await _memory_store.retrieve(conversation_id)
+    messages = await _memory.retrieve(conversation_id)
     return {
         "conversation_id": conversation_id,
         "messages": messages,

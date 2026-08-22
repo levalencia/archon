@@ -52,12 +52,14 @@ class AgentResult:
         iterations: int,
         tool_calls: list[dict],
         tokens_used: int = 0,
+        steps: list | None = None,
     ) -> None:
         self.response = response
         self.conversation_id = conversation_id
         self.correlation_id = correlation_id
         self.iterations = iterations
         self.tool_calls = tool_calls
+        self.steps = steps or []
         self.tokens_used = tokens_used
 
     def to_dict(self) -> dict:
@@ -91,6 +93,7 @@ class ProductionAgent:
         agent_id: str = "archon",
         max_iterations: int | None = None,
         token_budget: int | None = None,
+        system_prompt_extra: str = "",
     ) -> None:
         self.llm = llm
         self.memory = memory
@@ -100,6 +103,8 @@ class ProductionAgent:
         self.agent_id = agent_id
         self.max_iterations = max_iterations or self.MAX_ITERATIONS
         self.token_budget = token_budget or self.TOKEN_BUDGET
+        self.system_prompt_extra = system_prompt_extra
+        self._steps: list[dict] = []
 
     async def run(
         self,
@@ -191,6 +196,14 @@ class ProductionAgent:
             tool_name = tool_call["name"]
             tool_params = tool_call.get("parameters", {})
 
+            self._steps.append(
+                {
+                    "type": "tool_call",
+                    "agent": "archon",
+                    "detail": f"Called tool: {tool_name}",
+                    "content": f"Tool {tool_name} returned result",
+                }
+            )
             logger.info(
                 "react_tool_call",
                 tool=tool_name,
@@ -285,6 +298,7 @@ class ProductionAgent:
             iterations=self.max_iterations,
             tool_calls=tool_calls_made,
             tokens_used=total_tokens,
+            steps=self._steps,
         )
 
     async def _build_context(self, user_input: str, conversation_id: str) -> list[dict[str, str]]:
