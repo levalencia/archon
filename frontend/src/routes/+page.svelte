@@ -4,10 +4,13 @@
   import ChatMessages from '$lib/components/ChatMessages.svelte';
   import ChatInput from '$lib/components/ChatInput.svelte';
   import TracePanel from '$lib/components/TracePanel.svelte';
+  import ArtifactPanel from '$lib/components/ArtifactPanel.svelte';
 
   let activeConversationId = $state('');
   let showTrace = $state(true);
   let isLoading = $state(false);
+  let currentArtifacts: any[] = $state([]);
+  let showArtifacts = $state(false);
 
   interface Message {
     id: string;
@@ -102,6 +105,12 @@
 
         // Replace loading message
         messages = messages.map(m => m.id === loadingId ? assistantMsg : m);
+
+        // Check for artifacts
+        if (data.artifacts && data.artifacts.length > 0) {
+          currentArtifacts = data.artifacts;
+          showArtifacts = true;
+        }
 
         // Update trace panel
         const traces = [];
@@ -208,6 +217,13 @@
       {/if}
       <ChatInput onSend={(msg, img) => handleSend(msg, img)} disabled={isLoading} />
     </div>
+
+    {#if showArtifacts && currentArtifacts.length > 0}
+      <ArtifactPanel
+        artifacts={currentArtifacts}
+        onClose={() => showArtifacts = false}
+      />
+    {/if}
 
     {#if showTrace}
       <TracePanel

@@ -21,7 +21,9 @@ from app.agents.llm_factory import create_llm_client
 from app.memory.in_memory import InMemoryStore
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
+from app.routes.artifacts import get_artifact_store
 from app.routes.skills import get_skill_registry
+from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.tools.builtin import (
     calculator_tool,
     datetime_tool,
@@ -99,6 +101,7 @@ class ChatResponse(BaseModel):
     thinking_steps: list[dict]
     skills_used: list[dict]
     image_analyzed: bool = False
+    artifacts: list[dict] = []
 
 
 @router.post("", response_model=ChatResponse)
@@ -202,6 +205,21 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
             },
         )
 
+    # Detect and save artifacts from response
+    detected = detect_artifact_in_response(result.response)
+    saved_artifacts = []
+    artifact_store = get_artifact_store()
+    for art_data in detected:
+        artifact = Artifact(
+            conversation_id=conv_id,
+            title=art_data["title"],
+            artifact_type=art_data["type"],
+            language=art_data.get("language", ""),
+            content=art_data["content"],
+        )
+        await artifact_store.save(artifact)
+        saved_artifacts.append(artifact.to_summary())
+
     logger.info(
         "chat_response",
         conversation_id=conv_id,
@@ -222,6 +240,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         thinking_steps=thinking_steps,
         skills_used=skills_used,
         image_analyzed=bool(body.image),
+        artifacts=saved_artifacts,
     )
 
 
