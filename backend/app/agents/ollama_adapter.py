@@ -41,16 +41,17 @@ class OllamaAdapter:
             tools: Tool definitions for function calling
             images: List of base64-encoded images to analyze
         """
-        # If images provided, use vision model and add images to last user message
+        # Check if any message contains images → switch to vision model
         model = self.model
-        if images:
-            # Switch to vision model if available
+        has_images = images or any("images" in m for m in messages)
+        if has_images:
             model = await self._get_vision_model()
-            # Ollama expects images in the message
-            for msg in reversed(messages):
-                if msg["role"] == "user":
-                    msg["images"] = images
-                    break
+            # If images passed as parameter, add to last user message
+            if images:
+                for msg in reversed(messages):
+                    if msg["role"] == "user":
+                        msg["images"] = images
+                        break
 
         payload: dict = {
             "model": model,

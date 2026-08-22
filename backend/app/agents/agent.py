@@ -117,6 +117,7 @@ class ProductionAgent:
         correlation_id = get_correlation_id()
         tool_calls_made: list[dict] = []
         total_tokens = 0
+        _run_images = images
 
         # Log command received
         if self.audit:
@@ -140,6 +141,13 @@ class ProductionAgent:
                 messages_count=len(messages),
                 correlation_id=correlation_id,
             )
+
+            # Inject images into user message for vision (first iteration only)
+            if _run_images and iteration == 1:
+                for msg in reversed(messages):
+                    if msg["role"] == "user":
+                        msg["images"] = _run_images
+                        break
 
             # Call LLM
             response = await self.llm.chat(
