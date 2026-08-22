@@ -1,10 +1,7 @@
-"""PII detection using regex patterns.
+"""PII detection with optional spaCy NER support.
 
-Detects: email, phone, SSN, credit card, IP address, date of birth patterns.
-Returns detected entities with type, value, position, and risk level.
-
-See: https://github.com/levalencia/production-ai-agents/
-Concept: Layer 5 - Guardrails (PII detection and redaction)
+Uses regex patterns always + spaCy NER when installed for names/locations.
+Plan item #24: regex + spaCy NER + contextual analysis.
 """
 
 from __future__ import annotations
@@ -19,102 +16,132 @@ logger = structlog.get_logger()
 
 @dataclass
 class PIIEntity:
-    """A detected PII entity."""
-
     entity_type: str
     value: str
     start: int
     end: int
-    risk_level: str = "medium"  # low, medium, high
+    risk_level: str = "medium"
+    source: str = "regex"
 
 
-# PII detection patterns
-PII_PATTERNS: dict[str, tuple[str, str]] = {
-    "email": (r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "medium"),
-    "phone_us": (r"\b(?:\+1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b", "medium"),
-    "phone_intl": (r"\b\+\d{1,3}[-.\s]?\d{4,14}\b", "medium"),
-    "ssn": (r"\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b", "high"),
-    "credit_card": (r"\b(?:\d{4}[-\s]?){3}\d{4}\b", "high"),
-    "ip_address": (r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", "low"),
+# Regex patterns (always available)
+PII_PATTERNS = {
+    "email": (re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"), "medium"),
+    "phone": (re.compile(r"\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b"), "medium"),
+    "ssn": (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "high"),
+    "credit_card": (re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b"), "high"),
+    "ip_address": (re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"), "low"),
     "date_of_birth": (
-        r"\b(?:DOB|Date of Birth|born on)[:\s]*\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b",
-        "high",
+        re.compile(r"\b(?:0[1-9]|1[0-2])/(?:0[1-9]|[12]\d|3[01])/(?:19|20)\d{2}\b"),
+        "medium",
     ),
 }
 
-# Redaction placeholder
-REDACTION_CHAR = "*"
+# Try to load spaCy for NER
+_nlp = None
+_spacy_available = False
+
+
+def _init_spacy() -> bool:
+    """Initialize spaCy NER model if available."""
+    global _nlp, _spacy_available
+    if _nlp is not None:
+        return _spacy_available
+    try:
+        import spacy
+
+        _nlp = spacy.load("en_core_web_sm")
+        _spacy_available = True
+        logger.info("spacy_ner_loaded", model="en_core_web_sm")
+    except (ImportError, OSError):
+        _nlp = None
+        _spacy_available = False
+        logger.info("spacy_not_available", fallback="regex-only")
+    return _spacy_available
 
 
 class PIIDetector:
-    """Regex-based PII detection and redaction.
+    """Detect PII using regex + optional spaCy NER."""
 
-    Satisfies the PIIDetector Protocol (from protocols.py).
-    """
-
-    def __init__(
-        self,
-        patterns: dict[str, tuple[str, str]] | None = None,
-        redaction_char: str = REDACTION_CHAR,
-    ) -> None:
-        self._patterns = patterns or PII_PATTERNS
-        self._redaction_char = redaction_char
-        self._compiled = {
-            name: re.compile(pattern, re.IGNORECASE)
-            for name, (pattern, _) in self._patterns.items()
-        }
+    def __init__(self) -> None:
+        self._compiled = PII_PATTERNS
+        self._use_spacy = _init_spacy()
 
     def detect(self, text: str) -> list[PIIEntity]:
-        """Detect PII entities in text."""
-        entities: list[PIIEntity] = []
+        """Detect all PII entities in text."""
+        entities = []
 
-        for entity_type, compiled in self._compiled.items():
-            risk_level = self._patterns[entity_type][1]
-            for match in compiled.finditer(text):
+        # Regex detection (always)
+        for pii_type, (pattern, risk) in self._compiled.items():
+            for match in pattern.finditer(text):
                 entities.append(
                     PIIEntity(
-                        entity_type=entity_type,
+                        entity_type=pii_type,
                         value=match.group(),
                         start=match.start(),
                         end=match.end(),
-                        risk_level=risk_level,
+                        risk_level=risk,
+                        source="regex",
                     )
                 )
 
-        # Sort by position
-        entities.sort(key=lambda e: e.start)
-
-        if entities:
-            logger.info(
-                "pii_detected",
-                count=len(entities),
-                types=[e.entity_type for e in entities],
-                risk_levels=[e.risk_level for e in entities],
-            )
+        # spaCy NER detection (when available)
+        if self._use_spacy and _nlp is not None:
+            doc = _nlp(text)
+            for ent in doc.ents:
+                if ent.label_ == "PERSON":
+                    entities.append(
+                        PIIEntity(
+                            entity_type="person_name",
+                            value=ent.text,
+                            start=ent.start_char,
+                            end=ent.end_char,
+                            risk_level="medium",
+                            source="spacy_ner",
+                        )
+                    )
+                elif ent.label_ == "GPE":
+                    entities.append(
+                        PIIEntity(
+                            entity_type="location",
+                            value=ent.text,
+                            start=ent.start_char,
+                            end=ent.end_char,
+                            risk_level="low",
+                            source="spacy_ner",
+                        )
+                    )
+                elif ent.label_ in ("ORG",):
+                    entities.append(
+                        PIIEntity(
+                            entity_type="organization",
+                            value=ent.text,
+                            start=ent.start_char,
+                            end=ent.end_char,
+                            risk_level="low",
+                            source="spacy_ner",
+                        )
+                    )
 
         return entities
 
     def redact(self, text: str) -> str:
-        """Detect and redact PII from text."""
+        """Redact all PII from text."""
         entities = self.detect(text)
-        if not entities:
-            return text
-
-        # Redact from end to start to preserve positions
+        entities.sort(key=lambda e: e.start, reverse=True)
         result = text
-        for entity in reversed(entities):
-            replacement = f"[{entity.entity_type.upper()}]"
-            result = result[: entity.start] + replacement + result[entity.end :]
-
+        for entity in entities:
+            tag = f"[{entity.entity_type.upper()}]"
+            result = result[: entity.start] + tag + result[entity.end :]
         return result
 
     def assess_risk(self, text: str) -> str:
-        """Assess overall PII risk level of text."""
+        """Assess overall PII risk level."""
         entities = self.detect(text)
         if not entities:
             return "none"
-
-        risk_order = {"low": 1, "medium": 2, "high": 3}
-        max_risk = max(risk_order.get(e.risk_level, 0) for e in entities)
-        risk_map = {1: "low", 2: "medium", 3: "high"}
-        return risk_map.get(max_risk, "unknown")
+        if any(e.risk_level == "high" for e in entities):
+            return "high"
+        if any(e.risk_level == "medium" for e in entities):
+            return "medium"
+        return "low"

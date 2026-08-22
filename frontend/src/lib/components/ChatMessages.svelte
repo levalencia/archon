@@ -98,12 +98,30 @@
       <!-- Sources -->
       {#if msg.sources && msg.sources.length > 0}
         <div class="ml-9 mt-3 flex gap-2 flex-wrap">
-          {#each msg.sources as source}
-            <div class="px-3 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-md text-xs text-[var(--text-secondary)] flex items-center gap-1.5 cursor-pointer hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all">
+          {#each msg.sources as source, i}
+            <button
+              onclick={() => {
+                const el = document.getElementById('source-detail-' + msg.id);
+                if (el) {
+                  el.dataset.source = JSON.stringify(source);
+                  el.dataset.index = String(i);
+                  el.style.display = 'block';
+                }
+              }}
+              class="px-3 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-md text-xs text-[var(--text-secondary)] flex items-center gap-1.5 cursor-pointer hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
+            >
+              <span class="text-[var(--accent)] font-mono text-[10px]">[{i + 1}]</span>
               📄 {source.title}
               <span class="text-[var(--success)] font-mono text-[11px]">{source.score.toFixed(2)}</span>
-            </div>
+            </button>
           {/each}
+        </div>
+        <div id="source-detail-{msg.id}" style="display:none" class="ml-9 mt-2 px-4 py-3 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg text-xs text-[var(--text-secondary)]">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-semibold text-[var(--text-primary)]">Source Preview</span>
+            <button onclick={(e) => { const el = (e.target as HTMLElement).closest('[id^=source-detail]'); if (el) el.style.display = 'none'; }} class="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">✕</button>
+          </div>
+          <div class="text-[var(--text-muted)] font-mono text-[11px]">Click a source chip above to preview</div>
         </div>
       {/if}
     </div>

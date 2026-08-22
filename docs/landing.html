@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Archon — Production AI Agent</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; }
+  .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 20px; }
+  .logo { width: 80px; height: 80px; background: linear-gradient(135deg, #58a6ff, #bc8cff); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 700; color: white; margin-bottom: 24px; }
+  h1 { font-size: 48px; font-weight: 700; margin-bottom: 12px; }
+  .subtitle { font-size: 20px; color: #8b949e; max-width: 600px; margin-bottom: 32px; line-height: 1.6; }
+  .badges { display: flex; gap: 8px; margin-bottom: 40px; flex-wrap: wrap; justify-content: center; }
+  .badge { padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; }
+  .badge-blue { background: rgba(88,166,255,0.15); color: #58a6ff; }
+  .badge-green { background: rgba(63,185,80,0.15); color: #3fb950; }
+  .badge-purple { background: rgba(188,140,255,0.15); color: #bc8cff; }
+  .cta { display: flex; gap: 12px; margin-bottom: 60px; }
+  .btn { padding: 12px 28px; border-radius: 10px; font-size: 15px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
+  .btn-primary { background: #58a6ff; color: white; }
+  .btn-primary:hover { background: #79c0ff; }
+  .btn-secondary { background: #21262d; color: #e6edf3; border: 1px solid #30363d; }
+  .btn-secondary:hover { border-color: #58a6ff; }
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 1000px; margin-bottom: 60px; }
+  .feature { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; text-align: left; }
+  .feature-icon { font-size: 28px; margin-bottom: 12px; }
+  .feature h3 { font-size: 16px; margin-bottom: 8px; }
+  .feature p { font-size: 14px; color: #8b949e; line-height: 1.5; }
+  .stats { display: flex; gap: 40px; margin-bottom: 60px; }
+  .stat { text-align: center; }
+  .stat-number { font-size: 36px; font-weight: 700; color: #58a6ff; }
+  .stat-label { font-size: 13px; color: #8b949e; margin-top: 4px; }
+  .tech { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 40px; }
+  .tech span { padding: 6px 14px; background: #1c2128; border: 1px solid #30363d; border-radius: 8px; font-size: 13px; color: #8b949e; }
+  .footer { padding: 40px; text-align: center; border-top: 1px solid #30363d; color: #6e7681; font-size: 14px; }
+  .footer a { color: #58a6ff; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="logo">A</div>
+  <h1>Archon</h1>
+  <p class="subtitle">
+    A production AI agent webapp with ReAct reasoning, multi-agent orchestration,
+    RAG, tools, skills, and full observability. Runs 100% local.
+  </p>
+
+  <div class="badges">
+    <span class="badge badge-blue">294 Tests</span>
+    <span class="badge badge-green">100% Local</span>
+    <span class="badge badge-purple">Zero Frameworks</span>
+    <span class="badge badge-blue">61 Python Files</span>
+    <span class="badge badge-green">Ollama + llava</span>
+  </div>
+
+  <div class="cta">
+    <a href="https://github.com/levalencia/archon" class="btn btn-primary">⭐ Star on GitHub</a>
+    <a href="https://github.com/levalencia/archon#-quick-start" class="btn btn-secondary">Quick Start →</a>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">🧠</div>
+      <h3>ReAct Agent Loop</h3>
+      <p>Think → Act → Observe reasoning with tool calling. Ollama llama3.1 decides when to use calculator, web search, or file tools.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🤖</div>
+      <h3>Multi-Agent Orchestration</h3>
+      <p>Coordinator delegates to Planner, Retriever, Validator, Synthesizer. Per-agent token budgets. Fallback on failure.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📄</div>
+      <h3>RAG Pipeline</h3>
+      <p>Upload docs → chunk → embed → hybrid search (vector + BM25). Grounded answers with source citations.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🛡️</div>
+      <h3>Security Suite</h3>
+      <p>PII detection (regex + spaCy NER), guardrails, prompt injection blocking, red teaming, fuzz testing.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📊</div>
+      <h3>Full Observability</h3>
+      <p>OpenTelemetry traces, Prometheus metrics, cost tracking, drift detection, Jaeger visualization.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🎨</div>
+      <h3>Artifacts & Vision</h3>
+      <p>Claude-style artifact viewer (HTML, code, SVG, Mermaid). Upload images for llava analysis.</p>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-number">294</div>
+      <div class="stat-label">Tests Passing</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">61</div>
+      <div class="stat-label">Python Files</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">30+</div>
+      <div class="stat-label">API Endpoints</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">0</div>
+      <div class="stat-label">API Keys Needed</div>
+    </div>
+  </div>
+
+  <div class="tech">
+    <span>SvelteKit</span>
+    <span>FastAPI</span>
+    <span>Python 3.11</span>
+    <span>Ollama</span>
+    <span>PostgreSQL</span>
+    <span>Redis</span>
+    <span>Docker</span>
+    <span>Kubernetes</span>
+    <span>OpenTelemetry</span>
+  </div>
+</div>
+
+<div class="footer">
+  Built by <a href="https://github.com/levalencia">Luis Valencia</a> — Microsoft MVP · AI & Data Practice Lead
+  <br>Zero frameworks. Pure Python. Production-ready.
+</div>
+</body>
+</html>

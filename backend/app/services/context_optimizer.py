@@ -10,20 +10,17 @@ from __future__ import annotations
 
 import structlog
 
+from app.memory.advanced import get_token_count
+
 logger = structlog.get_logger()
 
-# Approximate token counting (no tiktoken dependency needed)
-# Average: 1 token ≈ 4 characters for English text
-CHARS_PER_TOKEN = 4
+
+CHARS_PER_TOKEN = 4  # Fallback constant
 
 
 def count_tokens(text: str) -> int:
-    """Count approximate tokens in text.
-
-    Uses character-based estimation (1 token ≈ 4 chars).
-    For production, swap with tiktoken: tiktoken.encoding_for_model(model).encode(text)
-    """
-    return max(1, len(text) // CHARS_PER_TOKEN)
+    """Count tokens using tiktoken (with fallback)."""
+    return get_token_count(text)
 
 
 def count_messages_tokens(messages: list[dict]) -> int:
