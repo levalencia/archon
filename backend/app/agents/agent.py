@@ -110,6 +110,7 @@ class ProductionAgent:
         self,
         user_input: str,
         conversation_id: str | None = None,
+        images: list[str] | None = None,
     ) -> AgentResult:
         """Execute the ReAct loop for a user message."""
         conversation_id = conversation_id or str(uuid.uuid4())

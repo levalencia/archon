@@ -77,6 +77,7 @@ def _create_tool_registry() -> SecureToolRegistry:
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
     conversation_id: str = ""
+    image: str = ""  # Base64 encoded image (optional)
 
 
 class ChatResponse(BaseModel):
@@ -88,6 +89,7 @@ class ChatResponse(BaseModel):
     tokens_used: int
     thinking_steps: list[dict]
     skills_used: list[dict]
+    image_analyzed: bool = False
 
 
 @router.post("", response_model=ChatResponse)
@@ -136,7 +138,13 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     )
 
     # Run the agent
-    result = await agent.run(body.message, conversation_id=conv_id)
+    # Parse images if provided
+    images = [body.image] if body.image else None
+    result = await agent.run(
+        body.message,
+        conversation_id=conv_id,
+        images=images,
+    )
 
     elapsed_ms = (time.monotonic() - start_time) * 1000
 
@@ -152,6 +160,20 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
                 "done": True,
                 "duration_ms": step.get("duration_ms", 0),
             }
+        )
+
+    # Add image step if image was analyzed
+    if body.image:
+        thinking_steps.insert(
+            0,
+            {
+                "step": 0,
+                "type": "vision",
+                "agent": "vision",
+                "detail": "Analyzing uploaded image with vision model",
+                "done": True,
+                "duration_ms": 0,
+            },
         )
 
     # Add skills step if any were used
@@ -190,6 +212,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         tokens_used=result.tokens_used,
         thinking_steps=thinking_steps,
         skills_used=skills_used,
+        image_analyzed=bool(body.image),
     )
 
 
@@ -234,7 +257,13 @@ async def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
         )
         yield f"event: thinking\ndata: {data}\n\n"
 
-        result = await agent.run(body.message, conversation_id=conv_id)
+        # Parse images if provided
+        images = [body.image] if body.image else None
+        result = await agent.run(
+            body.message,
+            conversation_id=conv_id,
+            images=images,
+        )
 
         # Stream thinking steps
         for step in result.steps:

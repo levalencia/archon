@@ -36,7 +36,7 @@
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  async function handleSend(message: string) {
+  async function handleSend(message: string, image?: string) {
     const userMsg: Message = {
       id: String(Date.now()),
       role: 'user',
@@ -66,6 +66,7 @@
         body: JSON.stringify({
           message,
           conversation_id: activeConversationId || undefined,
+          image: image || '',
         }),
       });
 
@@ -205,7 +206,7 @@
       {:else}
         <ChatMessages {messages} />
       {/if}
-      <ChatInput onSend={handleSend} disabled={isLoading} />
+      <ChatInput onSend={(msg, img) => handleSend(msg, img)} disabled={isLoading} />
     </div>
 
     {#if showTrace}
