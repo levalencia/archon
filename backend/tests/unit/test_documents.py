@@ -1,4 +1,5 @@
 """Tests for document API endpoints (upload, query, list, delete)."""
+
 from __future__ import annotations
 
 import pytest
