@@ -74,7 +74,6 @@ async def red_team_test(count: int = 15) -> RedTeamResult:
         pii_entities = pii.detect(prompt)
 
         is_blocked = not guard_result.get("allowed", True)
-        has_pii = len(pii_entities) > 0
 
         if is_blocked:
             blocked += 1
