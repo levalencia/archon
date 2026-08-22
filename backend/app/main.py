@@ -14,6 +14,7 @@ from app.middleware.correlation import CorrelationIdMiddleware
 from app.observability.logging import setup_logging
 from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
+from app.routes.documents import router as documents_router
 
 logger = structlog.get_logger()
 
@@ -73,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(chat_router)
     app.include_router(conversations_router)
+    app.include_router(documents_router)
 
     @app.get("/healthz")
     async def healthz() -> dict:

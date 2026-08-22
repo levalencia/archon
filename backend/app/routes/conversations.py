@@ -9,7 +9,7 @@ DELETE /api/conversations/{id}      — Delete a conversation
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter
@@ -73,7 +73,7 @@ async def list_conversations() -> list[ConversationResponse]:
 async def create_conversation(body: ConversationCreate) -> ConversationResponse:
     """Create a new conversation."""
     conv_id = str(uuid.uuid4())
-    now = datetime.now(tz=timezone.utc).isoformat()
+    now = datetime.now(tz=UTC).isoformat()
 
     _conversation_meta[conv_id] = {
         "title": body.title,
