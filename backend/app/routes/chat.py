@@ -27,6 +27,7 @@ from app.tools.builtin import (
     datetime_tool,
     read_file_tool,
 )
+from app.tools.image_gen import image_gen_tool
 from app.tools.registry import SecureToolRegistry
 from app.tools.web_search import web_search_tool
 
@@ -69,6 +70,14 @@ def _create_tool_registry() -> SecureToolRegistry:
         description="Read the contents of a file by path",
         input_schema={"required": ["path"]},
         timeout=10,
+    )
+
+    registry.register(
+        name="image_gen",
+        handler=image_gen_tool,
+        description="Generate an image from a text description. Returns image URL.",
+        input_schema={"required": ["prompt"]},
+        timeout=60,
     )
 
     return registry
