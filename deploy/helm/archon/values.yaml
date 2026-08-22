@@ -1,0 +1,49 @@
+replicaCount: 2
+
+image:
+  repository: archon-backend
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: true
+  host: archon.example.com
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPU: 70
+
+config:
+  llmProvider: ollama
+  llmModel: llama3.1:8b
+  skillsTopK: "3"
+  debug: "false"
+
+secrets:
+  databaseUrl: postgresql+asyncpg://archon:archon@postgres:5432/archon
+  redisUrl: redis://redis:6379/0
+  jwtSecret: change-me-in-production
+
+postgresql:
+  enabled: true
+  auth:
+    username: archon
+    password: archon
+    database: archon
+
+redis:
+  enabled: true

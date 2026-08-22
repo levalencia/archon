@@ -1,0 +1,12 @@
+apiVersion: v2
+name: archon
+description: Production AI Agent Webapp
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai-agent
+  - llm
+  - rag
+  - multi-agent
+home: https://github.com/levalencia/archon
