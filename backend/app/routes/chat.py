@@ -7,13 +7,11 @@ GET /api/chat/history/{conversation_id} — Get conversation history
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
 
 import structlog
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agents.agent import ProductionAgent
@@ -256,7 +254,6 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         image_analyzed=bool(body.image),
         artifacts=saved_artifacts,
     )
-
 
 
 @router.get("/history/{conversation_id}")
