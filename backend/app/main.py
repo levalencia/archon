@@ -22,6 +22,7 @@ from app.routes.images import router as images_router
 from app.routes.red_team import router as red_team_router
 from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
+from app.routes.stream import router as stream_router
 
 logger = structlog.get_logger()
 
@@ -80,6 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # --- Routes ---
 
     app.include_router(chat_router)
+    app.include_router(stream_router)
     app.include_router(conversations_router)
     app.include_router(documents_router)
     app.include_router(admin_router)

@@ -21,17 +21,91 @@
         const r = await fetch('/api/conversations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: msg.substring(0, 50) }) });
         currentConversationId = (await r.json()).id;
       }
+
+      // Create assistant message placeholder
+      const am: any = {
+        id: Date.now(), role: 'assistant', content: '',
+        timestamp: new Date().toLocaleTimeString(),
+        thinking_steps: [], tool_calls: [], skills_used: [],
+        sources: [], artifacts: [], iterations: 0,
+      };
+      messages = [...messages, am];
+
+      // SSE streaming request
       const body: any = { message: msg, conversation_id: currentConversationId };
       if (image) body.image = image;
-      const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) { messages = [...messages, { id: Date.now(), role: 'assistant', content: `Error: ${res.status}`, timestamp: new Date().toLocaleTimeString() }]; return; }
-      const data = await res.json();
-      traceData = { stats: { iterations: data.iterations, tools: data.tool_calls?.length || 0, tokens: data.tokens_used || 0, latency: data.elapsed_ms || 0 }, entries: data.thinking_steps || [], skills: data.skills_used || [] };
-      if (data.artifacts?.length > 0) artifacts = [...artifacts, ...data.artifacts];
-      const am: any = { id: Date.now(), role: 'assistant', content: '', timestamp: new Date().toLocaleTimeString(), thinking_steps: data.thinking_steps, tool_calls: data.tool_calls, skills_used: data.skills_used, sources: data.sources, artifacts: data.artifacts, iterations: data.iterations };
-      messages = [...messages, am];
-      const words = data.response.split(' ');
-      for (let i = 0; i < words.length; i++) { am.content += (i === 0 ? '' : ' ') + words[i]; messages = [...messages.slice(0, -1), { ...am }]; if (i % 3 === 0) await new Promise(r => setTimeout(r, 25)); }
+
+      const res = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            const eventType = line.substring(7);
+            // Next line should be data:
+            continue;
+          }
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.substring(6);
+
+          try {
+            const data = JSON.parse(payload);
+
+            // Handle different event types based on content
+            if (typeof data === 'string') {
+              // thinking or token event
+              if (data.startsWith('Searching') || data.startsWith('Preparing') || data.startsWith('Reasoning') || data.startsWith('Generating') || data.startsWith('No relevant')) {
+                am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: data, done: true }];
+              } else {
+                // Token — append to content
+                am.content += data;
+              }
+            } else if (data.tool) {
+              // tool_call event
+              am.tool_calls = [...(am.tool_calls || []), data];
+              am.thinking_steps = [...(am.thinking_steps || []), { type: 'tool_call', detail: `Called ${data.tool}(${JSON.stringify(data.parameters || {})})`, done: true }];
+            } else if (data.name && data.description) {
+              // skill event
+              am.skills_used = [...(am.skills_used || []), data];
+            } else if (data.iterations !== undefined) {
+              // done event
+              am.iterations = data.iterations;
+              if (data.artifacts) {
+                am.artifacts = data.artifacts;
+                artifacts = [...artifacts, ...data.artifacts];
+              }
+              traceData = {
+                stats: { iterations: data.iterations, tools: data.tools_used || 0, latency: data.elapsed_ms || 0 },
+                entries: am.thinking_steps || [],
+                skills: data.skills_used || [],
+              };
+            } else if (data.title && data.type) {
+              // artifact event
+              am.artifacts = [...(am.artifacts || []), data];
+            }
+          } catch {
+            // Plain text token
+            am.content += payload;
+          }
+
+          // Update messages reactively
+          messages = [...messages.slice(0, -1), { ...am }];
+        }
+      }
     } catch (e) { messages = [...messages, { id: Date.now(), role: 'assistant', content: `Error: ${e}`, timestamp: new Date().toLocaleTimeString() }]; }
     finally { isLoading = false; }
   }
