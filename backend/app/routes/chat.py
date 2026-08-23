@@ -22,6 +22,7 @@ from app.routes.admin import get_skills_top_k
 from app.routes.artifacts import get_artifact_store
 from app.routes.skills import get_skill_registry
 from app.services.artifacts import Artifact, detect_artifact_in_response
+from app.services.context_optimizer import ContextOptimizer
 from app.tools.builtin import (
     calculator_tool,
     datetime_tool,
@@ -59,7 +60,37 @@ def get_tool_registry():
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # Module-level stores (replaced by DI in production)
-_memory = InMemoryStore()
+# Persistent memory: SQLite (survives restarts). Switch to PostgreSQL via ARCHON_DATABASE_URL
+
+_db_store = None
+_memory_fallback = InMemoryStore()
+_context_optimizer = ContextOptimizer(max_tokens=6000, reserve_for_response=2048)
+
+
+async def _get_db_store():
+    global _db_store
+    if _db_store is None:
+        import os
+        from app.services.db_store import DatabaseStore
+
+        db_url = os.environ.get("ARCHON_DATABASE_URL", "sqlite+aiosqlite:///archon.db")
+        _db_store = DatabaseStore(db_url)
+        await _db_store.initialize()
+    return _db_store
+
+
+# Wrapper that implements the MemoryStore protocol using DatabaseStore
+class PersistentMemory:
+    async def store(self, conversation_id: str, role: str, content: str) -> None:
+        db = await _get_db_store()
+        await db.store(conversation_id, {"role": role, "content": content})
+
+    async def retrieve(self, conversation_id: str, limit: int = 50) -> list[dict]:
+        db = await _get_db_store()
+        return await db.retrieve(conversation_id, limit)
+
+
+_memory = PersistentMemory()
 
 
 def _create_tool_registry() -> SecureToolRegistry:
@@ -173,6 +204,18 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     # Run the agent
     # Parse images if provided
     images = [body.image] if body.image else None
+    # Optimize context window before running agent
+    history = await _memory.retrieve(conv_id, limit=50)
+    if len(history) > 10:
+        optimized = _context_optimizer.optimize(history)
+        stats = _context_optimizer.get_stats(optimized)
+        logger.info(
+            "context_optimized",
+            original=len(history),
+            optimized=len(optimized),
+            utilization_pct=stats["utilization_pct"],
+        )
+
     result = await agent.run(
         body.message,
         conversation_id=conv_id,
