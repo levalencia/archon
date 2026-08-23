@@ -1,18 +1,21 @@
-"""Azure AI Foundry adapter. Uses httpx with api-key header."""
+"""Azure AI Foundry adapter using the Anthropic Python SDK.
+
+Uses AsyncAnthropicFoundry for proper Azure authentication.
+"""
 
 from __future__ import annotations
 
-import httpx
+import time
+
 import structlog
 
 logger = structlog.get_logger()
 
 
 class FoundryAdapter:
-    """Azure AI Foundry adapter for Claude/GPT models hosted on Foundry.
+    """Azure AI Foundry adapter using the official Anthropic SDK.
 
-    Uses the Anthropic Messages API format with Azure's api-key auth header.
-    The core agent code never imports this directly — it goes through llm_factory.
+    Uses AsyncAnthropic with azure endpoint for proper auth handling.
     """
 
     def __init__(
@@ -21,54 +24,53 @@ class FoundryAdapter:
         base_url: str,
         model: str = "claude-opus-4-6",
     ) -> None:
+        from anthropic import AsyncAnthropic
+
         self.model = model
-        self.base_url = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            headers={
-                "api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            timeout=60.0,
+        self._client = AsyncAnthropic(
+            api_key=api_key,
+            base_url=base_url,
         )
-        logger.info("foundry_adapter_init", model=model, base_url=self.base_url)
+        logger.info("foundry_adapter_init", model=model, base_url=base_url)
 
     async def chat(
         self,
         messages: list[dict[str, str]],
         max_tokens: int = 4096,
-        temperature: float = 0.7,
+        **kwargs,
     ) -> str:
-        """Send messages to Azure Foundry endpoint."""
+        """Send messages to Azure Foundry via Anthropic SDK."""
         system_msg = None
         chat_messages = []
         for msg in messages:
             if msg["role"] == "system":
                 system_msg = msg["content"]
             else:
-                chat_messages.append(msg)
+                chat_messages.append({"role": msg["role"], "content": msg["content"]})
 
-        payload: dict = {
+        start = time.monotonic()
+
+        create_kwargs: dict = {
             "model": self.model,
             "messages": chat_messages,
             "max_tokens": max_tokens,
-            "temperature": temperature,
         }
         if system_msg:
-            payload["system"] = system_msg
+            create_kwargs["system"] = system_msg
 
-        response = await self._client.post("/v1/messages", json=payload)
-        response.raise_for_status()
+        response = await self._client.messages.create(**create_kwargs)
 
-        data = response.json()
-        content = data["content"][0]["text"]
+        duration_ms = (time.monotonic() - start) * 1000
+        content = response.content[0].text
 
         logger.info(
             "foundry_chat_complete",
             model=self.model,
             input_messages=len(chat_messages),
-            usage=data.get("usage"),
+            output_length=len(content),
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            duration_ms=round(duration_ms, 2),
         )
 
         return content

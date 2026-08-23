@@ -362,10 +362,13 @@ class ProductionAgent:
         return messages
 
     def _parse_tool_call(self, response: str) -> dict | None:
-        """Parse a tool call from LLM response. Returns None if final answer."""
+        """Parse a tool call from LLM response. Returns None if final answer.
+
+        Handles: pure JSON, JSON embedded in text, JSON in code blocks.
+        """
         response = response.strip()
 
-        # Try to parse as JSON with tool_call
+        # Try 1: Full response is JSON
         try:
             data = json.loads(response)
             if isinstance(data, dict) and "tool_call" in data:
@@ -374,6 +377,43 @@ class ProductionAgent:
                     return tc
         except (json.JSONDecodeError, KeyError):
             pass
+
+        # Try 2: Find JSON object in text (Claude often wraps in text)
+        import re
+
+        json_matches = re.findall(
+            r'\{\s*"tool_call"\s*:\s*\{[^}]*"name"\s*:[^}]*\}\s*\}',
+            response,
+        )
+        for match in json_matches:
+            try:
+                data = json.loads(match)
+                if "tool_call" in data and "name" in data["tool_call"]:
+                    return data["tool_call"]
+            except json.JSONDecodeError:
+                continue
+
+        # Try 3: Find any {"tool_call": ...} pattern more flexibly
+        idx = response.find('"tool_call"')
+        if idx >= 0:
+            # Walk back to find opening brace
+            start = response.rfind("{", 0, idx)
+            if start >= 0:
+                # Find matching closing braces
+                depth = 0
+                for i in range(start, len(response)):
+                    if response[i] == "{":
+                        depth += 1
+                    elif response[i] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            try:
+                                data = json.loads(response[start : i + 1])
+                                if "tool_call" in data:
+                                    return data["tool_call"]
+                            except json.JSONDecodeError:
+                                pass
+                            break
 
         return None
 

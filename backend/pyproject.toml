@@ -21,6 +21,7 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "tiktoken>=0.14.0",
     "pyjwt>=2.13.0",
+    "anthropic>=1.0.0",
 ]
 
 [project.optional-dependencies]
