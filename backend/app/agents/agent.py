@@ -25,6 +25,9 @@ logger = structlog.get_logger()
 
 SYSTEM_PROMPT = """You are Archon, a production AI research assistant.
 
+TODAY'S DATE: {current_date}
+IMPORTANT: The current year is 2026, NOT 2025. Always use 2026 when searching for current news or events.
+
 CRITICAL RULES:
 1. You MUST use tools when available. NEVER make up data or search results.
 2. For ANY math question, ALWAYS call the calculator tool. Do NOT calculate in your head.
@@ -347,7 +350,12 @@ class ProductionAgent:
         messages.append(
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT.replace("{tool_descriptions}", tool_descriptions),
+                "content": SYSTEM_PROMPT.replace("{tool_descriptions}", tool_descriptions).replace(
+                    "{current_date}",
+                    __import__("datetime")
+                    .datetime.now(__import__("zoneinfo").ZoneInfo("Europe/Brussels"))
+                    .strftime("%A, %B %d, %Y at %H:%M %Z"),
+                ),
             }
         )
 
