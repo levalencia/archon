@@ -179,7 +179,7 @@ class ProductionAgent:
             # Auto-compact context if too long
             from app.services.auto_compact import auto_compact_context
 
-            messages = await auto_compact_context(
+            messages, compact_stats = await auto_compact_context(
                 messages,
                 llm_chat_fn=self.llm.chat,
             )
@@ -355,10 +355,18 @@ class ProductionAgent:
             if tools:
                 tool_descriptions = json.dumps(tools, indent=2)
 
+        # Inject persistent memory into system prompt
+        from app.memory.persistent import get_persistent_memory
+        persistent = get_persistent_memory()
+        memory_context = persistent.get_context_text()
+        memory_section = ""
+        if memory_context:
+            memory_section = f"\n\nPERSISTENT MEMORY (facts about the user):\n{memory_context}\n"
+
         messages.append(
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT.replace("{tool_descriptions}", tool_descriptions).replace(
+                "content": (SYSTEM_PROMPT.replace("{tool_descriptions}", tool_descriptions) + memory_section).replace(
                     "{current_date}",
                     __import__("datetime")
                     .datetime.now(__import__("zoneinfo").ZoneInfo("Europe/Brussels"))

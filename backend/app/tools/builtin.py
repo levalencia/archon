@@ -15,7 +15,8 @@ from pathlib import Path
 
 import structlog
 
-from app.tools.web_search import web_search_tool  # noqa: F401 — re-exported
+from app.tools.memory_tools import memory_tool, session_search_tool  # noqa: F401 — re-exported
+from app.tools.web_search import web_search_tool
 
 logger = structlog.get_logger()
 

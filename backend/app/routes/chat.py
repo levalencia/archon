@@ -26,7 +26,9 @@ from app.services.context_optimizer import ContextOptimizer
 from app.tools.builtin import (
     calculator_tool,
     datetime_tool,
+    memory_tool,
     read_file_tool,
+    session_search_tool,
 )
 from app.tools.image_gen import image_gen_tool
 from app.tools.registry import SecureToolRegistry
@@ -36,7 +38,7 @@ logger = structlog.get_logger()
 
 # Singletons — created once, reused across requests
 _llm_singleton = None
-_tools_singleton = None
+_tools_singleton = None  # Reset on import
 
 
 def get_llm_client(settings):
@@ -133,6 +135,20 @@ def _create_tool_registry() -> SecureToolRegistry:
         description="Generate an image from a text description. Returns image URL.",
         input_schema={"required": ["prompt"]},
         timeout=60,
+    )
+
+    registry.register(
+        name="memory",
+        handler=memory_tool,
+        description="Save/recall persistent facts about the user. Actions: add, remove, replace, list.",
+        input_schema={"required": ["action"]},
+    )
+
+    registry.register(
+        name="session_search",
+        handler=session_search_tool,
+        description="Search past conversations. Use when user asks about previous discussions.",
+        input_schema={"required": ["query"]},
     )
 
     return registry
