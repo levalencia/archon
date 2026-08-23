@@ -36,7 +36,7 @@ class FoundryAdapter:
     async def chat(
         self,
         messages: list[dict[str, str]],
-        max_tokens: int = 4096,
+        max_tokens: int = 2048,
         **kwargs,
     ) -> str:
         """Send messages to Azure Foundry via Anthropic SDK."""
