@@ -53,56 +53,53 @@
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
+        let currentEvent = '';
         for (const line of lines) {
           if (line.startsWith('event: ')) {
-            const eventType = line.substring(7);
-            // Next line should be data:
+            currentEvent = line.substring(7).trim();
             continue;
           }
           if (!line.startsWith('data: ')) continue;
           const payload = line.substring(6);
 
-          try {
-            const data = JSON.parse(payload);
-
-            // Handle different event types based on content
-            if (typeof data === 'string') {
-              // thinking or token event
-              if (data.startsWith('Searching') || data.startsWith('Preparing') || data.startsWith('Reasoning') || data.startsWith('Generating') || data.startsWith('No relevant')) {
-                am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: data, done: true }];
-              } else {
-                // Token — append to content
-                am.content += data;
-              }
-            } else if (data.tool) {
-              // tool_call event
-              am.tool_calls = [...(am.tool_calls || []), data];
-              am.thinking_steps = [...(am.thinking_steps || []), { type: 'tool_call', detail: `Called ${data.tool}(${JSON.stringify(data.parameters || {})})`, done: true }];
-            } else if (data.name && data.description) {
-              // skill event
-              am.skills_used = [...(am.skills_used || []), data];
-            } else if (data.iterations !== undefined) {
-              // done event
-              am.iterations = data.iterations;
-              if (data.artifacts) {
-                am.artifacts = data.artifacts;
-                artifacts = [...artifacts, ...data.artifacts];
-              }
-              traceData = {
-                stats: { iterations: data.iterations, tools: data.tools_used || 0, latency: data.elapsed_ms || 0 },
-                entries: am.thinking_steps || [],
-                skills: data.skills_used || [],
-              };
-            } else if (data.title && data.type) {
-              // artifact event
-              am.artifacts = [...(am.artifacts || []), data];
-            }
-          } catch {
-            // Plain text token
+          if (currentEvent === 'thinking') {
+            am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: payload, done: true }];
+          } else if (currentEvent === 'skill') {
+            try {
+              const skill = JSON.parse(payload);
+              am.skills_used = [...(am.skills_used || []), skill];
+            } catch {}
+          } else if (currentEvent === 'tool_call') {
+            try {
+              const tc = JSON.parse(payload);
+              am.tool_calls = [...(am.tool_calls || []), tc];
+              am.thinking_steps = [...(am.thinking_steps || []), {
+                type: 'tool_call',
+                detail: `Called ${tc.tool}(${JSON.stringify(tc.parameters || {}).substring(0, 100)})`,
+                done: true,
+              }];
+            } catch {}
+          } else if (currentEvent === 'token') {
             am.content += payload;
+          } else if (currentEvent === 'artifact') {
+            try {
+              const art = JSON.parse(payload);
+              am.artifacts = [...(am.artifacts || []), art];
+              artifacts = [...artifacts, art];
+            } catch {}
+          } else if (currentEvent === 'done') {
+            try {
+              const done = JSON.parse(payload);
+              am.iterations = done.iterations;
+              traceData = {
+                stats: { iterations: done.iterations, tools: done.tools_used || 0, latency: done.elapsed_ms || 0 },
+                entries: am.thinking_steps || [],
+                skills: done.skills_used || [],
+              };
+            } catch {}
           }
 
-          // Update messages reactively
+          currentEvent = '';
           messages = [...messages.slice(0, -1), { ...am }];
         }
       }
