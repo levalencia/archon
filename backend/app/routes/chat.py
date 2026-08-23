@@ -71,6 +71,7 @@ async def _get_db_store():
     global _db_store
     if _db_store is None:
         import os
+
         from app.services.db_store import DatabaseStore
 
         db_url = os.environ.get("ARCHON_DATABASE_URL", "sqlite+aiosqlite:///archon.db")

@@ -176,6 +176,14 @@ class ProductionAgent:
                         break
 
             # Call LLM
+            # Auto-compact context if too long
+            from app.services.auto_compact import auto_compact_context
+
+            messages = await auto_compact_context(
+                messages,
+                llm_chat_fn=self.llm.chat,
+            )
+
             response = await self.llm.chat(
                 messages, max_tokens=min(4096, self.token_budget - total_tokens)
             )
