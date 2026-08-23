@@ -37,6 +37,7 @@
       const body: any = { message: msg, conversation_id: currentConversationId };
       if (image) body.image = image;
 
+      // First: get full response (sync) for tools/skills/artifacts
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -49,6 +50,32 @@
       }
 
       const data = await res.json();
+
+      // Then: stream the response text for visual effect
+      const fullResponse = data.response;
+      const assistantMsg = {
+        id: Date.now(),
+        role: 'assistant' as const,
+        content: '',
+        timestamp: new Date().toLocaleTimeString(),
+        thinking_steps: data.thinking_steps,
+        tool_calls: data.tool_calls,
+        skills_used: data.skills_used,
+        sources: data.sources,
+        artifacts: data.artifacts,
+        iterations: data.iterations,
+      };
+      messages = [...messages, assistantMsg];
+
+      // Stream text word by word
+      const words = fullResponse.split(' ');
+      for (let i = 0; i < words.length; i++) {
+        assistantMsg.content += (i === 0 ? '' : ' ') + words[i];
+        messages = [...messages.slice(0, -1), { ...assistantMsg }];
+        if (i % 3 === 0) {
+          await new Promise(r => setTimeout(r, 30));
+        }
+      }
 
       // Update trace data
       traceData = {
@@ -67,18 +94,7 @@
         artifacts = [...artifacts, ...data.artifacts];
       }
 
-      messages = [...messages, {
-        id: Date.now(),
-        role: 'assistant',
-        content: data.response,
-        timestamp: new Date().toLocaleTimeString(),
-        thinking_steps: data.thinking_steps,
-        tool_calls: data.tool_calls,
-        skills_used: data.skills_used,
-        sources: data.sources,
-        artifacts: data.artifacts,
-        iterations: data.iterations,
-      }];
+      // (already streamed above)
 
     } catch (e) {
       messages = [...messages, { id: Date.now(), role: 'assistant', content: `Connection error: ${e}`, timestamp: new Date().toLocaleTimeString() }];
