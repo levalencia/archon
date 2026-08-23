@@ -23,14 +23,14 @@ from starlette.responses import StreamingResponse
 
 from app.agents.agent import ProductionAgent
 from app.agents.llm_factory import create_llm_client
-from app.middleware.correlation import get_correlation_id
+from app.observability.logging import get_correlation_id
 from app.routes.chat import (
     _create_tool_registry,
     _memory,
     get_skill_registry,
     get_skills_top_k,
 )
-from app.services.artifacts import detect_artifacts
+from app.services.artifacts import detect_artifact_in_response
 
 logger = structlog.get_logger()
 
@@ -114,7 +114,7 @@ async def chat_stream_real(body: StreamRequest, request: Request):
             )
 
         # Step 5: Detect artifacts
-        artifacts = detect_artifacts(result.response, conv_id)
+        artifacts = detect_artifact_in_response(result.response)
         for art in artifacts:
             yield _sse(
                 "artifact",
