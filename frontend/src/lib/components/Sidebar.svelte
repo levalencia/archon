@@ -106,10 +106,13 @@
               {conv.id === activeId ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}">
               {conv.title || 'Untitled'}
             </span>
-            <button
+            <span
+              role="button"
+              tabindex="0"
               onclick={(e) => deleteConversation(conv.id, e)}
+              onkeydown={(e) => { if (e.key === "Enter") deleteConversation(conv.id, e); }}
               class="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--error)] text-xs transition-opacity cursor-pointer"
-            >✕</button>
+            >✕</span>
           </button>
         {/each}
       {/each}
