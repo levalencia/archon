@@ -25,7 +25,7 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -36,67 +36,3 @@ body {
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .animate-pulse-dot { animation: pulse 1.5s infinite; }
-/* Responsive breakpoints for mobile/tablet */
-@media (max-width: 768px) {
-  /* Hide sidebar on mobile */
-  aside:first-child {
-    display: none;
-  }
-
-  /* Hide right panel on mobile */
-  aside:last-child {
-    display: none;
-  }
-
-  /* Full width chat */
-  .max-w-\[800px\] {
-    max-width: 100%;
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  /* Smaller input bar */
-  .rounded-2xl {
-    border-radius: 12px;
-  }
-
-  /* Stack input hints */
-  .input-hints {
-    flex-wrap: wrap;
-  }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  /* Narrower sidebar on tablet */
-  aside:first-child {
-    width: 220px;
-  }
-
-  /* Narrower trace panel */
-  aside:last-child {
-    width: 280px;
-  }
-}
-
-/* Mobile menu toggle (shown only on mobile) */
-.mobile-menu-btn {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .mobile-menu-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    cursor: pointer;
-    color: var(--text-secondary);
-  }
-
-  .mobile-menu-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-}
