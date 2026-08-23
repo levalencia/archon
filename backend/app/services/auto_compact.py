@@ -36,14 +36,27 @@ async def auto_compact_context(
     This is how Hermes and Claude Code handle long conversations.
     """
     if not messages:
-        return messages
+        return messages, {
+            "compacted": False,
+            "tokens": 0,
+            "budget": max_tokens,
+            "utilization_pct": 0,
+            "messages": 0,
+        }
 
     # Separate system from conversation messages
     system_msgs = [m for m in messages if m.get("role") == "system"]
     conv_msgs = [m for m in messages if m.get("role") != "system"]
 
     if len(conv_msgs) <= keep_recent:
-        return messages  # Too few to compact
+        total_tokens = sum(get_token_count(m.get("content", "")) + 4 for m in messages)
+        return messages, {
+            "compacted": False,
+            "tokens": total_tokens,
+            "budget": max_tokens,
+            "utilization_pct": round(total_tokens / max_tokens * 100, 1),
+            "messages": len(messages),
+        }
 
     # Count tokens
     total_tokens = sum(get_token_count(m.get("content", "")) + 4 for m in messages)
@@ -51,14 +64,13 @@ async def auto_compact_context(
     utilization = total_tokens / budget if budget > 0 else 0
 
     if utilization < threshold:
-        logger.debug(
-            "context_no_compact_needed",
-            tokens=total_tokens,
-            budget=budget,
-            utilization_pct=round(utilization * 100, 1),
-            messages=len(messages),
-        )
-        return messages
+        return messages, {
+            "compacted": False,
+            "tokens": total_tokens,
+            "budget": budget,
+            "utilization_pct": round(utilization * 100, 1),
+            "messages": len(messages),
+        }
 
     # COMPACT: summarize old messages, keep recent
     old_msgs = conv_msgs[:-keep_recent]
@@ -105,4 +117,16 @@ async def auto_compact_context(
         messages_after=len(compacted),
     )
 
-    return compacted
+    return compacted, {
+        "compacted": True,
+        "tokens_before": total_tokens,
+        "tokens_after": new_tokens,
+        "tokens_saved": total_tokens - new_tokens,
+        "saved_pct": round((1 - new_tokens / total_tokens) * 100, 1),
+        "budget": budget,
+        "utilization_pct": round(new_tokens / budget * 100, 1),
+        "messages_before": len(messages),
+        "messages_after": len(compacted),
+        "messages": len(compacted),
+        "tokens": new_tokens,
+    }

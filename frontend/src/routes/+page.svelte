@@ -81,11 +81,25 @@
             } catch {}
           } else if (currentEvent === 'token') {
             am.content += payload;
+          } else if (currentEvent === 'compact') {
+            try {
+              const compact = JSON.parse(payload);
+              am.context_stats = { ...am.context_stats, ...compact, compacted: true };
+              am.thinking_steps = [...(am.thinking_steps || []), {
+                type: 'compact',
+                detail: `Context compacted: ${compact.tokens_before} → ${compact.tokens_after} tokens (${compact.saved_pct}% saved)`,
+                done: true,
+              }];
+            } catch {}
           } else if (currentEvent === 'artifact') {
             try {
               const art = JSON.parse(payload);
               am.artifacts = [...(am.artifacts || []), art];
               artifacts = [...artifacts, art];
+            } catch {}
+          } else if (currentEvent === 'context') {
+            try {
+              am.context_stats = JSON.parse(payload);
             } catch {}
           } else if (currentEvent === 'done') {
             try {

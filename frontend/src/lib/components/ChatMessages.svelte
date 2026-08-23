@@ -12,6 +12,7 @@
     sources?: any[];
     artifacts?: any[];
     iterations?: number;
+    context_stats?: any;
   }
 
   let { messages = [] }: { messages?: Message[] } = $props();
@@ -122,6 +123,32 @@
                         <span class="text-[var(--text-muted)] font-mono text-[11px]">{step.detail}</span>
                       </div>
                     {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            <!-- ═══ CONTEXT BAR ═══ -->
+            {#if msg.context_stats}
+              {@const ctx = msg.context_stats}
+              {@const pct = Math.min(ctx.utilization_pct || 0, 100)}
+              <div class="mb-3 px-3 py-2 bg-[var(--bg-tertiary)] rounded-lg">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-[11px] text-[var(--text-muted)]">Context Window</span>
+                  <span class="text-[11px] font-mono text-[var(--text-muted)]">
+                    {ctx.tokens?.toLocaleString() || 0} / {ctx.budget?.toLocaleString() || 8000} tokens
+                  </span>
+                </div>
+                <div class="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                  <div
+                    class="h-full rounded-full transition-all duration-500
+                      {pct > 75 ? 'bg-[var(--error)]' : pct > 50 ? 'bg-[var(--warning)]' : 'bg-[var(--accent)]'}"
+                    style="width: {pct}%"
+                  ></div>
+                </div>
+                {#if ctx.compacted}
+                  <div class="mt-1.5 text-[11px] text-[var(--warning)] flex items-center gap-1">
+                    ⚡ Context compacted: {ctx.tokens_before?.toLocaleString()} → {ctx.tokens_after?.toLocaleString()} tokens ({ctx.saved_pct}% saved)
                   </div>
                 {/if}
               </div>

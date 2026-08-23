@@ -116,7 +116,30 @@ async def chat_stream_real(body: StreamRequest, request: Request):
             yield _sse("token", "Error: agent failed to produce a result")
             return
 
-        # Step 4: Stream tool calls summary
+        # Step 4: Send context stats
+        # Get current context utilization from the agent's last compact check
+        from app.memory.advanced import get_token_count
+
+        history = []
+        try:
+            from app.routes.chat import _memory
+
+            history = await _memory.retrieve(conv_id, limit=50)
+        except Exception:
+            pass
+        ctx_tokens = sum(get_token_count(m.get("content", "")) + 4 for m in history)
+        ctx_budget = 8000
+        yield _sse(
+            "context",
+            {
+                "tokens": ctx_tokens,
+                "budget": ctx_budget,
+                "utilization_pct": round(ctx_tokens / ctx_budget * 100, 1) if ctx_budget > 0 else 0,
+                "messages": len(history),
+            },
+        )
+
+        # Step 5: Stream tool calls summary
         for tc in result.tool_calls:
             # Already streamed via queue, but add to final data
             pass
