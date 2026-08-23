@@ -33,6 +33,29 @@ from app.tools.web_search import web_search_tool
 
 logger = structlog.get_logger()
 
+# Singletons — created once, reused across requests
+_llm_singleton = None
+_tools_singleton = None
+
+
+def get_llm_client(settings):
+    global _llm_singleton
+    if _llm_singleton is None:
+        _llm_singleton = create_llm_client(settings)
+        logger.info(
+            "llm_singleton_created", provider=settings.llm_provider, model=settings.llm_model
+        )
+    return _llm_singleton
+
+
+def get_tool_registry():
+    global _tools_singleton
+    if _tools_singleton is None:
+        _tools_singleton = _create_tool_registry()
+        logger.info("tools_singleton_created", count=len(_tools_singleton.list_tools()))
+    return _tools_singleton
+
+
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # Module-level stores (replaced by DI in production)
@@ -108,10 +131,10 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     cid = get_correlation_id()
     start_time = time.monotonic()
     settings = request.app.state.settings
-    llm = create_llm_client(settings)
+    llm = get_llm_client(settings)
 
     # Create tool registry
-    tools = _create_tool_registry()
+    tools = get_tool_registry()
 
     # Search for relevant skills
     skill_registry = get_skill_registry()

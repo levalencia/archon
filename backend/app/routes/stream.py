@@ -13,10 +13,8 @@ from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from app.agents.agent import ProductionAgent
-from app.agents.llm_factory import create_llm_client
 from app.agents.streaming_agent import run_agent_streaming
 from app.routes.chat import (
-    _create_tool_registry,
     _memory,
     get_skill_registry,
     get_skills_top_k,
@@ -64,8 +62,10 @@ async def chat_stream_real(body: StreamRequest, request: Request):
         yield _sse("thinking", "Preparing agent...")
         await asyncio.sleep(0)
 
-        llm = create_llm_client(settings)
-        tools = _create_tool_registry()
+        from app.routes.chat import get_llm_client, get_tool_registry
+
+        llm = get_llm_client(settings)
+        tools = get_tool_registry()
         conv_id = body.conversation_id or str(uuid.uuid4())
         agent = ProductionAgent(
             llm=llm,
