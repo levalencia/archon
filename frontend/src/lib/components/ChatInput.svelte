@@ -21,10 +21,7 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }
 
   function autoResize(e: Event) {
@@ -36,26 +33,18 @@
   function handleFileSelect(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { alert('Only images'); return; }
+    if (!file || !file.type.startsWith('image/')) return;
     if (file.size > 10 * 1024 * 1024) { alert('Max 10MB'); return; }
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      imagePreview = result;
-      imageBase64 = result.split(',')[1] || '';
-    };
+    reader.onload = () => { const r = reader.result as string; imagePreview = r; imageBase64 = r.split(',')[1] || ''; };
     reader.readAsDataURL(file);
   }
 
-  function removeImage() {
-    imagePreview = '';
-    imageBase64 = '';
-    if (fileInput) fileInput.value = '';
-  }
+  function removeImage() { imagePreview = ''; imageBase64 = ''; if (fileInput) fileInput.value = ''; }
 </script>
 
-<div class="px-3 sm:px-6 pb-3 sm:pb-6 pt-2 sm:pt-4 w-full max-w-[800px] mx-auto">
+<!-- Full width, proper padding on all sides -->
+<div class="w-full px-4 md:px-6 pb-4 md:pb-5 pt-2 md:pt-3 shrink-0">
   {#if imagePreview}
     <div class="mb-2 relative inline-block">
       <img src={imagePreview} alt="Upload preview" class="max-h-24 rounded-lg border border-[var(--border)]" />
@@ -63,7 +52,7 @@
     </div>
   {/if}
 
-  <div class="flex items-end bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl sm:rounded-2xl p-1.5 sm:p-2 shadow-lg transition-all focus-within:border-[var(--accent)]">
+  <div class="flex items-end bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-2 shadow-lg transition-all focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_2px_var(--accent-glow)]">
     <textarea
       bind:this={textarea}
       bind:value={inputText}
@@ -72,32 +61,29 @@
       placeholder="Ask Archon anything..."
       rows="1"
       {disabled}
-      class="flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] text-[14px] sm:text-[15px] resize-none px-2 sm:px-3 py-2 max-h-[150px] leading-relaxed placeholder:text-[var(--text-muted)]"
+      class="flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] text-[15px] resize-none px-3 py-2 max-h-[150px] leading-relaxed placeholder:text-[var(--text-muted)]"
     ></textarea>
 
     <input bind:this={fileInput} type="file" accept="image/*" onchange={handleFileSelect} class="hidden" />
 
-    <div class="flex gap-1 p-0.5 sm:p-1">
-      <button
-        onclick={() => fileInput?.click()}
-        class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg border-none cursor-pointer flex items-center justify-center text-base transition-all
+    <div class="flex gap-1 p-1">
+      <button onclick={() => fileInput?.click()}
+        class="w-9 h-9 rounded-lg border-none cursor-pointer flex items-center justify-center text-base transition-all
           {imageBase64 ? 'bg-[var(--accent-glow)] text-[var(--accent)]' : 'bg-transparent text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'}"
-        title="Upload image"
-      >📎</button>
-      <button
-        onclick={handleSend}
+        title="Upload image">📎</button>
+      <button onclick={handleSend}
         disabled={(!inputText.trim() && !imageBase64) || disabled}
-        class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg border-none cursor-pointer flex items-center justify-center text-base transition-all
+        class="w-9 h-9 rounded-lg border-none cursor-pointer flex items-center justify-center text-base transition-all
           {(inputText.trim() || imageBase64) && !disabled
             ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]'
             : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] cursor-not-allowed'}"
-        title="Send"
-      >↑</button>
+        title="Send">↑</button>
     </div>
   </div>
 
   <div class="hidden sm:flex gap-3 px-1 pt-2 text-[11px] text-[var(--text-muted)]">
     <span><span class="px-1.5 bg-[var(--bg-tertiary)] rounded text-[10px] font-mono">Enter</span> Send</span>
     <span><span class="px-1.5 bg-[var(--bg-tertiary)] rounded text-[10px] font-mono">Shift+Enter</span> New line</span>
+    <span>📎 Image upload</span>
   </div>
 </div>
