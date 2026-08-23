@@ -36,6 +36,20 @@
     finally { isLoading = false; }
   }
 
+  async function loadConversation(id: string) {
+    currentConversationId = id;
+    showSidebar = false;
+    try {
+      const r = await fetch("/api/chat/history/" + id);
+      if (r.ok) {
+        const data = await r.json();
+        messages = (data.messages || []).map((m: any, i: number) => ({
+          id: i, role: m.role, content: m.content, timestamp: "",
+        }));
+      }
+    } catch { messages = []; }
+  }
+
   function handleNewConversation() { messages = []; currentConversationId = ''; artifacts = []; traceData = { stats: {}, entries: [], skills: [] }; showSidebar = false; }
 </script>
 
@@ -60,7 +74,7 @@
     transition-transform duration-200 ease-out
     flex flex-col overflow-y-auto
   ">
-    <Sidebar activeId={currentConversationId} onSelect={(id) => { currentConversationId = id; showSidebar = false; }} onNew={handleNewConversation} />
+    <Sidebar activeId={currentConversationId} onSelect={(id) => loadConversation(id)} onNew={handleNewConversation} />
   </div>
 
   <!-- ══ COL 2: CENTER (TopBar + Chat + Input) — fills remaining space ══ -->
