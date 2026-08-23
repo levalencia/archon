@@ -71,14 +71,25 @@ async def calculator_tool(expression: str) -> dict:
 
 
 async def datetime_tool(query: str = "now") -> dict:
-    """Get current date, time, day of week. Default timezone: Europe/Brussels."""
+    """Get current date, time, day of week. Default timezone: Europe/Brussels.
+
+    Always returns full datetime info regardless of query.
+    Supports timezone: "now America/New_York" or just "now".
+    """
     import zoneinfo
 
     utc_now = datetime.now(tz=UTC)
 
-    # Support timezone in query: "now Europe/Brussels" or just "now"
-    parts = query.split()
-    tz_name = parts[1] if len(parts) > 1 else "Europe/Brussels"
+    # Try to extract timezone from query
+    tz_name = "Europe/Brussels"
+    for word in query.split():
+        if "/" in word:
+            try:
+                zoneinfo.ZoneInfo(word)
+                tz_name = word
+            except Exception:
+                pass
+
     try:
         tz = zoneinfo.ZoneInfo(tz_name)
     except Exception:
@@ -87,28 +98,17 @@ async def datetime_tool(query: str = "now") -> dict:
 
     local = utc_now.astimezone(tz)
 
-    if parts[0] in ("now", "current", "today", "weekday"):
-        return {
-            "datetime": local.isoformat(),
-            "date": local.strftime("%Y-%m-%d"),
-            "time": local.strftime("%H:%M:%S"),
-            "day_of_week": local.strftime("%A"),
-            "timezone": tz_name,
-            "utc_offset": local.strftime("%z"),
-            "timestamp": utc_now.timestamp(),
-        }
-    if parts[0] == "date":
-        return {"date": local.strftime("%Y-%m-%d"), "day_of_week": local.strftime("%A")}
-    if parts[0] == "time":
-        return {
-            "time": local.strftime("%H:%M:%S"),
-            "timezone": tz_name,
-            "day_of_week": local.strftime("%A"),
-        }
-    if query == "timestamp":
-        return {"timestamp": now.timestamp()}
-
-    return {"datetime": now.isoformat(), "timezone": "UTC", "query": query}
+    # Always return full info — no matter what the query says
+    return {
+        "datetime": local.isoformat(),
+        "date": local.strftime("%Y-%m-%d"),
+        "time": local.strftime("%H:%M:%S"),
+        "day_of_week": local.strftime("%A"),
+        "timezone": tz_name,
+        "utc_offset": local.strftime("%z"),
+        "timestamp": utc_now.timestamp(),
+        "query": query,
+    }
 
 
 async def read_file_tool(path: str) -> dict:

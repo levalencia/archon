@@ -61,8 +61,75 @@ class SkillRegistry:
 
     def search(self, query: str, limit: int = 5) -> list[Skill]:
         """Search skills by keyword matching on name, description, and tags."""
+        # Filter stopwords — only match on meaningful words
+        stopwords = {
+            "what",
+            "is",
+            "the",
+            "a",
+            "an",
+            "and",
+            "or",
+            "for",
+            "to",
+            "of",
+            "in",
+            "on",
+            "at",
+            "by",
+            "how",
+            "do",
+            "does",
+            "can",
+            "my",
+            "me",
+            "this",
+            "that",
+            "with",
+            "from",
+            "about",
+            "it",
+            "its",
+            "i",
+            "you",
+            "we",
+            "they",
+            "be",
+            "are",
+            "was",
+            "were",
+            "been",
+            "have",
+            "has",
+            "had",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "current",
+            "please",
+            "tell",
+            "show",
+            "give",
+            "get",
+            "use",
+            "create",
+            "make",
+            "write",
+            "find",
+            "search",
+            "calculate",
+            "fecha",
+            "hora",
+            "actual",
+            "hoy",
+            "dia",
+            "tiempo",
+        }
         query_lower = query.lower()
-        query_words = set(query_lower.split())
+        query_words = {w for w in query_lower.split() if w not in stopwords and len(w) > 2}
 
         scored: list[tuple[float, Skill]] = []
         for skill in self._skills.values():
@@ -77,7 +144,7 @@ class SkillRegistry:
                     if word in tag.lower():
                         score += 2.0
 
-            if score > 0:
+            if score >= 2.0:  # Minimum relevance threshold
                 scored.append((score, skill))
 
         scored.sort(key=lambda x: x[0], reverse=True)
