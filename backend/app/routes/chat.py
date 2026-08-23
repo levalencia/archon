@@ -174,6 +174,20 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
             }
         )
 
+    # Add tool call steps
+    for _i, tc in enumerate(result.tool_calls):
+        thinking_steps.append(
+            {
+                "step": len(thinking_steps) + 1,
+                "type": "tool_call",
+                "agent": "react_agent",
+                "detail": f"Called {tc['tool']}({tc.get('parameters', {})})",
+                "result": str(tc.get("result", ""))[:200],
+                "done": True,
+                "duration_ms": 0,
+            }
+        )
+
     # Add image step if image was analyzed
     if body.image:
         thinking_steps.insert(
