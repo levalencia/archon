@@ -71,21 +71,40 @@ async def calculator_tool(expression: str) -> dict:
 
 
 async def datetime_tool(query: str = "now") -> dict:
-    """Get current date, time, or timezone information."""
-    now = datetime.now(tz=UTC)
+    """Get current date, time, day of week. Default timezone: Europe/Brussels."""
+    import zoneinfo
 
-    if query in ("now", "current"):
+    utc_now = datetime.now(tz=UTC)
+
+    # Support timezone in query: "now Europe/Brussels" or just "now"
+    parts = query.split()
+    tz_name = parts[1] if len(parts) > 1 else "Europe/Brussels"
+    try:
+        tz = zoneinfo.ZoneInfo(tz_name)
+    except Exception:
+        tz = UTC
+        tz_name = "UTC"
+
+    local = utc_now.astimezone(tz)
+
+    if parts[0] in ("now", "current", "today", "weekday"):
         return {
-            "datetime": now.isoformat(),
-            "date": now.strftime("%Y-%m-%d"),
-            "time": now.strftime("%H:%M:%S"),
-            "timezone": "UTC",
-            "timestamp": now.timestamp(),
+            "datetime": local.isoformat(),
+            "date": local.strftime("%Y-%m-%d"),
+            "time": local.strftime("%H:%M:%S"),
+            "day_of_week": local.strftime("%A"),
+            "timezone": tz_name,
+            "utc_offset": local.strftime("%z"),
+            "timestamp": utc_now.timestamp(),
         }
-    if query == "date":
-        return {"date": now.strftime("%Y-%m-%d")}
-    if query == "time":
-        return {"time": now.strftime("%H:%M:%S UTC")}
+    if parts[0] == "date":
+        return {"date": local.strftime("%Y-%m-%d"), "day_of_week": local.strftime("%A")}
+    if parts[0] == "time":
+        return {
+            "time": local.strftime("%H:%M:%S"),
+            "timezone": tz_name,
+            "day_of_week": local.strftime("%A"),
+        }
     if query == "timestamp":
         return {"timestamp": now.timestamp()}
 
