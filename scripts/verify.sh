@@ -42,6 +42,12 @@ printf '\n== Frontend production build ==\n'
   npm run build
 )
 
+printf '\n== Frontend browser tests ==\n'
+(
+  cd "$ROOT/frontend"
+  npx playwright test
+)
+
 printf '\n== Backend container smoke test ==\n'
 cleanup
 docker build -t "$IMAGE" "$ROOT"
