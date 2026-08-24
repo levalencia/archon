@@ -3,6 +3,7 @@
 Pipeline: Brave API → get URLs + snippets → extract full page content.
 Fallback: SearXNG → DuckDuckGo scraping → mock.
 """
+
 from __future__ import annotations
 
 import re
@@ -81,11 +82,13 @@ async def _brave_search(query: str, api_key: str, num: int) -> list[dict]:
 
     results = []
     for item in data.get("web", {}).get("results", [])[:num]:
-        results.append({
-            "title": item.get("title", ""),
-            "url": item.get("url", ""),
-            "snippet": item.get("description", ""),
-        })
+        results.append(
+            {
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "snippet": item.get("description", ""),
+            }
+        )
 
     logger.info("brave_search", query=query, results=len(results))
     return results
@@ -103,11 +106,13 @@ async def _searxng_search(query: str, num: int) -> list[dict]:
 
     results = []
     for item in data.get("results", [])[:num]:
-        results.append({
-            "title": item.get("title", ""),
-            "url": item.get("url", ""),
-            "snippet": item.get("content", ""),
-        })
+        results.append(
+            {
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "snippet": item.get("content", ""),
+            }
+        )
 
     logger.info("searxng_search", query=query, results=len(results))
     return results
@@ -126,7 +131,8 @@ async def _duckduckgo_search(query: str, num: int) -> list[dict]:
     for m in re.finditer(
         r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.+?)</a>.*?'
         r'class="result__snippet"[^>]*>(.+?)</a>',
-        r.text, re.DOTALL,
+        r.text,
+        re.DOTALL,
     ):
         url, title, snippet = m.group(1), m.group(2), m.group(3)
         title = re.sub(r"<[^>]+>", "", title).strip()
@@ -135,6 +141,7 @@ async def _duckduckgo_search(query: str, num: int) -> list[dict]:
             url_m = re.search(r"uddg=([^&]+)", url)
             if url_m:
                 from urllib.parse import unquote
+
                 url = unquote(url_m.group(1))
         results.append({"title": title, "url": url, "snippet": snippet})
         if len(results) >= num:

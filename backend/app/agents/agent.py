@@ -294,7 +294,17 @@ class ProductionAgent:
             # Execute tool (with permission check inside ToolExecutor)
             if self._tool_calls_remaining <= 0:
                 logger.warning("tool_budget_exhausted", tool=tool_name, made=len(tool_calls_made))
-                response = f"I've used all {self.MAX_TOOL_CALLS} tool calls. Here is my answer based on what I found."
+                # Give the LLM one final chance to synthesize with what it has
+                messages.append({"role": "assistant", "content": response})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "You have used all your tool calls. DO NOT call any more tools. "
+                        "Synthesize a complete answer from the information you already gathered. "
+                        "Present your findings clearly and organized.",
+                    }
+                )
+                response = await self.llm.chat(messages, max_tokens=4096)
                 break
 
             self._tool_calls_remaining -= 1
