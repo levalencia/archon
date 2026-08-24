@@ -20,6 +20,7 @@ from app.routes.admin import router as admin_router
 from app.routes.artifacts import router as artifacts_router
 from app.routes.auth import router as auth_router
 from app.routes.chat import router as chat_router
+from app.routes.log_stream import router as log_router, install_log_capture
 from app.routes.conversations import router as conversations_router
 from app.routes.documents import router as documents_router
 from app.routes.images import router as images_router
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Configure structured logging
     setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
 
+    install_log_capture()
     logger.info(
         "archon_starting",
         app=settings.app_name,
@@ -85,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # --- Routes ---
 
     app.include_router(chat_router)
+    app.include_router(log_router)
     app.include_router(stream_router)
     app.include_router(conversations_router)
     app.include_router(documents_router)

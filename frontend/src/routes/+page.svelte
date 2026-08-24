@@ -12,7 +12,29 @@
   let traceData = $state({ stats: {}, entries: [], skills: [] });
   let artifacts: any[] = $state([]);
   let modelName = $state('');
+  let showLogs = $state(false);
+  let logEntries: any[] = $state([]);
+  let logSource: EventSource | null = null;
   let providerName = $state('');
+
+  function connectLogs() {
+    if (logSource) logSource.close();
+    logSource = new EventSource('/api/logs/stream');
+    logSource.onmessage = (e) => {
+      try {
+        const entry = JSON.parse(e.data);
+        logEntries = [...logEntries.slice(-150), entry];
+        // Auto-scroll
+        const panel = document.getElementById('log-panel');
+        if (panel) panel.scrollTop = panel.scrollHeight;
+      } catch {}
+    };
+  }
+
+  function toggleLogs() {
+    showLogs = !showLogs;
+    if (showLogs && !logSource) connectLogs();
+  }
 
   async function loadModelInfo() {
     try {
@@ -215,6 +237,7 @@
       <div class="w-2 h-2 rounded-full bg-[var(--success)]"></div>
       <span class="hidden sm:block text-[13px] text-[var(--text-primary)]">{modelName || "loading..."}</span>
       <span class="hidden sm:block text-[11px] text-[var(--text-muted)]">{providerName}</span>
+      <button onclick={toggleLogs} class="ml-2 px-2 py-1 text-[10px] rounded {showLogs ? 'bg-[var(--accent)] text-black' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'} hover:bg-[var(--accent)] hover:text-black cursor-pointer font-mono">LOGS</button>
       <div class="flex-1"></div>
       <a href="/documents" class="hidden md:flex px-2 py-1 rounded text-[var(--text-muted)] text-xs hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] no-underline">📄 Docs</a>
       <a href="/dashboard" class="hidden md:flex px-2 py-1 rounded text-[var(--text-muted)] text-xs hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] no-underline">📊 Metrics</a>
