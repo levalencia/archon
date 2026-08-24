@@ -187,6 +187,7 @@ class ProductionAgent:
         messages = await self._build_context(user_input, conversation_id)
 
         # ReAct loop
+        _consecutive_no_tool = 0
         for iteration in range(1, self.max_iterations + 1):
             logger.info(
                 "react_iteration",
@@ -229,6 +230,15 @@ class ProductionAgent:
 
             # Parse: tool call or final answer?
             tool_call = self._parse_tool_call(response)
+
+            if tool_call is None:
+                _consecutive_no_tool += 1
+                if _consecutive_no_tool >= 2:
+                    # LLM keeps responding without tools — treat as final answer
+                    logger.info("react_consecutive_no_tool", count=_consecutive_no_tool)
+                    break
+            else:
+                _consecutive_no_tool = 0
 
             # Check request timeout
             import time as _time
@@ -378,10 +388,22 @@ class ProductionAgent:
             correlation_id=correlation_id,
         )
 
-        fallback = (
-            "I reached the maximum number of reasoning steps. "
-            "Here is what I found so far based on the tool results."
-        )
+        # Force one final synthesis call — DO NOT return empty
+        try:
+            messages.append({"role": "assistant", "content": response})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "STOP. Do NOT call any more tools. You have reached the limit. "
+                        "Using ALL the information you already gathered from your tool calls above, "
+                        "write a complete, well-formatted answer NOW. Organize it clearly."
+                    ),
+                }
+            )
+            fallback = await self.llm.chat(messages, max_tokens=4096)
+        except Exception:
+            fallback = response or "I was unable to complete the request."
 
         if self.memory:
             await self.memory.store(conversation_id, "user", user_input)
