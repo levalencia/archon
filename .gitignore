@@ -52,3 +52,7 @@ htmlcov/
 archon_memory.json
 archon_sessions.json
 *.runtime.json
+
+# Browser test artifacts
+frontend/test-results/
+frontend/playwright-report/
