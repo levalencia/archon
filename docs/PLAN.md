@@ -4,10 +4,12 @@
 
 **Author:** Luis Valencia Munoz
 **Created:** 2026-08-21
-**Status:** Planning
+**Status:** Active; capability status is tracked in [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md)
 **Repo:** `github.com/levalencia/production-ai-agents`
 
 ---
+
+> **Implementation truth:** This file records the original scope and design intent. Its 142 checklist items are not a completion report. See [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md) for Implemented / Wired / Tested / Demo-ready evidence.
 
 ## 1. What We're Building
 
