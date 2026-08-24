@@ -150,15 +150,34 @@
   async function loadConversation(id: string) {
     currentConversationId = id;
     showSidebar = false;
+    artifacts = [];
+    traceData = { stats: {}, entries: [], skills: [] };
+
     try {
       const r = await fetch("/api/chat/history/" + id);
       if (r.ok) {
         const data = await r.json();
-        messages = (data.messages || []).map((m: any, i: number) => ({
-          id: i, role: m.role, content: m.content, timestamp: "",
-        }));
+        const msgs = data.messages || [];
+        if (msgs.length > 0) {
+          messages = msgs.map((m: any, i: number) => ({
+            id: i,
+            role: m.role,
+            content: m.content,
+            timestamp: "",
+            thinking_steps: [],
+            tool_calls: [],
+            skills_used: [],
+          }));
+        } else {
+          messages = [];
+        }
+      } else {
+        messages = [];
       }
-    } catch { messages = []; }
+    } catch (e) {
+      console.error("Failed to load conversation:", e);
+      messages = [];
+    }
   }
 
   function handleNewConversation() { messages = []; currentConversationId = ''; artifacts = []; traceData = { stats: {}, entries: [], skills: [] }; showSidebar = false; }
