@@ -18,6 +18,7 @@ from app.config import Settings, get_settings
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
 from app.observability.logging import setup_logging
+from app.research.api import router as research_router
 from app.routes.admin import router as admin_router
 from app.routes.artifacts import router as artifacts_router
 from app.routes.auth import router as auth_router
@@ -111,6 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(artifacts_router)
     app.include_router(images_router)
+    app.include_router(research_router)
 
     @app.get("/metrics")
     async def prometheus_metrics():
