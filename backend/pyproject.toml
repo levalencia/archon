@@ -23,6 +23,7 @@ dependencies = [
     "pyjwt>=2.13.0",
     "anthropic>=1.0.0",
     "spacy>=3.8.15",
+    "python-dotenv>=1.2.3",
 ]
 
 [project.optional-dependencies]
