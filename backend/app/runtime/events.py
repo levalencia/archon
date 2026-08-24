@@ -14,6 +14,7 @@ class AgentEventKind(StrEnum):
     RUN_STARTED = "run_started"
     ITERATION_STARTED = "iteration_started"
     MODEL_RESPONSE = "model_response"
+    MODEL_PROGRESS = "model_progress"
     TEXT_DELTA = "text_delta"
     TOOL_CALL_REQUESTED = "tool_call_requested"
     TOOL_CALL_COMPLETED = "tool_call_completed"

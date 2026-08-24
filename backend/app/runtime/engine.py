@@ -31,8 +31,10 @@ class StopReason(StrEnum):
 class RuntimeBudget:
     max_iterations: int = 8
     max_tool_calls: int = 8
-    max_tokens: int = 16_000
+    max_tokens: int = 64_000
     max_seconds: float = 90.0
+    max_tool_result_chars: int = 12_000
+    final_synthesis_tokens: int = 2_048
 
     def __post_init__(self) -> None:
         if self.max_iterations < 1:
@@ -72,6 +74,7 @@ class AgentRuntime:
         started_at = self._clock()
         iterations = 0
         calls: list[dict[str, Any]] = []
+        seen_calls: set[str] = set()
         usage = TokenUsage()
         content = ""
         await self._emit(AgentEventKind.RUN_STARTED, 0)
@@ -100,14 +103,22 @@ class AgentRuntime:
                     response.usage,
                 )
                 if response.content:
-                    # Adapters currently return complete text. This is an explicit fallback event;
-                    # provider-level token streaming can emit multiple TEXT_DELTA events later.
-                    await self._emit(
-                        AgentEventKind.TEXT_DELTA, iterations, {"text": response.content}
+                    # Text accompanying tool calls is progress, not the final answer.
+                    event_kind = (
+                        AgentEventKind.MODEL_PROGRESS
+                        if response.tool_calls
+                        else AgentEventKind.TEXT_DELTA
                     )
+                    await self._emit(event_kind, iterations, {"text": response.content})
                 if usage.total_tokens > self._budget.max_tokens:
-                    return await self._stop(
-                        StopReason.TOKEN_BUDGET_EXHAUSTED, content, iterations, calls, usage
+                    return await self._finalize(
+                        StopReason.TOKEN_BUDGET_EXHAUSTED,
+                        history,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        started_at,
                     )
                 if not response.tool_calls:
                     return await self._stop(StopReason.COMPLETED, content, iterations, calls, usage)
@@ -117,9 +128,32 @@ class AgentRuntime:
                 )
                 for call in response.tool_calls:
                     if len(calls) >= self._budget.max_tool_calls:
-                        return await self._stop(
-                            StopReason.TOOL_BUDGET_EXHAUSTED, content, iterations, calls, usage
+                        return await self._finalize(
+                            StopReason.TOOL_BUDGET_EXHAUSTED,
+                            history,
+                            content,
+                            iterations,
+                            calls,
+                            usage,
+                            started_at,
                         )
+                    call_key = json.dumps(
+                        [call.name, dict(call.arguments)],
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        default=str,
+                    )
+                    if call_key in seen_calls:
+                        duplicate = {"error": "Duplicate tool call blocked; use existing result."}
+                        history.append(
+                            Message(
+                                Role.TOOL,
+                                json.dumps(duplicate, separators=(",", ":")),
+                                tool_call_id=call.id,
+                            )
+                        )
+                        continue
+                    seen_calls.add(call_key)
                     await self._emit(
                         AgentEventKind.TOOL_CALL_REQUESTED,
                         iterations,
@@ -136,17 +170,29 @@ class AgentRuntime:
                     await self._emit(
                         AgentEventKind.TOOL_CALL_COMPLETED,
                         iterations,
-                        {"id": call.id, "name": call.name, "output": dict(output)},
+                        {
+                            "id": call.id,
+                            "name": call.name,
+                            "arguments": dict(call.arguments),
+                            "output": dict(output),
+                        },
                     )
-                    history.append(
-                        Message(
-                            Role.TOOL,
-                            json.dumps(output, sort_keys=True, separators=(",", ":"), default=str),
-                            tool_call_id=call.id,
+                    serialized = json.dumps(
+                        output, sort_keys=True, separators=(",", ":"), default=str
+                    )
+                    if len(serialized) > self._budget.max_tool_result_chars:
+                        serialized = (
+                            serialized[: self._budget.max_tool_result_chars] + "...[truncated]"
                         )
-                    )
-            return await self._stop(
-                StopReason.ITERATION_BUDGET_EXHAUSTED, content, iterations, calls, usage
+                    history.append(Message(Role.TOOL, serialized, tool_call_id=call.id))
+            return await self._finalize(
+                StopReason.ITERATION_BUDGET_EXHAUSTED,
+                history,
+                content,
+                iterations,
+                calls,
+                usage,
+                started_at,
             )
         except TimeoutError:
             return await self._stop(
@@ -161,6 +207,44 @@ class AgentRuntime:
                 usage,
                 f"{type(error).__name__}: {error}",
             )
+
+    async def _finalize(
+        self,
+        reason: StopReason,
+        history: list[Message],
+        content: str,
+        iterations: int,
+        calls: list[dict[str, Any]],
+        usage: TokenUsage,
+        started_at: float,
+    ) -> AgentResult:
+        """Make one bounded, tool-free synthesis attempt before a budget stop."""
+        if self._expired(started_at):
+            return await self._stop(reason, content, iterations, calls, usage)
+        history.append(
+            Message(
+                Role.USER,
+                "Execution budget reached. Do not call tools. Produce the best complete final "
+                "answer now from the evidence already available. State any missing coverage.",
+            )
+        )
+        try:
+            response = await self._within_deadline(
+                self._model.complete(
+                    history,
+                    (),
+                    max_tokens=self._budget.final_synthesis_tokens,
+                ),
+                started_at,
+            )
+            usage += response.usage
+            if response.content:
+                content = response.content
+                await self._emit(AgentEventKind.TEXT_DELTA, iterations, {"text": content})
+        except (TimeoutError, Exception):
+            # Preserve the best content already produced; stop reason remains explicit.
+            pass
+        return await self._stop(reason, content, iterations, calls, usage)
 
     def _expired(self, started_at: float) -> bool:
         return self._clock() - started_at >= self._budget.max_seconds

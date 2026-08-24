@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     # Agent
     agent_max_iterations: int = 5
-    agent_token_budget: int = 8000
+    agent_token_budget: int = 64_000
     context_length: int = 200000  # Claude Opus: 200K, Sonnet: 200K, llama3.1: 128K
 
     model_config = {"env_prefix": "ARCHON_", "env_file": ".env", "extra": "ignore"}

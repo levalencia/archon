@@ -105,6 +105,8 @@ async def chat_stream_real(
                 continue
             if event.kind is AgentEventKind.ITERATION_STARTED:
                 yield _sse("thinking", f"Iteration {event.iteration}: calling LLM...")
+            elif event.kind is AgentEventKind.MODEL_PROGRESS:
+                yield _sse("thinking", event.data["text"])
             elif event.kind is AgentEventKind.TOOL_CALL_REQUESTED:
                 yield _sse("thinking", f"Calling {event.data['name']}...")
             elif event.kind is AgentEventKind.TOOL_CALL_COMPLETED:
@@ -112,6 +114,7 @@ async def chat_stream_real(
                     "tool_call",
                     {
                         "tool": event.data["name"],
+                        "parameters": event.data.get("arguments", {}),
                         "result": json.dumps(event.data["output"], ensure_ascii=False, default=str)[
                             :300
                         ],
