@@ -19,9 +19,7 @@ from app.security.pii_detector import PIIDetector
 
 logger = structlog.get_logger()
 
-router = APIRouter(
-    prefix="/api/security", tags=["security"], dependencies=[Depends(require_admin)]
-)
+router = APIRouter(prefix="/api/security", tags=["security"], dependencies=[Depends(require_admin)])
 
 # Adversarial prompt library
 RED_TEAM_PROMPTS = [

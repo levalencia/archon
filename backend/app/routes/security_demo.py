@@ -19,9 +19,7 @@ from app.security.guardrails import InputGuardrail, OutputGuardrail
 from app.security.permission_manager import SecurePermissionManager
 from app.security.pii_detector import PIIDetector
 
-router = APIRouter(
-    prefix="/api/security", tags=["security"], dependencies=[Depends(require_admin)]
-)
+router = APIRouter(prefix="/api/security", tags=["security"], dependencies=[Depends(require_admin)])
 
 _pii_detector = PIIDetector()
 _input_guardrail = InputGuardrail()

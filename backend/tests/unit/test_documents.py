@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.security.auth import create_jwt
 
 
 @pytest.fixture
@@ -15,7 +14,10 @@ def client() -> TestClient:
     settings = Settings(llm_provider="mock", debug=True)
     app = create_app(settings=settings)
     with TestClient(app) as c:
-        c.headers.update({"Authorization": f"Bearer {create_jwt('document-user', 'user')}"})
+        response = c.post(
+            "/api/auth/register", json={"username": "document-user", "password": "secret1"}
+        )
+        c.headers.update({"Authorization": f"Bearer {response.json()['access_token']}"})
         yield c
 
 

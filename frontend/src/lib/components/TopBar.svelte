@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { authenticatedFetch } from '$lib/auth';
+
   let { model = 'Claude Opus 4.6', provider = 'Foundry', showTrace = true, onToggleTrace = () => {} }: {
     model?: string;
     provider?: string;
@@ -11,7 +13,7 @@
 
   async function checkHealth() {
     try {
-      const r = await fetch('/api/admin/health');
+      const r = await authenticatedFetch('/api/admin/health');
       if (r.ok) {
         healthStatus = 'healthy';
       } else {

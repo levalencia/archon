@@ -48,7 +48,7 @@ def _safe_response(body: str, *, status_code: int = 200) -> HTMLResponse:
 
 def _render_text(content: str, *, title: str = "Artifact") -> str:
     return (
-        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        '<!doctype html><html><head><meta charset="utf-8">'
         "<style>body{margin:16px;background:#0d1117;color:#e6edf3;font-family:monospace;"
         "white-space:pre-wrap}pre{white-space:pre-wrap}</style></head><body>"
         f"<h1>{html.escape(title)}</h1><pre>{html.escape(content)}</pre></body></html>"

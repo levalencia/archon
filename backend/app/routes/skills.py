@@ -18,9 +18,7 @@ from app.skills.registry import Skill, SkillRegistry, create_default_skills
 
 logger = structlog.get_logger()
 
-router = APIRouter(
-    prefix="/api/skills", tags=["skills"], dependencies=[Depends(get_current_user)]
-)
+router = APIRouter(prefix="/api/skills", tags=["skills"], dependencies=[Depends(get_current_user)])
 
 # Module-level registry (shared with chat routes)
 _registry: SkillRegistry | None = None

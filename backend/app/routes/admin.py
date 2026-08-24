@@ -20,9 +20,7 @@ from app.security.circuit_breaker import CircuitBreaker
 
 logger = structlog.get_logger()
 
-router = APIRouter(
-    prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)]
-)
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 # Module-level instances (will be replaced by DI)
 _audit_logger = StructuredAuditLogger()

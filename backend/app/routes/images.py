@@ -12,9 +12,7 @@ from fastapi.responses import FileResponse
 
 from app.security.auth import get_current_user
 
-router = APIRouter(
-    prefix="/api/images", tags=["images"], dependencies=[Depends(get_current_user)]
-)
+router = APIRouter(prefix="/api/images", tags=["images"], dependencies=[Depends(get_current_user)])
 
 IMAGES_DIR = Path("/tmp/archon_generated_images")
 
