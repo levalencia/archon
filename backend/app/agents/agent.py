@@ -292,6 +292,13 @@ class ProductionAgent:
             )
 
             # Execute tool (with permission check inside ToolExecutor)
+            if self._tool_calls_remaining <= 0:
+                logger.warning("tool_budget_exhausted", tool=tool_name, made=len(tool_calls_made))
+                response = f"I've used all {self.MAX_TOOL_CALLS} tool calls. Here is my answer based on what I found."
+                break
+
+            self._tool_calls_remaining -= 1
+
             if self.tools:
                 try:
                     tool_result = await self.tools.execute(tool_name, tool_params)
