@@ -26,7 +26,9 @@ logger = structlog.get_logger()
 SYSTEM_PROMPT = """You are Archon, a production AI research assistant.
 
 TODAY'S DATE: {current_date}
-IMPORTANT: The current year is 2026, NOT 2025. Always use 2026 when searching for current news or events.
+IMPORTANT: The current year is 2026.
+TOOL BUDGET: You have a maximum of {tool_budget} tool calls per response. Plan efficiently.
+When you have used most of your budget, stop calling tools and synthesize your answer from what you have, NOT 2025. Always use 2026 when searching for current news or events.
 
 CRITICAL RULES:
 1. You MUST use tools when available. NEVER make up data or search results.
@@ -48,7 +50,7 @@ WEB SEARCH BEST PRACTICES:
     Search 1: "smallest countries world news August 2026"
     Search 2: "Vatican Monaco Malta news August 2026"
     Search 3: "Pacific island nations news August 2026"
-  * NEVER do more than 5 web searches in a single response
+  * Be efficient — you have a limited tool budget
 - ALWAYS respond in the SAME language the user used, regardless of search language
 4. For ANY date/time question, ALWAYS call the datetime tool first.
 5. After calling a tool, use its REAL result in your answer.
@@ -124,7 +126,9 @@ class ProductionAgent:
     The agent has no knowledge of which LLM, memory store, or tools it uses.
     """
 
-    MAX_ITERATIONS = 15
+    MAX_ITERATIONS = 20
+    MAX_TOOL_CALLS = 8
+    REQUEST_TIMEOUT = 90  # seconds
     TOKEN_BUDGET = 10000
 
     def __init__(
@@ -146,6 +150,8 @@ class ProductionAgent:
         self.permissions = permissions
         self.agent_id = agent_id
         self.max_iterations = max_iterations or self.MAX_ITERATIONS
+        self._tool_calls_remaining = self.MAX_TOOL_CALLS
+        self._start_time = None
         self.token_budget = token_budget or self.TOKEN_BUDGET
         self.system_prompt_extra = system_prompt_extra
         self._steps: list[dict] = []
@@ -160,6 +166,10 @@ class ProductionAgent:
         conversation_id = conversation_id or str(uuid.uuid4())
         correlation_id = get_correlation_id()
         tool_calls_made: list[dict] = []
+        import time as _time
+
+        self._start_time = _time.monotonic()
+        self._tool_calls_remaining = self.MAX_TOOL_CALLS
         total_tokens = 0
         _run_images = images
 
@@ -219,6 +229,14 @@ class ProductionAgent:
 
             # Parse: tool call or final answer?
             tool_call = self._parse_tool_call(response)
+
+            # Check request timeout
+            import time as _time
+
+            if self._start_time and (_time.monotonic() - self._start_time) > self.REQUEST_TIMEOUT:
+                logger.warning("react_timeout", elapsed=_time.monotonic() - self._start_time)
+                response = f"I've been working for over {self.REQUEST_TIMEOUT}s. Here's what I found so far."  # noqa: E501
+                break
 
             if tool_call is None:
                 # Final answer
