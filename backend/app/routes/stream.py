@@ -126,7 +126,7 @@ async def chat_stream_real(body: StreamRequest, request: Request):
 
         # Estimate from result
         resp_tokens = get_token_count(result.response)
-        ctx_budget = 8000
+        ctx_budget = settings.context_length
         ctx_tokens = resp_tokens * (result.iterations or 1) * 3  # rough estimate
         if compact_stats:
             ctx_tokens = compact_stats.get("tokens", ctx_tokens)
