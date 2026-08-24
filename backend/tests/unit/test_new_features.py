@@ -18,17 +18,16 @@ from app.observability.metrics import (
     record_tool_call,
 )
 from app.security.auth import (
-    authenticate_user,
-    create_jwt,
+    AuthRepository,
     hash_password,
-    register_user,
-    verify_jwt,
+    verify_password,
 )
 from app.services.context_optimizer import (
     ContextOptimizer,
     count_messages_tokens,
     count_tokens,
 )
+from app.services.db_store import DatabaseStore
 
 
 class TestTokenCounting:
@@ -82,38 +81,57 @@ class TestAuth:
     @pytest.mark.unit
     def test_hash_password(self) -> None:
         h = hash_password("secret123")
-        assert len(h) == 64  # SHA-256 hex
+        assert h.startswith("scrypt$")
+        assert verify_password("secret123", h)
+        assert not verify_password("wrong", h)
 
     @pytest.mark.unit
-    def test_register_and_authenticate(self) -> None:
-        register_user("testuser99", "password99")
-        user = authenticate_user("testuser99", "password99")
+    @pytest.mark.asyncio
+    async def test_register_and_authenticate(self, tmp_path) -> None:
+        store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path}/auth.db")
+        await store.initialize()
+        repository = AuthRepository(store, "test-secret")
+        await repository.register_user("testuser99", "password99")
+        user = await repository.authenticate_user("testuser99", "password99")
         assert user is not None
         assert user["username"] == "testuser99"
+        await store.close()
 
     @pytest.mark.unit
-    def test_wrong_password(self) -> None:
-        register_user("testuser98", "correct")
-        user = authenticate_user("testuser98", "wrong")
+    @pytest.mark.asyncio
+    async def test_wrong_password(self, tmp_path) -> None:
+        store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path}/auth.db")
+        await store.initialize()
+        repository = AuthRepository(store, "test-secret")
+        await repository.register_user("testuser98", "correct")
+        user = await repository.authenticate_user("testuser98", "wrong")
         assert user is None
+        await store.close()
 
     @pytest.mark.unit
     def test_jwt_create_and_verify(self) -> None:
-        token = create_jwt("user-1", "testuser")
-        payload = verify_jwt(token)
+        repository = AuthRepository(None, "test-secret")  # type: ignore[arg-type]
+        token = repository.create_jwt("user-1", "testuser")
+        payload = repository.verify_jwt(token)
         assert payload is not None
         assert payload["sub"] == "user-1"
         assert payload["username"] == "testuser"
 
     @pytest.mark.unit
     def test_jwt_invalid_token(self) -> None:
-        assert verify_jwt("invalid.token.here") is None
+        repository = AuthRepository(None, "test-secret")  # type: ignore[arg-type]
+        assert repository.verify_jwt("invalid.token.here") is None
 
     @pytest.mark.unit
-    def test_duplicate_username(self) -> None:
-        register_user("unique_user_1", "pass")
+    @pytest.mark.asyncio
+    async def test_duplicate_username(self, tmp_path) -> None:
+        store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path}/auth.db")
+        await store.initialize()
+        repository = AuthRepository(store, "test-secret")
+        await repository.register_user("unique_user_1", "pass")
         with pytest.raises(ValueError, match="already exists"):
-            register_user("unique_user_1", "pass2")
+            await repository.register_user("unique_user_1", "pass2")
+        await store.close()
 
 
 class TestEvaluators:

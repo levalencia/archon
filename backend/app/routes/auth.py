@@ -9,16 +9,11 @@ GET  /api/auth/me          — Get current user info
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
+from starlette.responses import JSONResponse
 
-from app.security.auth import (
-    authenticate_user,
-    create_jwt,
-    get_current_user,
-    register_api_key,
-    register_user,
-)
+from app.security.auth import AuthRepository, get_auth_repository, get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -46,14 +41,15 @@ class ApiKeyRequest(BaseModel):
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(body: RegisterRequest) -> TokenResponse | dict:
+async def register(body: RegisterRequest, request: Request) -> TokenResponse | dict:
     """Register a new user and return JWT token."""
+    repository = get_auth_repository(request)
     try:
-        user = register_user(body.username, body.password, body.email)
+        user = await repository.register_user(body.username, body.password, body.email)
     except ValueError as e:
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e)}, status_code=201)
 
-    token = create_jwt(user["user_id"], user["username"])
+    token = repository.create_jwt(user["user_id"], user["username"])
     return TokenResponse(
         access_token=token,
         user_id=user["user_id"],
@@ -62,13 +58,16 @@ async def register(body: RegisterRequest) -> TokenResponse | dict:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest) -> TokenResponse | dict:
+async def login(body: LoginRequest, request: Request) -> TokenResponse | dict:
     """Login and get JWT token."""
-    user = authenticate_user(body.username, body.password)
+    repository = get_auth_repository(request)
+    user = await repository.authenticate_user(body.username, body.password)
     if not user:
-        return {"error": "Invalid credentials"}
+        return JSONResponse({"error": "Invalid credentials"})
 
-    token = create_jwt(user["user_id"], user["username"])
+    token = repository.create_jwt(
+        user["user_id"], user["username"], is_admin=bool(user.get("is_admin"))
+    )
     return TokenResponse(
         access_token=token,
         user_id=user["user_id"],
@@ -79,10 +78,11 @@ async def login(body: LoginRequest) -> TokenResponse | dict:
 @router.post("/api-keys")
 async def create_api_key(
     body: ApiKeyRequest,
+    repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
     user: dict = Depends(get_current_user),  # noqa: B008
 ) -> dict:
     """Create a new API key (requires auth)."""
-    key = register_api_key(body.name, user["user_id"])
+    key = await repository.register_api_key(body.name, user["user_id"])
     return {"api_key": key, "name": body.name}
 
 

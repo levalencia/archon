@@ -7,10 +7,12 @@ asyncpg driver. Falls back to aiosqlite for testing.
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import Column, DateTime, Integer, String, Text, delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -70,6 +72,23 @@ class ArtifactRow(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(tz=UTC))
 
 
+class UserRow(Base):
+    __tablename__ = "users"
+    id = Column(String(36), primary_key=True)
+    username = Column(String(50), nullable=False, unique=True, index=True)
+    email = Column(String(320), nullable=False, default="")
+    password_hash = Column(Text, nullable=False)
+    is_admin = Column(Integer, nullable=False, default=0)
+
+
+class ApiKeyRow(Base):
+    __tablename__ = "api_keys"
+    id = Column(String(36), primary_key=True)
+    key_hash = Column(String(64), nullable=False, unique=True, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+
+
 class DatabaseStore:
     """PostgreSQL-backed store for conversations, messages, audit, artifacts.
 
@@ -100,19 +119,80 @@ class DatabaseStore:
     async def close(self) -> None:
         await self._engine.dispose()
 
+    # --- Authentication ---
+
+    async def create_user(
+        self, username: str, password_hash: str, email: str = "", *, is_admin: bool = False
+    ) -> dict:
+        user_id = str(uuid.uuid4())
+        async with self._session_factory() as session:
+            row = UserRow(
+                id=user_id,
+                username=username,
+                email=email,
+                password_hash=password_hash,
+                is_admin=int(is_admin),
+            )
+            session.add(row)
+            try:
+                await session.commit()
+            except IntegrityError as exc:
+                await session.rollback()
+                msg = f"Username '{username}' already exists"
+                raise ValueError(msg) from exc
+        return {"user_id": user_id, "username": username, "is_admin": is_admin}
+
+    async def get_user_by_username(self, username: str) -> dict | None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(UserRow).where(UserRow.username == username))
+            row = result.scalar_one_or_none()
+            return self._user_dict(row) if row is not None else None
+
+    async def get_user(self, user_id: str) -> dict | None:
+        async with self._session_factory() as session:
+            row = await session.get(UserRow, user_id)
+            return self._user_dict(row) if row is not None else None
+
+    @staticmethod
+    def _user_dict(row: UserRow) -> dict:
+        return {
+            "user_id": row.id,
+            "username": row.username,
+            "email": row.email,
+            "password_hash": row.password_hash,
+            "is_admin": bool(row.is_admin),
+        }
+
+    async def create_api_key(self, key_id: str, key_hash: str, user_id: str, name: str) -> None:
+        async with self._session_factory() as session:
+            session.add(ApiKeyRow(id=key_id, key_hash=key_hash, user_id=user_id, name=name))
+            await session.commit()
+
+    async def find_api_key_by_hash(self, key_hash: str) -> dict | None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(ApiKeyRow).where(ApiKeyRow.key_hash == key_hash))
+            row = result.scalar_one_or_none()
+            if row is None:
+                return None
+            return {"user_id": row.user_id, "name": row.name}
+
     # --- Memory Store interface (for agent) ---
 
     async def store(self, conversation_id: str, message: dict) -> None:
         """Store a message in a conversation."""
         await self.store_message(conversation_id, message["role"], message["content"])
 
-    async def store_message(self, conversation_id: str, role: str, content: str) -> None:
+    async def store_message(
+        self, conversation_id: str, role: str, content: str, user_id: str = "default"
+    ) -> None:
         """Store a message and ensure its conversation metadata exists."""
         async with self._session_factory() as session:
             conversation = await session.get(ConversationRow, conversation_id)
             now = datetime.now(tz=UTC)
             if conversation is None:
-                conversation = ConversationRow(id=conversation_id, title="New Conversation")
+                conversation = ConversationRow(
+                    id=conversation_id, title="New Conversation", user_id=user_id
+                )
                 session.add(conversation)
             else:
                 conversation.is_active = 1
@@ -126,15 +206,17 @@ class DatabaseStore:
             session.add(row)
             await session.commit()
 
-    async def retrieve(self, conversation_id: str, limit: int = 50) -> list[dict]:
-        """Retrieve messages for a conversation."""
+    async def retrieve(
+        self, conversation_id: str, limit: int = 50, user_id: str | None = None
+    ) -> list[dict]:
+        """Retrieve messages for a conversation, optionally constrained to its owner."""
         async with self._session_factory() as session:
-            result = await session.execute(
-                select(MessageRow)
-                .where(MessageRow.conversation_id == conversation_id)
-                .order_by(MessageRow.id)
-                .limit(limit)
-            )
+            query = select(MessageRow).where(MessageRow.conversation_id == conversation_id)
+            if user_id is not None:
+                query = query.join(
+                    ConversationRow, ConversationRow.id == MessageRow.conversation_id
+                ).where(ConversationRow.user_id == user_id)
+            result = await session.execute(query.order_by(MessageRow.id).limit(limit))
             rows = result.scalars().all()
             return [{"role": r.role, "content": r.content} for r in rows]
 
@@ -177,21 +259,23 @@ class DatabaseStore:
                 for conversation, message_count in rows
             ]
 
-    async def get_conversation(self, conv_id: str) -> dict | None:
+    async def get_conversation(self, conv_id: str, user_id: str | None = None) -> dict | None:
         async with self._session_factory() as session:
-            result = await session.execute(
-                select(ConversationRow).where(ConversationRow.id == conv_id)
-            )
+            query = select(ConversationRow).where(ConversationRow.id == conv_id)
+            if user_id is not None:
+                query = query.where(ConversationRow.user_id == user_id)
+            result = await session.execute(query)
             row = result.scalar_one_or_none()
             if not row:
                 return None
             return {"id": row.id, "title": row.title, "created_at": row.created_at.isoformat()}
 
-    async def delete_conversation(self, conv_id: str) -> bool:
+    async def delete_conversation(self, conv_id: str, user_id: str | None = None) -> bool:
         async with self._session_factory() as session:
-            result = await session.execute(
-                select(ConversationRow).where(ConversationRow.id == conv_id)
-            )
+            query = select(ConversationRow).where(ConversationRow.id == conv_id)
+            if user_id is not None:
+                query = query.where(ConversationRow.user_id == user_id)
+            result = await session.execute(query)
             row = result.scalar_one_or_none()
             if row:
                 await session.execute(

@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.security.auth import configure_auth, create_jwt
 
 
 @pytest.fixture
@@ -63,34 +62,40 @@ def test_csrf_double_submit_for_cookie_authenticated_mutation(client: TestClient
 @pytest.mark.integration
 def test_bearer_auth_is_csrf_exempt_and_admin_claim_is_enforced(client: TestClient) -> None:
     client.cookies.set("access_token", "ambient-cookie")
-    admin_token = create_jwt("admin-id", "operator", is_admin=True)
+    admin = client.post("/api/auth/register", json={"username": "admin", "password": "secret1"})
+    assert admin.status_code == 201
     response = client.put(
         "/api/admin/settings",
         json={"skills_top_k": 4},
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"Authorization": f"Bearer {admin.json()['access_token']}"},
     )
     assert response.status_code == 200
 
-    user_token = create_jwt("user-id", "user")
+    regular = client.post("/api/auth/register", json={"username": "regular", "password": "secret1"})
+    assert regular.status_code == 201
     forbidden = client.put(
         "/api/admin/settings",
         json={"skills_top_k": 5},
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {regular.json()['access_token']}"},
     )
     assert forbidden.status_code == 403
 
 
 @pytest.mark.integration
 def test_api_key_auth_is_csrf_exempt(client: TestClient) -> None:
-    configure_auth(
-        "test-secret",
-        {"test-admin-key": {"user_id": "api-admin", "name": "admin"}},
+    registered = client.post(
+        "/api/auth/register", json={"username": "admin", "password": "secret1"}
     )
+    api_key = client.post(
+        "/api/auth/api-keys",
+        json={"name": "admin-automation"},
+        headers={"Authorization": f"Bearer {registered.json()['access_token']}"},
+    ).json()["api_key"]
     client.cookies.set("access_token", "ambient-cookie")
     response = client.put(
         "/api/admin/settings",
         json={"skills_top_k": 4},
-        headers={"X-API-Key": "test-admin-key"},
+        headers={"X-API-Key": api_key},
     )
     assert response.status_code == 200
 

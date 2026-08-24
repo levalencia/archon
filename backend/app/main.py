@@ -32,8 +32,9 @@ from app.routes.red_team import router as red_team_router
 from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
-from app.security.auth import configure_auth
+from app.security.auth import AuthRepository
 from app.services.conversations import ConversationRepository
+from app.services.db_store import DatabaseStore
 
 logger = structlog.get_logger()
 
@@ -61,10 +62,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     repository = ConversationRepository(settings.database_url)
     await repository.initialize()
     app.state.conversations = repository
+    auth_store = DatabaseStore(settings.database_url)
+    await auth_store.initialize()
+    app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
 
     yield
 
     await repository.close()
+    await auth_store.close()
     logger.info("archon_shutdown")
 
 
@@ -79,7 +84,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
-    configure_auth(settings.secret_key)
 
     # --- Middleware (order matters: last added = first executed) ---
 
