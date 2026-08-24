@@ -240,6 +240,8 @@ class DatabaseStore:
                 )
                 session.add(conversation)
             else:
+                if conversation.user_id != user_id:
+                    return
                 conversation.is_active = 1
                 conversation.updated_at = now
             row = MessageRow(

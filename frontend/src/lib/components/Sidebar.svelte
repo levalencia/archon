@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { Conversation } from '$lib/types';
+  import { authenticatedFetch } from '$lib/auth';
   let { activeId = '', onSelect = (_id: string) => {}, onNew = () => {}, onClose = () => {} }: { activeId?: string; onSelect?: (id: string) => void; onNew?: () => void; onClose?: () => void } = $props();
   let conversations: Conversation[] = $state([]);
   let loading = $state(true); let error = $state('');
-  async function load() { loading = true; error = ''; try { const r = await fetch('/api/conversations'); if (!r.ok) throw new Error(`Request failed (${r.status})`); conversations = await r.json(); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load conversations'; } finally { loading = false; } }
+  async function load() { loading = true; error = ''; try { const r = await authenticatedFetch('/api/conversations'); if (!r.ok) throw new Error(`Request failed (${r.status})`); conversations = await r.json(); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load conversations'; } finally { loading = false; } }
   $effect(() => { activeId; load(); });
-  async function remove(id: string, e: Event) { e.stopPropagation(); try { const r = await fetch(`/api/conversations/${id}`, { method: 'DELETE' }); if (!r.ok && r.status !== 204) throw new Error(); conversations = conversations.filter(c => c.id !== id); if (activeId === id) onNew(); } catch { error = 'Could not delete conversation'; } }
+  async function remove(id: string, e: Event) { e.stopPropagation(); try { const r = await authenticatedFetch(`/api/conversations/${id}`, { method: 'DELETE' }); if (!r.ok && r.status !== 204) throw new Error(); conversations = conversations.filter(c => c.id !== id); if (activeId === id) onNew(); } catch { error = 'Could not delete conversation'; } }
 </script>
 
 <div class="sidebar-shell">

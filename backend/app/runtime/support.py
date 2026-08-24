@@ -39,5 +39,8 @@ async def prepare_messages(
     tools: Any,
     skills_context: str,
     images: list[str] | None = None,
+    user_id: str = "default",
 ) -> list[Message]:
-    return await build_messages(user_input, conversation_id, memory, tools, skills_context, images)
+    return await build_messages(
+        user_input, conversation_id, memory, tools, skills_context, images, user_id
+    )

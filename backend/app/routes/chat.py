@@ -11,7 +11,7 @@ import time
 import uuid
 
 import structlog
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.agents.llm_factory import create_llm_client
@@ -22,6 +22,7 @@ from app.routes.artifacts import get_artifact_store
 from app.routes.skills import get_skill_registry
 from app.runtime import AgentRuntime, RuntimeBudget
 from app.runtime.support import as_model_provider, prepare_messages
+from app.security.auth import get_current_user
 from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.context_optimizer import ContextOptimizer
 from app.services.conversations import ConversationRepository
@@ -150,7 +151,11 @@ class ChatResponse(BaseModel):
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(body: ChatRequest, request: Request) -> ChatResponse:
+async def chat(
+    body: ChatRequest,
+    request: Request,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> ChatResponse:
     """Send a message. The agent reasons with tools and skills, returns thinking steps."""
     cid = get_correlation_id()
     start_time = time.monotonic()
@@ -179,6 +184,11 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
 
     # Build typed runtime with native provider tools and skill context.
     conv_id = body.conversation_id or str(uuid.uuid4())
+    if body.conversation_id:
+        if await memory.get(conv_id, user["user_id"]) is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+    else:
+        await memory.create(conv_id, "New Conversation", user["user_id"])
 
     logger.info(
         "chat_request",
@@ -193,7 +203,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     # Parse images if provided
     images = [body.image] if body.image else None
     # Optimize context window before running agent
-    history = await memory.retrieve(conv_id, limit=50)
+    history = await memory.retrieve(conv_id, limit=50, user_id=user["user_id"])
     if len(history) > 10:
         optimized = _context_optimizer.optimize(history)
         stats = _context_optimizer.get_stats(optimized)
@@ -204,7 +214,9 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
             utilization_pct=stats["utilization_pct"],
         )
 
-    messages = await prepare_messages(body.message, conv_id, memory, tools, skills_context, images)
+    messages = await prepare_messages(
+        body.message, conv_id, memory, tools, skills_context, images, user["user_id"]
+    )
     runtime = AgentRuntime(
         as_model_provider(llm),
         tools,
@@ -223,8 +235,8 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         ),
     )
     result = await runtime.run(messages)
-    await memory.store(conv_id, "user", body.message)
-    await memory.store(conv_id, "assistant", result.content)
+    await memory.store(conv_id, "user", body.message, user["user_id"])
+    await memory.store(conv_id, "assistant", result.content, user["user_id"])
 
     elapsed_ms = (time.monotonic() - start_time) * 1000
 
@@ -313,9 +325,16 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
 
 
 @router.get("/history/{conversation_id}")
-async def get_history(conversation_id: str, request: Request) -> dict:
+async def get_history(
+    conversation_id: str,
+    request: Request,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> dict:
     """Get conversation history."""
-    messages = await get_conversation_repository(request).retrieve(conversation_id)
+    repository = get_conversation_repository(request)
+    if await repository.get(conversation_id, user["user_id"]) is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    messages = await repository.retrieve(conversation_id, user_id=user["user_id"])
     return {
         "conversation_id": conversation_id,
         "messages": messages,

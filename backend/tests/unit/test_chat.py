@@ -18,6 +18,10 @@ def client(tmp_path) -> TestClient:
     )
     app = create_app(settings=settings)
     with TestClient(app) as c:
+        token = c.post(
+            "/api/auth/register", json={"username": "chat-user", "password": "secret1"}
+        ).json()["access_token"]
+        c.headers.update({"Authorization": f"Bearer {token}"})
         yield c
 
 
@@ -52,12 +56,13 @@ class TestChatEndpoint:
 
     @pytest.mark.unit
     def test_chat_with_conversation_id(self, client: TestClient) -> None:
+        conversation_id = client.post("/api/conversations", json={}).json()["id"]
         response = client.post(
             "/api/chat",
-            json={"message": "Hi", "conversation_id": "conv-123"},
+            json={"message": "Hi", "conversation_id": conversation_id},
         )
         assert response.status_code == 200
-        assert response.json()["conversation_id"] == "conv-123"
+        assert response.json()["conversation_id"] == conversation_id
 
     @pytest.mark.unit
     def test_empty_message_rejected(self, client: TestClient) -> None:
@@ -122,22 +127,20 @@ class TestChatHistory:
     @pytest.mark.unit
     def test_empty_history(self, client: TestClient) -> None:
         response = client.get("/api/chat/history/nonexistent")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["messages"] == []
-        assert data["count"] == 0
+        assert response.status_code == 404
 
     @pytest.mark.unit
     def test_history_after_chat(self, client: TestClient) -> None:
+        conversation_id = client.post("/api/conversations", json={}).json()["id"]
         # Send a message first
         chat_response = client.post(
             "/api/chat",
-            json={"message": "Remember this", "conversation_id": "conv-hist"},
+            json={"message": "Remember this", "conversation_id": conversation_id},
         )
         assert chat_response.status_code == 200
 
         # Check history
-        response = client.get("/api/chat/history/conv-hist")
+        response = client.get(f"/api/chat/history/{conversation_id}")
         assert response.status_code == 200
         data = response.json()
         assert data["count"] == 2  # user + assistant

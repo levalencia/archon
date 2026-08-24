@@ -15,6 +15,10 @@ def client() -> TestClient:
     settings = Settings(llm_provider="mock", debug=True)
     app = create_app(settings=settings)
     with TestClient(app) as c:
+        token = c.post(
+            "/api/auth/register", json={"username": "conversation-user", "password": "secret1"}
+        ).json()["access_token"]
+        c.headers.update({"Authorization": f"Bearer {token}"})
         yield c
 
 
@@ -84,10 +88,7 @@ class TestConversationCRUD:
     @pytest.mark.unit
     def test_get_nonexistent_conversation(self, client: TestClient) -> None:
         response = client.get("/api/conversations/nonexistent")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["messages"] == []
-        assert data["message_count"] == 0
+        assert response.status_code == 404
 
     @pytest.mark.unit
     def test_conversation_message_history_list_delete_flow(self, client: TestClient) -> None:
@@ -122,7 +123,7 @@ class TestConversationCRUD:
         assert all(
             item["id"] != conversation_id for item in client.get("/api/conversations").json()
         )
-        assert client.get(f"/api/chat/history/{conversation_id}").json()["messages"] == []
+        assert client.get(f"/api/chat/history/{conversation_id}").status_code == 404
 
     @pytest.mark.unit
     @pytest.mark.asyncio

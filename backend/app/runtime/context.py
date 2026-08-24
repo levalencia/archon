@@ -17,6 +17,7 @@ async def build_messages(
     tools,
     system_prompt_extra: str = "",
     images: list[str] | None = None,
+    user_id: str = "default",
 ) -> list[Message]:
     descriptions = (
         json.dumps(tools.list_tools(), indent=2) if tools.list_tools() else "None configured"
@@ -46,7 +47,7 @@ async def build_messages(
         prompt += system_prompt_extra
     result = [Message(Role.SYSTEM, prompt)]
     if memory:
-        for item in await memory.retrieve(conversation_id, limit=20):
+        for item in await memory.retrieve(conversation_id, limit=20, user_id=user_id):
             role = Role(item["role"])
             result.append(Message(role, item["content"]))
     result.append(Message(Role.USER, user_input, images=tuple(images or ())))

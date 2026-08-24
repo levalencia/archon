@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,8 +26,14 @@ def reset_chat_state(tmp_path, monkeypatch):
     chat._db_store = None
 
 
-def client() -> TestClient:
-    return TestClient(create_app(Settings(llm_provider="mock", debug=True)))
+@contextmanager
+def client() -> Iterator[TestClient]:
+    with TestClient(create_app(Settings(llm_provider="mock", debug=True))) as api:
+        token = api.post(
+            "/api/auth/register", json={"username": "runtime-user", "password": "secret1"}
+        ).json()["access_token"]
+        api.headers.update({"Authorization": f"Bearer {token}"})
+        yield api
 
 
 def done_payload(text: str) -> dict:
@@ -39,8 +47,9 @@ def test_chat_uses_typed_runtime_and_preserves_history() -> None:
 
     chat._llm_singleton = MockLLM(["hello"])
     with client() as api:
-        response = api.post("/api/chat", json={"message": "hi", "conversation_id": "c1"})
-        history = api.get("/api/chat/history/c1")
+        conversation_id = api.post("/api/conversations", json={}).json()["id"]
+        response = api.post("/api/chat", json={"message": "hi", "conversation_id": conversation_id})
+        history = api.get(f"/api/chat/history/{conversation_id}")
     assert response.status_code == 200
     assert response.json()["response"] == "hello"
     assert response.json()["tokens_used"] == 1
@@ -58,8 +67,9 @@ def test_sse_receives_native_runtime_events_and_stop_reason() -> None:
         ]
     )
     with client() as api:
+        conversation_id = api.post("/api/conversations", json={}).json()["id"]
         response = api.post(
-            "/api/chat/stream", json={"message": "calculate", "conversation_id": "s1"}
+            "/api/chat/stream", json={"message": "calculate", "conversation_id": conversation_id}
         )
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
@@ -75,9 +85,11 @@ def test_concurrent_sse_streams_do_not_cross_talk() -> None:
     chat._llm_singleton = MockLLM(["alpha-response", "beta-response"])
     with client() as api:
         # TestClient requests are separate runs; unique conversation IDs also verify sink ownership.
-        first = api.post("/api/chat/stream", json={"message": "a", "conversation_id": "alpha"})
-        second = api.post("/api/chat/stream", json={"message": "b", "conversation_id": "beta"})
+        alpha = api.post("/api/conversations", json={}).json()["id"]
+        beta = api.post("/api/conversations", json={}).json()["id"]
+        first = api.post("/api/chat/stream", json={"message": "a", "conversation_id": alpha})
+        second = api.post("/api/chat/stream", json={"message": "b", "conversation_id": beta})
     assert "alpha-response" in first.text and "beta-response" not in first.text
     assert "beta-response" in second.text and "alpha-response" not in second.text
-    assert done_payload(first.text)["conversation_id"] == "alpha"
-    assert done_payload(second.text)["conversation_id"] == "beta"
+    assert done_payload(first.text)["conversation_id"] == alpha
+    assert done_payload(second.text)["conversation_id"] == beta

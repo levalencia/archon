@@ -7,7 +7,7 @@ import json
 import time
 import uuid
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
@@ -22,6 +22,7 @@ from app.routes.chat import (
 )
 from app.runtime import AgentEvent, AgentEventKind, AgentRuntime, RuntimeBudget
 from app.runtime.support import as_model_provider, prepare_messages
+from app.security.auth import get_current_user
 from app.services.artifacts import detect_artifact_in_response
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -44,8 +45,19 @@ class QueueEventSink:
 
 
 @router.post("/stream")
-async def chat_stream_real(body: StreamRequest, request: Request) -> StreamingResponse:
+async def chat_stream_real(
+    body: StreamRequest,
+    request: Request,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> StreamingResponse:
     settings = request.app.state.settings
+    memory = get_conversation_repository(request)
+    conv_id = body.conversation_id or str(uuid.uuid4())
+    if body.conversation_id:
+        if await memory.get(conv_id, user["user_id"]) is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+    else:
+        await memory.create(conv_id, "New Conversation", user["user_id"])
 
     async def event_stream():
         started = time.monotonic()
@@ -55,8 +67,6 @@ async def chat_stream_real(body: StreamRequest, request: Request) -> StreamingRe
         for skill in skills_used:
             yield _sse("skill", skill)
 
-        conv_id = body.conversation_id or str(uuid.uuid4())
-        memory = get_conversation_repository(request)
         tools = get_tool_registry()
         messages = await prepare_messages(
             body.message,
@@ -65,6 +75,7 @@ async def chat_stream_real(body: StreamRequest, request: Request) -> StreamingRe
             tools,
             skills_context,
             [body.image] if body.image else None,
+            user["user_id"],
         )
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
         runtime = AgentRuntime(
@@ -111,8 +122,8 @@ async def chat_stream_real(body: StreamRequest, request: Request) -> StreamingRe
                 yield _sse("token", event.data["text"])
 
         result = await task
-        await memory.store(conv_id, "user", body.message)
-        await memory.store(conv_id, "assistant", result.content)
+        await memory.store(conv_id, "user", body.message, user["user_id"])
+        await memory.store(conv_id, "assistant", result.content, user["user_id"])
         artifacts = detect_artifact_in_response(result.content)
         for artifact in artifacts:
             yield _sse("artifact", artifact)

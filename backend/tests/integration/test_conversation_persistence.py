@@ -20,6 +20,10 @@ def test_conversation_lifecycle_and_restart_persistence(tmp_path) -> None:
     chat._llm_singleton = MockLLM(["persisted answer"])
 
     with TestClient(create_app(settings)) as client:
+        registered = client.post(
+            "/api/auth/register", json={"username": "persistent-chat", "password": "secret1"}
+        )
+        client.headers.update({"Authorization": f"Bearer {registered.json()['access_token']}"})
         created = client.post("/api/conversations", json={"title": "Persistent chat"})
         assert created.status_code == 201
         conversation_id = created.json()["id"]
@@ -49,12 +53,18 @@ def test_conversation_lifecycle_and_restart_persistence(tmp_path) -> None:
 
     chat._llm_singleton = None
     with TestClient(create_app(settings)) as restarted_client:
+        logged_in = restarted_client.post(
+            "/api/auth/login", json={"username": "persistent-chat", "password": "secret1"}
+        )
+        restarted_client.headers.update(
+            {"Authorization": f"Bearer {logged_in.json()['access_token']}"}
+        )
         detail = restarted_client.get(f"/api/conversations/{conversation_id}").json()
         assert detail["title"] == "Persistent chat"
         assert detail["messages"] == expected_messages
         assert restarted_client.delete(f"/api/conversations/{conversation_id}").status_code == 204
         assert restarted_client.get("/api/conversations").json() == []
-        assert restarted_client.get(f"/api/chat/history/{conversation_id}").json()["messages"] == []
+        assert restarted_client.get(f"/api/chat/history/{conversation_id}").status_code == 404
 
 
 @pytest.mark.integration

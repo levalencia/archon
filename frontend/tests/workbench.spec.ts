@@ -1,11 +1,24 @@
 import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/conversations', route => route.request().method() === 'POST'
-    ? route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id: 'run-123', title: 'Test run', created_at: new Date().toISOString(), message_count: 0 }) })
-    : route.fulfill({ contentType: 'application/json', body: '[]' }));
+  const authorized = (headers: Record<string, string>) => headers.authorization === 'Bearer playwright-token';
+  await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
+  await page.route('**/api/conversations', route => {
+    if (!authorized(route.request().headers())) return route.fulfill({ status: 401 });
+    return route.request().method() === 'POST'
+      ? route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id: 'run-123', title: 'Test run', created_at: new Date().toISOString(), message_count: 0 }) })
+      : route.fulfill({ contentType: 'application/json', body: '[]' });
+  });
   await page.route('**/api/admin/health', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ llm_model: 'Reliability Model', llm_provider: 'test' }) }));
-  await page.route('**/api/chat/stream', async route => route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'event: thinking\ndata: Verifying evidence\n\nevent: token\ndata: Grounded answer\n\nevent: context\ndata: {"tokens":120,"budget":8000,"utilization_pct":1.5}\n\nevent: done\ndata: {"iterations":1,"tools_used":0,"elapsed_ms":42}\n\n' }));
+  await page.route('**/api/chat/stream', async route => authorized(route.request().headers())
+    ? route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'event: thinking\ndata: Verifying evidence\n\nevent: token\ndata: Grounded answer\n\nevent: context\ndata: {"tokens":120,"budget":8000,"utilization_pct":1.5}\n\nevent: done\ndata: {"iterations":1,"tools_used":0,"elapsed_ms":42}\n\n' })
+    : route.fulfill({ status: 401 }));
+  await page.route('**/api/logs/stream', route => authorized(route.request().headers())
+    ? route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' })
+    : route.fulfill({ status: 401 }));
+  await page.route('**/api/chat/history/*', route => authorized(route.request().headers())
+    ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ messages: [] }) })
+    : route.fulfill({ status: 401 }));
 });
 
 test('desktop workbench streams an answer and exposes inspector tabs', async ({ page }) => {
