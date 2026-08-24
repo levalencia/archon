@@ -6,8 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint:
+  backend-quality:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -20,77 +24,48 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync --extra dev
       - name: Ruff lint
-        run: uv run ruff check app/ tests/
+        run: uv run ruff check app tests
       - name: Ruff format
-        run: uv run ruff format --check app/ tests/
-      - name: Mypy type check
-        run: uv run mypy app/ --ignore-missing-imports --no-error-summary || true
+        run: uv run ruff format --check app tests
+      - name: Backend tests
+        run: uv run pytest -q --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=50
 
-  test:
+  frontend-quality:
     runs-on: ubuntu-latest
-    needs: lint
     defaults:
       run:
-        working-directory: backend
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
-      - uses: astral-sh/setup-uv@v3
-      - run: uv sync --extra dev
-      - name: Unit tests
-        run: uv run pytest -m unit --cov --cov-report=term-missing -q
-      - name: Security probe tests
-        run: uv run pytest -m security -v
-      - name: All tests + coverage
-        run: uv run pytest -m "unit or security" --cov --cov-report=xml -q
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Svelte and TypeScript checks
+        run: npm run check
+      - name: Frontend tests
+        run: npm test -- --run
+      - name: Production build
+        run: npm run build
 
-  security-scan:
+  backend-image:
     runs-on: ubuntu-latest
-    needs: lint
-    defaults:
-      run:
-        working-directory: backend
+    needs: [backend-quality, frontend-quality]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - uses: astral-sh/setup-uv@v3
-      - run: uv sync --extra dev
-      - name: Bandit security scan
-        run: uv run pip install bandit && uv run bandit -r app/ -ll || true
-      - name: Safety dependency check
-        run: uv run pip install safety && uv run safety check || true
-
-  quality-gate:
-    runs-on: ubuntu-latest
-    needs: test
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - uses: astral-sh/setup-uv@v3
-      - run: uv sync --extra dev
-      - name: Quality gate (coverage > 50%)
-        run: uv run pytest -m "unit or security" --cov --cov-fail-under=50 -q
-
-  build:
-    runs-on: ubuntu-latest
-    needs: [test, security-scan]
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
+      - name: Build backend image
         run: docker build -t archon-backend:${{ github.sha }} .
-      - name: Smoke test
+      - name: Smoke test backend image
         run: |
           docker run -d --name archon-test -p 8000:8000 archon-backend:${{ github.sha }}
-          sleep 5
-          curl -f http://localhost:8000/healthz || exit 1
-          docker stop archon-test
+          trap 'docker rm -f archon-test >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://localhost:8000/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs archon-test
+          exit 1
