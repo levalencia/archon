@@ -72,7 +72,7 @@ class ConversationSharder:
 
     def get_shard(self, user_id: str) -> int:
         """Determine shard number for a user_id."""
-        h = int(hashlib.md5(user_id.encode()).hexdigest(), 16)  # noqa: S324
+        h = int(hashlib.sha256(user_id.encode()).hexdigest(), 16)
         return h % self.num_shards
 
     def get_schema_name(self, user_id: str) -> str:

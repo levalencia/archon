@@ -204,7 +204,7 @@ class EmbeddingService:
 
         Same text always produces same embedding (useful for testing).
         """
-        text_hash = hashlib.md5(text.encode()).hexdigest()  # noqa: S324
+        text_hash = hashlib.sha256(text.encode()).hexdigest()
         values = []
         for i in range(0, min(len(text_hash) * 2, self.dimensions * 2), 2):
             idx = i % len(text_hash)

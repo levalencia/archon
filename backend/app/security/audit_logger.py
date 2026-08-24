@@ -107,26 +107,16 @@ class StructuredAuditLogger:
         security_level: str | None = None,
     ) -> list[dict]:
         """Search audit entries by filters."""
-        conditions = []
-        params: list = []
-
-        if agent_id:
-            conditions.append("agent_id = ?")
-            params.append(agent_id)
-        if action:
-            conditions.append("action = ?")
-            params.append(action)
-        if correlation_id:
-            conditions.append("correlation_id = ?")
-            params.append(correlation_id)
-        if security_level:
-            conditions.append("security_level = ?")
-            params.append(security_level)
-
-        where = " AND ".join(conditions) if conditions else "1=1"
+        filter_values = (agent_id, action, correlation_id, security_level)
+        filters = tuple(value or None for value in filter_values)
         cursor = self._conn.execute(
-            f"SELECT * FROM audit_log WHERE {where} ORDER BY timestamp DESC",  # noqa: S608
-            params,
+            """SELECT * FROM audit_log
+               WHERE (? IS NULL OR agent_id = ?)
+                 AND (? IS NULL OR action = ?)
+                 AND (? IS NULL OR correlation_id = ?)
+                 AND (? IS NULL OR security_level = ?)
+               ORDER BY timestamp DESC""",
+            tuple(value for filter_value in filters for value in (filter_value, filter_value)),
         )
         return [dict(row) for row in cursor.fetchall()]
 

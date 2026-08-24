@@ -27,6 +27,8 @@ jobs:
         run: uv run ruff check app tests
       - name: Ruff format
         run: uv run ruff format --check app tests
+      - name: Bandit security scan
+        run: uv run bandit -r app -ll
       - name: Backend tests
         run: uv run pytest -q --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=50
 
@@ -64,8 +66,8 @@ jobs:
       - name: Smoke test backend image
         run: |
           docker run -d --name archon-test -p 8000:8000 \
-  -e ARCHON_DATABASE_URL="sqlite+aiosqlite:////tmp/archon-ci.db" \
-  archon-backend:${{ github.sha }}
+            -e ARCHON_DATABASE_URL="sqlite+aiosqlite:////tmp/archon-ci.db" \
+            archon-backend:${{ github.sha }}
           trap 'docker rm -f archon-test >/dev/null 2>&1 || true' EXIT
           for attempt in {1..20}; do
             if curl --fail --silent http://localhost:8000/healthz; then

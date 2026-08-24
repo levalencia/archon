@@ -9,7 +9,9 @@ Concept: Layer 3 - Tools (registered, validated, timeout-enforced)
 
 from __future__ import annotations
 
+import ast
 import math
+import operator
 import os
 import stat
 from datetime import UTC, datetime
@@ -23,6 +25,53 @@ from app.tools.web_search import web_search_tool
 logger = structlog.get_logger()
 
 MAX_READ_FILE_BYTES = 1_000_000
+MAX_CALCULATOR_EXPRESSION_LENGTH = 500
+MAX_CALCULATOR_NODES = 64
+
+_BINARY_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow,
+    ast.Mod: operator.mod,
+}
+_UNARY_OPERATORS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+_FUNCTIONS = {
+    "sqrt": math.sqrt,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "log": math.log,
+    "abs": abs,
+    "round": round,
+}
+_CONSTANTS = {"pi": math.pi, "e": math.e}
+
+
+def _evaluate_math_node(node: ast.AST) -> int | float:
+    """Evaluate a parsed expression containing only explicitly allowed math nodes."""
+    if isinstance(node, ast.Expression):
+        return _evaluate_math_node(node.body)
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+            raise ValueError("Only numeric constants are supported")
+        return node.value
+    if isinstance(node, ast.Name) and node.id in _CONSTANTS:
+        return _CONSTANTS[node.id]
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY_OPERATORS:
+        return _UNARY_OPERATORS[type(node.op)](_evaluate_math_node(node.operand))
+    if isinstance(node, ast.BinOp) and type(node.op) in _BINARY_OPERATORS:
+        left = _evaluate_math_node(node.left)
+        right = _evaluate_math_node(node.right)
+        if isinstance(node.op, ast.Pow) and abs(right) > 100:
+            raise ValueError("Exponent is too large")
+        return _BINARY_OPERATORS[type(node.op)](left, right)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        function = _FUNCTIONS.get(node.func.id)
+        if function is not None and not node.keywords and 1 <= len(node.args) <= 2:
+            return function(*(_evaluate_math_node(argument) for argument in node.args))
+    raise ValueError(f"Unsupported expression element: {type(node).__name__}")
 
 
 async def calculator_tool(expression: str) -> dict:
@@ -31,50 +80,18 @@ async def calculator_tool(expression: str) -> dict:
     Supports: +, -, *, /, **, sqrt, sin, cos, tan, log, pi, e
     Does NOT use eval() — parses and computes safely.
     """
-    allowed = set("0123456789.+-*/() ._")
     clean = expression.strip()
-
-    # Normalize ^ to ** for power
     clean = clean.replace("^", "**")
 
-    replacements = {
-        "pi": str(math.pi),
-        "e": str(math.e),
-        "sqrt": "math.sqrt",
-        "sin": "math.sin",
-        "cos": "math.cos",
-        "tan": "math.tan",
-        "log": "math.log",
-        "abs": "abs",
-        "round": "round",
-        "**": "**",
-    }
-
-    for name, replacement in replacements.items():
-        clean = clean.replace(name, replacement)
-
-    stripped = clean
-    for func in [
-        "math.sqrt",
-        "math.sin",
-        "math.cos",
-        "math.tan",
-        "math.log",
-        "abs",
-        "round",
-    ]:
-        stripped = stripped.replace(func, "")
-
-    if not all(c in allowed or c == "." for c in stripped):
-        return {"error": f"Invalid characters in expression: {expression}"}
-
     try:
-        result = eval(  # noqa: S307
-            clean,
-            {"__builtins__": {}, "math": math, "abs": abs, "round": round},
-        )
+        if not clean or len(clean) > MAX_CALCULATOR_EXPRESSION_LENGTH:
+            raise ValueError("Expression is empty or too long")
+        tree = ast.parse(clean, mode="eval")
+        if sum(1 for _ in ast.walk(tree)) > MAX_CALCULATOR_NODES:
+            raise ValueError("Expression is too complex")
+        result = _evaluate_math_node(tree)
         return {"result": float(result), "expression": expression}
-    except Exception as e:
+    except (ArithmeticError, RecursionError, SyntaxError, TypeError, ValueError) as e:
         return {"error": f"Calculation error: {e}", "expression": expression}
 
 

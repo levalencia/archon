@@ -1,36 +1,30 @@
-"""Image serving + generation API routes.
-
-GET /api/images/{filename} — Serve generated images
-"""
+"""Authenticated serving of generated images from private temporary storage."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi import APIRouter, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from app.security.auth import get_current_user
+from app.tools.image_storage import image_path
 
-router = APIRouter(prefix="/api/images", tags=["images"], dependencies=[Depends(get_current_user)])
-
-IMAGES_DIR = Path("/tmp/archon_generated_images")
+router = APIRouter(
+    prefix="/api/images",
+    tags=["images"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/{filename}")
-async def serve_image(filename: str) -> FileResponse:
-    """Serve a generated image file."""
-    filepath = IMAGES_DIR / filename
-    if not filepath.exists():
-        from fastapi.responses import JSONResponse
+async def serve_image(filename: str) -> FileResponse | JSONResponse:
+    """Serve a generated image only when its resolved path is safely contained."""
+    try:
+        filepath = image_path(filename)
+    except ValueError:
+        filepath = None
+    if filepath is None or not filepath.is_file():
+        return JSONResponse({"error": "Image not found"}, status_code=404)
 
-        return JSONResponse(
-            {"error": "Image not found"},
-            status_code=404,
-        )
-
-    # Determine media type
-    suffix = filepath.suffix.lower()
     media_types = {
         ".png": "image/png",
         ".jpg": "image/jpeg",
@@ -38,8 +32,7 @@ async def serve_image(filename: str) -> FileResponse:
         ".svg": "image/svg+xml",
         ".webp": "image/webp",
     }
-
     return FileResponse(
         filepath,
-        media_type=media_types.get(suffix, "application/octet-stream"),
+        media_type=media_types.get(filepath.suffix.lower(), "application/octet-stream"),
     )

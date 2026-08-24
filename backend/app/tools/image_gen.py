@@ -13,17 +13,15 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
 import uuid
-from pathlib import Path
 
 import httpx
 import structlog
 
-logger = structlog.get_logger()
+from app.tools.image_storage import image_path
 
-# Directory to store generated images
-IMAGES_DIR = Path("/tmp/archon_generated_images")
-IMAGES_DIR.mkdir(exist_ok=True)
+logger = structlog.get_logger()
 
 
 async def image_gen_tool(
@@ -57,7 +55,7 @@ async def _mock_generate(prompt: str, size: str) -> dict:
     """Generate a placeholder SVG image (no API key needed)."""
     w, h = (int(x) for x in size.split("x"))
     # Create a gradient SVG with the prompt as text
-    prompt_hash = hashlib.md5(prompt.encode()).hexdigest()  # noqa: S324
+    prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
     color1 = f"#{prompt_hash[:6]}"
     color2 = f"#{prompt_hash[6:12]}"
 
@@ -75,7 +73,7 @@ async def _mock_generate(prompt: str, size: str) -> dict:
   </text>
   <text x="50%" y="55%" text-anchor="middle" fill="rgba(255,255,255,0.7)"
         font-family="sans-serif" font-size="14">
-    {prompt[:60]}
+    {html.escape(prompt[:60])}
   </text>
   <text x="50%" y="70%" text-anchor="middle" fill="rgba(255,255,255,0.5)"
         font-family="sans-serif" font-size="12">
@@ -84,8 +82,8 @@ async def _mock_generate(prompt: str, size: str) -> dict:
 </svg>"""
 
     filename = f"{uuid.uuid4().hex[:12]}.svg"
-    filepath = IMAGES_DIR / filename
-    filepath.write_text(svg)
+    filepath = image_path(filename)
+    filepath.write_text(svg, encoding="utf-8")
 
     logger.info(
         "image_generated_mock",
@@ -133,7 +131,7 @@ async def _together_generate(
     img_bytes = base64.b64decode(b64_data)
 
     filename = f"{uuid.uuid4().hex[:12]}.png"
-    filepath = IMAGES_DIR / filename
+    filepath = image_path(filename)
     filepath.write_bytes(img_bytes)
 
     logger.info(
@@ -180,7 +178,7 @@ async def _openai_generate(
     img_bytes = base64.b64decode(b64_data)
 
     filename = f"{uuid.uuid4().hex[:12]}.png"
-    filepath = IMAGES_DIR / filename
+    filepath = image_path(filename)
     filepath.write_bytes(img_bytes)
 
     logger.info(
