@@ -1,9 +1,9 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 """Archon: Production AI Agent Webapp — FastAPI application."""
 
 from __future__ import annotations
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
