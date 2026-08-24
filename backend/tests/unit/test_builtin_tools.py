@@ -122,7 +122,7 @@ class TestFileTool:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_read_file(self, workspace: Path) -> None:
-        result = await read_file_tool(str(workspace / "test.txt"))
+        result = await read_file_tool("test.txt", workspace_root=workspace)
         assert result["content"] == "Hello World"
         assert result["size"] == 11
 
@@ -131,6 +131,35 @@ class TestFileTool:
     async def test_read_nonexistent(self) -> None:
         result = await read_file_tool("/nonexistent/file.txt")
         assert "error" in result
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_read_rejects_traversal_sibling_prefix_and_symlink(self, workspace: Path) -> None:
+        sibling = workspace.parent / f"{workspace.name}-sibling"
+        sibling.mkdir()
+        secret = sibling / "secret.txt"
+        secret.write_text("secret")
+        (workspace / "escape.txt").symlink_to(secret)
+        try:
+            traversal = await read_file_tool(
+                f"../{sibling.name}/secret.txt", workspace_root=workspace
+            )
+            sibling_prefix = await read_file_tool(secret, workspace_root=workspace)
+            symlink = await read_file_tool("escape.txt", workspace_root=workspace)
+        finally:
+            secret.unlink()
+            sibling.rmdir()
+
+        assert "outside workspace" in traversal["error"]
+        assert "outside workspace" in sibling_prefix["error"]
+        assert "outside workspace" in symlink["error"]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_read_rejects_oversized_file(self, workspace: Path) -> None:
+        (workspace / "large.txt").write_text("12345")
+        result = await read_file_tool("large.txt", workspace_root=workspace, max_size=4)
+        assert "maximum size" in result["error"]
 
     @pytest.mark.unit
     @pytest.mark.asyncio

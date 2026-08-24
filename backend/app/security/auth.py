@@ -65,12 +65,13 @@ def authenticate_user(username: str, password: str) -> dict | None:
     return None
 
 
-def create_jwt(user_id: str, username: str) -> str:
+def create_jwt(user_id: str, username: str, *, is_admin: bool = False) -> str:
     """Create a simple JWT token (HMAC-SHA256)."""
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
         "sub": user_id,
         "username": username,
+        "is_admin": is_admin,
         "iat": int(time.time()),
         "exp": int(time.time()) + _JWT_EXPIRY,
     }
@@ -145,9 +146,21 @@ async def get_current_user(
                 "user_id": payload["sub"],
                 "username": payload.get("username", ""),
                 "auth_method": "jwt",
+                "is_admin": bool(payload.get("is_admin", False)),
             }
 
     raise HTTPException(status_code=401, detail="Not authenticated")
+
+
+async def require_admin(
+    request: Request,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> dict:
+    """Require an admin JWT claim or a username configured as an administrator."""
+    configured = set(getattr(request.app.state.settings, "admin_usernames", []))
+    if user.get("is_admin") is True or user.get("username") in configured:
+        return user
+    raise HTTPException(status_code=403, detail="Administrator access required")
 
 
 async def get_optional_user(

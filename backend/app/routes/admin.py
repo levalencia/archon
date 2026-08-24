@@ -11,10 +11,11 @@ from __future__ import annotations
 import time
 
 import structlog
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from app.security.audit_logger import StructuredAuditLogger
+from app.security.auth import require_admin
 from app.security.circuit_breaker import CircuitBreaker
 
 logger = structlog.get_logger()
@@ -100,7 +101,9 @@ async def get_circuit_breakers() -> dict:
     return {name: cb.get_stats() for name, cb in _circuit_breakers.items()}
 
 
-@router.post("/circuit-breakers/{name}/reset", status_code=200)
+@router.post(
+    "/circuit-breakers/{name}/reset", status_code=200, dependencies=[Depends(require_admin)]
+)
 async def reset_circuit_breaker(name: str) -> dict:
     """Manually reset a circuit breaker."""
     if name not in _circuit_breakers:
@@ -128,7 +131,7 @@ async def get_settings() -> dict:
     return {"settings": _settings}
 
 
-@router.put("/settings")
+@router.put("/settings", dependencies=[Depends(require_admin)])
 async def update_settings(body: SettingsUpdate) -> dict:
     """Update admin settings (e.g., skills_top_k)."""
     _settings["skills_top_k"] = body.skills_top_k

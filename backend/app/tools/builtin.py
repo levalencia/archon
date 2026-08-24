@@ -10,6 +10,8 @@ Concept: Layer 3 - Tools (registered, validated, timeout-enforced)
 from __future__ import annotations
 
 import math
+import os
+import stat
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,6 +21,8 @@ from app.tools.memory_tools import memory_tool, session_search_tool  # noqa: F40
 from app.tools.web_search import web_search_tool
 
 logger = structlog.get_logger()
+
+MAX_READ_FILE_BYTES = 1_000_000
 
 
 async def calculator_tool(expression: str) -> dict:
@@ -115,17 +119,28 @@ async def datetime_tool(query: str = "now") -> dict:
     }
 
 
-async def read_file_tool(path: str) -> dict:
-    """Read a file's contents."""
-    file_path = Path(path)
-    if not file_path.exists():
-        return {"error": f"File not found: {path}"}
-    if not file_path.is_file():
-        return {"error": f"Not a file: {path}"}
+async def read_file_tool(
+    path: str | Path, workspace_root: str | Path | None = None, max_size: int = MAX_READ_FILE_BYTES
+) -> dict:
+    """Read a regular file contained by the configured workspace root."""
+    root = Path(workspace_root or os.environ.get("ARCHON_WORKSPACE_ROOT", Path.cwd())).resolve()
     try:
+        requested = Path(path)
+        candidate = requested if requested.is_absolute() else root / requested
+        file_path = candidate.resolve(strict=True)
+        file_path.relative_to(root)
+        file_stat = file_path.stat()
+        if not stat.S_ISREG(file_stat.st_mode):
+            return {"error": f"Not a regular file: {path}"}
+        if file_stat.st_size > max_size:
+            return {"error": f"File exceeds maximum size of {max_size} bytes: {path}"}
         content = file_path.read_text(encoding="utf-8")
-        return {"content": content, "path": str(file_path), "size": len(content)}
-    except Exception as e:
+        return {"content": content, "path": str(file_path), "size": file_stat.st_size}
+    except (FileNotFoundError, RuntimeError):
+        return {"error": f"File not found: {path}"}
+    except ValueError:
+        return {"error": f"Path is outside workspace: {path}"}
+    except (OSError, UnicodeError) as e:
         return {"error": f"Error reading file: {e}"}
 
 

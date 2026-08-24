@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = "dev-secret-change-in-production"
     encryption_master_key: str = ""
+    admin_usernames: list[str] = ["admin"]
 
     # Rate Limiting
     rate_limit_requests: int = 60

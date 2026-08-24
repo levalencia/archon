@@ -16,6 +16,7 @@ load_dotenv()
 
 from app.config import Settings, get_settings
 from app.middleware.correlation import CorrelationIdMiddleware
+from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
 from app.observability.logging import setup_logging
 from app.routes.admin import router as admin_router
 from app.routes.artifacts import router as artifacts_router
@@ -30,6 +31,7 @@ from app.routes.red_team import router as red_team_router
 from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
+from app.security.auth import configure_auth
 
 logger = structlog.get_logger()
 
@@ -37,7 +39,7 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: startup and shutdown."""
-    settings = get_settings()
+    settings = app.state.settings
 
     # Configure structured logging
     setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
@@ -70,6 +72,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=settings.app_version,
         lifespan=lifespan,
     )
+    app.state.settings = settings
+    configure_auth(settings.secret_key)
 
     # --- Middleware (order matters: last added = first executed) ---
 
@@ -85,6 +89,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Correlation ID injection
     app.add_middleware(CorrelationIdMiddleware)
+    app.add_middleware(CSRFMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     # --- Routes ---
 

@@ -12,12 +12,14 @@ from collections import deque
 from contextlib import suppress
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from starlette.responses import StreamingResponse
+
+from app.security.auth import get_current_user
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/logs", tags=["logs"])
+router = APIRouter(prefix="/api/logs", tags=["logs"], dependencies=[Depends(get_current_user)])
 
 # Circular buffer of recent logs + subscriber queues
 _log_buffer: deque[dict] = deque(maxlen=200)
