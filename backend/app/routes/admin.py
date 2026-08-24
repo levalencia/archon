@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 import structlog
-from fastapi import APIRouter
+from fastapi import Request, APIRouter
 from pydantic import BaseModel, Field
 
 from app.security.audit_logger import StructuredAuditLogger
@@ -28,7 +28,7 @@ _start_time = time.time()
 
 
 @router.get("/health")
-async def detailed_health() -> dict:
+async def detailed_health(request: Request) -> dict:
     """Detailed health check with service status."""
     uptime = time.time() - _start_time
     return {
