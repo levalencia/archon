@@ -11,8 +11,12 @@ from app.skills.registry import Skill, SkillRegistry, create_default_skills
 
 
 @pytest.fixture
-def client() -> TestClient:
-    settings = Settings(llm_provider="mock", debug=True)
+def client(tmp_path) -> TestClient:
+    settings = Settings(
+        llm_provider="mock",
+        debug=True,
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'skills.db'}",
+    )
     app = create_app(settings=settings)
     with TestClient(app) as c:
         yield c
@@ -46,15 +50,19 @@ class TestSkillRegistry:
         assert results[0].name == "python-analysis"
 
     @pytest.mark.unit
-    @pytest.mark.skip(reason="needs mock LLM")
     def test_search_by_tag(self) -> None:
         reg = SkillRegistry()
         reg.register(
-            Skill(name="rag-skill", description="RAG", content="c", tags=["rag", "search"])
+            Skill(
+                name="rag-skill",
+                description="RAG",
+                content="c",
+                tags=["rag", "retrieval"],
+            )
         )
         reg.register(Skill(name="other", description="Other", content="c", tags=["misc"]))
 
-        results = reg.search("search")
+        results = reg.search("retrieval")
         assert len(results) >= 1
         assert results[0].name == "rag-skill"
 

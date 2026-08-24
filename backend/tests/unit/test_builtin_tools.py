@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from app.tools import web_search as web_search_module
 from app.tools.builtin import (
     calculator_tool,
     datetime_tool,
@@ -83,6 +84,30 @@ class TestDatetimeTool:
 class TestWebSearchTool:
     """Web search tool tests (mock results)."""
 
+    @pytest.fixture(autouse=True)
+    def deterministic_search(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def fake_searxng(query: str, num: int) -> list[dict]:
+            return [
+                {
+                    "title": f"Result for {query}",
+                    "url": "https://example.test/one",
+                    "snippet": "A deterministic search result.",
+                },
+                {
+                    "title": "Second result",
+                    "url": "https://example.test/two",
+                    "snippet": "Another deterministic search result.",
+                },
+            ][:num]
+
+        async def fake_extract(results: list[dict], max_chars: int = 3000) -> list[dict]:
+            del max_chars
+            return [{**result, "content": result["snippet"]} for result in results]
+
+        monkeypatch.delenv("ARCHON_BRAVE_API_KEY", raising=False)
+        monkeypatch.setattr(web_search_module, "_searxng_search", fake_searxng)
+        monkeypatch.setattr(web_search_module, "_extract_content", fake_extract)
+
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_returns_results(self) -> None:
@@ -92,7 +117,6 @@ class TestWebSearchTool:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="SearXNG live, not mock")
     async def test_result_structure(self) -> None:
         result = await web_search_tool("AI agents")
         for r in result["results"]:

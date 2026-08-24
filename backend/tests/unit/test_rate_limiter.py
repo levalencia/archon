@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fakeredis.aioredis
 import pytest
 
 from app.security.rate_limiter import RateLimiter
@@ -62,14 +63,8 @@ class TestRateLimiterRedis:
 
     @pytest.fixture
     async def redis_limiter(self) -> RateLimiter:
-        try:
-            import fakeredis.aioredis
-
-            redis = fakeredis.aioredis.FakeRedis()
-            return RateLimiter(redis_client=redis, max_requests=3, window_seconds=60)
-        except ImportError:
-            pytest.skip("fakeredis not installed")
-            return RateLimiter()  # unreachable but satisfies type checker
+        redis = fakeredis.aioredis.FakeRedis()
+        return RateLimiter(redis_client=redis, max_requests=3, window_seconds=60)
 
     @pytest.mark.unit
     @pytest.mark.asyncio

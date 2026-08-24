@@ -1,8 +1,9 @@
-"""Unit tests for LLM adapters. All use MockLLM or mock httpx responses."""
+"""Unit tests for LLM adapters using deterministic SDK and HTTP transports."""
 
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -13,6 +14,7 @@ from app.agents.mock_llm import MockLLM
 from app.agents.ollama_adapter import OllamaAdapter
 from app.agents.openai_adapter import OpenAIAdapter
 from app.agents.protocols import LLMClient
+from app.runtime.models import Message, Role, TokenUsage, ToolCall, ToolDefinition
 
 
 class TestAdapterProtocolCompliance:
@@ -20,13 +22,11 @@ class TestAdapterProtocolCompliance:
 
     @pytest.mark.unit
     def test_openai_satisfies_protocol(self) -> None:
-        adapter = OpenAIAdapter(api_key="test", model="gpt-4o")
-        assert isinstance(adapter, LLMClient)
+        assert isinstance(OpenAIAdapter(api_key="test", model="gpt-4o"), LLMClient)
 
     @pytest.mark.unit
     def test_anthropic_satisfies_protocol(self) -> None:
-        adapter = AnthropicAdapter(api_key="test")
-        assert isinstance(adapter, LLMClient)
+        assert isinstance(AnthropicAdapter(api_key="test"), LLMClient)
 
     @pytest.mark.unit
     def test_foundry_satisfies_protocol(self) -> None:
@@ -35,13 +35,11 @@ class TestAdapterProtocolCompliance:
 
     @pytest.mark.unit
     def test_ollama_satisfies_protocol(self) -> None:
-        adapter = OllamaAdapter(model="llama3")
-        assert isinstance(adapter, LLMClient)
+        assert isinstance(OllamaAdapter(model="llama3"), LLMClient)
 
     @pytest.mark.unit
     def test_mock_satisfies_protocol(self) -> None:
-        adapter = MockLLM()
-        assert isinstance(adapter, LLMClient)
+        assert isinstance(MockLLM(), LLMClient)
 
 
 class TestOpenAIAdapter:
@@ -49,21 +47,38 @@ class TestOpenAIAdapter:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Uses Anthropic SDK now")
-    async def test_chat_parses_response(self) -> None:
-        mock_response = {
-            "choices": [{"message": {"content": "Hello from OpenAI!"}}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-        }
+    async def test_chat_converts_request_and_parses_response(self) -> None:
+        requests: list[httpx.Request] = []
 
-        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=mock_response))
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "Hello from OpenAI!"}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+                },
+            )
+
         adapter = OpenAIAdapter(api_key="test-key", model="gpt-4o")
         adapter._client = httpx.AsyncClient(
-            transport=transport, base_url="https://api.openai.com/v1"
+            transport=httpx.MockTransport(handler),
+            base_url="https://api.openai.com/v1",
+            headers={"Authorization": "Bearer test-key"},
         )
+        messages = [{"role": "user", "content": "hi"}]
 
-        result = await adapter.chat([{"role": "user", "content": "hi"}])
+        result = await adapter.chat(messages, max_tokens=123, temperature=0.25)
+
         assert result == "Hello from OpenAI!"
+        assert requests[0].url == "https://api.openai.com/v1/chat/completions"
+        assert requests[0].headers["authorization"] == "Bearer test-key"
+        assert json.loads(requests[0].content) == {
+            "model": "gpt-4o",
+            "messages": messages,
+            "max_tokens": 123,
+            "temperature": 0.25,
+        }
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -81,49 +96,90 @@ class TestOpenAIAdapter:
 
 
 class TestAnthropicAdapter:
-    """Anthropic adapter with mocked HTTP responses."""
+    """Anthropic adapter with a deterministic SDK transport."""
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Uses Anthropic SDK now")
-    async def test_chat_parses_response(self) -> None:
-        mock_response = {
-            "content": [{"type": "text", "text": "Hello from Claude!"}],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
+    async def test_complete_converts_request_and_parses_tool_use(self, monkeypatch) -> None:
+        import anthropic
 
-        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=mock_response))
-        adapter = AnthropicAdapter(api_key="test-key")
-        adapter._client = httpx.AsyncClient(
-            transport=transport, base_url="https://api.anthropic.com/v1"
+        constructor: dict = {}
+        request: dict = {}
+
+        class Messages:
+            async def create(self, **kwargs):
+                request.update(kwargs)
+                return SimpleNamespace(
+                    content=[
+                        SimpleNamespace(type="text", text="Checking weather. "),
+                        SimpleNamespace(
+                            type="tool_use",
+                            id="call-weather",
+                            name="weather",
+                            input={"city": "Ghent"},
+                        ),
+                    ],
+                    usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+                    stop_reason="tool_use",
+                )
+
+        class Client:
+            def __init__(self, **kwargs):
+                constructor.update(kwargs)
+                self.messages = Messages()
+
+        monkeypatch.setattr(anthropic, "AsyncAnthropic", Client)
+        adapter = AnthropicAdapter(api_key="test-key", model="claude-test")
+        response = await adapter.complete(
+            [Message(Role.SYSTEM, "Be concise"), Message(Role.USER, "Weather in Ghent?")],
+            [
+                ToolDefinition(
+                    "weather",
+                    "Look up weather",
+                    {"type": "object", "properties": {"city": {"type": "string"}}},
+                )
+            ],
+            max_tokens=123,
         )
 
-        result = await adapter.chat([{"role": "user", "content": "hi"}])
-        assert result == "Hello from Claude!"
+        assert constructor == {"api_key": "test-key"}
+        assert request == {
+            "model": "claude-test",
+            "system": "Be concise",
+            "messages": [{"role": "user", "content": "Weather in Ghent?"}],
+            "tools": [
+                {
+                    "name": "weather",
+                    "description": "Look up weather",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {"city": {"type": "string"}},
+                    },
+                }
+            ],
+            "max_tokens": 123,
+        }
+        assert response.content == "Checking weather. "
+        assert response.tool_calls == (ToolCall("call-weather", "weather", {"city": "Ghent"}),)
+        assert response.usage == TokenUsage(10, 5)
+        assert response.provider_stop_reason == "tool_use"
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_system_message_extracted(self) -> None:
-        """Anthropic requires system message separate from messages list."""
-        received_payloads: list[dict] = []
+    async def test_system_message_extracted_with_http_transport(self) -> None:
+        requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
-            payload = json.loads(request.content)
-            received_payloads.append(payload)
+            requests.append(request)
             return httpx.Response(
                 200,
-                json={
-                    "content": [{"type": "text", "text": "ok"}],
-                    "usage": {},
-                },
+                json={"content": [{"type": "text", "text": "ok"}], "usage": {}},
             )
 
-        transport = httpx.MockTransport(handler)
         adapter = AnthropicAdapter(api_key="test-key")
         adapter._client = httpx.AsyncClient(
-            transport=transport, base_url="https://api.anthropic.com/v1"
+            transport=httpx.MockTransport(handler), base_url="https://api.anthropic.com/v1"
         )
-
         await adapter.chat(
             [
                 {"role": "system", "content": "You are helpful"},
@@ -131,73 +187,55 @@ class TestAnthropicAdapter:
             ]
         )
 
-        payload = received_payloads[0]
+        payload = json.loads(requests[0].content)
         assert payload["system"] == "You are helpful"
-        assert len(payload["messages"]) == 1
-        assert payload["messages"][0]["role"] == "user"
+        assert payload["messages"] == [{"role": "user", "content": "hi"}]
 
 
 class TestFoundryAdapter:
-    """Foundry adapter with mocked HTTP responses."""
+    """Foundry adapter with a deterministic SDK transport."""
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Uses Anthropic SDK now")
-    async def test_chat_parses_response(self) -> None:
-        mock_response = {
-            "content": [{"type": "text", "text": "Hello from Foundry!"}],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
+    async def test_chat_converts_request_and_parses_response(self, monkeypatch) -> None:
+        import anthropic
 
-        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=mock_response))
+        constructor: dict = {}
+        request: dict = {}
+
+        class Messages:
+            async def create(self, **kwargs):
+                request.update(kwargs)
+                return SimpleNamespace(
+                    content=[SimpleNamespace(type="text", text="Hello from Foundry!")],
+                    usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+                    stop_reason="end_turn",
+                )
+
+        class Client:
+            def __init__(self, **kwargs):
+                constructor.update(kwargs)
+                self.messages = Messages()
+
+        monkeypatch.setattr(anthropic, "AsyncAnthropic", Client)
         adapter = FoundryAdapter(
             api_key="test-key",
             base_url="https://foundry.example.com/anthropic",
-        )
-        adapter._client = httpx.AsyncClient(
-            transport=transport,
-            base_url="https://foundry.example.com/anthropic",
+            model="foundry-claude",
         )
 
-        result = await adapter.chat([{"role": "user", "content": "hi"}])
+        result = await adapter.chat([{"role": "user", "content": "hi"}], max_tokens=321)
+
         assert result == "Hello from Foundry!"
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Foundry now uses Anthropic SDK, needs real credentials")
-    @pytest.mark.skip(reason="Uses Anthropic SDK now")
-    async def test_uses_api_key_header(self) -> None:
-        """Foundry uses api-key header, not Authorization Bearer."""
-        received_headers: dict[str, str] = {}
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            received_headers.update(dict(request.headers))
-            return httpx.Response(
-                200,
-                json={
-                    "content": [{"type": "text", "text": "ok"}],
-                    "usage": {},
-                },
-            )
-
-        transport = httpx.MockTransport(handler)
-        adapter = FoundryAdapter(
-            api_key="my-foundry-key",
-            base_url="https://foundry.example.com",
-        )
-        # Recreate client with mock transport but keep the api-key header
-        adapter._client = httpx.AsyncClient(
-            transport=transport,
-            base_url="https://foundry.example.com",
-            headers={
-                "api-key": "my-foundry-key",
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-        )
-
-        await adapter.chat([{"role": "user", "content": "hi"}])
-        assert received_headers.get("api-key") == "my-foundry-key"
+        assert constructor == {
+            "api_key": "test-key",
+            "base_url": "https://foundry.example.com/anthropic",
+        }
+        assert request == {
+            "model": "foundry-claude",
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 321,
+        }
 
 
 class TestOllamaAdapter:
@@ -205,16 +243,85 @@ class TestOllamaAdapter:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Uses Anthropic SDK now")
-    async def test_chat_parses_response(self) -> None:
-        mock_response = {
-            "message": {"role": "assistant", "content": "Hello from Ollama!"},
-            "eval_count": 42,
+    async def test_chat_converts_request_and_parses_response(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "message": {"role": "assistant", "content": "Hello from Ollama!"},
+                    "eval_count": 42,
+                },
+            )
+
+        adapter = OllamaAdapter(model="llama3")
+        adapter._client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://localhost:11434"
+        )
+        messages = [{"role": "user", "content": "hi"}]
+
+        result = await adapter.chat(messages, max_tokens=222)
+
+        assert result == "Hello from Ollama!"
+        assert requests[0].url == "http://localhost:11434/api/chat"
+        assert json.loads(requests[0].content) == {
+            "model": "llama3",
+            "messages": messages,
+            "stream": False,
+            "options": {"num_predict": 222},
         }
 
-        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=mock_response))
-        adapter = OllamaAdapter(model="llama3")
-        adapter._client = httpx.AsyncClient(transport=transport, base_url="http://localhost:11434")
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_chat_converts_and_parses_tool_calls(self) -> None:
+        requests: list[httpx.Request] = []
 
-        result = await adapter.chat([{"role": "user", "content": "hi"}])
-        assert result == "Hello from Ollama!"
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "name": "weather",
+                                    "arguments": {"city": "Ghent"},
+                                }
+                            }
+                        ],
+                    }
+                },
+            )
+
+        adapter = OllamaAdapter(model="llama3")
+        adapter._client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://localhost:11434"
+        )
+        tools = [
+            {
+                "name": "weather",
+                "description": "Look up weather",
+                "parameters": {"type": "object", "required": ["city"]},
+            }
+        ]
+
+        result = await adapter.chat([{"role": "user", "content": "weather?"}], tools=tools)
+
+        assert json.loads(result) == {
+            "tool_calls": [{"tool": "weather", "args": {"city": "Ghent"}}]
+        }
+        assert json.loads(requests[0].content)["tools"] == [
+            {
+                "type": "function",
+                "function": {
+                    "name": "weather",
+                    "description": "Look up weather",
+                    "parameters": {"type": "object", "required": ["city"]},
+                },
+            }
+        ]

@@ -7,14 +7,22 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.routes import documents
 
 
 @pytest.fixture
-def client() -> TestClient:
-    settings = Settings(llm_provider="mock", debug=True)
+def client(tmp_path) -> TestClient:
+    documents._vector_store = documents.VectorStore()
+    documents._document_registry.clear()
+    settings = Settings(
+        llm_provider="mock",
+        debug=True,
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'documents.db'}",
+    )
     app = create_app(settings=settings)
     with TestClient(app) as c:
         yield c
+    documents._document_registry.clear()
 
 
 SAMPLE_DOC = {
@@ -54,7 +62,6 @@ class TestDocumentQuery:
     """RAG query tests."""
 
     @pytest.mark.unit
-    @pytest.mark.skip(reason="needs mock LLM")
     def test_query_after_upload(self, client: TestClient) -> None:
         # Upload first
         client.post("/api/documents/upload", json=SAMPLE_DOC)
@@ -66,7 +73,7 @@ class TestDocumentQuery:
         )
         assert response.status_code == 200
         data = response.json()
-        assert "answer" in data
+        assert data["answer"] == "I am a mock LLM."
         assert data["chunks_retrieved"] >= 1
         assert len(data["sources"]) >= 1
 
