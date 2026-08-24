@@ -274,4 +274,34 @@
   {#if artifacts.length > 0}
     <ArtifactPanel {artifacts} />
   {/if}
+
+  <!-- ══ BOTTOM: Live Backend Logs ══ -->
+  {#if showLogs}
+    <div class="fixed bottom-0 left-0 right-0 h-[250px] bg-[#0a0e14] border-t-2 border-[var(--accent)] z-50 flex flex-col shadow-2xl">
+      <div class="flex items-center justify-between px-3 py-1.5 bg-[#0d1117] border-b border-[var(--border)]">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-mono text-[var(--accent)] font-bold">BACKEND LOGS</span>
+          <span class="text-[10px] text-[var(--text-muted)]">{logEntries.length} entries</span>
+          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+        </div>
+        <div class="flex gap-3">
+          <button onclick={() => { logEntries = []; }} class="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">Clear</button>
+          <button onclick={() => { const text = logEntries.map(e => e.ts + ' [' + e.level + '] ' + e.event + ' ' + JSON.stringify(e.data)).join('\n'); navigator.clipboard.writeText(text); }} class="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">📋 Copy All</button>
+          <button onclick={() => { showLogs = false; }} class="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">✕ Close</button>
+        </div>
+      </div>
+      <div id="log-panel" class="flex-1 overflow-y-auto font-mono text-[11px] px-2 py-1 leading-5">
+        {#each logEntries as log}
+          <div class="py-0.5 flex gap-2 hover:bg-[#ffffff08]">
+            <span class="text-[var(--text-muted)] shrink-0 w-[58px]">{log.ts}</span>
+            <span class="shrink-0 w-[48px] {log.level === 'error' ? 'text-red-400' : log.level === 'warning' ? 'text-yellow-400' : 'text-blue-400'}">[{log.level}]</span>
+            <span class="text-green-300">{log.event}</span>
+            {#if log.data && Object.keys(log.data).length > 0}
+              <span class="text-[var(--text-muted)] truncate">{Object.entries(log.data).filter(([k]) => k !== 'level').map(([k, v]) => k + '=' + v).join(' ')}</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
 </div>
