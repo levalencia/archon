@@ -18,10 +18,10 @@ This document is the source of truth for implementation claims. A source file al
 | Gate | Result |
 |---|---|
 | Backend Ruff | Pass |
-| Backend tests | 294 passed, 15 skipped |
-| Backend measured coverage | 69% |
+| Backend tests | 368 passed, 0 skipped |
+| Backend measured coverage | 74% |
 | Svelte and TypeScript checks | 0 errors, 0 warnings |
-| Frontend unit tests | 5 passed |
+| Frontend unit tests | 6 passed |
 | Frontend browser tests | 2 passed, desktop and mobile |
 | Frontend production build | Pass |
 | Backend Docker smoke | Pass, `/healthz` |
@@ -38,17 +38,17 @@ This document is the source of truth for implementation claims. A source file al
 | URL-addressable conversations | Yes | Yes | Yes | Yes | `/chat/[id]` |
 | Workbench desktop/mobile shell | Yes | Yes | Yes | Yes | Browser-tested |
 | Sanitized Markdown rendering | Yes | Yes | Yes | Yes | DOMPurify after Markdown rendering |
-| Unified persistent conversation repository | In progress | No | No | No | Messages and metadata still being consolidated |
-| Persistent identity and API keys | Partial | Partial | Partial | No | Current auth uses process memory |
-| Resource ownership enforcement | Partial | No | No | No | Required for conversations, docs, artifacts and logs |
-| Security headers and CSRF | Implemented | No | Isolated tests | No | Middleware exists but is not installed |
-| Default tool permission policy | Partial | Partial | Partial | No | `read_file` remains too permissive |
-| Grounded research workflow | In progress | No | No | No | Typed vertical slice under development |
-| Evidence and citation verification | Partial | No | Partial | No | Existing evaluators are not the live answer gate |
+| Unified persistent conversation repository | Yes | Yes | Yes | Yes | Shared by conversation CRUD, chat, stream, and history |
+| Persistent identity and API keys | Yes | Yes | Yes | Yes | Salted scrypt, standard HS256 JWT, hashed API keys |
+| Resource ownership enforcement | Yes | Yes | Yes | Yes | Conversation, document, artifact, log and admin boundaries tested |
+| Security headers and CSRF | Yes | Yes | Yes | Yes | Cookie double-submit; Bearer/API-key exemption |
+| Default tool permission policy | Partial | Yes | Yes | Partial | File reads are workspace-contained; general approval UI remains planned |
+| Grounded research workflow | Yes | Yes | Yes | Partial | Offline caller-supplied sources; live adapter wiring remains planned |
+| Evidence and citation verification | Yes | Yes | Yes | Partial | 12 golden cases; currently used by `/v1/research` |
 | Durable replayable run events | Partial | No | Partial | No | Events stream live but are not durably replayed |
 | RAG with real durable embeddings | Partial/demo | Yes | Partial | No | Default route uses mock embeddings/in-memory vectors |
 | Multi-agent coordinator | Yes | No | Unit only | No | Not part of default chat path |
-| OpenTelemetry export | Partial | No | Unit only | No | Export/startup wiring incomplete |
+| OpenTelemetry export | Yes | Configurable | Yes | Partial | Composite runtime sink; exporter activates when configured |
 | Rate limiter | Yes | No | Unit only | No | Not installed on the live API path |
 | MCP client integration | No | No | No | No | Planned after core reliability work |
 | Human approval gates | No | No | No | No | Planned after permission policy |
@@ -65,7 +65,7 @@ This document is the source of truth for implementation claims. A source file al
 
 ## Known test debt
 
-Fifteen backend tests are currently skipped. They must be replaced, made deterministic, or justified individually before a production-readiness claim. Network-dependent checks must not be part of the deterministic unit gate.
+All previously skipped backend tests have deterministic replacements. The current backend suite reports zero skipped tests. Live provider checks remain separate from the deterministic CI gate.
 
 ## Claim policy
 
