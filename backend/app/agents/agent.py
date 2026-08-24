@@ -357,6 +357,7 @@ class ProductionAgent:
 
         # Inject persistent memory into system prompt
         from app.memory.persistent import get_persistent_memory
+
         persistent = get_persistent_memory()
         memory_context = persistent.get_context_text()
         memory_section = ""
@@ -366,7 +367,9 @@ class ProductionAgent:
         messages.append(
             {
                 "role": "system",
-                "content": (SYSTEM_PROMPT.replace("{tool_descriptions}", tool_descriptions) + memory_section).replace(
+                "content": (
+                    SYSTEM_PROMPT.replace("{tool_descriptions}", tool_descriptions) + memory_section
+                ).replace(
                     "{current_date}",
                     __import__("datetime")
                     .datetime.now(__import__("zoneinfo").ZoneInfo("Europe/Brussels"))

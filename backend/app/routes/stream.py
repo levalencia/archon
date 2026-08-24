@@ -197,4 +197,8 @@ def _sse(event: str, data) -> str:
         payload = json.dumps(data, ensure_ascii=False)
     else:
         payload = str(data)
-    return f"event: {event}\ndata: {payload}\n\n"
+    # SSE data field can't have raw newlines — use multi-line data format
+    # Each line gets its own "data:" prefix
+    lines = payload.split("\n")
+    data_lines = "\n".join(f"data: {line}" for line in lines)
+    return f"event: {event}\n{data_lines}\n\n"

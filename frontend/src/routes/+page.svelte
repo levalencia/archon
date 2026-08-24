@@ -71,13 +71,21 @@
         buffer = lines.pop() || '';
 
         let currentEvent = '';
+        let dataBuffer = '';
         for (const line of lines) {
           if (line.startsWith('event: ')) {
             currentEvent = line.substring(7).trim();
+            dataBuffer = '';
             continue;
           }
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.substring(6);
+          if (line.startsWith('data: ')) {
+            dataBuffer += (dataBuffer ? '\n' : '') + line.substring(6);
+            continue;
+          }
+          // Empty line = end of event, process it
+          if (line.trim() === '' && currentEvent && dataBuffer) {
+            const payload = dataBuffer;
+            dataBuffer = '';
 
           if (currentEvent === 'thinking') {
             am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: payload, done: true }];
@@ -130,7 +138,8 @@
             } catch {}
           }
 
-          currentEvent = '';
+            currentEvent = '';
+          }
           messages = [...messages.slice(0, -1), { ...am }];
         }
       }
