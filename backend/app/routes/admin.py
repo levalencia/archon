@@ -33,6 +33,8 @@ async def detailed_health() -> dict:
     uptime = time.time() - _start_time
     return {
         "status": "healthy",
+        "llm_model": request.app.state.settings.llm_model,
+        "llm_provider": request.app.state.settings.llm_provider,
         "uptime_seconds": round(uptime, 2),
         "services": {
             "api": "up",
