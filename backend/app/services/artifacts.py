@@ -31,6 +31,7 @@ class Artifact:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     conversation_id: str = ""
     message_id: str = ""
+    user_id: str = ""
     title: str = "Untitled"
     artifact_type: str = "code"  # html, code, svg, mermaid, markdown, csv, json
     language: str = ""  # python, javascript, sql, etc. (for code type)
@@ -94,6 +95,14 @@ class ArtifactStore:
     async def list_by_conversation(self, conversation_id: str) -> list[Artifact]:
         ids = self._by_conversation.get(conversation_id, [])
         return [self._artifacts[aid] for aid in ids if aid in self._artifacts]
+
+    async def list_by_user(self, user_id: str, conversation_id: str = "") -> list[Artifact]:
+        artifacts = (
+            await self.list_by_conversation(conversation_id)
+            if conversation_id
+            else list(self._artifacts.values())
+        )
+        return [artifact for artifact in artifacts if artifact.user_id == user_id]
 
     async def delete(self, artifact_id: str) -> bool:
         artifact = self._artifacts.pop(artifact_id, None)

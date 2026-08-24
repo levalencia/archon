@@ -66,6 +66,7 @@ class VectorStore:
         top_k: int = 5,
         min_score: float = 0.0,
         document_id: str | None = None,
+        document_ids: set[str] | None = None,
     ) -> list[dict]:
         """Search for similar chunks by cosine similarity.
 
@@ -75,6 +76,8 @@ class VectorStore:
 
         for chunk in self._chunks.values():
             if document_id and chunk.document_id != document_id:
+                continue
+            if document_ids is not None and chunk.document_id not in document_ids:
                 continue
             if chunk.embedding is None:
                 continue

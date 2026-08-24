@@ -55,6 +55,7 @@ class RAGPipeline:
         self,
         question: str,
         document_id: str | None = None,
+        document_ids: set[str] | None = None,
     ) -> dict:
         """Run the full RAG pipeline for a question.
 
@@ -69,6 +70,7 @@ class RAGPipeline:
             top_k=self.top_k,
             min_score=self.min_score,
             document_id=document_id,
+            document_ids=document_ids,
         )
 
         if not search_results:

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { authenticatedFetch } from '$lib/auth';
   let evalResults: any = $state(null);
   let redTeamResults: any = $state(null);
   let fuzzResults: any = $state(null);
@@ -6,14 +7,14 @@
 
   async function runRedTeam() {
     running = 'redteam';
-    const r = await fetch('/api/security/red-team', { method: 'POST' });
+    const r = await authenticatedFetch('/api/security/red-team', { method: 'POST' });
     redTeamResults = await r.json();
     running = '';
   }
 
   async function runFuzz() {
     running = 'fuzz';
-    const r = await fetch('/api/security/fuzz', { method: 'POST' });
+    const r = await authenticatedFetch('/api/security/fuzz', { method: 'POST' });
     fuzzResults = await r.json();
     running = '';
   }

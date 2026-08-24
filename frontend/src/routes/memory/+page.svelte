@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { authenticatedFetch } from '$lib/auth';
   let memoryStats: any = $state(null);
   let contextStats: any = $state(null);
   let checkpoints: any[] = $state([]);
@@ -6,7 +7,7 @@
 
   async function loadMemory() {
     try {
-      const r = await fetch('/api/admin/health');
+      const r = await authenticatedFetch('/api/admin/health');
       memoryStats = await r.json();
     } catch { memoryStats = { error: 'Cannot connect' }; }
   }

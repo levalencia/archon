@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { authenticatedFetch } from '$lib/auth';
   let metrics: any = $state(null);
   let loading = $state(true);
 
@@ -10,13 +11,13 @@
     loading = true;
     try {
       const [metricsRes, adminRes] = await Promise.all([
-        fetch('/api/admin/metrics'),
-        fetch('/api/admin/health'),
+        authenticatedFetch('/api/admin/metrics'),
+        authenticatedFetch('/api/admin/health'),
       ]);
       metrics = { ...(await metricsRes.json()), ...(await adminRes.json()) };
 
       // Try to load detailed metrics
-      const promRes = await fetch('/metrics');
+      const promRes = await authenticatedFetch('/metrics');
       if (promRes.ok) {
         metrics.prometheus = await promRes.text();
       }
@@ -103,7 +104,7 @@
     <!-- Audit Log -->
     <section class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5 mb-6">
       <h2 class="text-base font-semibold text-[var(--text-primary)] mb-4">📋 Recent Audit</h2>
-      {#await fetch('/api/admin/audit?limit=10').then(r => r.json())}
+      {#await authenticatedFetch('/api/admin/audit?limit=10').then(r => r.json())}
         <div class="text-sm text-[var(--text-muted)]">Loading...</div>
       {:then data}
         {#if data.count === 0}

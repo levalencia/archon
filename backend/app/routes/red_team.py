@@ -10,15 +10,18 @@ import random
 import string
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from app.security.auth import require_admin
 from app.security.guardrails import InputGuardrail
 from app.security.pii_detector import PIIDetector
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/security", tags=["security"])
+router = APIRouter(
+    prefix="/api/security", tags=["security"], dependencies=[Depends(require_admin)]
+)
 
 # Adversarial prompt library
 RED_TEAM_PROMPTS = [

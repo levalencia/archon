@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.security.auth import create_jwt
 
 
 @pytest.fixture
@@ -14,6 +15,8 @@ def client() -> TestClient:
     settings = Settings(llm_provider="mock", debug=True)
     app = create_app(settings=settings)
     with TestClient(app) as c:
+        token = create_jwt("admin-id", "admin", is_admin=True)
+        c.headers.update({"Authorization": f"Bearer {token}"})
         yield c
 
 

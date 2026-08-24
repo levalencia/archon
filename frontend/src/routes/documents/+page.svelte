@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { authenticatedFetch } from '$lib/auth';
   let documents: any[] = $state([]);
   let dragOver = $state(false);
   let uploading = $state(false);
@@ -6,14 +7,14 @@
   let queryResult: any = $state(null);
 
   async function loadDocuments() {
-    const r = await fetch('/api/documents');
+    const r = await authenticatedFetch('/api/documents');
     documents = await r.json();
   }
 
   async function uploadFile(file: File) {
     uploading = true;
     const text = await file.text();
-    const r = await fetch('/api/documents/upload', {
+    const r = await authenticatedFetch('/api/documents/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: file.name, content: text, source: file.name }),
@@ -37,7 +38,7 @@
 
   async function queryDocuments() {
     if (!queryText.trim()) return;
-    const r = await fetch('/api/documents/query', {
+    const r = await authenticatedFetch('/api/documents/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: queryText }),
@@ -46,7 +47,7 @@
   }
 
   async function deleteDoc(id: string) {
-    await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+    await authenticatedFetch(`/api/documents/${id}`, { method: 'DELETE' });
     await loadDocuments();
   }
 

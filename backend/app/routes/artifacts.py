@@ -1,26 +1,21 @@
-"""Artifact API routes: create, list, get, update, delete.
-
-GET    /api/artifacts                         — List artifacts for a conversation
-GET    /api/artifacts/{id}                    — Get full artifact content
-GET    /api/artifacts/{id}/render             — Get artifact ready for iframe render
-PUT    /api/artifacts/{id}                    — Update artifact content
-DELETE /api/artifacts/{id}                    — Delete artifact
-"""
+"""Authenticated, owner-scoped artifact API routes."""
 
 from __future__ import annotations
 
-import structlog
-from fastapi import APIRouter
+import html
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from app.services.artifacts import ArtifactStore
+from app.security.auth import get_current_user
+from app.services.artifacts import Artifact, ArtifactStore
 
-logger = structlog.get_logger()
-
-router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
-
+router = APIRouter(
+    prefix="/api/artifacts", tags=["artifacts"], dependencies=[Depends(get_current_user)]
+)
 _store = ArtifactStore()
+_RENDER_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"
 
 
 def get_artifact_store() -> ArtifactStore:
@@ -32,89 +27,77 @@ class ArtifactUpdate(BaseModel):
     title: str | None = None
 
 
+async def _owned_artifact(artifact_id: str, user_id: str) -> Artifact:
+    artifact = await _store.get(artifact_id)
+    if not artifact or artifact.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    return artifact
+
+
+def _safe_response(body: str, *, status_code: int = 200) -> HTMLResponse:
+    return HTMLResponse(
+        body,
+        status_code=status_code,
+        headers={
+            "Content-Security-Policy": _RENDER_CSP,
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
+
+def _render_text(content: str, *, title: str = "Artifact") -> str:
+    return (
+        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        "<style>body{margin:16px;background:#0d1117;color:#e6edf3;font-family:monospace;"
+        "white-space:pre-wrap}pre{white-space:pre-wrap}</style></head><body>"
+        f"<h1>{html.escape(title)}</h1><pre>{html.escape(content)}</pre></body></html>"
+    )
+
+
 @router.get("")
-async def list_artifacts(conversation_id: str = "") -> list[dict]:
-    """List artifacts, optionally filtered by conversation."""
-    if conversation_id:
-        artifacts = await _store.list_by_conversation(conversation_id)
-    else:
-        artifacts = list(_store._artifacts.values())
-    return [a.to_summary() for a in artifacts]
+async def list_artifacts(
+    conversation_id: str = "",
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> list[dict]:
+    artifacts = await _store.list_by_user(user["user_id"], conversation_id)
+    return [artifact.to_summary() for artifact in artifacts]
 
 
 @router.get("/{artifact_id}")
-async def get_artifact(artifact_id: str) -> dict:
-    """Get full artifact with content."""
-    artifact = await _store.get(artifact_id)
-    if not artifact:
-        return {"error": "Artifact not found"}
-    return artifact.to_dict()
+async def get_artifact(
+    artifact_id: str,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> dict:
+    return (await _owned_artifact(artifact_id, user["user_id"])).to_dict()
 
 
 @router.get("/{artifact_id}/render")
-async def render_artifact(artifact_id: str) -> HTMLResponse:
-    """Render artifact as HTML for iframe embedding.
-
-    - html: served directly
-    - svg: wrapped in HTML
-    - mermaid: rendered with mermaid.js
-    - code: syntax highlighted
-    - markdown: rendered to HTML
-    """
-    artifact = await _store.get(artifact_id)
-    if not artifact:
-        return HTMLResponse("<p>Artifact not found</p>", status_code=404)
-
-    if artifact.artifact_type == "html":
-        return HTMLResponse(artifact.content)
-
-    if artifact.artifact_type == "svg":
-        html = f"""<!DOCTYPE html>
-<html><head><style>body{{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#0d1117}}</style></head>
-<body>{artifact.content}</body></html>"""
-        return HTMLResponse(html)
-
-    if artifact.artifact_type == "mermaid":
-        html = f"""<!DOCTYPE html>
-<html><head>
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<style>body{{margin:20px;background:#0d1117;color:#e6edf3;font-family:sans-serif}}</style>
-</head><body>
-<pre class="mermaid">{artifact.content}</pre>
-<script>mermaid.initialize({{startOnLoad:true,theme:'dark'}})</script>
-</body></html>"""
-        return HTMLResponse(html)
-
-    if artifact.artifact_type == "code":
-        escaped = artifact.content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        html = f"""<!DOCTYPE html>
-<html><head>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<style>body{{margin:0;background:#0d1117}}pre{{margin:16px;border-radius:8px}}</style>
-</head><body>
-<pre><code class="language-{artifact.language}">{escaped}</code></pre>
-<script>hljs.highlightAll()</script>
-</body></html>"""
-        return HTMLResponse(html)
-
-    # Default: show as preformatted text
-    escaped = artifact.content.replace("<", "&lt;").replace(">", "&gt;")
-    html = f"""<!DOCTYPE html>
-<html><head><style>body{{margin:16px;background:#0d1117;color:#e6edf3;font-family:monospace;white-space:pre-wrap}}</style></head>
-<body>{escaped}</body></html>"""
-    return HTMLResponse(html)
+async def render_artifact(
+    artifact_id: str,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> HTMLResponse:
+    """Render inert escaped content in a CSP sandbox; never execute artifact markup."""
+    artifact = await _owned_artifact(artifact_id, user["user_id"])
+    return _safe_response(_render_text(artifact.content, title=artifact.title))
 
 
 @router.put("/{artifact_id}")
-async def update_artifact(artifact_id: str, body: ArtifactUpdate) -> dict:
-    """Update artifact content (creates new version)."""
+async def update_artifact(
+    artifact_id: str,
+    body: ArtifactUpdate,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> dict:
+    await _owned_artifact(artifact_id, user["user_id"])
     artifact = await _store.update_content(artifact_id, body.content, body.title)
-    if not artifact:
-        return {"error": "Artifact not found"}
+    assert artifact is not None
     return artifact.to_dict()
 
 
 @router.delete("/{artifact_id}", status_code=204)
-async def delete_artifact(artifact_id: str) -> None:
+async def delete_artifact(
+    artifact_id: str,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> None:
+    await _owned_artifact(artifact_id, user["user_id"])
     await _store.delete(artifact_id)

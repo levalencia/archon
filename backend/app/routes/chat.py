@@ -279,6 +279,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     for art_data in detected:
         artifact = Artifact(
             conversation_id=conv_id,
+            user_id=user["user_id"],
             title=art_data["title"],
             artifact_type=art_data["type"],
             language=art_data.get("language", ""),

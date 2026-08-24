@@ -7,10 +7,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 
-router = APIRouter(prefix="/api/images", tags=["images"])
+from app.security.auth import get_current_user
+
+router = APIRouter(
+    prefix="/api/images", tags=["images"], dependencies=[Depends(get_current_user)]
+)
 
 IMAGES_DIR = Path("/tmp/archon_generated_images")
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { authenticatedFetch } from '$lib/auth';
   let skillsTopK = $state(3);
   let loading = $state(false);
   let saved = $state(false);
@@ -9,20 +10,20 @@
   let metrics: any = $state(null);
 
   async function loadSettings() {
-    const r = await fetch('/api/admin/settings');
+    const r = await authenticatedFetch('/api/admin/settings');
     const d = await r.json();
     skillsTopK = d.settings?.skills_top_k || 3;
 
-    const sr = await fetch('/api/skills');
+    const sr = await authenticatedFetch('/api/skills');
     skills = await sr.json();
 
-    const mr = await fetch('/api/admin/metrics');
+    const mr = await authenticatedFetch('/api/admin/metrics');
     metrics = await mr.json();
   }
 
   async function saveSettings() {
     loading = true;
-    await fetch('/api/admin/settings', {
+    await authenticatedFetch('/api/admin/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ skills_top_k: skillsTopK }),
@@ -35,7 +36,7 @@
   async function importSkill() {
     if (!importRepo) return;
     importStatus = 'importing...';
-    const r = await fetch('/api/skills/import', {
+    const r = await authenticatedFetch('/api/skills/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo: importRepo, path: importPath }),
@@ -43,13 +44,13 @@
     const d = await r.json();
     importStatus = d.error ? `Error: ${d.error}` : `Imported: ${d.name} (${d.content_length} chars)`;
     importRepo = '';
-    const sr = await fetch('/api/skills');
+    const sr = await authenticatedFetch('/api/skills');
     skills = await sr.json();
   }
 
   async function deleteSkill(name: string) {
-    await fetch(`/api/skills/${name}`, { method: 'DELETE' });
-    const sr = await fetch('/api/skills');
+    await authenticatedFetch(`/api/skills/${name}`, { method: 'DELETE' });
+    const sr = await authenticatedFetch('/api/skills');
     skills = await sr.json();
   }
 

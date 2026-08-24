@@ -61,16 +61,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "base-uri 'self'; object-src 'none'; frame-ancestors 'self'; "
-            "script-src 'self' 'unsafe-inline' "
-            "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
-            "font-src 'self' data:; img-src 'self' data: blob: https:; "
-            "connect-src 'self' http://localhost:* ws://localhost:*; "
-            "frame-src 'self'; worker-src 'self' blob:"
-        )
+        if "Content-Security-Policy" not in response.headers:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "base-uri 'self'; object-src 'none'; frame-ancestors 'self'; "
+                "script-src 'self' 'unsafe-inline' "
+                "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+                "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+                "font-src 'self' data:; img-src 'self' data: blob: https:; "
+                "connect-src 'self' http://localhost:* ws://localhost:*; "
+                "frame-src 'self'; worker-src 'self' blob:"
+            )
         return response
 
 

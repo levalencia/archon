@@ -11,14 +11,17 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.security.auth import require_admin
 from app.security.guardrails import InputGuardrail, OutputGuardrail
 from app.security.permission_manager import SecurePermissionManager
 from app.security.pii_detector import PIIDetector
 
-router = APIRouter(prefix="/api/security", tags=["security"])
+router = APIRouter(
+    prefix="/api/security", tags=["security"], dependencies=[Depends(require_admin)]
+)
 
 _pii_detector = PIIDetector()
 _input_guardrail = InputGuardrail()

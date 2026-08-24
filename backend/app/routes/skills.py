@@ -10,14 +10,17 @@ GET    /api/skills/{name}       — Get full skill content
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.security.auth import get_current_user, require_admin
 from app.skills.registry import Skill, SkillRegistry, create_default_skills
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/skills", tags=["skills"])
+router = APIRouter(
+    prefix="/api/skills", tags=["skills"], dependencies=[Depends(get_current_user)]
+)
 
 # Module-level registry (shared with chat routes)
 _registry: SkillRegistry | None = None
@@ -113,7 +116,12 @@ async def search_skills(body: SkillSearchRequest) -> list[SkillResponse]:
     ]
 
 
-@router.post("/import", response_model=SkillResponse, status_code=201)
+@router.post(
+    "/import",
+    response_model=SkillResponse,
+    status_code=201,
+    dependencies=[Depends(require_admin)],
+)
 async def import_skill(body: SkillImportRequest) -> SkillResponse | dict:
     """Import a skill from a GitHub repository.
 
@@ -153,7 +161,9 @@ async def import_skill(body: SkillImportRequest) -> SkillResponse | dict:
     )
 
 
-@router.post("", response_model=SkillResponse, status_code=201)
+@router.post(
+    "", response_model=SkillResponse, status_code=201, dependencies=[Depends(require_admin)]
+)
 async def create_skill(body: SkillCreateRequest) -> SkillResponse:
     """Create a custom skill manually."""
     registry = get_skill_registry()
@@ -174,7 +184,7 @@ async def create_skill(body: SkillCreateRequest) -> SkillResponse:
     )
 
 
-@router.delete("/{name}", status_code=204)
+@router.delete("/{name}", status_code=204, dependencies=[Depends(require_admin)])
 async def delete_skill(name: str) -> None:
     """Remove a skill from the registry."""
     registry = get_skill_registry()

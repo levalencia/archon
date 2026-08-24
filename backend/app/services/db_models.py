@@ -116,6 +116,7 @@ class DocumentModel(Base):
     __tablename__ = "documents"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), nullable=False, index=True)
     title = Column(String(500), nullable=False)
     source = Column(String(500), nullable=True, default="")
     chunks_count = Column(Integer, nullable=False, default=0)

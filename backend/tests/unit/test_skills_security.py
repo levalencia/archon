@@ -7,18 +7,17 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.security.auth import create_jwt
 from app.skills.registry import Skill, SkillRegistry, create_default_skills
 
 
 @pytest.fixture
-def client(tmp_path) -> TestClient:
-    settings = Settings(
-        llm_provider="mock",
-        debug=True,
-        database_url=f"sqlite+aiosqlite:///{tmp_path / 'skills.db'}",
-    )
+def client() -> TestClient:
+    settings = Settings(llm_provider="mock", debug=True)
     app = create_app(settings=settings)
     with TestClient(app) as c:
+        token = create_jwt("admin-id", "admin", is_admin=True)
+        c.headers.update({"Authorization": f"Bearer {token}"})
         yield c
 
 
@@ -53,16 +52,11 @@ class TestSkillRegistry:
     def test_search_by_tag(self) -> None:
         reg = SkillRegistry()
         reg.register(
-            Skill(
-                name="rag-skill",
-                description="RAG",
-                content="c",
-                tags=["rag", "retrieval"],
-            )
+            Skill(name="rag-skill", description="RAG", content="c", tags=["rag", "search"])
         )
         reg.register(Skill(name="other", description="Other", content="c", tags=["misc"]))
 
-        results = reg.search("retrieval")
+        results = reg.search("rag")
         assert len(results) >= 1
         assert results[0].name == "rag-skill"
 
