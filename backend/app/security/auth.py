@@ -5,11 +5,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import secrets
+import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
-import jwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -83,6 +84,14 @@ class AuthRepository:
             "is_admin": user["is_admin"],
         }
 
+    @staticmethod
+    def _base64url(data: bytes) -> str:
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+    @staticmethod
+    def _decode_base64url(value: str) -> bytes:
+        return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
     def create_jwt(
         self,
         user_id: str,
@@ -91,24 +100,46 @@ class AuthRepository:
         is_admin: bool = False,
         expires_delta: timedelta | None = None,
     ) -> str:
-        now = datetime.now(tz=UTC)
-        return jwt.encode(
-            {
-                "sub": user_id,
-                "username": username,
-                "is_admin": is_admin,
-                "iat": now,
-                "exp": now + (expires_delta or _JWT_EXPIRY),
-            },
-            self.secret,
-            algorithm=_JWT_ALGORITHM,
+        """Create a standards-compliant HS256 JWT using only the standard library."""
+        issued_at = int(time.time())
+        expiry = issued_at + int((expires_delta or _JWT_EXPIRY).total_seconds())
+        header = self._base64url(
+            json.dumps({"alg": _JWT_ALGORITHM, "typ": "JWT"}, separators=(",", ":")).encode()
         )
+        payload = self._base64url(
+            json.dumps(
+                {
+                    "sub": user_id,
+                    "username": username,
+                    "is_admin": is_admin,
+                    "iat": issued_at,
+                    "exp": expiry,
+                },
+                separators=(",", ":"),
+            ).encode()
+        )
+        signing_input = f"{header}.{payload}".encode("ascii")
+        signature = self._base64url(hmac.digest(self.secret.encode(), signing_input, "sha256"))
+        return f"{header}.{payload}.{signature}"
 
     def verify_jwt(self, token: str) -> dict | None:
+        """Verify signature, algorithm, subject, and expiry of an HS256 JWT."""
         try:
-            payload = jwt.decode(token, self.secret, algorithms=[_JWT_ALGORITHM])
-            return payload if payload.get("sub") else None
-        except jwt.PyJWTError:
+            header_part, payload_part, supplied_signature = token.split(".")
+            header = json.loads(self._decode_base64url(header_part))
+            if header != {"alg": _JWT_ALGORITHM, "typ": "JWT"}:
+                return None
+            signing_input = f"{header_part}.{payload_part}".encode("ascii")
+            expected_signature = self._base64url(
+                hmac.digest(self.secret.encode(), signing_input, "sha256")
+            )
+            if not hmac.compare_digest(expected_signature, supplied_signature):
+                return None
+            payload = json.loads(self._decode_base64url(payload_part))
+            if not payload.get("sub") or int(payload.get("exp", 0)) <= int(time.time()):
+                return None
+            return payload
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             return None
 
 
