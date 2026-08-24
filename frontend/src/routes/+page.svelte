@@ -11,6 +11,23 @@
   let currentConversationId = $state('');
   let traceData = $state({ stats: {}, entries: [], skills: [] });
   let artifacts: any[] = $state([]);
+  let modelName = $state('');
+  let providerName = $state('');
+
+  async function loadModelInfo() {
+    try {
+      const r = await fetch('/api/admin/health');
+      if (r.ok) {
+        const d = await r.json();
+        modelName = d.llm_model || 'claude-opus-4-6';
+        providerName = d.llm_provider || 'foundry';
+      }
+    } catch {
+      modelName = 'claude-opus-4-6';
+      providerName = 'foundry';
+    }
+  }
+  loadModelInfo();
 
   async function handleSend(msg: string, image?: string) {
     if (!msg.trim() && !image) return;
@@ -168,8 +185,8 @@
     <header class="h-[48px] border-b border-[var(--border)] flex items-center px-3 md:px-4 gap-2 bg-[var(--bg-secondary)] shrink-0">
       <button onclick={() => showSidebar = !showSidebar} class="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] cursor-pointer">☰</button>
       <div class="w-2 h-2 rounded-full bg-[var(--success)]"></div>
-      <span class="hidden sm:block text-[13px] text-[var(--text-primary)]">llama3.1:8b</span>
-      <span class="hidden sm:block text-[11px] text-[var(--text-muted)]">Ollama</span>
+      <span class="hidden sm:block text-[13px] text-[var(--text-primary)]">{modelName || "loading..."}</span>
+      <span class="hidden sm:block text-[11px] text-[var(--text-muted)]">{providerName}</span>
       <div class="flex-1"></div>
       <a href="/documents" class="hidden md:flex px-2 py-1 rounded text-[var(--text-muted)] text-xs hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] no-underline">📄 Docs</a>
       <a href="/dashboard" class="hidden md:flex px-2 py-1 rounded text-[var(--text-muted)] text-xs hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] no-underline">📊 Metrics</a>
