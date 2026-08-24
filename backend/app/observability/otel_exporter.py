@@ -126,6 +126,26 @@ class OTLPExporter:
         else:
             logger.debug("otel_tool_call", **attrs)
 
+    def export_span(self, span: Span) -> None:
+        """Export an already completed runtime span when OTLP is enabled."""
+        if not self._real_tracer:
+            return
+        with self._real_tracer.start_as_current_span(span.name) as exported:
+            for key, value in span.attributes.items():
+                exported.set_attribute(key, value)
+            if span.status == "error":
+                from opentelemetry.trace import Status, StatusCode
+
+                message = str(span.attributes.get("error.message", ""))
+                exported.set_status(Status(StatusCode.ERROR, message))
+
+    def shutdown(self) -> None:
+        """Flush the configured provider if it supports shutdown."""
+        if self._real_tracer:
+            shutdown = getattr(self._real_tracer.provider, "shutdown", None)
+            if shutdown:
+                shutdown()
+
 
 # Global instance
 _exporter: OTLPExporter | None = None

@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Observability
+    otel_endpoint: str = ""
+    otel_service_name: str = "archon"
+
     # Security
     secret_key: str = "dev-secret-change-in-production"
     encryption_master_key: str = ""

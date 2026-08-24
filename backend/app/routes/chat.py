@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.llm_factory import create_llm_client
 from app.observability.logging import get_correlation_id
+from app.observability.runtime_events import CompositeEventSink
 from app.routes.admin import get_skills_top_k
 from app.routes.artifacts import get_artifact_store
 from app.routes.skills import get_skill_registry
@@ -207,6 +208,13 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     runtime = AgentRuntime(
         as_model_provider(llm),
         tools,
+        events=CompositeEventSink(
+            conversation_id=conv_id,
+            correlation_id=cid,
+            model=settings.llm_model,
+            repository=memory,
+            exporter=request.app.state.otel_exporter,
+        ),
         budget=RuntimeBudget(
             max_iterations=settings.agent_max_iterations,
             max_tool_calls=8,

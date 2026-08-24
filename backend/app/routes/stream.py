@@ -11,6 +11,8 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
+from app.observability.logging import get_correlation_id
+from app.observability.runtime_events import CompositeEventSink
 from app.routes.chat import (
     get_conversation_repository,
     get_llm_client,
@@ -68,7 +70,14 @@ async def chat_stream_real(body: StreamRequest, request: Request) -> StreamingRe
         runtime = AgentRuntime(
             as_model_provider(get_llm_client(settings)),
             tools,
-            events=QueueEventSink(queue),
+            events=CompositeEventSink(
+                conversation_id=conv_id,
+                correlation_id=get_correlation_id(),
+                model=settings.llm_model,
+                repository=memory,
+                exporter=request.app.state.otel_exporter,
+                downstream=QueueEventSink(queue),
+            ),
             budget=RuntimeBudget(
                 max_iterations=settings.agent_max_iterations,
                 max_tool_calls=8,

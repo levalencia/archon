@@ -17,6 +17,17 @@ class ConversationRepository:
     async def close(self) -> None:
         await self._store.close()
 
+    async def check_health(self) -> None:
+        await self._store.ping()
+
+    async def append_runtime_event(self, **event) -> None:
+        await self._store.append_runtime_event(event)
+
+    async def recent_runtime_events(
+        self, *, run_id: str | None = None, limit: int = 100
+    ) -> list[dict]:
+        return await self._store.recent_runtime_events(run_id=run_id, limit=min(max(limit, 1), 200))
+
     async def create(self, conversation_id: str, title: str) -> dict:
         await self._store.create_conversation(conversation_id, title)
         conversation = await self._store.get_conversation(conversation_id)

@@ -89,6 +89,18 @@ class ApiKeyRow(Base):
     name = Column(String(100), nullable=False)
 
 
+class RuntimeEventRow(Base):
+    __tablename__ = "runtime_events"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(36), nullable=False, index=True)
+    conversation_id = Column(String(36), nullable=False, index=True)
+    correlation_id = Column(String(100), nullable=False, index=True)
+    kind = Column(String(40), nullable=False)
+    iteration = Column(Integer, nullable=False)
+    data = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(tz=UTC))
+
+
 class DatabaseStore:
     """PostgreSQL-backed store for conversations, messages, audit, artifacts.
 
@@ -118,6 +130,39 @@ class DatabaseStore:
 
     async def close(self) -> None:
         await self._engine.dispose()
+
+    async def ping(self) -> None:
+        """Verify that the configured database can execute a query."""
+        async with self._session_factory() as session:
+            await session.execute(select(1))
+
+    async def append_runtime_event(self, event: dict, *, max_events: int = 1000) -> None:
+        """Persist an event and retain only the newest bounded process history."""
+        async with self._session_factory() as session:
+            values = {**event, "data": json.dumps(event.get("data", {}), default=str)}
+            session.add(RuntimeEventRow(**values))
+            await session.flush()
+            ids = select(RuntimeEventRow.id).order_by(RuntimeEventRow.id.desc()).offset(max_events)
+            await session.execute(delete(RuntimeEventRow).where(RuntimeEventRow.id.in_(ids)))
+            await session.commit()
+
+    async def recent_runtime_events(self, *, run_id: str | None, limit: int) -> list[dict]:
+        async with self._session_factory() as session:
+            query = select(RuntimeEventRow)
+            if run_id:
+                query = query.where(RuntimeEventRow.run_id == run_id)
+            result = await session.execute(query.order_by(RuntimeEventRow.id.desc()).limit(limit))
+            return [
+                {
+                    "run_id": row.run_id,
+                    "conversation_id": row.conversation_id,
+                    "correlation_id": row.correlation_id,
+                    "kind": row.kind,
+                    "iteration": row.iteration,
+                    "data": json.loads(row.data),
+                }
+                for row in reversed(result.scalars().all())
+            ]
 
     # --- Authentication ---
 

@@ -13,6 +13,7 @@ Concept: Layer 6 - Observability
 
 from __future__ import annotations
 
+import re
 import uuid
 from contextvars import ContextVar
 
@@ -20,6 +21,31 @@ import structlog
 
 # ContextVar for request-scoped correlation ID
 correlation_id_ctx: ContextVar[str] = ContextVar("correlation_id", default="")
+_VALUE_PATTERN = re.compile(
+    r"(?i)(bearer\s+)[a-z0-9._~+/=-]+|((?:api[-_]?key|token|password)\s*[:=]\s*)[^\s,;}]+"
+)
+_SENSITIVE_KEYS = re.compile(r"(?i)(authorization|api[-_]?key|token|secret|password|cookie)")
+
+
+def redact_sensitive(value: str) -> str:
+    """Redact common credentials embedded in free-form values."""
+    return _VALUE_PATTERN.sub(lambda match: f"{match.group(1) or match.group(2)}[REDACTED]", value)
+
+
+def redact_event(logger: structlog.types.WrappedLogger, method_name: str, event_dict: dict) -> dict:
+    """Recursively redact credentials before rendering or log-stream capture."""
+    del logger, method_name
+
+    def clean(value, key=""):
+        if _SENSITIVE_KEYS.search(str(key)):
+            return "[REDACTED]"
+        if isinstance(value, dict):
+            return {k: clean(v, k) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [clean(item) for item in value]
+        return redact_sensitive(value) if isinstance(value, str) else value
+
+    return clean(event_dict)
 
 
 def get_correlation_id() -> str:
@@ -65,6 +91,7 @@ def setup_logging(*, json_format: bool = True, log_level: str = "INFO") -> None:
     processors: list = [
         structlog.contextvars.merge_contextvars,
         add_correlation_id,
+        redact_event,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),

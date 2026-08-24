@@ -31,10 +31,46 @@ _metrics: dict[str, Any] = {
     "artifacts_created_total": 0,
     "skills_searches_total": 0,
     "image_analyses_total": 0,
+    "agent_runs_total": 0,
+    "agent_errors_total": 0,
+    "agent_iterations_total": 0,
+    "agent_tokens_total": 0,
+    "agent_run_duration_sum": 0.0,
+    "agent_stop_reasons": defaultdict(int),
     "by_model": defaultdict(lambda: {"calls": 0, "tokens": 0, "latency": 0.0}),
     "by_tool": defaultdict(lambda: {"calls": 0, "errors": 0, "latency": 0.0}),
     "latency_buckets": defaultdict(list),  # endpoint → [latency_ms, ...]
 }
+
+
+def reset_metrics() -> None:
+    """Reset the process-local registry (primarily for deterministic tests)."""
+    for key, value in _metrics.items():
+        if isinstance(value, defaultdict):
+            value.clear()
+        elif isinstance(value, float):
+            _metrics[key] = 0.0
+        else:
+            _metrics[key] = 0
+
+
+def record_run_started() -> None:
+    _metrics["agent_runs_total"] += 1
+
+
+def record_iteration() -> None:
+    _metrics["agent_iterations_total"] += 1
+
+
+def record_run_stopped(
+    reason: str, iterations: int, tokens: int, duration_ms: float, error: bool
+) -> None:
+    del iterations
+    _metrics["agent_stop_reasons"][reason] += 1
+    _metrics["agent_tokens_total"] += tokens
+    _metrics["agent_run_duration_sum"] += duration_ms
+    if error or reason == "error":
+        _metrics["agent_errors_total"] += 1
 
 
 def record_llm_call(model: str, tokens: int, latency_ms: float) -> None:
@@ -95,6 +131,10 @@ def get_metrics_snapshot() -> dict:
 
     return {
         "totals": {
+            "agent_runs": _metrics["agent_runs_total"],
+            "agent_errors": _metrics["agent_errors_total"],
+            "agent_iterations": _metrics["agent_iterations_total"],
+            "agent_tokens": _metrics["agent_tokens_total"],
             "llm_calls": _metrics["llm_calls_total"],
             "llm_tokens": _metrics["llm_tokens_total"],
             "tool_calls": _metrics["tool_calls_total"],
@@ -113,12 +153,28 @@ def get_metrics_snapshot() -> dict:
         },
         "by_model": dict(_metrics["by_model"]),
         "by_tool": dict(_metrics["by_tool"]),
+        "stop_reasons": dict(_metrics["agent_stop_reasons"]),
     }
 
 
 def get_prometheus_text() -> str:
     """Generate Prometheus text format metrics."""
     lines = [
+        "# HELP archon_agent_runs_total Total typed runtime runs",
+        "# TYPE archon_agent_runs_total counter",
+        f"archon_agent_runs_total {_metrics['agent_runs_total']}",
+        "# HELP archon_agent_errors_total Total failed typed runtime runs",
+        "# TYPE archon_agent_errors_total counter",
+        f"archon_agent_errors_total {_metrics['agent_errors_total']}",
+        "# HELP archon_agent_iterations_total Total runtime iterations",
+        "# TYPE archon_agent_iterations_total counter",
+        f"archon_agent_iterations_total {_metrics['agent_iterations_total']}",
+        "# HELP archon_agent_tokens_total Total runtime tokens",
+        "# TYPE archon_agent_tokens_total counter",
+        f"archon_agent_tokens_total {_metrics['agent_tokens_total']}",
+        "# HELP archon_agent_run_duration_milliseconds_sum Runtime duration in milliseconds",
+        "# TYPE archon_agent_run_duration_milliseconds_sum counter",
+        f"archon_agent_run_duration_milliseconds_sum {_metrics['agent_run_duration_sum']}",
         "# HELP archon_llm_calls_total Total LLM API calls",
         "# TYPE archon_llm_calls_total counter",
         f"archon_llm_calls_total {_metrics['llm_calls_total']}",
@@ -142,5 +198,8 @@ def get_prometheus_text() -> str:
     for model, data in _metrics["by_model"].items():
         lines.append(f'archon_llm_calls_by_model{{model="{model}"}} {data["calls"]}')
         lines.append(f'archon_llm_tokens_by_model{{model="{model}"}} {data["tokens"]}')
+
+    for reason, count in _metrics["agent_stop_reasons"].items():
+        lines.append(f'archon_agent_stops_total{{reason="{reason}"}} {count}')
 
     return "\n".join(lines) + "\n"

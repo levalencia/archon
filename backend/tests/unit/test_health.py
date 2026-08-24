@@ -16,6 +16,7 @@ def settings() -> Settings:
         llm_provider="mock",
         llm_model="test-model",
         debug=True,
+        database_url="sqlite+aiosqlite:///:memory:",
     )
 
 
@@ -42,7 +43,23 @@ class TestHealthEndpoints:
         """GET /readyz returns ready status."""
         response = client.get("/readyz")
         assert response.status_code == 200
-        assert response.json() == {"status": "ready"}
+        assert response.json() == {
+            "status": "ready",
+            "dependencies": {"conversation_repository": "up"},
+        }
+
+    @pytest.mark.unit
+    def test_readiness_probe_reports_repository_failure(self, client: TestClient) -> None:
+        async def unavailable() -> None:
+            raise RuntimeError("database unavailable")
+
+        client.app.state.conversations.check_health = unavailable
+        response = client.get("/readyz")
+        assert response.status_code == 503
+        assert response.json() == {
+            "status": "degraded",
+            "dependencies": {"conversation_repository": "down"},
+        }
 
     @pytest.mark.unit
     def test_app_metadata(self, client: TestClient) -> None:

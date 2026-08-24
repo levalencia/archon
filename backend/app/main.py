@@ -11,6 +11,7 @@ import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 
@@ -18,6 +19,7 @@ from app.config import Settings, get_settings
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
 from app.observability.logging import setup_logging
+from app.observability.otel_exporter import OTLPExporter
 from app.research.api import router as research_router
 from app.routes.admin import router as admin_router
 from app.routes.artifacts import router as artifacts_router
@@ -65,11 +67,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
+    exporter = None
+    if settings.otel_endpoint:
+        exporter = OTLPExporter(settings.otel_service_name, settings.otel_endpoint)
+    app.state.otel_exporter = exporter
 
     yield
 
     await repository.close()
     await auth_store.close()
+    if exporter:
+        exporter.shutdown()
     logger.info("archon_shutdown")
 
 
@@ -132,9 +140,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "alive"}
 
     @app.get("/readyz")
-    async def readyz() -> dict:
-        """Readiness probe. TODO: check DB and Redis connectivity."""
-        return {"status": "ready"}
+    async def readyz():
+        """Report readiness based on a live database query."""
+        dependencies = {"conversation_repository": "up"}
+        try:
+            await app.state.conversations.check_health()
+        except Exception as error:
+            dependencies["conversation_repository"] = "down"
+            logger.warning(
+                "readiness_check_failed", dependency="conversation_repository", error=str(error)
+            )
+            return JSONResponse(
+                status_code=503,
+                content={"status": "degraded", "dependencies": dependencies},
+            )
+        return {"status": "ready", "dependencies": dependencies}
 
     return app
 
