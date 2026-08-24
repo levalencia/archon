@@ -116,26 +116,29 @@ async def chat_stream_real(body: StreamRequest, request: Request):
             yield _sse("token", "Error: agent failed to produce a result")
             return
 
-        # Step 4: Send context stats
-        # Get current context utilization from the agent's last compact check
+        # Step 4: Send context stats from agent's compact check
+        compact_stats = None
+        for step in result.steps or []:
+            if isinstance(step, dict) and step.get("type") == "compact":
+                compact_stats = step.get("stats", {})
+
         from app.memory.advanced import get_token_count
 
-        history = []
-        try:
-            from app.routes.chat import _memory
-
-            history = await _memory.retrieve(conv_id, limit=50)
-        except Exception:
-            pass
-        ctx_tokens = sum(get_token_count(m.get("content", "")) + 4 for m in history)
+        # Estimate from result
+        resp_tokens = get_token_count(result.response)
         ctx_budget = 8000
+        ctx_tokens = resp_tokens * (result.iterations or 1) * 3  # rough estimate
+        if compact_stats:
+            ctx_tokens = compact_stats.get("tokens", ctx_tokens)
+
         yield _sse(
             "context",
             {
                 "tokens": ctx_tokens,
                 "budget": ctx_budget,
-                "utilization_pct": round(ctx_tokens / ctx_budget * 100, 1) if ctx_budget > 0 else 0,
-                "messages": len(history),
+                "utilization_pct": round(min(ctx_tokens / ctx_budget * 100, 100), 1),
+                "messages": result.iterations * 2,
+                "compacted": bool(compact_stats),
             },
         )
 
