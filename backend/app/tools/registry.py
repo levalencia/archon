@@ -21,6 +21,8 @@ import structlog
 
 from app.agents.protocols import AuditLog, PermissionChecker
 from app.observability.logging import get_correlation_id
+from app.runtime.models import ToolCall
+from app.runtime.models import ToolDefinition as RuntimeToolDefinition
 
 logger = structlog.get_logger()
 
@@ -85,8 +87,14 @@ class SecureToolRegistry:
         )
         logger.info("tool_registered", name=name, description=description)
 
-    async def execute(self, tool_name: str, parameters: dict) -> dict:
-        """Execute a tool with permission checks and timeout enforcement."""
+    async def execute(self, call: ToolCall | str, parameters: dict | None = None) -> dict:
+        """Execute a typed call (or legacy name/parameters) through all security gates."""
+        if isinstance(call, ToolCall):
+            tool_name = call.name
+            parameters = dict(call.arguments)
+        else:
+            tool_name = call
+            parameters = parameters or {}
         correlation_id = get_correlation_id()
 
         # 1. Tool exists?
@@ -199,6 +207,16 @@ class SecureToolRegistry:
             }
             for tool in self._tools.values()
         ]
+
+    def definitions(self) -> tuple[RuntimeToolDefinition, ...]:
+        """Return provider-neutral schemas for native provider tool calling."""
+        definitions = []
+        for tool in self._tools.values():
+            schema = dict(tool.input_schema)
+            schema.setdefault("type", "object")
+            schema.setdefault("properties", {})
+            definitions.append(RuntimeToolDefinition(tool.name, tool.description, schema))
+        return tuple(definitions)
 
     def get_tool(self, name: str) -> ToolDefinition | None:
         """Get a tool definition by name."""

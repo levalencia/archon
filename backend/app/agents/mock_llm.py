@@ -1,22 +1,39 @@
-"""Mock LLM adapter for testing. No API calls, deterministic responses."""
+"""Mock LLM adapter for deterministic text and structured-tool tests."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
+
 
 class MockLLM:
-    """Deterministic LLM for testing. Pops responses from a list.
-
-    Usage:
-        llm = MockLLM(responses=["Hello!", "I can help with that."])
-        result = await llm.chat([{"role": "user", "content": "Hi"}])
-        assert result == "Hello!"
-        assert len(llm.call_history) == 1
-    """
-
-    def __init__(self, responses: list[str] | None = None) -> None:
+    def __init__(self, responses: Sequence[str | ModelResponse] | None = None) -> None:
         self.responses = list(responses) if responses else ["I am a mock LLM."]
         self.call_history: list[dict] = []
         self._call_count = 0
+
+    async def complete(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[ToolDefinition] = (),
+        *,
+        max_tokens: int = 4096,
+    ) -> ModelResponse:
+        self.call_history.append(
+            {"messages": tuple(messages), "tools": tuple(tools), "max_tokens": max_tokens}
+        )
+        response = (
+            self.responses[self._call_count]
+            if self._call_count < len(self.responses)
+            else "I don't have more responses configured."
+        )
+        self._call_count += 1
+        if isinstance(response, ModelResponse):
+            return response
+        return ModelResponse(
+            response, usage=TokenUsage(output_tokens=max(1, len(response.split())))
+        )
 
     async def chat(
         self,
@@ -24,20 +41,7 @@ class MockLLM:
         max_tokens: int = 4096,
         temperature: float = 0.7,
     ) -> str:
-        """Return next response from the list. Tracks all calls for assertions."""
-        self.call_history.append(
-            {
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "call_number": self._call_count,
-            }
-        )
-
-        if self._call_count < len(self.responses):
-            response = self.responses[self._call_count]
-        else:
-            response = "I don't have more responses configured."
-
-        self._call_count += 1
-        return response
+        del temperature
+        typed = [Message(role=item["role"], content=item["content"]) for item in messages]
+        response = await self.complete(typed, max_tokens=max_tokens)
+        return response.content or ""

@@ -14,13 +14,14 @@ import structlog
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from app.agents.agent import ProductionAgent
 from app.agents.llm_factory import create_llm_client
 from app.memory.in_memory import InMemoryStore
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
 from app.routes.artifacts import get_artifact_store
 from app.routes.skills import get_skill_registry
+from app.runtime import AgentRuntime, RuntimeBudget
+from app.runtime.support import as_model_provider, prepare_messages
 from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.context_optimizer import ContextOptimizer
 from app.tools.builtin import (
@@ -202,14 +203,8 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
             }
         )
 
-    # Build agent with tools and skill context
+    # Build typed runtime with native provider tools and skill context.
     conv_id = body.conversation_id or str(uuid.uuid4())
-    agent = ProductionAgent(
-        llm=llm,
-        tools=tools,
-        memory=_memory,
-        system_prompt_extra=skills_context,
-    )
 
     logger.info(
         "chat_request",
@@ -235,41 +230,35 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
             utilization_pct=stats["utilization_pct"],
         )
 
-    result = await agent.run(
-        body.message,
-        conversation_id=conv_id,
-        images=images,
+    messages = await prepare_messages(body.message, conv_id, _memory, tools, skills_context, images)
+    runtime = AgentRuntime(
+        as_model_provider(llm),
+        tools,
+        budget=RuntimeBudget(
+            max_iterations=settings.agent_max_iterations,
+            max_tool_calls=8,
+            max_tokens=settings.agent_token_budget,
+            max_seconds=90,
+        ),
     )
+    result = await runtime.run(messages)
+    await _memory.store(conv_id, "user", body.message)
+    await _memory.store(conv_id, "assistant", result.content)
 
     elapsed_ms = (time.monotonic() - start_time) * 1000
 
-    # Build thinking steps from agent execution trace
-    thinking_steps = []
-    for i, step in enumerate(result.steps):
-        thinking_steps.append(
-            {
-                "step": i + 1,
-                "type": step.get("type", "reasoning"),
-                "agent": step.get("agent", "archon"),
-                "detail": step.get("detail", step.get("content", "")[:100]),
-                "done": True,
-                "duration_ms": step.get("duration_ms", 0),
-            }
-        )
-
-    # Add tool call steps
-    for _i, tc in enumerate(result.tool_calls):
-        thinking_steps.append(
-            {
-                "step": len(thinking_steps) + 1,
-                "type": "tool_call",
-                "agent": "react_agent",
-                "detail": f"Called {tc['tool']}({tc.get('parameters', {})})",
-                "result": str(tc.get("result", ""))[:200],
-                "done": True,
-                "duration_ms": 0,
-            }
-        )
+    thinking_steps = [
+        {
+            "step": i + 1,
+            "type": "tool_call",
+            "agent": "runtime",
+            "detail": f"Called {call['tool']}({call.get('parameters', {})})",
+            "result": str(call.get("result", ""))[:200],
+            "done": True,
+            "duration_ms": 0,
+        }
+        for i, call in enumerate(result.tool_calls)
+    ]
 
     # Add image step if image was analyzed
     if body.image:
@@ -303,7 +292,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         )
 
     # Detect and save artifacts from response
-    detected = detect_artifact_in_response(result.response)
+    detected = detect_artifact_in_response(result.content)
     saved_artifacts = []
     artifact_store = get_artifact_store()
     for art_data in detected:
@@ -328,12 +317,12 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     )
 
     return ChatResponse(
-        response=result.response,
+        response=result.content,
         conversation_id=conv_id,
         correlation_id=cid,
         iterations=result.iterations,
         tool_calls=result.tool_calls,
-        tokens_used=result.tokens_used,
+        tokens_used=result.usage.total_tokens,
         thinking_steps=thinking_steps,
         skills_used=skills_used,
         image_analyzed=bool(body.image),

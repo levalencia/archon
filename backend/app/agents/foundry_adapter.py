@@ -1,76 +1,54 @@
-"""Azure AI Foundry adapter using the Anthropic Python SDK.
-
-Uses AsyncAnthropicFoundry for proper Azure authentication.
-"""
+"""Azure AI Foundry Anthropic adapter using official SDK tool schemas."""
 
 from __future__ import annotations
 
-import time
+from collections.abc import Sequence
 
-import structlog
-
-logger = structlog.get_logger()
+from app.runtime.anthropic import anthropic_request, anthropic_response
+from app.runtime.models import Message, ModelResponse, ToolDefinition
 
 
 class FoundryAdapter:
-    """Azure AI Foundry adapter using the official Anthropic SDK.
-
-    Uses AsyncAnthropic with azure endpoint for proper auth handling.
-    """
-
-    def __init__(
-        self,
-        api_key: str,
-        base_url: str,
-        model: str = "claude-opus-4-6",
-    ) -> None:
+    def __init__(self, api_key: str, base_url: str, model: str = "claude-opus-4-6") -> None:
         from anthropic import AsyncAnthropic
 
         self.model = model
-        self._client = AsyncAnthropic(
-            api_key=api_key,
-            base_url=base_url,
-        )
-        logger.info("foundry_adapter_init", model=model, base_url=base_url)
+        self._client = AsyncAnthropic(api_key=api_key, base_url=base_url)
 
-    async def chat(
+    async def complete(
         self,
-        messages: list[dict[str, str]],
-        max_tokens: int = 2048,
-        **kwargs,
-    ) -> str:
-        """Send messages to Azure Foundry via Anthropic SDK."""
-        system_msg = None
-        chat_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_msg = msg["content"]
-            else:
-                chat_messages.append({"role": msg["role"], "content": msg["content"]})
+        messages: Sequence[Message],
+        tools: Sequence[ToolDefinition] = (),
+        *,
+        max_tokens: int = 4096,
+    ) -> ModelResponse:
+        request = anthropic_request(messages, tools, max_tokens)
+        if hasattr(self._client, "messages"):
+            response = await self._client.messages.create(model=self.model, **request)
+            return anthropic_response(response)
 
-        start = time.monotonic()
+        # Compatibility seam for injected HTTP transports used in deterministic tests.
+        response = await self._client.post("/messages", json={"model": self.model, **request})
+        response.raise_for_status()
+        payload = response.json()
+        content = "".join(
+            block.get("text", "")
+            for block in payload.get("content", ())
+            if block.get("type") == "text"
+        )
+        usage = payload.get("usage", {})
+        from app.runtime.models import TokenUsage
 
-        create_kwargs: dict = {
-            "model": self.model,
-            "messages": chat_messages,
-            "max_tokens": max_tokens,
-        }
-        if system_msg:
-            create_kwargs["system"] = system_msg
-
-        response = await self._client.messages.create(**create_kwargs)
-
-        duration_ms = (time.monotonic() - start) * 1000
-        content = response.content[0].text
-
-        logger.info(
-            "foundry_chat_complete",
-            model=self.model,
-            input_messages=len(chat_messages),
-            output_length=len(content),
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-            duration_ms=round(duration_ms, 2),
+        return ModelResponse(
+            content=content or None,
+            usage=TokenUsage(
+                usage.get("input_tokens", 0),
+                usage.get("output_tokens", 0),
+            ),
+            provider_stop_reason=payload.get("stop_reason"),
         )
 
-        return content
+    async def chat(self, messages: list[dict[str, str]], max_tokens: int = 4096, **kwargs) -> str:
+        del kwargs
+        typed = [Message(role=item["role"], content=item["content"]) for item in messages]
+        return (await self.complete(typed, max_tokens=max_tokens)).content or ""

@@ -1,72 +1,54 @@
-"""Anthropic adapter. Uses httpx to call the Anthropic Messages API."""
+"""Anthropic adapter using the official SDK and native tool_use blocks."""
 
 from __future__ import annotations
 
-import httpx
-import structlog
+from collections.abc import Sequence
 
-logger = structlog.get_logger()
+from app.runtime.anthropic import anthropic_request, anthropic_response
+from app.runtime.models import Message, ModelResponse, ToolDefinition
 
 
 class AnthropicAdapter:
-    """Anthropic Claude adapter via the Messages API.
+    def __init__(self, api_key: str, model: str = "claude-sonnet-4-20250514") -> None:
+        from anthropic import AsyncAnthropic
 
-    The core agent code never imports this directly — it goes through llm_factory.
-    """
-
-    def __init__(
-        self,
-        api_key: str,
-        model: str = "claude-sonnet-4-20250514",
-    ) -> None:
         self.model = model
-        self._client = httpx.AsyncClient(
-            base_url="https://api.anthropic.com/v1",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            timeout=60.0,
-        )
-        logger.info("anthropic_adapter_init", model=model)
+        self._client = AsyncAnthropic(api_key=api_key)
 
-    async def chat(
+    async def complete(
         self,
-        messages: list[dict[str, str]],
+        messages: Sequence[Message],
+        tools: Sequence[ToolDefinition] = (),
+        *,
         max_tokens: int = 4096,
-        temperature: float = 0.7,
-    ) -> str:
-        """Send messages to Anthropic Messages API."""
-        # Anthropic requires system message separate from messages
-        system_msg = None
-        chat_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_msg = msg["content"]
-            else:
-                chat_messages.append(msg)
+    ) -> ModelResponse:
+        request = anthropic_request(messages, tools, max_tokens)
+        if hasattr(self._client, "messages"):
+            response = await self._client.messages.create(model=self.model, **request)
+            return anthropic_response(response)
 
-        payload: dict = {
-            "model": self.model,
-            "messages": chat_messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-        if system_msg:
-            payload["system"] = system_msg
-
-        response = await self._client.post("/messages", json=payload)
+        # Compatibility seam for injected HTTP transports used in deterministic tests.
+        response = await self._client.post("/messages", json={"model": self.model, **request})
         response.raise_for_status()
+        payload = response.json()
+        content = "".join(
+            block.get("text", "")
+            for block in payload.get("content", ())
+            if block.get("type") == "text"
+        )
+        usage = payload.get("usage", {})
+        from app.runtime.models import TokenUsage
 
-        data = response.json()
-        content = data["content"][0]["text"]
-
-        logger.info(
-            "anthropic_chat_complete",
-            model=self.model,
-            input_messages=len(chat_messages),
-            usage=data.get("usage"),
+        return ModelResponse(
+            content=content or None,
+            usage=TokenUsage(
+                usage.get("input_tokens", 0),
+                usage.get("output_tokens", 0),
+            ),
+            provider_stop_reason=payload.get("stop_reason"),
         )
 
-        return content
+    async def chat(self, messages: list[dict[str, str]], max_tokens: int = 4096, **kwargs) -> str:
+        del kwargs
+        typed = [Message(role=item["role"], content=item["content"]) for item in messages]
+        return (await self.complete(typed, max_tokens=max_tokens)).content or ""
