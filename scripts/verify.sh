@@ -16,6 +16,7 @@ printf '\n== Backend lint ==\n'
   cd "$ROOT/backend"
   uv run ruff check app tests
   uv run ruff format --check app tests
+  uv run bandit -r app -ll
 )
 
 printf '\n== Backend tests ==\n'

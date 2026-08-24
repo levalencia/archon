@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from app.security.auth import get_current_user
 from app.tools.image_storage import image_path
@@ -15,8 +15,8 @@ router = APIRouter(
 )
 
 
-@router.get("/{filename}")
-async def serve_image(filename: str) -> FileResponse | JSONResponse:
+@router.get("/{filename}", response_model=None)
+async def serve_image(filename: str) -> Response:
     """Serve a generated image only when its resolved path is safely contained."""
     try:
         filepath = image_path(filename)
