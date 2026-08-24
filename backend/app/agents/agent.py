@@ -41,7 +41,14 @@ WEB SEARCH BEST PRACTICES:
   * News about Brazil → search in Portuguese: "notícias Brasil hoje agosto 2026"
   * News about Japan → search in English but include country: "Japan news today August 2026"
   * News about Colombia → search in Spanish: "noticias Colombia hoy agosto 2026"
-- For multi-country queries, do ONE search per country in the appropriate language
+- For multi-country queries, be EFFICIENT:
+  * Group countries by region: "noticias Sudamérica agosto 2026" instead of 10 separate searches
+  * Maximum 3-4 web searches per query — combine related countries
+  * Example: instead of searching each of 10 countries separately, do:
+    Search 1: "smallest countries world news August 2026"
+    Search 2: "Vatican Monaco Malta news August 2026"
+    Search 3: "Pacific island nations news August 2026"
+  * NEVER do more than 5 web searches in a single response
 - ALWAYS respond in the SAME language the user used, regardless of search language
 4. For ANY date/time question, ALWAYS call the datetime tool first.
 5. After calling a tool, use its REAL result in your answer.
@@ -117,7 +124,7 @@ class ProductionAgent:
     The agent has no knowledge of which LLM, memory store, or tools it uses.
     """
 
-    MAX_ITERATIONS = 25
+    MAX_ITERATIONS = 15
     TOKEN_BUDGET = 10000
 
     def __init__(
