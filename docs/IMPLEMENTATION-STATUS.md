@@ -1,7 +1,7 @@
 # Archon Implementation Status
 
 **Last verified:** 2026-08-24  
-**Branch basis:** local `main` after typed runtime and workbench integration  
+**Branch basis:** local `main` at `9462518` after runtime hardening and remaining-work plan  
 **Acceptance command:** `./scripts/verify.sh`
 
 This document is the source of truth for implementation claims. A source file alone does not make a capability complete.
@@ -18,13 +18,14 @@ This document is the source of truth for implementation claims. A source file al
 | Gate | Result |
 |---|---|
 | Backend Ruff | Pass |
-| Backend tests | 368 passed, 0 skipped |
+| Backend tests | 371 passed, 0 skipped |
 | Backend measured coverage | 74% |
 | Svelte and TypeScript checks | 0 errors, 0 warnings |
 | Frontend unit tests | 6 passed |
 | Frontend browser tests | 2 passed, desktop and mobile |
 | Frontend production build | Pass |
 | Backend Docker smoke | Pass, `/healthz` |
+| Live Foundry and Brave regression | Pass: 5 distinct searches, 0 duplicates, 3 iterations, `completed` |
 
 ## Capability matrix
 
@@ -32,7 +33,7 @@ This document is the source of truth for implementation claims. A source file al
 |---|---:|---:|---:|---:|---|
 | Typed agent runtime | Yes | Yes | Yes | Yes | Default chat and SSE path |
 | Native Anthropic and Foundry tool calls | Yes | Yes | Yes | Yes | Normalized `tool_use` blocks |
-| Explicit run stop reasons and budgets | Yes | Yes | Yes | Yes | Iteration, tools, tokens, time |
+| Explicit run stop reasons and budgets | Yes | Yes | Yes | Yes | Iteration, tools, tokens, time; forced tool-free final synthesis |
 | Per-request runtime events | Yes | Yes | Yes | Yes | No shared-method monkey-patching |
 | Robust frontend SSE parser | Yes | Yes | Yes | Yes | Split chunks, multiline data, terminal flush |
 | URL-addressable conversations | Yes | Yes | Yes | Yes | `/chat/[id]` |
@@ -43,7 +44,7 @@ This document is the source of truth for implementation claims. A source file al
 | Resource ownership enforcement | Yes | Yes | Yes | Yes | Conversation, document, artifact, log and admin boundaries tested |
 | Security headers and CSRF | Yes | Yes | Yes | Yes | Cookie double-submit; Bearer/API-key exemption |
 | Default tool permission policy | Partial | Yes | Yes | Partial | File reads are workspace-contained; general approval UI remains planned |
-| Grounded research workflow | Yes | Yes | Yes | Partial | Offline caller-supplied sources; live adapter wiring remains planned |
+| Grounded research workflow | Yes | Yes | Yes | Partial | Offline cited workflow plus live Foundry and Brave runtime regression |
 | Evidence and citation verification | Yes | Yes | Yes | Partial | 12 golden cases; currently used by `/v1/research` |
 | Durable replayable run events | Partial | No | Partial | No | Events stream live but are not durably replayed |
 | RAG with real durable embeddings | Partial/demo | Yes | Partial | No | Default route uses mock embeddings/in-memory vectors |
@@ -56,12 +57,11 @@ This document is the source of truth for implementation claims. A source file al
 
 ## Active implementation order
 
-1. Unified persistent conversations and messages.
-2. Persistent auth, ownership, middleware, and sensitive-tool boundaries.
-3. Grounded research workflow and golden evaluations.
-4. Durable event replay, approvals, and governed MCP.
-5. One bounded specialist delegation workflow.
-6. Verified deployment and published benchmark results.
+1. Durable, owner-scoped run-event replay in API and Workbench.
+2. Permission policy and human approval flow for sensitive tools.
+3. Governed MCP adapter using the existing typed tool contract.
+4. One bounded specialist delegation workflow.
+5. Verified deployment and published benchmark results.
 
 ## Known test debt
 
