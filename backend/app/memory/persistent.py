@@ -50,7 +50,10 @@ class PersistentMemory:
         total_chars = sum(len(e["content"]) for e in self._entries)
         if total_chars + len(content) > MAX_MEMORY_CHARS:
             return {
-                "error": f"Memory full ({total_chars}/{MAX_MEMORY_CHARS} chars). Remove old entries first."
+                "error": (
+                    f"Memory full ({total_chars}/{MAX_MEMORY_CHARS} chars). "
+                    "Remove old entries first."
+                )
             }
 
         entry = {

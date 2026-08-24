@@ -1,17 +1,18 @@
 """Archon: Production AI Agent Webapp — FastAPI application."""
 
+# ruff: noqa: E402 -- environment must be loaded before importing app configuration/routes.
+
 from __future__ import annotations
-
-from dotenv import load_dotenv
-
-load_dotenv()
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
 
 from app.config import Settings, get_settings
 from app.middleware.correlation import CorrelationIdMiddleware
@@ -20,10 +21,11 @@ from app.routes.admin import router as admin_router
 from app.routes.artifacts import router as artifacts_router
 from app.routes.auth import router as auth_router
 from app.routes.chat import router as chat_router
-from app.routes.log_stream import router as log_router, install_log_capture
 from app.routes.conversations import router as conversations_router
 from app.routes.documents import router as documents_router
 from app.routes.images import router as images_router
+from app.routes.log_stream import install_log_capture
+from app.routes.log_stream import router as log_router
 from app.routes.red_team import router as red_team_router
 from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router

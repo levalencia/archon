@@ -9,6 +9,7 @@ import asyncio
 import json
 import time
 from collections import deque
+from contextlib import suppress
 
 import structlog
 from fastapi import APIRouter
@@ -41,10 +42,8 @@ class LogCapture:
 
         # Push to all subscribers
         for q in _subscribers[:]:
-            try:
+            with suppress(asyncio.QueueFull):
                 q.put_nowait(entry)
-            except asyncio.QueueFull:
-                pass
 
         return event_dict
 
@@ -77,7 +76,7 @@ async def stream_logs():
                 try:
                     entry = await asyncio.wait_for(queue.get(), timeout=5.0)
                     yield f"data: {json.dumps(entry, ensure_ascii=False)}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": heartbeat\n\n"
         finally:
             if queue in _subscribers:

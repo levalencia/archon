@@ -87,8 +87,9 @@
       <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
         <div class="space-y-4">
           <div>
-            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Username</label>
+            <label for="username" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Username</label>
             <input
+              id="username"
               type="text"
               bind:value={username}
               required
@@ -100,8 +101,9 @@
 
           {#if mode === 'register'}
             <div>
-              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Email</label>
+              <label for="email" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Email</label>
               <input
+                id="email"
                 type="email"
                 bind:value={email}
                 class="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)] transition-colors"
@@ -111,8 +113,9 @@
           {/if}
 
           <div>
-            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Password</label>
+            <label for="password" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Password</label>
             <input
+              id="password"
               type="password"
               bind:value={password}
               required

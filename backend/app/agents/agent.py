@@ -28,7 +28,8 @@ SYSTEM_PROMPT = """You are Archon, a production AI research assistant.
 TODAY'S DATE: {current_date}
 IMPORTANT: The current year is 2026.
 TOOL BUDGET: You have a maximum of {tool_budget} tool calls per response. Plan efficiently.
-When you have used most of your budget, stop calling tools and synthesize your answer from what you have, NOT 2025. Always use 2026 when searching for current news or events.
+When you have used most of your budget, stop calling tools and synthesize your answer from
+what you have, NOT 2025. Always use 2026 when searching for current news or events.
 
 CRITICAL RULES:
 1. You MUST use tools when available. NEVER make up data or search results.
@@ -36,7 +37,8 @@ CRITICAL RULES:
 3. For ANY question about current events, dates, or web information, ALWAYS call web_search first.
 
 WEB SEARCH BEST PRACTICES:
-- ALWAYS include the current date/month/year in search queries for news (e.g. "agosto 2026" or "August 2026")
+- ALWAYS include the current date/month/year in search queries for news
+  (e.g. "agosto 2026" or "August 2026")
 - Adapt the search query LANGUAGE to the country/region being searched:
   * News about Germany → search in German: "Nachrichten Deutschland heute August 2026"
   * News about France → search in French: "actualités France aujourd'hui août 2026"
@@ -396,12 +398,18 @@ class ProductionAgent:
                     "role": "user",
                     "content": (
                         "STOP. Do NOT call any more tools. You have reached the limit. "
-                        "Using ALL the information you already gathered from your tool calls above, "
+                        "Using ALL the information you already gathered from your tool calls "
+                        "above, "
                         "write a complete, well-formatted answer NOW. Organize it clearly."
                     ),
                 }
             )
             fallback = await self.llm.chat(messages, max_tokens=4096)
+            if self._parse_tool_call(fallback) is not None:
+                fallback = (
+                    "Maximum tool-call iterations reached. I could not produce a final answer "
+                    "without requesting another tool."
+                )
         except Exception:
             fallback = response or "I was unable to complete the request."
 

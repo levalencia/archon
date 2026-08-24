@@ -9,7 +9,8 @@
   let isLoading = $state(false);
   let showSidebar = $state(false);
   let currentConversationId = $state('');
-  let traceData = $state({ stats: {}, entries: [], skills: [] });
+  const defaultTraceStats = { latency: '—', tokens: '—', tools: 0, iterations: 0 };
+  let traceData = $state({ stats: { ...defaultTraceStats } });
   let artifacts: any[] = $state([]);
   let modelName = $state('');
   let showLogs = $state(false);
@@ -153,9 +154,12 @@
               const done = JSON.parse(payload);
               am.iterations = done.iterations;
               traceData = {
-                stats: { iterations: done.iterations, tools: done.tools_used || 0, latency: done.elapsed_ms || 0 },
-                entries: am.thinking_steps || [],
-                skills: done.skills_used || [],
+                stats: {
+                  iterations: done.iterations,
+                  tools: done.tools_used || 0,
+                  latency: done.elapsed_ms != null ? `${done.elapsed_ms}ms` : '—',
+                  tokens: done.tokens_used != null ? String(done.tokens_used) : '—',
+                },
               };
             } catch {}
           }
@@ -173,7 +177,7 @@
     currentConversationId = id;
     showSidebar = false;
     artifacts = [];
-    traceData = { stats: {}, entries: [], skills: [] };
+    traceData = { stats: { ...defaultTraceStats } };
 
     try {
       const r = await fetch("/api/chat/history/" + id);
@@ -202,7 +206,7 @@
     }
   }
 
-  function handleNewConversation() { messages = []; currentConversationId = ''; artifacts = []; traceData = { stats: {}, entries: [], skills: [] }; showSidebar = false; }
+  function handleNewConversation() { messages = []; currentConversationId = ''; artifacts = []; traceData = { stats: { ...defaultTraceStats } }; showSidebar = false; }
 </script>
 
 <!-- 
@@ -215,7 +219,7 @@
   <!-- ══ COL 1: SIDEBAR ══ -->
   <!-- Mobile: slide-out drawer with backdrop -->
   {#if showSidebar}
-    <button class="md:hidden fixed inset-0 bg-black/60 z-40" onclick={() => showSidebar = false}></button>
+    <button aria-label="Close sidebar" class="md:hidden fixed inset-0 bg-black/60 z-40" onclick={() => showSidebar = false}></button>
   {/if}
   <div class="
     {showSidebar ? 'translate-x-0' : '-translate-x-full'}
@@ -267,7 +271,7 @@
 
   <!-- ══ COL 3: TRACE PANEL — desktop only, fixed width ══ -->
   <div class="hidden lg:flex w-[320px] shrink-0 flex-col bg-[var(--bg-secondary)] border-l border-[var(--border)] overflow-y-auto">
-    <TracePanel stats={traceData.stats} entries={traceData.entries} skills={traceData.skills} />
+    <TracePanel stats={traceData.stats} />
   </div>
 
   <!-- Artifact overlay -->

@@ -16,9 +16,17 @@ logger = structlog.get_logger()
 BRAVE_API_URL = "https://api.search.brave.com/res/v1/web/search"
 
 
-async def web_search_tool(query: str, num_results: int = 5) -> dict:
+async def web_search_tool(
+    query: str,
+    num_results: int = 5,
+    *,
+    max_results: int | None = None,
+) -> dict:
     """Search the web and extract content from top results."""
     import os
+
+    if max_results is not None:
+        num_results = max_results
 
     brave_key = os.environ.get("ARCHON_BRAVE_API_KEY", "")
 

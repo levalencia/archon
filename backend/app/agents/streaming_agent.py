@@ -73,7 +73,6 @@ async def run_agent_streaming(
 
         response = await original_chat(messages, max_tokens, **kwargs)
 
-        preview = response[:100].replace("\n", " ")
         await event_queue.put(("thinking", f"LLM responded ({len(response)} chars)"))
 
         return response

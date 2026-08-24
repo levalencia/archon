@@ -1,7 +1,10 @@
 <script lang="ts">
   let metrics: any = $state(null);
-  let costData: any = $state(null);
   let loading = $state(true);
+
+  interface CircuitBreaker {
+    state: string;
+  }
 
   async function loadData() {
     loading = true;
@@ -82,13 +85,14 @@
       {:else}
         <div class="space-y-2">
           {#each Object.entries(metrics.circuit_breakers || {}) as [name, cb]}
+            {@const circuitBreaker = cb as CircuitBreaker}
             <div class="flex items-center justify-between px-4 py-2 bg-[var(--bg-tertiary)] rounded-lg">
               <span class="text-sm text-[var(--text-primary)]">{name}</span>
               <span class="text-xs font-mono px-2 py-0.5 rounded
-                {cb.state === 'closed' ? 'bg-[rgba(63,185,80,0.15)] text-[var(--success)]' :
-                 cb.state === 'open' ? 'bg-[rgba(248,81,73,0.15)] text-[var(--error)]' :
+                {circuitBreaker.state === 'closed' ? 'bg-[rgba(63,185,80,0.15)] text-[var(--success)]' :
+                 circuitBreaker.state === 'open' ? 'bg-[rgba(248,81,73,0.15)] text-[var(--error)]' :
                  'bg-[rgba(210,153,34,0.15)] text-[var(--warning)]'}">
-                {cb.state}
+                {circuitBreaker.state}
               </span>
             </div>
           {/each}

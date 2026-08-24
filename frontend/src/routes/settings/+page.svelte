@@ -64,8 +64,9 @@
     <h2 class="text-base font-semibold text-[var(--text-primary)] mb-4">Skills Configuration</h2>
 
     <div class="flex items-center gap-4 mb-4">
-      <label class="text-sm text-[var(--text-secondary)]">Skills per query (top K):</label>
+      <label for="skills-top-k" class="text-sm text-[var(--text-secondary)]">Skills per query (top K):</label>
       <input
+        id="skills-top-k"
         type="number"
         bind:value={skillsTopK}
         min="1" max="10"

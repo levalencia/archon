@@ -142,11 +142,6 @@ async def chat_stream_real(body: StreamRequest, request: Request):
             },
         )
 
-        # Step 5: Stream tool calls summary
-        for tc in result.tool_calls:
-            # Already streamed via queue, but add to final data
-            pass
-
         # Step 5: Artifacts
         artifacts = detect_artifact_in_response(result.response)
         for art in artifacts:
@@ -193,10 +188,7 @@ async def chat_stream_real(body: StreamRequest, request: Request):
 
 
 def _sse(event: str, data) -> str:
-    if isinstance(data, (dict, list)):
-        payload = json.dumps(data, ensure_ascii=False)
-    else:
-        payload = str(data)
+    payload = json.dumps(data, ensure_ascii=False) if isinstance(data, (dict, list)) else str(data)
     # SSE data field can't have raw newlines — use multi-line data format
     # Each line gets its own "data:" prefix
     lines = payload.split("\n")

@@ -140,7 +140,10 @@ def _create_tool_registry() -> SecureToolRegistry:
     registry.register(
         name="memory",
         handler=memory_tool,
-        description="Save/recall persistent facts about the user. Actions: add, remove, replace, list.",
+        description=(
+            "Save/recall persistent facts about the user. "
+            "Actions: add, remove, replace, list."
+        ),
         input_schema={"required": ["action"]},
     )
 
