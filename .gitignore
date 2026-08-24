@@ -47,3 +47,8 @@ htmlcov/
 
 # Logs
 *.log
+
+# Runtime state
+archon_memory.json
+archon_sessions.json
+*.runtime.json

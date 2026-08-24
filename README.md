@@ -1,196 +1,204 @@
 <div align="center">
 
-# 🏛️ Archon
+# Archon
 
-### Production AI Agent Webapp
+### Agent Reliability Workbench
 
-**ReAct reasoning · Multi-agent orchestration · RAG · Tools · Skills · Vision · Artifacts**
-**Guardrails · PII Detection · Circuit Breakers · OpenTelemetry · 100% Local**
+**A local-first, inspectable AI-agent runtime for studying tool execution, context, evidence, and failure modes.**
 
 [![CI](https://github.com/levalencia/archon/actions/workflows/ci.yml/badge.svg)](https://github.com/levalencia/archon/actions)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-277%20passed-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-<img src="docs/mockup-archon-ui.html" alt="Archon UI" width="800">
-
-*A complete AI agent system you can run locally with zero API keys.*
-
-[Quick Start](#-quick-start) · [Features](#-features) · [Architecture](#-architecture) · [API Docs](#-api) · [Deploy](#-deploy)
+[Quick Start](#quick-start) · [Verified Today](#verified-today) · [Architecture](#architecture) · [Limitations](#current-limitations)
 
 </div>
 
 ---
 
-## ⚡ Quick Start
+## Why this project exists
+
+Archon is a portfolio and learning project for production-oriented agent engineering. Its differentiator is not the number of agent features. It is the ability to inspect and test:
+
+- native structured tool calls;
+- iteration, tool, token, and time budgets;
+- typed runtime events and explicit stop reasons;
+- conversation history and context composition;
+- web evidence, citations, and evaluation;
+- responsive run inspection on desktop and mobile;
+- provider adapters without an orchestration framework dependency.
+
+## Verified today
+
+The repository includes a reproducible acceptance command:
 
 ```bash
-# Clone
+./scripts/verify.sh
+```
+
+At the latest local verification, it exercised:
+
+- Ruff lint and formatting;
+- 294 backend tests with 69% measured coverage;
+- Svelte and TypeScript checks with zero diagnostics;
+- 5 Vitest tests;
+- 2 Playwright workflows covering desktop and mobile;
+- frontend production build;
+- backend Docker image build and `/healthz` smoke test.
+
+These numbers describe the current local branch and should be updated whenever the suite changes. CI executes the same core quality gates.
+
+## Quick start
+
+### Prerequisites
+
+- Python 3.11
+- [`uv`](https://docs.astral.sh/uv/)
+- Node.js 22+
+- Docker
+- Optional: Ollama for a local model, or credentials for a configured hosted provider
+
+```bash
 git clone https://github.com/levalencia/archon.git
 cd archon
 
-# Start infrastructure (PostgreSQL, Redis, Jaeger)
-docker compose up -d
-
-# Pull a local LLM
-ollama pull llama3.1:8b
-ollama pull llava:7b  # optional: for image analysis
-
 # Backend
 cd backend
-uv sync --extra dev
-cp .env.example .env  # defaults to Ollama
-uv run uvicorn app.main:app --reload
+uv sync --extra dev --extra llm
+cp .env.example .env
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Frontend (new terminal)
+# Frontend, in another terminal
 cd frontend
-npm install
-npm run dev
+npm ci
+npm run dev -- --host 0.0.0.0
 ```
 
-Open **http://localhost:3000** — start chatting. Zero API keys needed.
+Open `http://localhost:3000`.
 
----
+The default example configuration targets Ollama. Hosted providers require their own credentials. Never commit `.env` files or runtime memory/database files.
 
-## 🎯 Features
+## Architecture
 
-| Feature | Description |
-|---|---|
-| 🧠 **ReAct Agent** | Think → Act → Observe reasoning loop with tool calling |
-| 🤖 **Multi-Agent** | Coordinator + Planner + Retriever + Validator + Synthesizer |
-| 📄 **RAG Pipeline** | Upload docs → chunk → embed → vector search → grounded answers |
-| 🔧 **5 Built-in Tools** | Calculator, datetime, web search (DuckDuckGo), file reader, image gen |
-| 📚 **Skills System** | Import skills from any GitHub repo, auto-match per query |
-| 🎨 **Artifacts** | Claude-style artifact viewer: HTML, code, SVG, Mermaid rendered in iframe |
-| 👁️ **Vision** | Upload images → auto-switch to llava for analysis |
-| 🛡️ **Security** | PII detection, input/output guardrails, prompt injection blocking |
-| ⚡ **Circuit Breaker** | CLOSED/OPEN/HALF_OPEN per provider, auto-recovery |
-| 🚦 **Rate Limiter** | Redis sliding window, per-user limits |
-| 🔐 **Auth** | JWT tokens + API keys, register/login |
-| 📊 **Observability** | Structured logging, Prometheus metrics, trace waterfall |
-| 🔄 **Provider Swappable** | Ollama, OpenAI, Anthropic, Azure Foundry — change in `.env` |
-| 🐳 **100% Local** | Docker Compose: PostgreSQL + Redis + Jaeger + Ollama |
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                  Svelte Frontend                     │
-│  Chat · Artifacts · Trace · Dashboard · Settings     │
-├──────────────────────┬──────────────────────────────┤
-│    FastAPI Backend    │     Observability Layer       │
-│                      │  structlog · Prometheus       │
-│  ReAct Agent ◄──►    │  OTel Tracing · Cost Tracker  │
-│  Multi-Agent         │  Correlation IDs              │
-│  RAG Pipeline        ├──────────────────────────────┤
-│  Tool Registry       │     Security Layer            │
-│  Skills Engine       │  Guardrails · PII · Auth      │
-│  Artifact Detector   │  Circuit Breaker · Rate Limit │
-├──────────────────────┴──────────────────────────────┤
-│              Infrastructure                          │
-│  PostgreSQL (pgvector) · Redis · Jaeger · Ollama     │
-└─────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    UI[SvelteKit workbench] -->|REST and SSE| API[FastAPI routes]
+    API --> RT[Typed agent runtime]
+    RT --> MODEL[Provider adapters]
+    RT --> TOOLS[Secure tool registry]
+    RT --> EVENTS[Typed event sink]
+    RT --> MEMORY[Conversation and context services]
+    EVENTS --> UI
+    EVENTS --> OBS[Logs traces and evaluations]
 ```
 
-**50 Python source files · 10 Svelte components · 277 tests · 30+ API endpoints**
+### Live request path
 
----
+1. The frontend creates or opens a conversation.
+2. FastAPI builds system, skill, memory, history, and user messages.
+3. The typed runtime invokes a provider with native tool schemas.
+4. Tool calls are decoded into typed contracts rather than parsed from model prose.
+5. Runtime events are sent to the SSE route without monkey-patching shared objects.
+6. The UI renders the answer first and exposes Run, Evidence, Context, and Logs through an inspector.
 
-## 🔌 API
+## Implemented and wired
 
-All endpoints at `http://localhost:8000`:
-
-| Method | Path | Description |
+| Capability | Status | Evidence |
 |---|---|---|
-| POST | `/api/chat` | Send message, get agent response with tools + thinking |
-| POST | `/api/chat/stream` | SSE streaming response |
-| GET/POST | `/api/conversations` | List / create conversations |
-| POST | `/api/documents/upload` | Upload and index a document (RAG) |
-| POST | `/api/documents/query` | Query documents with RAG |
-| GET/POST | `/api/skills` | List / create / import skills |
-| POST | `/api/skills/import` | Import skill from GitHub repo |
-| POST | `/api/security/pii-scan` | Scan text for PII |
-| POST | `/api/security/guardrail` | Test guardrails |
-| GET | `/api/admin/health` | Detailed health + uptime |
-| GET | `/api/admin/metrics` | System metrics |
-| GET | `/metrics` | Prometheus format metrics |
-| POST | `/api/auth/register` | Register new user |
-| POST | `/api/auth/login` | Login, get JWT token |
+| Typed agent runtime and budgets | Wired and tested | `backend/app/runtime/`, runtime unit and SSE tests |
+| Native Anthropic/Foundry tool-use normalization | Wired and tested | `backend/app/runtime/anthropic.py` |
+| Provider-neutral adapters | Wired; provider depth varies | `backend/app/agents/` |
+| Seven default tools | Wired; policies still being hardened | `backend/app/routes/chat.py` |
+| SSE runtime events | Wired and tested | `backend/app/routes/stream.py` |
+| Conversation UI and URL routing | Wired and browser-tested | `/chat/[id]` |
+| Robust incremental SSE parser | Wired and unit-tested | `frontend/src/lib/sse.ts` |
+| Markdown sanitization | Wired | `ChatMessages.svelte` with DOMPurify |
+| Desktop/mobile workbench | Wired and Playwright-tested | `frontend/tests/workbench.spec.ts` |
+| Docker backend smoke test | Wired | `scripts/verify.sh` |
 
-Full OpenAPI docs: `http://localhost:8000/docs`
+## Implemented but not yet production-ready
 
----
-
-## 🚀 Deploy
-
-### Docker Compose (Production)
-```bash
-docker compose -f docker-compose.prod.yml up -d
-```
-
-### Kubernetes
-```bash
-helm install archon ./deploy/helm/archon \
-  --set config.llmProvider=ollama \
-  --set config.llmModel=llama3.1:8b
-```
-
-### Azure App Service
-```bash
-az webapp up --name archon --resource-group my-rg
-```
-
----
-
-## 🧪 Testing
-
-```bash
-cd backend
-uv run pytest -m unit -q          # 277 tests, ~20s
-uv run pytest -m security -v      # Security probe tests
-uv run ruff check app/ tests/     # Lint
-```
-
----
-
-## 📦 Tech Stack
-
-| Layer | Technology |
+| Capability | Current reality |
 |---|---|
-| Frontend | SvelteKit + Tailwind CSS |
-| Backend | FastAPI + Python 3.11 |
-| LLM | Ollama (llama3.1, llava) · OpenAI · Anthropic · Azure Foundry |
-| Database | PostgreSQL + pgvector |
-| Cache | Redis |
-| Tracing | Jaeger + OpenTelemetry |
-| Metrics | Prometheus + Grafana |
-| Deploy | Docker Compose · Kubernetes · Helm |
+| Authentication | Components exist, but route ownership and persistent identity are still being consolidated. |
+| Conversation persistence | Messages persist, but metadata and routes are being unified behind one repository. |
+| RAG | The public route currently uses mock embeddings and an in-memory vector store. |
+| Multi-agent orchestration | Coordinator modules exist, but the main chat path uses the typed single-agent runtime. |
+| OpenTelemetry | Exporter modules exist; startup/export wiring is incomplete. |
+| Security middleware | Implemented modules require full live-path integration and adversarial tests. |
+| Redis/PostgreSQL | Optional infrastructure exists; local fallback paths remain the most exercised. |
+| Image generation | Mock rendering is available; hosted generation is provider-dependent. |
+
+## Current limitations
+
+- This is not yet a multi-tenant production service.
+- The remaining skipped backend tests must be replaced or justified.
+- Authentication, ownership, artifacts, logs, and tool permissions still require end-to-end hardening.
+- RAG quality cannot be claimed until real embeddings, durable vector storage, and retrieval evaluations replace the demo defaults.
+- The legacy ReAct implementation remains in the codebase for compatibility but is not the preferred live runtime.
+- Provider token streaming is not equally capable across every adapter.
+- Kubernetes, Helm, and cloud manifests are examples until a deployment is performed and verified.
+
+## API
+
+OpenAPI is available at `http://localhost:8000/docs` while the backend is running. Important routes include:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/chat` | Execute a typed agent run |
+| POST | `/api/chat/stream` | Stream runtime events over SSE |
+| GET/POST | `/api/conversations` | Conversation lifecycle |
+| GET | `/api/chat/history/{id}` | Conversation messages |
+| GET | `/api/logs/stream` | Live logs; access control is being hardened |
+| POST | `/api/documents/upload` | Demo document ingestion |
+| POST | `/api/documents/query` | Demo RAG query |
+| GET/POST | `/api/skills` | Skill registry operations |
+| POST | `/api/auth/register` | Register a user |
+| POST | `/api/auth/login` | Obtain a token |
+
+## Testing
+
+```bash
+# Full local acceptance gate
+./scripts/verify.sh
+
+# Backend only
+cd backend
+uv run ruff check app tests
+uv run ruff format --check app tests
+uv run pytest
+
+# Frontend only
+cd frontend
+npm run check
+npm test -- --run
+npx playwright test
+npm run build
+```
+
+## Design principles
+
+- Pure Python protocols and dependency injection; no LangChain, AutoGen, or CrewAI runtime dependency.
+- Local-first development with optional hosted providers.
+- Typed contracts at provider, tool, event, persistence, and evaluation boundaries.
+- Deterministic tests for control flow; real-provider smoke tests are separate and credential-dependent.
+- Progressive disclosure: answer first, execution details on demand.
+- Claims in documentation must distinguish **implemented**, **wired**, **tested**, and **deployed**.
+
+## Roadmap
+
+1. Unified user-scoped persistence and route ownership.
+2. Permission policy and approval UI for sensitive tools.
+3. Grounded research workflow with citation and unsupported-claim evaluations.
+4. Durable run-event replay and reconnectable SSE.
+5. One governed MCP integration.
+6. One bounded specialist delegation workflow.
+7. Verified deployment and published benchmark results.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-## 🤝 Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-1. Fork the repo
-2. Create a feature branch
-3. Write tests (RED → GREEN)
-4. Submit a PR
-
----
-
-## 📝 License
-
-MIT — see [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-Built by [Luis Valencia](https://github.com/levalencia) — Microsoft MVP · AI & Data Practice Lead
-
-**Zero frameworks. Pure Python. Production-ready.**
-
-</div>
+Built by [Luis Valencia](https://github.com/levalencia).
