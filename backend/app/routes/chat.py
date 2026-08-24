@@ -66,7 +66,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 _db_store = None
 _memory_fallback = InMemoryStore()
-_context_optimizer = ContextOptimizer(max_tokens=6000, reserve_for_response=2048)
+_context_optimizer = ContextOptimizer(max_tokens=200000, reserve_for_response=4096)
 
 
 async def _get_db_store():

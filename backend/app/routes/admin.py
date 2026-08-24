@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 import structlog
-from fastapi import Request, APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from app.security.audit_logger import StructuredAuditLogger

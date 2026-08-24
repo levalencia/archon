@@ -27,8 +27,11 @@ async def calculator_tool(expression: str) -> dict:
     Supports: +, -, *, /, **, sqrt, sin, cos, tan, log, pi, e
     Does NOT use eval() — parses and computes safely.
     """
-    allowed = set("0123456789.+-*/() ")
+    allowed = set("0123456789.+-*/() ._")
     clean = expression.strip()
+
+    # Normalize ^ to ** for power
+    clean = clean.replace("^", "**")
 
     replacements = {
         "pi": str(math.pi),

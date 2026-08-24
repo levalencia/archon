@@ -106,7 +106,7 @@ class ProductionAgent:
     The agent has no knowledge of which LLM, memory store, or tools it uses.
     """
 
-    MAX_ITERATIONS = 5
+    MAX_ITERATIONS = 10
     TOKEN_BUDGET = 10000
 
     def __init__(
