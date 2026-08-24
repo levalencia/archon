@@ -63,7 +63,9 @@ jobs:
         run: docker build -t archon-backend:${{ github.sha }} .
       - name: Smoke test backend image
         run: |
-          docker run -d --name archon-test -p 8000:8000 archon-backend:${{ github.sha }}
+          docker run -d --name archon-test -p 8000:8000 \
+  -e ARCHON_DATABASE_URL="sqlite+aiosqlite:////tmp/archon-ci.db" \
+  archon-backend:${{ github.sha }}
           trap 'docker rm -f archon-test >/dev/null 2>&1 || true' EXIT
           for attempt in {1..20}; do
             if curl --fail --silent http://localhost:8000/healthz; then

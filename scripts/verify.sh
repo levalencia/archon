@@ -51,7 +51,9 @@ printf '\n== Frontend browser tests ==\n'
 printf '\n== Backend container smoke test ==\n'
 cleanup
 docker build -t "$IMAGE" "$ROOT"
-docker run -d --name "$CONTAINER" -p "$PORT:8000" "$IMAGE" >/dev/null
+docker run -d --name "$CONTAINER" -p "$PORT:8000" \
+  -e ARCHON_DATABASE_URL="sqlite+aiosqlite:////tmp/archon-verify.db" \
+  "$IMAGE" >/dev/null
 
 ready=0
 for _ in {1..30}; do
