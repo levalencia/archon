@@ -15,7 +15,6 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from app.agents.llm_factory import create_llm_client
-from app.memory.in_memory import InMemoryStore
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
 from app.routes.artifacts import get_artifact_store
@@ -24,6 +23,7 @@ from app.runtime import AgentRuntime, RuntimeBudget
 from app.runtime.support import as_model_provider, prepare_messages
 from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.context_optimizer import ContextOptimizer
+from app.services.conversations import ConversationRepository
 from app.tools.builtin import (
     calculator_tool,
     datetime_tool,
@@ -62,39 +62,11 @@ def get_tool_registry():
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
-# Module-level stores (replaced by DI in production)
-# Persistent memory: SQLite (survives restarts). Switch to PostgreSQL via ARCHON_DATABASE_URL
-
-_db_store = None
-_memory_fallback = InMemoryStore()
 _context_optimizer = ContextOptimizer(max_tokens=200000, reserve_for_response=4096)
 
 
-async def _get_db_store():
-    global _db_store
-    if _db_store is None:
-        import os
-
-        from app.services.db_store import DatabaseStore
-
-        db_url = os.environ.get("ARCHON_DATABASE_URL", "sqlite+aiosqlite:///archon.db")
-        _db_store = DatabaseStore(db_url)
-        await _db_store.initialize()
-    return _db_store
-
-
-# Wrapper that implements the MemoryStore protocol using DatabaseStore
-class PersistentMemory:
-    async def store(self, conversation_id: str, role: str, content: str) -> None:
-        db = await _get_db_store()
-        await db.store(conversation_id, {"role": role, "content": content})
-
-    async def retrieve(self, conversation_id: str, limit: int = 50) -> list[dict]:
-        db = await _get_db_store()
-        return await db.retrieve(conversation_id, limit)
-
-
-_memory = PersistentMemory()
+def get_conversation_repository(request: Request) -> ConversationRepository:
+    return request.app.state.conversations
 
 
 def _create_tool_registry() -> SecureToolRegistry:
@@ -183,6 +155,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     start_time = time.monotonic()
     settings = request.app.state.settings
     llm = get_llm_client(settings)
+    memory = get_conversation_repository(request)
 
     # Create tool registry
     tools = get_tool_registry()
@@ -219,7 +192,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     # Parse images if provided
     images = [body.image] if body.image else None
     # Optimize context window before running agent
-    history = await _memory.retrieve(conv_id, limit=50)
+    history = await memory.retrieve(conv_id, limit=50)
     if len(history) > 10:
         optimized = _context_optimizer.optimize(history)
         stats = _context_optimizer.get_stats(optimized)
@@ -230,7 +203,7 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
             utilization_pct=stats["utilization_pct"],
         )
 
-    messages = await prepare_messages(body.message, conv_id, _memory, tools, skills_context, images)
+    messages = await prepare_messages(body.message, conv_id, memory, tools, skills_context, images)
     runtime = AgentRuntime(
         as_model_provider(llm),
         tools,
@@ -242,8 +215,8 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         ),
     )
     result = await runtime.run(messages)
-    await _memory.store(conv_id, "user", body.message)
-    await _memory.store(conv_id, "assistant", result.content)
+    await memory.store(conv_id, "user", body.message)
+    await memory.store(conv_id, "assistant", result.content)
 
     elapsed_ms = (time.monotonic() - start_time) * 1000
 
@@ -331,9 +304,9 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
 
 
 @router.get("/history/{conversation_id}")
-async def get_history(conversation_id: str) -> dict:
+async def get_history(conversation_id: str, request: Request) -> dict:
     """Get conversation history."""
-    messages = await _memory.retrieve(conversation_id)
+    messages = await get_conversation_repository(request).retrieve(conversation_id)
     return {
         "conversation_id": conversation_id,
         "messages": messages,

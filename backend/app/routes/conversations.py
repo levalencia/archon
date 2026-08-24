@@ -1,41 +1,24 @@
-"""Conversation management API routes.
-
-GET    /api/conversations           — List all conversations
-POST   /api/conversations           — Create a new conversation
-GET    /api/conversations/{id}      — Get conversation details + messages
-DELETE /api/conversations/{id}      — Delete a conversation
-"""
+"""Persistent conversation management API routes."""
 
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from app.memory.in_memory import InMemoryStore
+from app.services.conversations import ConversationRepository
 
 logger = structlog.get_logger()
-
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
-
-# Module-level store (shared with chat routes via import)
-_memory_store = InMemoryStore()
-# Conversation metadata
-_conversation_meta: dict[str, dict] = {}
 
 
 class ConversationCreate(BaseModel):
-    """Create conversation request."""
-
     title: str = Field(default="New Conversation", max_length=200)
 
 
 class ConversationResponse(BaseModel):
-    """Conversation metadata response."""
-
     id: str
     title: str
     created_at: str
@@ -43,8 +26,6 @@ class ConversationResponse(BaseModel):
 
 
 class ConversationDetail(BaseModel):
-    """Conversation with messages."""
-
     id: str
     title: str
     created_at: str
@@ -52,63 +33,39 @@ class ConversationDetail(BaseModel):
     message_count: int
 
 
+def get_conversation_repository(request: Request) -> ConversationRepository:
+    return request.app.state.conversations
+
+
 @router.get("", response_model=list[ConversationResponse])
-async def list_conversations() -> list[ConversationResponse]:
-    """List all conversations with metadata."""
-    result = []
-    for cid, meta in _conversation_meta.items():
-        count = await _memory_store.get_message_count(cid)
-        result.append(
-            ConversationResponse(
-                id=cid,
-                title=meta.get("title", "Untitled"),
-                created_at=meta.get("created_at", ""),
-                message_count=count,
-            )
-        )
-    return result
+async def list_conversations(request: Request) -> list[ConversationResponse]:
+    rows = await get_conversation_repository(request).list()
+    return [ConversationResponse(**row) for row in rows]
 
 
 @router.post("", response_model=ConversationResponse, status_code=201)
-async def create_conversation(body: ConversationCreate) -> ConversationResponse:
-    """Create a new conversation."""
+async def create_conversation(body: ConversationCreate, request: Request) -> ConversationResponse:
     conv_id = str(uuid.uuid4())
-    now = datetime.now(tz=UTC).isoformat()
-
-    _conversation_meta[conv_id] = {
-        "title": body.title,
-        "created_at": now,
-    }
-
+    conversation = await get_conversation_repository(request).create(conv_id, body.title)
     logger.info("conversation_created", conversation_id=conv_id, title=body.title)
-
-    return ConversationResponse(
-        id=conv_id,
-        title=body.title,
-        created_at=now,
-        message_count=0,
-    )
+    return ConversationResponse(**conversation)
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
-async def get_conversation(conversation_id: str) -> ConversationDetail:
-    """Get conversation with all messages."""
-    meta = _conversation_meta.get(conversation_id, {})
-    messages = await _memory_store.retrieve(conversation_id)
-    count = await _memory_store.get_message_count(conversation_id)
-
-    return ConversationDetail(
-        id=conversation_id,
-        title=meta.get("title", "Untitled"),
-        created_at=meta.get("created_at", ""),
-        messages=messages,
-        message_count=count,
-    )
+async def get_conversation(conversation_id: str, request: Request) -> ConversationDetail:
+    conversation = await get_conversation_repository(request).get(conversation_id)
+    if conversation is None:
+        return ConversationDetail(
+            id=conversation_id,
+            title="Untitled",
+            created_at="",
+            messages=[],
+            message_count=0,
+        )
+    return ConversationDetail(**conversation)
 
 
 @router.delete("/{conversation_id}", status_code=204)
-async def delete_conversation(conversation_id: str) -> None:
-    """Delete a conversation and its messages."""
-    await _memory_store.delete_conversation(conversation_id)
-    _conversation_meta.pop(conversation_id, None)
+async def delete_conversation(conversation_id: str, request: Request) -> None:
+    await get_conversation_repository(request).delete(conversation_id)
     logger.info("conversation_deleted", conversation_id=conversation_id)

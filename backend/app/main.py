@@ -32,6 +32,7 @@ from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
 from app.security.auth import configure_auth
+from app.services.conversations import ConversationRepository
 
 logger = structlog.get_logger()
 
@@ -54,11 +55,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         debug=settings.debug,
     )
 
-    # Store settings in app state for dependency injection
+    # Store settings and the unified conversation repository in app state.
     app.state.settings = settings
+    repository = ConversationRepository(settings.database_url)
+    await repository.initialize()
+    app.state.conversations = repository
 
     yield
 
+    await repository.close()
     logger.info("archon_shutdown")
 
 

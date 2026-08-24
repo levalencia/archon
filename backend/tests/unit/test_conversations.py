@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.services.conversations import ConversationRepository
 
 
 @pytest.fixture
@@ -15,6 +16,14 @@ def client() -> TestClient:
     app = create_app(settings=settings)
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+async def isolated_database(tmp_path, monkeypatch):
+    """Use an isolated persistent database for each test."""
+    database_url = f"sqlite+aiosqlite:///{tmp_path / 'conversations.db'}"
+    monkeypatch.setenv("ARCHON_DATABASE_URL", database_url)
+    yield database_url
 
 
 class TestConversationCRUD:
@@ -79,3 +88,60 @@ class TestConversationCRUD:
         data = response.json()
         assert data["messages"] == []
         assert data["message_count"] == 0
+
+    @pytest.mark.unit
+    def test_conversation_message_history_list_delete_flow(self, client: TestClient) -> None:
+        created = client.post("/api/conversations", json={"title": "Persistent Chat"})
+        assert created.status_code == 201
+        conversation_id = created.json()["id"]
+
+        message = client.post(
+            "/api/chat",
+            json={"message": "Remember this", "conversation_id": conversation_id},
+        )
+        assert message.status_code == 200
+
+        history = client.get(f"/api/chat/history/{conversation_id}")
+        assert history.status_code == 200
+        assert history.json()["messages"] == [
+            {"role": "user", "content": "Remember this"},
+            {"role": "assistant", "content": "I am a mock LLM."},
+        ]
+
+        conversations = client.get("/api/conversations")
+        assert conversations.status_code == 200
+        persisted = next(item for item in conversations.json() if item["id"] == conversation_id)
+        assert persisted["title"] == "Persistent Chat"
+        assert persisted["message_count"] == 2
+
+        detail = client.get(f"/api/conversations/{conversation_id}")
+        assert detail.json()["messages"] == history.json()["messages"]
+        assert detail.json()["message_count"] == 2
+
+        assert client.delete(f"/api/conversations/{conversation_id}").status_code == 204
+        assert all(
+            item["id"] != conversation_id for item in client.get("/api/conversations").json()
+        )
+        assert client.get(f"/api/chat/history/{conversation_id}").json()["messages"] == []
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_data_survives_fresh_database_store(self, isolated_database: str) -> None:
+        first = ConversationRepository(isolated_database)
+        await first.initialize()
+        await first.create("persistent-id", "Survives Restart")
+        await first.store("persistent-id", "user", "still here")
+        await first.close()
+
+        fresh = ConversationRepository(isolated_database)
+        await fresh.initialize()
+        try:
+            conversation = await fresh.get("persistent-id")
+            assert conversation is not None
+            assert conversation["title"] == "Survives Restart"
+            assert conversation["message_count"] == 1
+            assert await fresh.retrieve("persistent-id") == [
+                {"role": "user", "content": "still here"}
+            ]
+        finally:
+            await fresh.close()

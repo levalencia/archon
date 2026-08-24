@@ -10,7 +10,7 @@ import json
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import Column, DateTime, Integer, String, Text, select
+from sqlalchemy import Column, DateTime, Integer, String, Text, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -104,11 +104,24 @@ class DatabaseStore:
 
     async def store(self, conversation_id: str, message: dict) -> None:
         """Store a message in a conversation."""
+        await self.store_message(conversation_id, message["role"], message["content"])
+
+    async def store_message(self, conversation_id: str, role: str, content: str) -> None:
+        """Store a message and ensure its conversation metadata exists."""
         async with self._session_factory() as session:
+            conversation = await session.get(ConversationRow, conversation_id)
+            now = datetime.now(tz=UTC)
+            if conversation is None:
+                conversation = ConversationRow(id=conversation_id, title="New Conversation")
+                session.add(conversation)
+            else:
+                conversation.is_active = 1
+                conversation.updated_at = now
             row = MessageRow(
                 conversation_id=conversation_id,
-                role=message["role"],
-                content=message["content"],
+                role=role,
+                content=content,
+                created_at=now,
             )
             session.add(row)
             await session.commit()
@@ -119,11 +132,20 @@ class DatabaseStore:
             result = await session.execute(
                 select(MessageRow)
                 .where(MessageRow.conversation_id == conversation_id)
-                .order_by(MessageRow.created_at)
+                .order_by(MessageRow.id)
                 .limit(limit)
             )
             rows = result.scalars().all()
             return [{"role": r.role, "content": r.content} for r in rows]
+
+    async def get_message_count(self, conversation_id: str) -> int:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(func.count(MessageRow.id)).where(
+                    MessageRow.conversation_id == conversation_id
+                )
+            )
+            return result.scalar_one()
 
     # --- Conversation CRUD ---
 
@@ -137,13 +159,23 @@ class DatabaseStore:
     async def list_conversations(self, user_id: str = "default") -> list[dict]:
         async with self._session_factory() as session:
             result = await session.execute(
-                select(ConversationRow)
+                select(ConversationRow, func.count(MessageRow.id))
+                .outerjoin(MessageRow, MessageRow.conversation_id == ConversationRow.id)
                 .where(ConversationRow.user_id == user_id)
                 .where(ConversationRow.is_active == 1)
+                .group_by(ConversationRow.id)
                 .order_by(ConversationRow.updated_at.desc())
             )
-            rows = result.scalars().all()
-            return [{"id": r.id, "title": r.title, "created_at": str(r.created_at)} for r in rows]
+            rows = result.all()
+            return [
+                {
+                    "id": conversation.id,
+                    "title": conversation.title,
+                    "created_at": conversation.created_at.isoformat(),
+                    "message_count": message_count,
+                }
+                for conversation, message_count in rows
+            ]
 
     async def get_conversation(self, conv_id: str) -> dict | None:
         async with self._session_factory() as session:
@@ -153,7 +185,7 @@ class DatabaseStore:
             row = result.scalar_one_or_none()
             if not row:
                 return None
-            return {"id": row.id, "title": row.title, "created_at": str(row.created_at)}
+            return {"id": row.id, "title": row.title, "created_at": row.created_at.isoformat()}
 
     async def delete_conversation(self, conv_id: str) -> bool:
         async with self._session_factory() as session:
@@ -162,7 +194,10 @@ class DatabaseStore:
             )
             row = result.scalar_one_or_none()
             if row:
-                row.is_active = 0
+                await session.execute(
+                    delete(MessageRow).where(MessageRow.conversation_id == conv_id)
+                )
+                await session.delete(row)
                 await session.commit()
                 return True
             return False

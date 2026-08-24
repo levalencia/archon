@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 from app.routes.chat import (
-    _memory,
+    get_conversation_repository,
     get_llm_client,
     get_skill_registry,
     get_skills_top_k,
@@ -54,11 +54,12 @@ async def chat_stream_real(body: StreamRequest, request: Request) -> StreamingRe
             yield _sse("skill", skill)
 
         conv_id = body.conversation_id or str(uuid.uuid4())
+        memory = get_conversation_repository(request)
         tools = get_tool_registry()
         messages = await prepare_messages(
             body.message,
             conv_id,
-            _memory,
+            memory,
             tools,
             skills_context,
             [body.image] if body.image else None,
@@ -101,8 +102,8 @@ async def chat_stream_real(body: StreamRequest, request: Request) -> StreamingRe
                 yield _sse("token", event.data["text"])
 
         result = await task
-        await _memory.store(conv_id, "user", body.message)
-        await _memory.store(conv_id, "assistant", result.content)
+        await memory.store(conv_id, "user", body.message)
+        await memory.store(conv_id, "assistant", result.content)
         artifacts = detect_artifact_in_response(result.content)
         for artifact in artifacts:
             yield _sse("artifact", artifact)
