@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
 
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ChatMessages from '$lib/components/ChatMessages.svelte';
@@ -118,7 +117,7 @@
     stats = { latency: '—', tokens: '—', tools: 0, iterations: 0 };
     error = '';
     setOverlay(sidebarElement, sidebarScrim, false);
-    goto('/');
+    history.replaceState({}, '', '/');
   }
 
   async function loadConversation(id: string, route = true) {
@@ -127,7 +126,7 @@
     setOverlay(sidebarElement, sidebarScrim, false);
     error = '';
     loading = true;
-    if (route) goto(`/chat/${id}`);
+    if (route) history.replaceState({}, '', `/chat/${id}`);
 
     try {
       const r = await authenticatedFetch(`/api/chat/history/${id}`);
@@ -204,7 +203,8 @@
         });
         if (!r.ok) throw new Error(`Could not create conversation (${r.status})`);
         currentId = (await r.json()).id;
-        goto(`/chat/${currentId}`, { replaceState: true });
+        // Update URL without navigating (avoids re-mounting the component)
+        history.replaceState({}, '', `/chat/${currentId}`);
       }
 
       // Build assistant message shell
@@ -274,7 +274,7 @@
     onclick={() => setOverlay(sidebarElement, sidebarScrim, false)}
   ></button>
 
-  <aside bind:this={sidebarElement} data-open="false" inert class="sidebar">
+  <aside bind:this={sidebarElement} data-open="false" class="sidebar">
     <Sidebar
       activeId={currentId}
       onSelect={loadConversation}
@@ -327,7 +327,7 @@
   </main>
 
   <!-- Inspector panel -->
-  <aside bind:this={inspectorElement} data-open="false" inert class="inspector-shell">
+  <aside bind:this={inspectorElement} data-open="false" class="inspector-shell">
     <button
       class="sheet-close"
       aria-label="Close inspector"
