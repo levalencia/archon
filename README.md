@@ -36,7 +36,7 @@ The repository includes a local acceptance command:
 ./scripts/verify.sh
 ```
 
-The fresh 2026-08-25 audit at `27952f4` found **466 backend tests passed, 0 skipped**, with **81.84% aggregate coverage**. It also found that the full gate was **not green**: Ruff reported 50 lint errors and 16 files needing formatting. Frontend evidence was 4 Vitest tests, 2 Playwright scenarios, Svelte check at 0 errors/1 warning, and a passing production build. A local Docker build and `/healthz` smoke passed with `mock-model/mock`; this is not deployment evidence. The last 10 remote CI runs had failed, and the audited local work had not been pushed.
+The audited repository has meaningful automated coverage and local runtime evidence, but the full quality and release gates are not green. Local build or container smoke results do not establish deployment.
 
 See the [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) for exact definitions, capability depth, and limitations. Do not infer production readiness from test count, source-file presence, or a local smoke test.
 
@@ -52,16 +52,15 @@ See the [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.
 
 ```bash
 git clone https://github.com/levalencia/archon.git
-cd archon
 
-# Backend
-cd backend
+# Terminal 1, from the directory containing the clone
+cd archon/backend
 uv sync --extra dev --extra llm
 cp .env.example .env
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Frontend, in another terminal
-cd frontend
+# Terminal 2, from the directory containing the clone
+cd archon/frontend
 npm ci
 npm run dev -- --host 0.0.0.0
 ```
@@ -95,14 +94,14 @@ flowchart LR
 
 ## Evidence-based capability summary
 
-The strongest demonstrated core is the typed budgeted runtime, native Anthropic/Foundry tool handling, live SSE evidence, authenticated conversations, and tool contracts. Provider parity is partial. RAG durability, user-scoped memory, execution isolation, approvals, MCP, multi-agent security, evaluations, durable run replay, and cloud deployment are incomplete or unverified.
+The strongest demonstrated core is the typed budgeted runtime, native Anthropic/Foundry tool handling, live SSE evidence, authenticated conversations, and tool contracts. The desktop Workbench works for live run inspection, but the current global mobile shell has a known compressed-layout defect. Provider parity is partial. RAG durability, user-scoped memory, execution isolation, approvals, MCP, multi-agent security, evaluations, durable run replay, and cloud deployment are incomplete or unverified.
 
 The [canonical evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) evaluates each capability independently as **Exists**, **Wired**, **Tested**, **Observed**, **UI**, and **Deployed**. It supersedes older feature-count and completion scorecards.
 
 ## Current limitations
 
 - This is not yet a multi-tenant production service.
-- Backend tests report zero skipped, but lint/format gates and remote CI evidence were red at the audited revision.
+- Audited quality and release gates are not all green; see the canonical evidence matrix for current results.
 - Authentication is meaningful for conversations and some resources, but memory, tasks, MCP, and approvals still have ownership gaps.
 - Python and terminal tools execute host subprocesses; they are not secure sandboxes.
 - Tool approval can be bypassed on the synchronous chat path and is not represented by durable owner-scoped receipts.
@@ -141,7 +140,7 @@ uv run ruff format --check app tests
 uv run pytest
 
 # Frontend only
-cd frontend
+cd ../frontend
 npm run check
 npm test -- --run
 npx playwright test

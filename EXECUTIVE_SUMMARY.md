@@ -1,6 +1,6 @@
 # Archon — Executive Summary
 
-> **Current status:** The [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) supersedes the completion claims previously published in this file. This summary reflects the fresh 2026-08-25 audit of revision `27952f4`.
+> **Current status:** The [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) supersedes the completion claims previously published in this file and is the source for current audit results.
 
 ## What is Archon?
 
@@ -17,18 +17,9 @@ Its best-supported core is:
 
 It is not currently a production platform, secure execution sandbox, complete MCP implementation, durable multi-tenant RAG/memory system, or feature-equivalent replacement for Hermes, Codex, Claude Code, or OpenCode.
 
-## Audit snapshot
+## Audit status
 
-| Area | Fresh evidence |
-|---|---|
-| Backend | 466 tests passed, 0 skipped; 81.84% aggregate coverage |
-| Backend gates | Ruff failed with 50 errors; 16 files required formatting; strict Mypy reported 395 errors |
-| Static security | Bandit reported 0 medium/high findings; this is not runtime security proof |
-| Frontend | 4 Vitest tests, 2 Playwright scenarios, Svelte check 0 errors/1 warning, build passed |
-| Container | Local image build and `/healthz` passed with `mock-model/mock`; no deployment was proved |
-| Remote release evidence | Last 10 CI runs failed; audited local `main` was 54 commits ahead and not pushed |
-
-The acceptance gates were therefore **not green** at the audited revision.
+The audit found useful automated and local runtime evidence, but it did not establish green quality and release gates or a verified deployment. Exact results and repository state are maintained only in the [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md).
 
 ## Honest implementation summary
 
@@ -52,7 +43,7 @@ For per-capability evidence, use [Implementation Evidence](docs/IMPLEMENTATION-E
 
 ## Archived session record
 
-The previous version of this document was a same-day change log. It reported a frontend overhaul, route fixes, new feature modules, and growth to 466 tests. That historical work remains useful context, but its conclusions are superseded:
+The previous version of this document was a same-day change log. It reported a frontend overhaul, route fixes, new feature modules, and growth in test coverage. That historical work remains useful context, but its conclusions are superseded:
 
 - “zero dead code” was not established by the audit;
 - “37/37 competitor feature parity” was invalid—the table actually contained 38 rows and mixed stubs, mocks, files, routes, tests, and live capabilities;

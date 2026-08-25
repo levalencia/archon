@@ -6,14 +6,7 @@
 
 This file previously described a 2026-08-24 baseline at local `main` revision `9462518`. It reported 371 backend tests, 74% coverage, clean Ruff, 6 frontend unit tests, and a capability table based on **Implemented**, **Wired**, **Tested**, and **Demo-ready**.
 
-Those values are historical, not current. A fresh audit at `27952f4` found:
-
-- 466 backend tests passed, 0 skipped, with 81.84% aggregate coverage;
-- Ruff failed with 50 errors and 16 files needing formatting;
-- 4 Vitest tests and 2 Playwright scenarios;
-- Svelte check at 0 errors and 1 warning, with a passing frontend build;
-- a passing local Docker `/healthz` smoke using `mock-model/mock`;
-- the last 10 remote CI runs failed, while local `main` was 54 commits ahead and had not been pushed.
+Those values are an immutable historical snapshot, not current status. The superseding audit found meaningful test and local runtime evidence, but it did not establish green quality and release gates or a verified deployment. Exact current results and repository state are maintained only in [Implementation Evidence](IMPLEMENTATION-EVIDENCE.md).
 
 The prior capability table also overstated several areas. In particular, it did not represent the approval bypass, host-process execution, global plaintext memory, PII-before-persistence, mock/default RAG, MCP/task scaffolding, sequential multi-agent pipeline, mock evaluations, transient run evidence, or absent deployment proof with enough precision.
 
