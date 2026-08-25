@@ -1,6 +1,6 @@
 <script lang="ts">
  import type { Artifact, ContextStats, InspectorTab, LogEntry, RunStats } from '$lib/types';
- let { stats, artifacts = [], context, logs = [], active = 'run', onTab = (_t: InspectorTab) => {}, onOpenArtifact = () => {} }: { stats: RunStats; artifacts?: Artifact[]; context?: ContextStats; logs?: LogEntry[]; active?: InspectorTab; onTab?: (tab: InspectorTab) => void; onOpenArtifact?: () => void } = $props();
+ let { stats, artifacts = [], context, logs = [], active = 'run', onTab = (_t: InspectorTab) => {}, onOpenArtifact = () => {}, onClearLogs = () => {} }: { stats: RunStats; artifacts?: Artifact[]; context?: ContextStats; logs?: LogEntry[]; active?: InspectorTab; onTab?: (tab: InspectorTab) => void; onOpenArtifact?: () => void; onClearLogs?: () => void } = $props();
  const tabs: InspectorTab[] = ['run','evidence','context','logs'];
 </script>
 <div class="inspector">
@@ -23,7 +23,7 @@
   {#if context?.compacted}<div style="margin-top:12px;padding:10px 12px;background:rgba(85,214,190,0.08);border:1px solid rgba(85,214,190,0.25);border-radius:8px;font-size:12px;color:var(--accent)">⚡ Context compacted — {context.tokens_before?.toLocaleString()} → {context.tokens_after?.toLocaleString()} tokens ({context.saved_pct}% saved, {context.messages_before} → {context.messages_after} messages)</div>
   {:else if context?.budget}<div style="margin-top:8px;font-size:11px;color:var(--muted)">Compaction triggers at {Math.round((context.budget || 0) * 0.75).toLocaleString()} tokens (75%)</div>{/if}
  {:else}
-  <div class="log-toolbar"><span>{logs.length} events</span><button onclick={() => navigator.clipboard?.writeText(logs.map(l => `${l.ts || ''} [${l.level || ''}] ${l.event || ''} ${l.data ? JSON.stringify(l.data) : ''}`).join('\n'))}>Copy logs</button></div><div class="log-list">{#if logs.length === 0}<div class="empty-detail">Waiting for backend events…</div>{/if}{#each logs as log}<div><time>{log.ts}</time><strong class:error-text={log.level === 'error'}>{log.level}</strong><span>{log.event}{#if log.data && Object.keys(log.data).length > 0} <span style="color:var(--muted);font-size:9px">{Object.entries(log.data).map(([k,v]) => `${k}=${v}`).join(' ')}</span>{/if}</span></div>{/each}</div>
+  <div class="log-toolbar"><span>{logs.length} events</span><button onclick={onClearLogs}>Clear</button><button onclick={() => navigator.clipboard?.writeText(logs.map(l => `${l.ts || ''} [${l.level || ''}] ${l.event || ''} ${l.data ? JSON.stringify(l.data) : ''}`).join('\n'))}>Copy</button></div><div class="log-list">{#if logs.length === 0}<div class="empty-detail">Waiting for backend events…</div>{/if}{#each logs as log}<div><time>{log.ts}</time><strong class:error-text={log.level === 'error'}>{log.level}</strong><span>{log.event}{#if log.data && Object.keys(log.data).length > 0} <span style="color:var(--muted);font-size:9px">{Object.entries(log.data).map(([k,v]) => `${k}=${v}`).join(' ')}</span>{/if}</span></div>{/each}</div>
  {/if}
  </div>
 </div>

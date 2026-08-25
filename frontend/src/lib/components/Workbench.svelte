@@ -176,13 +176,14 @@
       } catch { /* skip */ }
     } else if (event.event === 'context') {
       try {
-        context = JSON.parse(payload);
-        am.context_stats = context;
+        const ctx = JSON.parse(payload) as ContextStats;
+        context = ctx;
+        am.context_stats = ctx;
         // If compaction happened, add it as a visible thinking step
-        if (context.compacted) {
+        if (ctx.compacted) {
           am.thinking_steps = [...(am.thinking_steps || []), {
             type: 'compaction',
-            detail: `⚡ Context compacted: ${context.tokens_before?.toLocaleString()} → ${context.tokens_after?.toLocaleString()} tokens (${context.saved_pct}% saved, ${context.messages_before} → ${context.messages_after} messages)`,
+            detail: `⚡ Context compacted: ${ctx.tokens_before?.toLocaleString()} → ${ctx.tokens_after?.toLocaleString()} tokens (${ctx.saved_pct}% saved, ${ctx.messages_before} → ${ctx.messages_after} messages)`,
             elapsed_ms: am.startedAt ? Math.round(performance.now() - am.startedAt) : 0,
           }];
         }
@@ -393,6 +394,7 @@
       active={activeTab}
       onTab={(t) => activeTab = t}
       onOpenArtifact={() => artifactOpen = true}
+      onClearLogs={() => logs = []}
     />
   </aside>
 
