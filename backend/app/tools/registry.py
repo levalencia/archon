@@ -84,6 +84,8 @@ def resolve_workspace_path(arguments: Mapping[str, Any]) -> tuple[ResourcePatter
     path = arguments.get("path")
     if not isinstance(path, str):
         raise ValueError("path argument must be a string")
+    if os.name != "nt" and "\\" in path:
+        raise ValueError("Invalid workspace path")
     # The root is trusted server configuration. It must never be selected by model-controlled
     # tool arguments; registry validation also rejects ``workspace_root`` for all live tools.
     root_value = os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))

@@ -190,6 +190,32 @@ class TestFileTool:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    @pytest.mark.skipif(os.name == "nt", reason="Backslash is a Windows path separator")
+    @pytest.mark.parametrize("operation", ["read", "list", "write"])
+    async def test_file_tools_reject_backslash_identity_mismatch(
+        self, workspace: Path, operation: str
+    ) -> None:
+        path = r"allowed\secret.txt"
+        literal_target = workspace / path
+        if operation == "list":
+            literal_target.mkdir()
+            (literal_target / "marker.txt").write_text("must not be listed")
+            result = await list_directory_tool(path, workspace_root=workspace)
+        else:
+            literal_target.write_text("must remain unchanged")
+            if operation == "read":
+                result = await read_file_tool(path, workspace_root=workspace)
+            else:
+                result = await write_file_tool(path, "replacement", workspace_root=workspace)
+
+        assert result == {"error": f"Path is outside workspace: {path}"}
+        if operation == "list":
+            assert (literal_target / "marker.txt").read_text() == "must not be listed"
+        else:
+            assert literal_target.read_text() == "must remain unchanged"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_list_directory(self, workspace: Path) -> None:
         result = await list_directory_tool(".", workspace_root=workspace)
         assert result["count"] == 3
@@ -220,6 +246,25 @@ class TestFileTool:
         assert result["status"] == "written"
         assert path.read_text() == "new"
         assert path.stat().st_mode & 0o777 == 0o600
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_write_refuses_hard_link_without_changing_outside_inode(
+        self, workspace: Path
+    ) -> None:
+        outside = workspace.parent / f"{workspace.name}-outside-hard-link.txt"
+        outside.write_text("outside content")
+        outside.chmod(0o644)
+        target = workspace / "hard-link.txt"
+        os.link(outside, target)
+        try:
+            result = await write_file_tool("hard-link.txt", "replacement", workspace_root=workspace)
+
+            assert result == {"error": "Unable to write file safely: hard-link.txt"}
+            assert outside.read_text() == "outside content"
+            assert outside.stat().st_mode & 0o777 == 0o644
+        finally:
+            outside.unlink()
 
     @pytest.mark.unit
     @pytest.mark.asyncio

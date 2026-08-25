@@ -168,6 +168,8 @@ def _relative_workspace_components(
     raw_path = os.fspath(path)
     if not isinstance(raw_path, str):
         raise ValueError("Workspace paths must be text")
+    if os.name != "nt" and "\\" in raw_path:
+        raise ValueError("Invalid workspace path")
     if not raw_path or any(ord(character) < 32 or ord(character) == 127 for character in raw_path):
         raise ValueError("Invalid workspace path")
     if "//" in raw_path or (raw_path.endswith(os.sep) and raw_path != os.sep):
@@ -358,7 +360,8 @@ async def write_file_tool(
             0o600,
             dir_fd=directory_fd,
         )
-        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+        file_stat = os.fstat(file_fd)
+        if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_nlink != 1:
             return {"error": f"Unable to write file safely: {path}"}
         os.fchmod(file_fd, 0o600)
         os.ftruncate(file_fd, 0)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -398,6 +399,32 @@ class TestPolicyRequestBridge:
 
 
 class TestWorkspacePathResolver:
+    @pytest.mark.skipif(os.name == "nt", reason="Backslash is a Windows path separator")
+    def test_rejects_backslash_identity_mismatch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        root = tmp_path / "workspace"
+        root.mkdir()
+        monkeypatch.setenv("ARCHON_WORKSPACE_ROOT", str(root))
+
+        with pytest.raises(ValueError, match="^Invalid workspace path$"):
+            resolve_workspace_path({"path": r"allowed\secret.txt"})
+
+    @pytest.mark.skipif(os.name == "nt", reason="Backslash is a Windows path separator")
+    @pytest.mark.parametrize("tool_name", ["read_file", "list_directory", "write_file"])
+    def test_file_tool_policy_rejects_backslash_with_sanitized_error(self, tool_name: str) -> None:
+        registry = SecureToolRegistry()
+        register_builtin_tools(registry)
+
+        arguments = {"path": r"allowed\secret.txt"}
+        if tool_name == "write_file":
+            arguments["content"] = "blocked"
+        with pytest.raises(PolicyMetadataError) as captured:
+            registry.policy_request(ToolCall("call-1", tool_name, arguments))
+
+        assert str(captured.value) == f"resource resolver failed for tool '{tool_name}'"
+        assert r"allowed\secret.txt" not in str(captured.value)
+
     def test_resolves_relative_and_absolute_paths_from_configured_root(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
