@@ -115,28 +115,30 @@
             <p class="user-copy">{msg.content}</p>
           {/if}
 
-          <!-- Citations / Sources -->
-          {#if msg.sources?.length}
-            <div style="margin-top:12px;padding:10px 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px">
-              <p style="margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700">
-                Sources ({msg.sources.length})
-              </p>
-              {#each msg.sources as src, i}
-                <div style="display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:12px;{i > 0 ? 'border-top:1px solid var(--border);' : ''}">
-                  <span style="color:var(--accent);font-weight:700;font-size:10px;min-width:16px">[{i + 1}]</span>
-                  {#if src.url}
-                    <a href={src.url} target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                      {src.title || src.url}
-                    </a>
-                  {:else}
-                    <span style="color:var(--secondary)">{src.title}</span>
-                  {/if}
-                  {#if src.score != null}
-                    <span style="color:var(--muted);font-size:10px;margin-left:auto">{(src.score * 100).toFixed(0)}%</span>
-                  {/if}
-                </div>
-              {/each}
-            </div>
+          <!-- Citations / Sources (only after streaming is done) -->
+          {#if msg.sources?.length && msg.content && !(loading && msg.startedAt)}
+            <details style="margin-top:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px">
+              <summary style="padding:10px 12px;cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;list-style:none;display:flex;align-items:center;gap:6px">
+                <span style="color:var(--accent);font-size:14px">▸</span> Sources ({msg.sources.length})
+              </summary>
+              <div style="padding:0 12px 10px">
+                {#each msg.sources as src, i}
+                  <div style="display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:12px;{i > 0 ? 'border-top:1px solid var(--border);' : ''}">
+                    <span style="color:var(--accent);font-weight:700;font-size:10px;min-width:16px">[{i + 1}]</span>
+                    {#if src.url}
+                      <a href={src.url} target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                        {src.title || src.url}
+                      </a>
+                    {:else}
+                      <span style="color:var(--secondary)">{src.title}</span>
+                    {/if}
+                    {#if src.score != null}
+                      <span style="color:var(--muted);font-size:10px;margin-left:auto">{(src.score * 100).toFixed(0)}%</span>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            </details>
           {/if}
 
           <!-- Artifacts -->
