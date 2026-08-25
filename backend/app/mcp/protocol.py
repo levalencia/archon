@@ -6,7 +6,8 @@ Implements the core MCPServer that can register tools and dispatch
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class MCPServer:
@@ -30,10 +31,7 @@ class MCPServer:
 
     def list_tools(self) -> list[dict[str, str]]:
         """Return metadata for every registered tool."""
-        return [
-            {"name": t["name"], "description": t["description"]}
-            for t in self._tools.values()
-        ]
+        return [{"name": t["name"], "description": t["description"]} for t in self._tools.values()]
 
     async def handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a JSON-RPC 2.0 request and return a response dict."""

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -17,13 +16,11 @@ from app.runtime import (
     ModelResponse,
     RecordingEventSink,
     Role,
-    RuntimeBudget,
     StopReason,
     TokenUsage,
     ToolCall,
 )
 from app.tools.registry import SecureToolRegistry
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,9 +78,9 @@ async def test_safe_tool_no_approval() -> None:
         hook_called = True
         return True
 
-    result = await AgentRuntime(
-        provider, reg, events=sink, approval_hook=_hook
-    ).run([Message(Role.USER, "calc")])
+    result = await AgentRuntime(provider, reg, events=sink, approval_hook=_hook).run(
+        [Message(Role.USER, "calc")]
+    )
 
     assert result.stop_reason is StopReason.COMPLETED
     assert not hook_called
@@ -111,9 +108,9 @@ async def test_dangerous_tool_requires_approval() -> None:
     async def _hook(name: str, tid: str, args: dict) -> bool:
         return True  # approve
 
-    result = await AgentRuntime(
-        provider, reg, events=sink, approval_hook=_hook
-    ).run([Message(Role.USER, "run code")])
+    await AgentRuntime(provider, reg, events=sink, approval_hook=_hook).run(
+        [Message(Role.USER, "run code")]
+    )
 
     kinds = [e.kind for e in sink.events]
     assert AgentEventKind.APPROVAL_REQUIRED in kinds
@@ -138,16 +135,14 @@ async def test_approved_tool_executes() -> None:
     async def _hook(name: str, tid: str, args: dict) -> bool:
         return True
 
-    result = await AgentRuntime(
-        provider, reg, events=sink, approval_hook=_hook
-    ).run([Message(Role.USER, "run code")])
+    result = await AgentRuntime(provider, reg, events=sink, approval_hook=_hook).run(
+        [Message(Role.USER, "run code")]
+    )
 
     assert result.stop_reason is StopReason.COMPLETED
     assert result.content == "executed"
     # Tool should have completed successfully
-    assert any(
-        e.kind is AgentEventKind.TOOL_CALL_COMPLETED for e in sink.events
-    )
+    assert any(e.kind is AgentEventKind.TOOL_CALL_COMPLETED for e in sink.events)
     assert result.tool_calls[0]["status"] == "success"
 
 
@@ -174,9 +169,9 @@ async def test_denied_tool_skipped() -> None:
     async def _hook(name: str, tid: str, args: dict) -> bool:
         return False
 
-    result = await AgentRuntime(
-        provider, reg, events=sink, approval_hook=_hook
-    ).run([Message(Role.USER, "run code")])
+    result = await AgentRuntime(provider, reg, events=sink, approval_hook=_hook).run(
+        [Message(Role.USER, "run code")]
+    )
 
     assert result.stop_reason is StopReason.COMPLETED
     kinds = [e.kind for e in sink.events]
@@ -221,9 +216,9 @@ async def test_approval_timeout() -> None:
     async def _timeout_hook(name: str, tid: str, args: dict) -> bool:
         return False  # Simulates what happens when approval times out
 
-    result = await AgentRuntime(
-        provider, reg, events=sink, approval_hook=_timeout_hook
-    ).run([Message(Role.USER, "run code")])
+    result = await AgentRuntime(provider, reg, events=sink, approval_hook=_timeout_hook).run(
+        [Message(Role.USER, "run code")]
+    )
 
     assert result.tool_calls[0]["status"] == "denied"
 
@@ -244,9 +239,7 @@ def _test_client() -> Iterator:
     chat._llm_singleton = None
     chat._tools_singleton = None
     try:
-        with TestClient(
-            create_app(Settings(llm_provider="mock", debug=True))
-        ) as api:
+        with TestClient(create_app(Settings(llm_provider="mock", debug=True))) as api:
             token = api.post(
                 "/api/auth/register",
                 json={"username": "approval-user", "password": "secret123"},

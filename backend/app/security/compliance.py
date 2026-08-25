@@ -33,9 +33,13 @@ def _default_policy() -> CompliancePolicy:
         max_response_length=10_000,
         forbidden_topics=["bomb-making", "hacking tutorial", "illegal drugs synthesis"],
         required_disclaimers={
-            "medical": "This is not medical advice. Please consult a qualified healthcare professional.",
+            "medical": (
+                "This is not medical advice. Please consult a qualified healthcare professional."
+            ),
             "legal": "This is not legal advice. Please consult a qualified attorney.",
-            "financial": "This is not financial advice. Please consult a qualified financial advisor.",
+            "financial": (
+                "This is not financial advice. Please consult a qualified financial advisor."
+            ),
         },
         content_categories=["medical", "legal", "financial"],
     )
@@ -51,9 +55,22 @@ def _get_topic_pattern(topic: str) -> re.Pattern:
 
 
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
-    "medical": ["diagnosis", "treatment", "medication", "symptom", "prescription", "dosage", "medical advice"],
+    "medical": [
+        "diagnosis",
+        "treatment",
+        "medication",
+        "symptom",
+        "prescription",
+        "dosage",
+        "medical advice",
+    ],
     "legal": ["legal advice", "lawsuit", "attorney", "court ruling", "legal opinion", "liability"],
-    "financial": ["investment advice", "stock pick", "financial advice", "portfolio recommendation"],
+    "financial": [
+        "investment advice",
+        "stock pick",
+        "financial advice",
+        "portfolio recommendation",
+    ],
 }
 
 

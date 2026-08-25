@@ -21,9 +21,9 @@ import json
 
 import structlog
 
-from app.agents.agent_auth import AgentToken, check_permission, verify_agent_token
+from app.agents.agent_auth import AgentToken, check_permission
 from app.agents.protocols import LLMClient
-from app.agents.secure_channel import SecureChannel, SignedMessage
+from app.agents.secure_channel import SecureChannel
 
 logger = structlog.get_logger()
 

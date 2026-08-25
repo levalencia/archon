@@ -9,7 +9,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-
 # Default permission sets per role
 ROLE_PERMISSIONS: dict[str, list[str]] = {
     "query_decomposition": ["plan", "decompose"],

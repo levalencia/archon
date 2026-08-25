@@ -13,6 +13,9 @@ import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from app.eval.ab_testing import ABTestManager, ABVariant
+from app.eval.evaluators import evaluate_faithfulness, evaluate_relevance
+from app.eval.harness import EvalCase, EvalHarness
 from app.security.auth import require_admin
 from app.security.guardrails import InputGuardrail
 from app.security.pii_detector import PIIDetector
@@ -190,8 +193,6 @@ async def fuzz_test(iterations: int = 50) -> FuzzResult:
 # Eval harness endpoints
 # ---------------------------------------------------------------------------
 
-from app.eval.evaluators import evaluate_faithfulness, evaluate_relevance
-
 
 class EvaluateRequest(BaseModel):
     response: str
@@ -236,8 +237,6 @@ async def list_evaluators() -> dict:
 # A/B testing endpoint
 # ---------------------------------------------------------------------------
 
-from app.eval.ab_testing import ABTestManager, ABVariant
-
 
 class ABTestRequest(BaseModel):
     question: str
@@ -271,7 +270,10 @@ async def ab_test(body: ABTestRequest) -> ABTestResponse:
     )
     variant_b = ABVariant(
         name=body.models[1] if len(body.models) > 1 else body.models[0],
-        config={"model": body.models[1] if len(body.models) > 1 else body.models[0], "system_prompt": body.system_prompt_b},
+        config={
+            "model": body.models[1] if len(body.models) > 1 else body.models[0],
+            "system_prompt": body.system_prompt_b,
+        },
     )
 
     manager.create_test(test_name, variant_a, variant_b)
@@ -280,7 +282,10 @@ async def ab_test(body: ABTestRequest) -> ABTestResponse:
     for variant in [variant_a, variant_b]:
         start = _time.monotonic()
         # Use a simple mock response incorporating the model name
-        response_text = f"Response from {variant.name}: The answer to '{body.question}' is provided by {variant.name}."
+        response_text = (
+            f"Response from {variant.name}: The answer to '{body.question}' "
+            f"is provided by {variant.name}."
+        )
         latency_ms = (_time.monotonic() - start) * 1000
         tokens = len(response_text.split())
 
@@ -302,8 +307,6 @@ async def ab_test(body: ABTestRequest) -> ABTestResponse:
 # ---------------------------------------------------------------------------
 # Eval harness batch endpoint
 # ---------------------------------------------------------------------------
-
-from app.eval.harness import EvalCase, EvalHarness
 
 
 class HarnessTestCase(BaseModel):

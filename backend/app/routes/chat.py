@@ -25,6 +25,7 @@ from app.runtime.support import as_model_provider, prepare_messages
 from app.security.auth import get_current_user
 from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.conversations import ConversationRepository
+from app.services.task_queue import get_task_queue
 from app.tools.builtin import (
     calculator_tool,
     datetime_tool,
@@ -38,7 +39,6 @@ from app.tools.registry import SecureToolRegistry
 from app.tools.sandbox import execute_sandboxed
 from app.tools.terminal import terminal_tool
 from app.tools.web_search import web_search_tool
-from app.services.task_queue import get_task_queue
 
 logger = structlog.get_logger()
 
@@ -171,7 +171,10 @@ def _create_tool_registry() -> SecureToolRegistry:
     registry.register(
         name="code_execute",
         handler=_code_execute_handler,
-        description="Execute Python code safely. Returns stdout, stderr, and exit_code. Use for calculations, data processing, or testing code snippets.",
+        description=(
+            "Execute Python code safely. Returns stdout, stderr, and exit_code. "
+            "Use for calculations, data processing, or testing code snippets."
+        ),
         input_schema={
             "required": ["code"],
             "properties": {

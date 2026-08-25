@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 
 import pytest
 
-from app.runtime.events import AgentEventKind, RecordingEventSink
 from app.runtime.engine import AgentRuntime, RuntimeBudget
+from app.runtime.events import AgentEventKind, RecordingEventSink
 from app.runtime.models import Message, Role, TokenUsage, ToolCall
 from app.services.task_queue import TaskQueue
-
 
 # ---------- TASK 2: Streaming tool progress ----------
 
@@ -73,7 +71,7 @@ class TestToolProgress:
             events=sink,
             budget=RuntimeBudget(max_iterations=3, max_tool_calls=3, max_seconds=10),
         )
-        result = await runtime.run([Message(Role.USER, "test")])
+        await runtime.run([Message(Role.USER, "test")])
         progress_events = [e for e in sink.events if e.kind == AgentEventKind.TOOL_PROGRESS]
         assert len(progress_events) >= 1
         # Check chunk data is present
@@ -92,7 +90,7 @@ class TestToolProgress:
             events=sink,
             budget=RuntimeBudget(max_iterations=3, max_tool_calls=3, max_seconds=10),
         )
-        result = await runtime.run([Message(Role.USER, "test")])
+        await runtime.run([Message(Role.USER, "test")])
         progress_events = [e for e in sink.events if e.kind == AgentEventKind.TOOL_PROGRESS]
         assert len(progress_events) == 0
 

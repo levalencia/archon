@@ -7,7 +7,6 @@ pending -> running -> completed | failed
 from __future__ import annotations
 
 import asyncio
-import traceback
 import uuid
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field

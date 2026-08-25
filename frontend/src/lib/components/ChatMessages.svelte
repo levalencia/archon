@@ -165,9 +165,3 @@
     {/if}
   </div>
 </div>
-
-<style>
-  .eval-badge:hover .eval-tooltip {
-    display: block !important;
-  }
-</style>

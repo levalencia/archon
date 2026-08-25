@@ -136,6 +136,3 @@ class TestBatchEval:
         result = await run_batch_eval(mock_agent, cases)
         assert result.total_cases == 2
         assert result.avg_safety == 1.0  # No PII in answers
-
-
-

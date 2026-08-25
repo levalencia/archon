@@ -10,7 +10,6 @@ from app.mcp.protocol import MCPServer
 from app.mcp.transport import SSETransport, StdioTransport
 from app.routes.mcp import router
 
-
 # ---- MCPServer unit tests ----
 
 
@@ -31,23 +30,27 @@ async def test_tools_list(server: MCPServer) -> None:
 
 @pytest.mark.asyncio
 async def test_tools_call(server: MCPServer) -> None:
-    resp = await server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "tools/call",
-        "params": {"name": "echo", "arguments": {"text": "hello"}},
-    })
+    resp = await server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "echo", "arguments": {"text": "hello"}},
+        }
+    )
     assert resp["result"]["content"] == {"echo": "hello"}
 
 
 @pytest.mark.asyncio
 async def test_unknown_tool(server: MCPServer) -> None:
-    resp = await server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 3,
-        "method": "tools/call",
-        "params": {"name": "nope"},
-    })
+    resp = await server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "nope"},
+        }
+    )
     assert "error" in resp
     assert resp["error"]["code"] == -32602
 
@@ -72,12 +75,14 @@ async def test_async_handler() -> None:
         return {"echo": text}
 
     server.register_tool("async_echo", "Async echo", async_echo)
-    resp = await server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 6,
-        "method": "tools/call",
-        "params": {"name": "async_echo", "arguments": {"text": "hi"}},
-    })
+    resp = await server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {"name": "async_echo", "arguments": {"text": "hi"}},
+        }
+    )
     assert resp["result"]["content"] == {"echo": "hi"}
 
 

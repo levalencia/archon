@@ -6,7 +6,7 @@ import pytest
 
 from app.runtime import AgentRuntime, RuntimeBudget
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink
-from app.runtime.models import Message, ModelResponse, Role, ToolCall, ToolDefinition, TokenUsage
+from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall, ToolDefinition
 
 
 class _CollectorSink(EventSink):
@@ -24,7 +24,9 @@ class _FailFirstThenSucceedTools:
         self.call_count = 0
 
     def definitions(self):
-        return (ToolDefinition("flaky_tool", "A tool that fails once then works", {"type": "object"}),)
+        return (
+            ToolDefinition("flaky_tool", "A tool that fails once then works", {"type": "object"}),
+        )
 
     async def execute(self, call):
         self.call_count += 1
@@ -42,10 +44,7 @@ class _ReflexionModel:
     async def complete(self, messages, tools=(), *, max_tokens=4096):
         self.call_count += 1
         # Check if the last message is a tool error
-        has_error = any(
-            m.role == Role.TOOL and "error" in m.content.lower()
-            for m in messages
-        )
+        has_error = any(m.role == Role.TOOL and "error" in m.content.lower() for m in messages)
         if self.call_count == 1:
             # First call: request the flaky tool
             return ModelResponse(
@@ -110,9 +109,7 @@ async def test_reflexion_error_visible_in_result():
     tools = _FailFirstThenSucceedTools()
     model = _ReflexionModel()
 
-    runtime = AgentRuntime(
-        model, tools, budget=RuntimeBudget(max_iterations=5, max_tool_calls=4)
-    )
+    runtime = AgentRuntime(model, tools, budget=RuntimeBudget(max_iterations=5, max_tool_calls=4))
     result = await runtime.run([Message(Role.USER, "test")])
 
     # Both calls (failed + succeeded) should be in the list

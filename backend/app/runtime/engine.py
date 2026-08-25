@@ -165,13 +165,19 @@ class AgentRuntime:
                         {"id": call.id, "name": call.name, "arguments": dict(call.arguments)},
                     )
                     # Human-in-the-loop: check if tool requires approval
-                    if self._approval_hook and hasattr(self._tools, "tool_requires_approval") and self._tools.tool_requires_approval(call.name):
+                    if (
+                        self._approval_hook
+                        and hasattr(self._tools, "tool_requires_approval")
+                        and self._tools.tool_requires_approval(call.name)
+                    ):
                         await self._emit(
                             AgentEventKind.APPROVAL_REQUIRED,
                             iterations,
                             {"id": call.id, "name": call.name, "arguments": dict(call.arguments)},
                         )
-                        approved = await self._approval_hook(call.name, call.id, dict(call.arguments))
+                        approved = await self._approval_hook(
+                            call.name, call.id, dict(call.arguments)
+                        )
                         if not approved:
                             denied_output = {"error": "User denied this tool call"}
                             record = {
@@ -184,7 +190,11 @@ class AgentRuntime:
                             await self._emit(
                                 AgentEventKind.TOOL_DENIED,
                                 iterations,
-                                {"id": call.id, "name": call.name, "arguments": dict(call.arguments)},
+                                {
+                                    "id": call.id,
+                                    "name": call.name,
+                                    "arguments": dict(call.arguments),
+                                },
                             )
                             history.append(
                                 Message(

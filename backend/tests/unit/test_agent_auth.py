@@ -7,7 +7,6 @@ import time
 import pytest
 
 from app.agents.agent_auth import (
-    AgentToken,
     check_permission,
     create_agent_token,
     verify_agent_token,

@@ -25,18 +25,18 @@ from app.routes.admin import router as admin_router
 from app.routes.artifacts import router as artifacts_router
 from app.routes.auth import router as auth_router
 from app.routes.chat import router as chat_router
+from app.routes.compliance import router as compliance_router
 from app.routes.conversations import router as conversations_router
 from app.routes.documents import router as documents_router
 from app.routes.images import router as images_router
 from app.routes.log_stream import install_log_capture
 from app.routes.log_stream import router as log_router
+from app.routes.mcp import router as mcp_router
+from app.routes.memory import router as memory_router
+from app.routes.multi_agent import router as multi_agent_router
 from app.routes.red_team import router as red_team_router
 from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
-from app.routes.memory import router as memory_router
-from app.routes.mcp import router as mcp_router
-from app.routes.compliance import router as compliance_router
-from app.routes.multi_agent import router as multi_agent_router
 from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
 from app.security.auth import AuthRepository

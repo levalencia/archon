@@ -1,4 +1,5 @@
 """Tests for eval harness wiring (POST /evaluate, GET /evaluators) and cost tracking."""
+
 from __future__ import annotations
 
 import json
@@ -45,8 +46,13 @@ def test_evaluate_endpoint_returns_scores():
         resp = api.post(
             "/api/security/evaluate",
             json={
-                "response": "Python is a programming language used for data science and web development.",
-                "context": "Python is a popular programming language widely used in data science, web development, and automation.",
+                "response": (
+                    "Python is a programming language used for data science and web development."
+                ),
+                "context": (
+                    "Python is a popular programming language widely used in data science, "
+                    "web development, and automation."
+                ),
                 "question": "What is Python used for?",
             },
         )
@@ -105,7 +111,7 @@ def test_cost_tracker_record():
 
 
 def test_cost_tracker_defaults_for_unknown_model():
-    from app.observability.cost_tracker import CostTracker, COST_PER_1K
+    from app.observability.cost_tracker import COST_PER_1K, CostTracker
 
     tracker = CostTracker()
     info = tracker.record(
@@ -135,7 +141,7 @@ def test_stream_done_event_includes_cost_usd():
         text = resp.text
         # Parse the done event
         marker = "event: done\ndata: "
-        assert marker in text, f"No done event found in SSE stream"
+        assert marker in text, "No done event found in SSE stream"
         payload_str = text.split(marker, 1)[1].split("\n\n", 1)[0]
         payload = json.loads(payload_str)
         assert "cost_usd" in payload

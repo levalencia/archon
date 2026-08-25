@@ -208,7 +208,10 @@ class EmbeddingService:
         import httpx
 
         if not self.api_key:
-            msg = "OpenAI embedding provider requires an API key (set embedding_api_key or llm_api_key)"
+            msg = (
+                "OpenAI embedding provider requires an API key "
+                "(set embedding_api_key or llm_api_key)"
+            )
             raise ValueError(msg)
 
         async with httpx.AsyncClient(timeout=30.0) as client:

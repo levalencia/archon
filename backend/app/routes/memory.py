@@ -10,9 +10,7 @@ from fastapi import APIRouter, Depends
 from app.memory.checkpoints import CheckpointManager
 from app.security.auth import get_current_user
 
-router = APIRouter(
-    prefix="/api/memory", tags=["memory"], dependencies=[Depends(get_current_user)]
-)
+router = APIRouter(prefix="/api/memory", tags=["memory"], dependencies=[Depends(get_current_user)])
 
 _checkpoint_mgr = CheckpointManager()
 

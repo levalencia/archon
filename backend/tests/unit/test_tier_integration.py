@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.memory.advanced import get_token_count, importance_weighted_trim, summarize_messages
-from app.memory.checkpoints import CheckpointManager
+from app.memory.advanced import get_token_count, importance_weighted_trim
 
 
 class TestTierIntegration:

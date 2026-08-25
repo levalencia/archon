@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.runtime.anthropic import anthropic_request
-from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolDefinition
+from app.runtime.models import Message, ModelResponse, Role, TokenUsage
 from app.runtime.support import JsonModeProvider
 
 

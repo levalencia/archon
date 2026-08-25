@@ -188,7 +188,7 @@ class SessionStore:
 # Singletons
 _persistent_memory: PersistentMemory | None = None
 _session_store: SessionStore | None = None
-_redis_memory: "RedisMemory | None" = None  # type: ignore[name-defined]  # noqa: F821
+_redis_memory: RedisMemory | None = None  # type: ignore[name-defined]  # noqa: F821
 
 
 def get_persistent_memory() -> PersistentMemory:
@@ -198,14 +198,18 @@ def get_persistent_memory() -> PersistentMemory:
         # Wrap with encryption if configured
         try:
             from app.config import get_settings
+
             settings = get_settings()
             if settings.memory_encryption_enabled and settings.encryption_master_key:
                 from app.memory.encrypted_memory import EncryptedMemoryStore
+
                 _encrypted_store = EncryptedMemoryStore(settings.encryption_master_key)
                 _persistent_memory._encrypted_store = _encrypted_store
                 logger.info("persistent_memory_encryption_enabled")
         except Exception:
-            logger.debug("persistent_memory_encryption_skipped", reason="config unavailable or error")
+            logger.debug(
+                "persistent_memory_encryption_skipped", reason="config unavailable or error"
+            )
     return _persistent_memory
 
 
@@ -228,6 +232,7 @@ async def get_redis_memory():
 
     try:
         from app.config import get_settings
+
         settings = get_settings()
     except Exception:
         return None

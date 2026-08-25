@@ -1,4 +1,5 @@
 """Tests for A/B testing, eval harness, and encrypted memory wiring."""
+
 from __future__ import annotations
 
 import asyncio

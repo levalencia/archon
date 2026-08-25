@@ -72,11 +72,9 @@ async def terminal_tool(command: str, timeout: int = 30) -> dict:
             env=env,
         )
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             timed_out = False
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             proc.kill()
             stdout_bytes, stderr_bytes = b"", b"Command timed out"
             timed_out = True

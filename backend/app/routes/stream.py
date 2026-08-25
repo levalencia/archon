@@ -124,7 +124,7 @@ async def chat_stream_real(
             try:
                 await asyncio.wait_for(evt.wait(), timeout=APPROVAL_TIMEOUT_SECONDS)
                 return _decisions.pop(tool_call_id, False)
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 return False
             finally:
                 _pending.pop(tool_call_id, None)
@@ -133,6 +133,7 @@ async def chat_stream_real(
         provider = as_model_provider(get_llm_client(settings))
         if json_mode:
             from app.runtime.support import JsonModeProvider
+
             provider = JsonModeProvider(provider)
 
         runtime = AgentRuntime(
@@ -174,9 +175,7 @@ async def chat_stream_real(
                     {
                         "tool": event.data["name"],
                         "parameters": event.data.get("arguments", {}),
-                        "result": json.dumps(output, ensure_ascii=False, default=str)[
-                            :300
-                        ],
+                        "result": json.dumps(output, ensure_ascii=False, default=str)[:300],
                         "status": "success",
                     },
                 )
@@ -192,16 +191,22 @@ async def chat_stream_real(
             elif event.kind is AgentEventKind.TEXT_DELTA:
                 yield _sse("token", event.data["text"])
             elif event.kind is AgentEventKind.APPROVAL_REQUIRED:
-                yield _sse("approval_required", {
-                    "tool": event.data["name"],
-                    "tool_call_id": event.data["id"],
-                    "parameters": event.data.get("arguments", {}),
-                })
+                yield _sse(
+                    "approval_required",
+                    {
+                        "tool": event.data["name"],
+                        "tool_call_id": event.data["id"],
+                        "parameters": event.data.get("arguments", {}),
+                    },
+                )
             elif event.kind is AgentEventKind.TOOL_DENIED:
-                yield _sse("tool_denied", {
-                    "tool": event.data["name"],
-                    "tool_call_id": event.data["id"],
-                })
+                yield _sse(
+                    "tool_denied",
+                    {
+                        "tool": event.data["name"],
+                        "tool_call_id": event.data["id"],
+                    },
+                )
             elif event.kind is AgentEventKind.TOOL_PROGRESS:
                 yield _sse("thinking", f"[{event.data['name']}] {event.data['chunk']}")
 

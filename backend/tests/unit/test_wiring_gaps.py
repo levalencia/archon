@@ -1,4 +1,7 @@
-"""Tests for the 4 wiring gaps: encrypted memory, resilient coordinator, image input, write approval."""
+"""Tests for wiring gaps.
+
+Covers encrypted memory, resilient coordinator, image input, and write approval.
+"""
 
 from __future__ import annotations
 
@@ -6,10 +9,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.memory.persistent import PersistentMemory, get_persistent_memory, reset_singletons
+from app.memory.persistent import get_persistent_memory, reset_singletons
 from app.runtime.context import build_messages
 from app.runtime.models import Message, Role
-
 
 # ---------------------------------------------------------------------------
 # 1. Encrypted memory wiring
@@ -36,6 +38,7 @@ class TestEncryptedMemoryWiring:
             mem = get_persistent_memory()
             assert hasattr(mem, "_encrypted_store")
             from app.memory.encrypted_memory import EncryptedMemoryStore
+
             assert isinstance(mem._encrypted_store, EncryptedMemoryStore)
 
     def test_no_encryption_when_disabled(self):
@@ -61,6 +64,7 @@ class TestResilientCoordinatorWiring:
     def test_route_imports_resilient_coordinator(self):
         """The multi_agent route module should reference ResilientCoordinator."""
         from app.routes import multi_agent as mod
+
         assert hasattr(mod, "ResilientCoordinator")
         # Verify AgentCoordinator is NOT directly referenced at module level
         assert "AgentCoordinator" not in dir(mod)
@@ -116,6 +120,7 @@ class TestWriteFileApproval:
         """The chat route's tool registry should mark write_file as requires_approval."""
         # Reset singleton so we get a fresh registry
         import app.routes.chat as chat_mod
+
         old = chat_mod._tools_singleton
         chat_mod._tools_singleton = None
         try:

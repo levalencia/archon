@@ -93,9 +93,7 @@ def anthropic_request(
         json_instruction = "Respond with valid JSON only."
         if "system" in request:
             if isinstance(request["system"], list):
-                request["system"].append(
-                    {"type": "text", "text": json_instruction}
-                )
+                request["system"].append({"type": "text", "text": json_instruction})
             else:
                 request["system"] = request["system"] + "\n\n" + json_instruction
         else:

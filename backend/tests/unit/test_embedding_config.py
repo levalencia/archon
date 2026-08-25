@@ -72,8 +72,7 @@ class TestEmbeddingServiceOpenAI:
     @pytest.mark.asyncio
     async def test_openai_embed_calls_api(self) -> None:
         """Mock the httpx call to verify correct request structure."""
-        import httpx
-        from unittest.mock import AsyncMock, patch, MagicMock
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         fake_response = MagicMock()
         fake_response.raise_for_status = MagicMock()
