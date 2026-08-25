@@ -77,6 +77,7 @@ async def test_token_budget_exhaustion_forces_tool_free_synthesis() -> None:
     ).run([Message(Role.USER, "research")])
 
     assert result.stop_reason is StopReason.TOKEN_BUDGET_EXHAUSTED
+    assert result.stop_reason.value == "token_budget_exhausted"
     assert result.content == "Complete synthesis with limitations stated."
     assert provider.call_history[-1]["tools"] == ()
 
