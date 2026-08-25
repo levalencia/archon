@@ -90,6 +90,38 @@ class TestPolicyModels:
         with pytest.raises(ValueError, match="concrete"):
             request(resource(ResourceKind.HOST, "*.example.com"))
 
+    def test_policy_request_rejects_tool_resources_as_competing_tool_identity(self) -> None:
+        with pytest.raises(ValueError, match="tool_name is the sole tool identity"):
+            PolicyRequest(
+                "dangerous_tool",
+                (resource(ResourceKind.TOOL, "read_file"),),
+                frozenset({RiskClass.READ}),
+            )
+
+    @pytest.mark.parametrize(
+        ("factory", "value"),
+        [
+            (lambda value: PolicyRequest(value, (), frozenset({RiskClass.READ})), "read_file\n"),
+            (lambda value: PolicyRequest(value, (), frozenset({RiskClass.READ})), "\tread_file"),
+            (lambda value: resource(ResourceKind.HOST, value), "example.com\n"),
+            (lambda value: resource(ResourceKind.HOST, value), "\texample.com"),
+            (lambda value: PolicyRule(value, PolicyAction.DENY), "rule-id\n"),
+            (lambda value: PolicyRule(value, PolicyAction.DENY), "\trule-id"),
+        ],
+    )
+    def test_boundary_controls_are_rejected_before_whitespace_trimming(
+        self, factory: object, value: str
+    ) -> None:
+        with pytest.raises(ValueError, match="control characters"):
+            factory(value)  # type: ignore[operator]
+
+    def test_normal_surrounding_spaces_still_trim_for_policy_identity(self) -> None:
+        assert (
+            PolicyRequest("  READ_FILE  ", (), frozenset({RiskClass.READ})).tool_name == "read_file"
+        )
+        assert resource(ResourceKind.HOST, "  EXAMPLE.COM  ").pattern == "example.com"
+        assert PolicyRule("  rule-id  ", PolicyAction.DENY).id == "rule-id"
+
     @pytest.mark.parametrize("model", ["rule", "request"])
     def test_resource_elements_must_be_resource_patterns(self, model: str) -> None:
         invalid_resources = ("/tmp/not-a-resource-pattern",)
@@ -130,12 +162,12 @@ class TestPolicyModels:
             )
 
     def test_description_allows_empty_but_rejects_non_strings_and_controls(self) -> None:
-        assert PolicyRule("empty-description", PolicyAction.ALLOW, description="").description == ""
+        assert PolicyRule("empty-description", PolicyAction.DENY, description="").description == ""
         with pytest.raises(TypeError, match="description must be a string"):
-            PolicyRule("non-string", PolicyAction.ALLOW, description=7)  # type: ignore[arg-type]
+            PolicyRule("non-string", PolicyAction.DENY, description=7)  # type: ignore[arg-type]
         for invalid in ("line\nbreak", "tab\tcharacter", "zero\x00byte"):
             with pytest.raises(ValueError, match="control characters"):
-                PolicyRule("control", PolicyAction.ALLOW, description=invalid)
+                PolicyRule("control", PolicyAction.DENY, description=invalid)
 
     @pytest.mark.parametrize(
         ("kind", "pattern"),
@@ -195,6 +227,44 @@ class TestPolicyModels:
 
 @pytest.mark.unit
 class TestRulePolicyEngine:
+    @pytest.mark.parametrize("action", [PolicyAction.ALLOW, PolicyAction.ASK])
+    def test_implicit_global_permit_or_prompt_rule_is_rejected(self, action: PolicyAction) -> None:
+        with pytest.raises(ValueError, match="explicit resources or risk classes"):
+            PolicyRule("implicit-global", action)
+
+    @pytest.mark.parametrize("action", [PolicyAction.ALLOW, PolicyAction.ASK])
+    def test_explicit_tool_catch_all_rule_is_supported(self, action: PolicyAction) -> None:
+        rule = PolicyRule(
+            "explicit-global",
+            action,
+            (resource(ResourceKind.TOOL, "*"),),
+        )
+        decision = RulePolicyEngine([rule]).evaluate(request())
+        assert decision.action is action
+        assert decision.matched_rule_id == "explicit-global"
+
+    def test_duplicate_canonical_rule_ids_are_rejected(self) -> None:
+        composed = PolicyRule(" café ", PolicyAction.DENY)
+        decomposed = PolicyRule("cafe\u0301", PolicyAction.DENY)
+        with pytest.raises(ValueError, match="duplicate canonical rule id.*café"):
+            RulePolicyEngine([composed, decomposed])
+
+    def test_tool_rules_only_match_authoritative_request_tool_name(self) -> None:
+        engine = RulePolicyEngine(
+            [
+                PolicyRule(
+                    "allow-read-file",
+                    PolicyAction.ALLOW,
+                    (resource(ResourceKind.TOOL, "read_file"),),
+                    frozenset({RiskClass.READ}),
+                )
+            ],
+            default_action=PolicyAction.DENY,
+        )
+        decision = engine.evaluate(PolicyRequest("dangerous_tool", (), frozenset({RiskClass.READ})))
+        assert decision.action is PolicyAction.DENY
+        assert decision.matched_rule_id is None
+
     def test_exact_rule_matches_and_reason_is_readable(self) -> None:
         engine = RulePolicyEngine(
             [
@@ -207,7 +277,7 @@ class TestRulePolicyEngine:
                 )
             ]
         )
-        decision = engine.evaluate(request(resource(ResourceKind.TOOL, "READ_FILE")))
+        decision = engine.evaluate(request())
         assert decision.action is PolicyAction.ALLOW
         assert decision.matched_rule_id == "allow-read"
         assert decision.specificity == (1, len("read_file"), 1)
@@ -226,7 +296,7 @@ class TestRulePolicyEngine:
         engine = RulePolicyEngine([rule])
         item = PolicyRequest(
             "fetch",
-            (resource(ResourceKind.TOOL, "fetch"), resource(ResourceKind.HOST, "other.com")),
+            (resource(ResourceKind.HOST, "other.com"),),
             frozenset({RiskClass.NETWORK}),
         )
         assert engine.evaluate(item).matched_rule_id is None
@@ -284,12 +354,12 @@ class TestRulePolicyEngine:
     def test_highest_specificity_wins_independent_of_order(self) -> None:
         broad = PolicyRule("broad", PolicyAction.DENY, (resource(ResourceKind.TOOL, "*"),))
         exact = PolicyRule("exact", PolicyAction.ALLOW, (resource(ResourceKind.TOOL, "read_file"),))
-        item = request(resource(ResourceKind.TOOL, "read_file"))
+        item = request()
         assert RulePolicyEngine([exact, broad]).evaluate(item).matched_rule_id == "exact"
         assert RulePolicyEngine([broad, exact]).evaluate(item).matched_rule_id == "exact"
 
     def test_risk_specific_rule_is_more_specific_and_requires_intersection(self) -> None:
-        generic = PolicyRule("generic", PolicyAction.ALLOW)
+        generic = PolicyRule("generic", PolicyAction.ALLOW, (resource(ResourceKind.TOOL, "*"),))
         risky = PolicyRule("network", PolicyAction.ASK, risk_classes=frozenset({RiskClass.NETWORK}))
         engine = RulePolicyEngine([generic, risky])
         network = request(risks=frozenset({RiskClass.NETWORK}))
@@ -307,7 +377,11 @@ class TestRulePolicyEngine:
         assert RulePolicyEngine(rules).evaluate(request()).matched_rule_id == "deny"
 
     def test_equal_specificity_uses_last_match_without_deny(self) -> None:
-        rules = [PolicyRule("allow", PolicyAction.ALLOW), PolicyRule("ask", PolicyAction.ASK)]
+        tool = (resource(ResourceKind.TOOL, "read_file"),)
+        rules = [
+            PolicyRule("allow", PolicyAction.ALLOW, tool),
+            PolicyRule("ask", PolicyAction.ASK, tool),
+        ]
         assert RulePolicyEngine(rules).evaluate(request()).matched_rule_id == "ask"
 
     def test_disabled_rule_is_ignored(self) -> None:
@@ -329,9 +403,15 @@ class TestRulePolicyEngine:
         assert "unclassified" in decision.reason.lower()
 
     def test_generic_allow_cannot_authorize_unclassified_request(self) -> None:
-        decision = RulePolicyEngine([PolicyRule("generic", PolicyAction.ALLOW)]).evaluate(
-            request(risks=frozenset())
-        )
+        decision = RulePolicyEngine(
+            [
+                PolicyRule(
+                    "generic",
+                    PolicyAction.ALLOW,
+                    (resource(ResourceKind.TOOL, "*"),),
+                )
+            ]
+        ).evaluate(request(risks=frozenset()))
         assert decision.action is PolicyAction.DENY
         assert decision.matched_rule_id is None
         assert "unclassified" in decision.reason.lower()

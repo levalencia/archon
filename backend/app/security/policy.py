@@ -54,13 +54,13 @@ class ResourceKind(StrEnum):
 def _text(value: str, label: str, *, strip: bool = True) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{label} must be a string")
+    if any(unicodedata.category(character).startswith("C") for character in value):
+        raise ValueError(f"{label} cannot contain control characters")
     value = unicodedata.normalize("NFC", value)
     if strip:
         value = value.strip()
     if not value:
         raise ValueError(f"{label} must be non-empty")
-    if any(unicodedata.category(character).startswith("C") for character in value):
-        raise ValueError(f"{label} cannot contain control characters")
     return value
 
 
@@ -206,6 +206,12 @@ class PolicyRule:
             raise ValueError("rule description cannot contain control characters")
         if type(self.enabled) is not bool:
             raise TypeError("rule enabled must be a bool")
+        if (
+            action in {PolicyAction.ALLOW, PolicyAction.ASK}
+            and not resources
+            and not self.risk_classes
+        ):
+            raise ValueError("ALLOW and ASK rules require explicit resources or risk classes")
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +226,10 @@ class PolicyRequest:
         resources = tuple(self.resources)
         if not all(isinstance(resource, ResourcePattern) for resource in resources):
             raise TypeError("request resources must contain only ResourcePattern values")
+        if any(resource.kind is ResourceKind.TOOL for resource in resources):
+            raise ValueError(
+                "request resources cannot contain TOOL entries; tool_name is the sole tool identity"
+            )
         if any(resource.is_wildcard for resource in resources):
             raise ValueError("request resources must be concrete, not wildcard patterns")
         object.__setattr__(self, "resources", resources)
@@ -290,7 +300,13 @@ class RulePolicyEngine:
         rules: Sequence[PolicyRule],
         default_action: PolicyAction = PolicyAction.ALLOW,
     ) -> None:
-        object.__setattr__(self, "rules", tuple(rules))
+        immutable_rules = tuple(rules)
+        rule_ids: set[str] = set()
+        for rule in immutable_rules:
+            if rule.id in rule_ids:
+                raise ValueError(f"duplicate canonical rule id: {rule.id!r}")
+            rule_ids.add(rule.id)
+        object.__setattr__(self, "rules", immutable_rules)
         action = (
             default_action
             if isinstance(default_action, PolicyAction)
