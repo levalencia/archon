@@ -28,11 +28,21 @@ from app.services.artifacts import detect_artifact_in_response
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
+# Module-level pending approval state (keyed by tool_call_id)
+_pending: dict[str, asyncio.Event] = {}
+_decisions: dict[str, bool] = {}
+
+APPROVAL_TIMEOUT_SECONDS = 60
+
 
 class StreamRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
     conversation_id: str = ""
     image: str = ""
+
+
+class ApprovalBody(BaseModel):
+    approved: bool
 
 
 class QueueEventSink:
@@ -100,6 +110,20 @@ async def chat_stream_real(
             messages = [MMsg(MRole(m["role"]), m["content"]) for m in raw_msgs]
 
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
+
+        async def _approval_hook(tool_name: str, tool_call_id: str, arguments: dict) -> bool:
+            """Approval hook: emits event via queue, waits for POST decision."""
+            evt = asyncio.Event()
+            _pending[tool_call_id] = evt
+            try:
+                await asyncio.wait_for(evt.wait(), timeout=APPROVAL_TIMEOUT_SECONDS)
+                return _decisions.pop(tool_call_id, False)
+            except (TimeoutError, asyncio.TimeoutError):
+                return False
+            finally:
+                _pending.pop(tool_call_id, None)
+                _decisions.pop(tool_call_id, None)
+
         runtime = AgentRuntime(
             as_model_provider(get_llm_client(settings)),
             tools,
@@ -117,6 +141,7 @@ async def chat_stream_real(
                 max_tokens=settings.agent_token_budget,
                 max_seconds=90,
             ),
+            approval_hook=_approval_hook,
         )
         task = asyncio.create_task(runtime.run(messages))
         while not task.done() or not queue.empty():
@@ -155,6 +180,17 @@ async def chat_stream_real(
                         yield _sse("sources", sources)
             elif event.kind is AgentEventKind.TEXT_DELTA:
                 yield _sse("token", event.data["text"])
+            elif event.kind is AgentEventKind.APPROVAL_REQUIRED:
+                yield _sse("approval_required", {
+                    "tool": event.data["name"],
+                    "tool_call_id": event.data["id"],
+                    "parameters": event.data.get("arguments", {}),
+                })
+            elif event.kind is AgentEventKind.TOOL_DENIED:
+                yield _sse("tool_denied", {
+                    "tool": event.data["name"],
+                    "tool_call_id": event.data["id"],
+                })
 
         result = await task
         await memory.store(conv_id, "user", body.message, user["user_id"])
@@ -225,3 +261,18 @@ def _sse(event: str, data) -> str:
         else str(data)
     )
     return f"event: {event}\n" + "\n".join(f"data: {line}" for line in payload.split("\n")) + "\n\n"
+
+
+@router.post("/approve/{tool_call_id}")
+async def approve_tool_call(
+    tool_call_id: str,
+    body: ApprovalBody,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> dict:
+    """Approve or deny a pending tool call."""
+    evt = _pending.get(tool_call_id)
+    if evt is None:
+        raise HTTPException(status_code=404, detail="No pending approval for this tool call")
+    _decisions[tool_call_id] = body.approved
+    evt.set()
+    return {"tool_call_id": tool_call_id, "approved": body.approved}

@@ -36,6 +36,7 @@
   let hydrated = $state(false);
   let activeTab: InspectorTab = $state('run');
   let stats: RunStats = $state({ latency: '—', tokens: '—', tools: 0, iterations: 0 });
+  let pendingApproval: { tool: string; tool_call_id: string; parameters: Record<string, any> } | null = $state(null);
 
   let controller: AbortController | null = null;
   let logController: AbortController | null = null;
@@ -222,6 +223,19 @@
       } catch { /* skip */ }
     }
 
+    // Handle human-in-the-loop approval requests
+    if (event.event === 'approval_required') {
+      try {
+        const approval = JSON.parse(payload);
+        pendingApproval = approval;
+        am.thinking_steps = [...(am.thinking_steps || []), {
+          type: 'thinking',
+          detail: `⏳ Waiting for approval: ${approval.tool}...`,
+          elapsed_ms: elapsed,
+        }];
+      } catch { /* skip */ }
+    }
+
     // Handle eval scores (auto-quality assessment)
     if (event.event === 'eval') {
       try {
@@ -230,6 +244,58 @@
     }
 
     messages = [...messages.slice(0, -1), { ...am }];
+  }
+
+  // ── Human-in-the-loop approval ─────────────────────────────────────
+  async function approve() {
+    if (!pendingApproval) return;
+    const { tool, tool_call_id } = pendingApproval;
+    try {
+      await authenticatedFetch(`/api/chat/approve/${tool_call_id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: true }),
+      });
+      // Add thinking step to the current assistant message
+      const am = messages[messages.length - 1];
+      if (am && am.role === 'assistant') {
+        am.thinking_steps = [...(am.thinking_steps || []), {
+          type: 'thinking',
+          detail: `✅ Approved: ${tool}`,
+          elapsed_ms: am.startedAt ? Math.round(performance.now() - am.startedAt) : 0,
+        }];
+        messages = [...messages.slice(0, -1), { ...am }];
+      }
+    } catch (e) {
+      console.error('Failed to approve tool call', e);
+    } finally {
+      pendingApproval = null;
+    }
+  }
+
+  async function deny() {
+    if (!pendingApproval) return;
+    const { tool, tool_call_id } = pendingApproval;
+    try {
+      await authenticatedFetch(`/api/chat/approve/${tool_call_id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: false }),
+      });
+      const am = messages[messages.length - 1];
+      if (am && am.role === 'assistant') {
+        am.thinking_steps = [...(am.thinking_steps || []), {
+          type: 'thinking',
+          detail: `❌ Denied: ${tool}`,
+          elapsed_ms: am.startedAt ? Math.round(performance.now() - am.startedAt) : 0,
+        }];
+        messages = [...messages.slice(0, -1), { ...am }];
+      }
+    } catch (e) {
+      console.error('Failed to deny tool call', e);
+    } finally {
+      pendingApproval = null;
+    }
   }
 
   // ── Send message ──────────────────────────────────────────────────
@@ -413,6 +479,30 @@
     tabindex="-1"
     onclick={() => setOverlay(inspectorElement, inspectorScrim, false)}
   ></button>
+
+  {#if pendingApproval}
+    <div class="approval-backdrop" role="dialog" aria-modal="true" aria-label="Tool approval required">
+      <div class="approval-card">
+        <div class="approval-header">
+          <span class="approval-icon">⚠️</span>
+          <h3>Tool Approval Required</h3>
+        </div>
+        <p class="approval-description">The agent wants to execute the following tool. Please review and approve or deny.</p>
+        <div class="approval-detail">
+          <span class="approval-detail-label">Tool</span>
+          <span class="approval-tool-name">{pendingApproval.tool}</span>
+        </div>
+        <div class="approval-detail">
+          <span class="approval-detail-label">Parameters</span>
+          <pre class="approval-params">{JSON.stringify(pendingApproval.parameters, null, 2)}</pre>
+        </div>
+        <div class="approval-actions">
+          <button class="approval-btn approve" onclick={approve}>Approve</button>
+          <button class="approval-btn deny" onclick={deny}>Deny</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if artifactOpen}
     <ArtifactPanel {artifacts} onClose={() => artifactOpen = false} />

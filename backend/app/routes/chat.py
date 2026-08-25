@@ -130,6 +130,7 @@ def _create_tool_registry() -> SecureToolRegistry:
                 "old_text": {"type": "string", "description": "Substring to find (remove/replace)"},
             },
         },
+        requires_approval=True,
     )
 
     registry.register(
@@ -153,6 +154,7 @@ def _create_tool_registry() -> SecureToolRegistry:
             },
         },
         timeout=15,
+        requires_approval=True,
     )
 
     return registry

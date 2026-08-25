@@ -1245,3 +1245,125 @@ button {
     display: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Approval modal (Human-in-the-Loop)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.approval-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.approval-card {
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 12px;
+  padding: 28px 32px;
+  width: min(520px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.approval-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.approval-icon {
+  font-size: 1.5rem;
+}
+
+.approval-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.approval-description {
+  margin: 0 0 18px;
+  font-size: 0.88rem;
+  color: var(--text-muted, #888);
+  line-height: 1.45;
+}
+
+.approval-detail {
+  margin-bottom: 14px;
+}
+
+.approval-detail-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #888);
+  margin-bottom: 4px;
+}
+
+.approval-tool-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--warning, #f0c674);
+}
+
+.approval-params {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--bg-primary, #121220);
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-primary, #e0e0e0);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 22px;
+  justify-content: flex-end;
+}
+
+.approval-btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.approval-btn:hover {
+  opacity: 0.9;
+}
+
+.approval-btn:active {
+  transform: scale(0.97);
+}
+
+.approval-btn.approve {
+  background: var(--accent, #2dd4bf);
+  color: #000;
+}
+
+.approval-btn.deny {
+  background: var(--error, #e55);
+  color: #fff;
+}

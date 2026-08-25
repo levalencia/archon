@@ -17,6 +17,9 @@ from app.runtime.ports import ModelProvider, ToolExecutor
 T = TypeVar("T")
 Clock = Callable[[], float]
 
+# Approval hook: (tool_name, tool_call_id, arguments) -> approved?
+ApprovalHook = Callable[[str, str, dict], Coroutine[Any, Any, bool]]
+
 
 class StopReason(StrEnum):
     COMPLETED = "completed"
@@ -62,12 +65,14 @@ class AgentRuntime:
         events: EventSink | None = None,
         budget: RuntimeBudget | None = None,
         clock: Clock = time.monotonic,
+        approval_hook: ApprovalHook | None = None,
     ) -> None:
         self._model = model
         self._tools = tools
         self._events = events or NullEventSink()
         self._budget = budget or RuntimeBudget()
         self._clock = clock
+        self._approval_hook = approval_hook
 
     async def run(self, messages: Sequence[Message]) -> AgentResult:
         history = list(messages)
@@ -159,6 +164,36 @@ class AgentRuntime:
                         iterations,
                         {"id": call.id, "name": call.name, "arguments": dict(call.arguments)},
                     )
+                    # Human-in-the-loop: check if tool requires approval
+                    if self._approval_hook and hasattr(self._tools, "tool_requires_approval") and self._tools.tool_requires_approval(call.name):
+                        await self._emit(
+                            AgentEventKind.APPROVAL_REQUIRED,
+                            iterations,
+                            {"id": call.id, "name": call.name, "arguments": dict(call.arguments)},
+                        )
+                        approved = await self._approval_hook(call.name, call.id, dict(call.arguments))
+                        if not approved:
+                            denied_output = {"error": "User denied this tool call"}
+                            record = {
+                                "tool": call.name,
+                                "parameters": dict(call.arguments),
+                                "result": denied_output,
+                                "status": "denied",
+                            }
+                            calls.append(record)
+                            await self._emit(
+                                AgentEventKind.TOOL_DENIED,
+                                iterations,
+                                {"id": call.id, "name": call.name, "arguments": dict(call.arguments)},
+                            )
+                            history.append(
+                                Message(
+                                    Role.TOOL,
+                                    json.dumps(denied_output, separators=(",", ":")),
+                                    tool_call_id=call.id,
+                                )
+                            )
+                            continue
                     try:
                         output = await self._within_deadline(self._tools.execute(call), started_at)
                     except Exception as tool_err:

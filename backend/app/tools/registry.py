@@ -41,6 +41,7 @@ class ToolDefinition:
         required_permissions: list[str] | None = None,
         input_schema: dict | None = None,
         timeout: int = DEFAULT_TOOL_TIMEOUT,
+        requires_approval: bool = False,
     ) -> None:
         self.name = name
         self.handler = handler
@@ -48,6 +49,7 @@ class ToolDefinition:
         self.required_permissions = required_permissions or []
         self.input_schema = input_schema or {}
         self.timeout = timeout
+        self.requires_approval = requires_approval
 
 
 class SecureToolRegistry:
@@ -75,6 +77,7 @@ class SecureToolRegistry:
         required_permissions: list[str] | None = None,
         input_schema: dict | None = None,
         timeout: int | None = None,
+        requires_approval: bool = False,
     ) -> None:
         """Register a tool."""
         self._tools[name] = ToolDefinition(
@@ -84,6 +87,7 @@ class SecureToolRegistry:
             required_permissions=required_permissions,
             input_schema=input_schema,
             timeout=timeout or self._default_timeout,
+            requires_approval=requires_approval,
         )
         logger.info("tool_registered", name=name, description=description)
 
@@ -221,3 +225,10 @@ class SecureToolRegistry:
     def get_tool(self, name: str) -> ToolDefinition | None:
         """Get a tool definition by name."""
         return self._tools.get(name)
+
+    def tool_requires_approval(self, name: str) -> bool:
+        """Check if a tool requires human approval before execution."""
+        tool = self._tools.get(name)
+        if tool is None:
+            return False
+        return tool.requires_approval
