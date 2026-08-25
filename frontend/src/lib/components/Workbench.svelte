@@ -170,12 +170,23 @@
       try {
         const d = JSON.parse(payload);
         am.iterations = d.iterations;
+        const tokensUsed = d.tokens_used || 0;
         stats = {
           iterations: d.iterations || 0,
           tools: d.tools_used || 0,
           latency: d.elapsed_ms != null ? `${d.elapsed_ms}ms` : '—',
-          tokens: d.tokens_used != null ? String(d.tokens_used) : '—',
+          tokens: tokensUsed ? String(tokensUsed) : '—',
         };
+        // Populate context from done event if no explicit context event was sent
+        if (!context) {
+          const budget = 200000; // default context length
+          context = {
+            tokens: tokensUsed,
+            budget,
+            utilization_pct: Math.round((tokensUsed / budget) * 100),
+          };
+          am.context_stats = context;
+        }
       } catch { /* skip */ }
     }
 
@@ -254,11 +265,20 @@
     loading = false;
   }
 
-  // ── Overlay helpers ────────────────────────────────────────────────
+  // ── Overlay helpers (mobile only) ───────────────────────────────────
+  function isMobile() {
+    return window.matchMedia('(max-width: 720px)').matches;
+  }
+
   function setOverlay(element: HTMLElement, scrim: HTMLButtonElement, open: boolean) {
     element.classList.toggle('open', open);
     element.setAttribute('data-open', String(open));
-    element.toggleAttribute('inert', !open);
+    // Only set inert on mobile — on desktop panels are always interactive
+    if (isMobile()) {
+      element.toggleAttribute('inert', !open);
+    } else {
+      element.removeAttribute('inert');
+    }
     scrim.classList.toggle('open', open);
     scrim.tabIndex = open ? 0 : -1;
   }

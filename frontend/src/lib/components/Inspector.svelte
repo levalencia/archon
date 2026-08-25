@@ -15,7 +15,7 @@
  {:else if active === 'context'}
   <p class="section-label">Context window</p><div class="context-meter"><div><span>Utilization</span><strong>{context?.utilization_pct || 0}%</strong></div><progress max="100" value={context?.utilization_pct || 0}></progress><small>{context?.tokens?.toLocaleString() || 0} of {context?.budget?.toLocaleString() || 0} tokens</small></div>
  {:else}
-  <div class="log-toolbar"><span>{logs.length} events</span><button onclick={() => navigator.clipboard?.writeText(logs.map(l => `${l.ts || ''} [${l.level || ''}] ${l.event || ''}`).join('\n'))}>Copy logs</button></div><div class="log-list">{#if logs.length === 0}<div class="empty-detail">Waiting for backend events…</div>{/if}{#each logs as log}<div><time>{log.ts}</time><strong class:error-text={log.level === 'error'}>{log.level}</strong><span>{log.event}</span></div>{/each}</div>
+  <div class="log-toolbar"><span>{logs.length} events</span><button onclick={() => navigator.clipboard?.writeText(logs.map(l => `${l.ts || ''} [${l.level || ''}] ${l.event || ''} ${l.data ? JSON.stringify(l.data) : ''}`).join('\n'))}>Copy logs</button></div><div class="log-list">{#if logs.length === 0}<div class="empty-detail">Waiting for backend events…</div>{/if}{#each logs as log}<div><time>{log.ts}</time><strong class:error-text={log.level === 'error'}>{log.level}</strong><span>{log.event}{#if log.data && Object.keys(log.data).length > 0} <span style="color:var(--muted);font-size:9px">{Object.entries(log.data).map(([k,v]) => `${k}=${v}`).join(' ')}</span>{/if}</span></div>{/each}</div>
  {/if}
  </div>
 </div>
