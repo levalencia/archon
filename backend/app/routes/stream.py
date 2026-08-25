@@ -72,7 +72,13 @@ async def chat_stream_real(
 
     async def event_stream():
         started = time.monotonic()
-        skills = get_skill_registry().search(body.message, limit=get_skills_top_k())
+        # Detect /json prefix for structured output mode
+        user_message = body.message
+        json_mode = False
+        if user_message.startswith("/json "):
+            json_mode = True
+            user_message = user_message[6:]  # Strip '/json ' prefix
+        skills = get_skill_registry().search(user_message, limit=get_skills_top_k())
         skills_context = "".join(f"\n\n[Skill: {s.name}]\n{s.content}" for s in skills)
         skills_used = [{"name": s.name, "description": s.description} for s in skills]
         for skill in skills_used:
@@ -80,7 +86,7 @@ async def chat_stream_real(
 
         tools = get_tool_registry()
         messages = await prepare_messages(
-            body.message,
+            user_message,
             conv_id,
             memory,
             tools,
@@ -124,8 +130,13 @@ async def chat_stream_real(
                 _pending.pop(tool_call_id, None)
                 _decisions.pop(tool_call_id, None)
 
+        provider = as_model_provider(get_llm_client(settings))
+        if json_mode:
+            from app.runtime.support import JsonModeProvider
+            provider = JsonModeProvider(provider)
+
         runtime = AgentRuntime(
-            as_model_provider(get_llm_client(settings)),
+            provider,
             tools,
             events=CompositeEventSink(
                 conversation_id=conv_id,

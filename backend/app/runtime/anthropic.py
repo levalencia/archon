@@ -9,7 +9,12 @@ from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCal
 
 
 def anthropic_request(
-    messages: Sequence[Message], tools: Sequence[ToolDefinition], max_tokens: int
+    messages: Sequence[Message],
+    tools: Sequence[ToolDefinition],
+    max_tokens: int,
+    *,
+    response_format: str | None = None,
+    prompt_caching_enabled: bool = False,
 ) -> dict[str, Any]:
     system_parts: list[str] = []
     converted: list[dict[str, Any]] = []
@@ -63,7 +68,17 @@ def anthropic_request(
             converted.append(block)
     request: dict[str, Any] = {"messages": converted, "max_tokens": max_tokens}
     if system_parts:
-        request["system"] = "\n\n".join(system_parts)
+        system_text = "\n\n".join(system_parts)
+        if prompt_caching_enabled:
+            request["system"] = [
+                {
+                    "type": "text",
+                    "text": system_text,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+        else:
+            request["system"] = system_text
     if tools:
         request["tools"] = [
             {
@@ -73,6 +88,20 @@ def anthropic_request(
             }
             for tool in tools
         ]
+    if response_format == "json":
+        # Add JSON instruction to system prompt
+        json_instruction = "Respond with valid JSON only."
+        if "system" in request:
+            if isinstance(request["system"], list):
+                request["system"].append(
+                    {"type": "text", "text": json_instruction}
+                )
+            else:
+                request["system"] = request["system"] + "\n\n" + json_instruction
+        else:
+            request["system"] = json_instruction
+        # Add prefill to force JSON opening brace
+        request["messages"].append({"role": "assistant", "content": "{"})
     return request
 
 

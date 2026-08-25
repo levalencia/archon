@@ -145,7 +145,13 @@ class TestAnthropicAdapter:
         assert constructor == {"api_key": "test-key"}
         assert request == {
             "model": "claude-test",
-            "system": "Be concise",
+            "system": [
+                {
+                    "type": "text",
+                    "text": "Be concise",
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             "messages": [{"role": "user", "content": "Weather in Ghent?"}],
             "tools": [
                 {
@@ -188,7 +194,13 @@ class TestAnthropicAdapter:
         )
 
         payload = json.loads(requests[0].content)
-        assert payload["system"] == "You are helpful"
+        assert payload["system"] == [
+            {
+                "type": "text",
+                "text": "You are helpful",
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
         assert payload["messages"] == [{"role": "user", "content": "hi"}]
 
 

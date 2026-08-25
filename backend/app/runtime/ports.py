@@ -15,6 +15,7 @@ class ModelProvider(Protocol):
         tools: Sequence[ToolDefinition] = (),
         *,
         max_tokens: int = 4096,
+        response_format: str | None = None,
     ) -> ModelResponse: ...
 
 

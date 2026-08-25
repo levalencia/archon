@@ -9,10 +9,16 @@ from app.runtime.models import Message, ModelResponse, ToolDefinition
 
 
 class AnthropicAdapter:
-    def __init__(self, api_key: str, model: str = "claude-sonnet-4-20250514") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "claude-sonnet-4-20250514",
+        prompt_caching_enabled: bool = True,
+    ) -> None:
         from anthropic import AsyncAnthropic
 
         self.model = model
+        self.prompt_caching_enabled = prompt_caching_enabled
         self._client = AsyncAnthropic(api_key=api_key)
 
     async def complete(
@@ -21,8 +27,15 @@ class AnthropicAdapter:
         tools: Sequence[ToolDefinition] = (),
         *,
         max_tokens: int = 4096,
+        response_format: str | None = None,
     ) -> ModelResponse:
-        request = anthropic_request(messages, tools, max_tokens)
+        request = anthropic_request(
+            messages,
+            tools,
+            max_tokens,
+            response_format=response_format,
+            prompt_caching_enabled=self.prompt_caching_enabled,
+        )
         if hasattr(self._client, "messages"):
             response = await self._client.messages.create(model=self.model, **request)
             return anthropic_response(response)
