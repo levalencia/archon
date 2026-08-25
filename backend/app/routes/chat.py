@@ -116,9 +116,19 @@ def _create_tool_registry() -> SecureToolRegistry:
         name="memory",
         handler=memory_tool,
         description=(
-            "Save/recall persistent facts about the user. Actions: add, remove, replace, list."
+            "Save/recall persistent facts about the user. "
+            "Actions: add (content=fact), remove (old_text=substring), "
+            "replace (old_text=old, content=new), list (no args). "
+            "Example: memory(action='add', content='User is 47 years old')"
         ),
-        input_schema={"required": ["action"]},
+        input_schema={
+            "required": ["action"],
+            "properties": {
+                "action": {"type": "string", "enum": ["add", "remove", "replace", "list"]},
+                "content": {"type": "string", "description": "The fact to save (add/replace)"},
+                "old_text": {"type": "string", "description": "Substring to find (remove/replace)"},
+            },
+        },
     )
 
     registry.register(

@@ -11,7 +11,7 @@ import json
 from app.memory.persistent import get_persistent_memory, get_session_store
 
 
-async def memory_tool(action: str, content: str = "", old_text: str = "") -> str:
+async def memory_tool(action: str, content: str = "", old_text: str = "", **kwargs) -> str:
     """Manage persistent memory. Actions: add, remove, replace, list.
 
     Use to save durable facts about the user (preferences, environment, name).
@@ -23,6 +23,13 @@ async def memory_tool(action: str, content: str = "", old_text: str = "") -> str
     - memory(action="remove", old_text="Brussels")
     - memory(action="list")
     """
+    # Handle alternative parameter names LLMs sometimes use
+    if not content and "value" in kwargs:
+        content = str(kwargs["value"])
+    if not content and "key" in kwargs and action == "add":
+        content = f"{kwargs['key']}: {kwargs.get('value', '')}"
+    if not old_text and "key" in kwargs and action in ("remove", "replace"):
+        old_text = str(kwargs["key"])
     mem = get_persistent_memory()
 
     if action == "add":
