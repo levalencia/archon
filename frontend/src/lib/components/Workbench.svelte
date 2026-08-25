@@ -198,6 +198,7 @@
           tools: d.tools_used || 0,
           latency: d.elapsed_ms != null ? `${d.elapsed_ms}ms` : '—',
           tokens: tokensUsed ? String(tokensUsed) : '—',
+          cost: d.cost_usd != null ? `$${d.cost_usd.toFixed(4)}` : undefined,
         };
         // Populate context from done event if no explicit context event was sent
         if (!context) {

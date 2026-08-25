@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
+from app.observability.cost_tracker import CostTracker
 from app.observability.logging import get_correlation_id
 from app.observability.runtime_events import CompositeEventSink
 from app.routes.chat import (
@@ -161,6 +162,17 @@ async def chat_stream_real(
         artifacts = detect_artifact_in_response(result.content)
         for artifact in artifacts:
             yield _sse("artifact", artifact)
+
+        # Estimate cost
+        cost_tracker = CostTracker()
+        cost_info = cost_tracker.record(
+            conversation_id=conv_id,
+            user_id=user["user_id"],
+            model=settings.llm_model,
+            input_tokens=result.usage.input_tokens,
+            output_tokens=result.usage.output_tokens,
+        )
+
         yield _sse(
             "done",
             {
@@ -172,6 +184,7 @@ async def chat_stream_real(
                 "conversation_id": conv_id,
                 "stop_reason": result.stop_reason.value,
                 "tokens_used": result.usage.total_tokens,
+                "cost_usd": cost_info["cost_usd"],
                 "error": result.error,
             },
         )

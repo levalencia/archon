@@ -26,6 +26,7 @@ def _build_app(llm_mock: AsyncMock) -> FastAPI:
         llm_model = "mock-model"
         llm_api_key = ""
         llm_base_url = ""
+        llm_fallback_providers = ""
 
     app.state.settings = _FakeSettings()
     return app

@@ -184,3 +184,49 @@ async def fuzz_test(iterations: int = 50) -> FuzzResult:
         unexpected=unexpected,
         results=results[-10:],  # Last 10 only
     )
+
+
+# ---------------------------------------------------------------------------
+# Eval harness endpoints
+# ---------------------------------------------------------------------------
+
+from app.eval.evaluators import evaluate_faithfulness, evaluate_relevance
+
+
+class EvaluateRequest(BaseModel):
+    response: str
+    context: str = ""
+    question: str = ""
+
+
+class EvalScoreOut(BaseModel):
+    name: str
+    score: float
+    reason: str
+
+
+class EvaluateResponse(BaseModel):
+    scores: list[EvalScoreOut]
+
+
+AVAILABLE_EVALUATORS = ["faithfulness", "relevance", "safety", "cost"]
+
+
+@router.post("/evaluate", response_model=EvaluateResponse)
+async def evaluate(body: EvaluateRequest) -> EvaluateResponse:
+    """Run groundedness + relevance evaluators on a response."""
+    scores: list[EvalScoreOut] = []
+
+    faith = evaluate_faithfulness(body.response, body.context)
+    scores.append(EvalScoreOut(name=faith.name, score=faith.score, reason=faith.reason))
+
+    rel = evaluate_relevance(body.response, body.question)
+    scores.append(EvalScoreOut(name=rel.name, score=rel.score, reason=rel.reason))
+
+    return EvaluateResponse(scores=scores)
+
+
+@router.get("/evaluators")
+async def list_evaluators() -> dict:
+    """List available evaluator names."""
+    return {"evaluators": AVAILABLE_EVALUATORS}

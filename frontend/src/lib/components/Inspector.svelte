@@ -8,7 +8,7 @@
  <div class="tabs" role="tablist">{#each tabs as tab}<button role="tab" aria-selected={active === tab} onclick={() => onTab(tab)}>{tab[0].toUpperCase()+tab.slice(1)}</button>{/each}</div>
  <div class="inspector-content">
  {#if active === 'run'}
-  <p class="section-label">Current run</p><div class="stat-grid"><div><span>Latency</span><strong>{stats.latency}</strong></div><div><span>Tokens</span><strong>{stats.tokens}</strong></div><div><span>Tools</span><strong>{stats.tools}</strong></div><div><span>Iterations</span><strong>{stats.iterations}</strong></div></div>
+  <p class="section-label">Current run</p><div class="stat-grid"><div><span>Latency</span><strong>{stats.latency}</strong></div><div><span>Tokens</span><strong>{stats.tokens}</strong></div><div><span>Tools</span><strong>{stats.tools}</strong></div><div><span>Iterations</span><strong>{stats.iterations}</strong></div>{#if stats.cost}<div><span>Cost</span><strong style="color:var(--accent)">{stats.cost}</strong></div>{/if}</div>
   <section class="health"><h3>Reliability signals</h3><div><span class="status-dot"></span><span>LLM provider</span><strong>Healthy</strong></div><div><span class="status-dot"></span><span>Vector database</span><strong>Healthy</strong></div></section>
  {:else if active === 'evidence'}
   <p class="section-label">Generated artifacts</p>{#if artifacts.length}<button class="artifact-card" onclick={onOpenArtifact}><strong>{artifacts[0].title}</strong><span>{artifacts.length} available · Open preview</span></button>{:else}<div class="empty-detail">Sources, tool output, and artifacts from the run appear here.</div>{/if}

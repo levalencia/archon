@@ -35,6 +35,7 @@ from app.tools.builtin import (
 )
 from app.tools.image_gen import image_gen_tool
 from app.tools.registry import SecureToolRegistry
+from app.tools.sandbox import execute_sandboxed
 from app.tools.web_search import web_search_tool
 
 logger = structlog.get_logger()
@@ -136,6 +137,22 @@ def _create_tool_registry() -> SecureToolRegistry:
         handler=session_search_tool,
         description="Search past conversations. Use when user asks about previous discussions.",
         input_schema={"required": ["query"]},
+    )
+
+    async def _code_execute_handler(code: str) -> dict:
+        return await execute_sandboxed(code)
+
+    registry.register(
+        name="code_execute",
+        handler=_code_execute_handler,
+        description="Execute Python code safely. Returns stdout, stderr, and exit_code. Use for calculations, data processing, or testing code snippets.",
+        input_schema={
+            "required": ["code"],
+            "properties": {
+                "code": {"type": "string", "description": "Python code to execute"},
+            },
+        },
+        timeout=15,
     )
 
     return registry

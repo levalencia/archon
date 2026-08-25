@@ -12,7 +12,7 @@ export interface Message {
   iterations?: number; context_stats?: ContextStats;
   startedAt?: number; // performance.now() when the message started
 }
-export interface RunStats { latency: string; tokens: string; tools: number; iterations: number }
+export interface RunStats { latency: string; tokens: string; tools: number; iterations: number; cost?: string }
 export interface LogEntry { ts?: string; level?: string; event?: string; data?: Record<string, unknown> }
 export interface Conversation { id: string; title: string; created_at: string; message_count?: number }
 export type InspectorTab = 'run' | 'evidence' | 'context' | 'logs';

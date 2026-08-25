@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     llm_model: str = "mock-model"
     llm_api_key: str = ""
     llm_base_url: str = ""
+    llm_fallback_providers: str = ""  # comma-separated list e.g. "openai,ollama"
 
     # Embeddings
     embedding_provider: str = "mock"  # mock | openai

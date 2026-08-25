@@ -32,14 +32,19 @@ class FallbackLLMChain:
         self.adapters = adapters
         self._failures: dict[int, int] = {}
 
-    async def chat(self, messages: list[dict], max_tokens: int = 2048, **kwargs) -> str:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+    ) -> str:
         """Try each adapter in order. Return first successful response."""
         errors = []
 
         for i, adapter in enumerate(self.adapters):
             adapter_name = type(adapter).__name__
             try:
-                response = await adapter.chat(messages, max_tokens, **kwargs)
+                response = await adapter.chat(messages, max_tokens, temperature=temperature)
                 if i > 0:
                     logger.info(
                         "llm_fallback_success",
