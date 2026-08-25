@@ -149,15 +149,25 @@
   // ── SSE event application ──────────────────────────────────────────
   function apply(event: SSEEvent, am: Message) {
     const payload = event.data;
+    const elapsed = am.startedAt ? Math.round(performance.now() - am.startedAt) : 0;
 
     if (event.event === 'token') {
       am.content += payload;
     } else if (event.event === 'thinking') {
-      am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: payload }];
+      am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: payload, elapsed_ms: elapsed }];
     } else if (event.event === 'skill') {
       try { am.skills_used = [...(am.skills_used || []), JSON.parse(payload)]; } catch { /* skip */ }
     } else if (event.event === 'tool_call') {
-      try { am.tool_calls = [...(am.tool_calls || []), JSON.parse(payload)]; } catch { /* skip */ }
+      try {
+        const tc = JSON.parse(payload);
+        tc.elapsed_ms = elapsed;
+        am.tool_calls = [...(am.tool_calls || []), tc];
+      } catch { /* skip */ }
+    } else if (event.event === 'sources') {
+      try {
+        const srcs = JSON.parse(payload);
+        am.sources = [...(am.sources || []), ...srcs];
+      } catch { /* skip */ }
     } else if (event.event === 'artifact') {
       try {
         const a = JSON.parse(payload);
@@ -228,6 +238,8 @@
         tool_calls: [],
         skills_used: [],
         artifacts: [],
+        sources: [],
+        startedAt: performance.now(),
       };
       messages = [...messages, am];
 

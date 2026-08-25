@@ -36,7 +36,8 @@ class TestHealthEndpoints:
         """GET /healthz returns alive status."""
         response = client.get("/healthz")
         assert response.status_code == 200
-        assert response.json() == {"status": "alive"}
+        assert response.json()["status"] == "alive"
+        assert "llm_model" in response.json()
 
     @pytest.mark.unit
     def test_readiness_probe(self, client: TestClient) -> None:

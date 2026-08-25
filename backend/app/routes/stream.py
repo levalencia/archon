@@ -110,17 +110,27 @@ async def chat_stream_real(
             elif event.kind is AgentEventKind.TOOL_CALL_REQUESTED:
                 yield _sse("thinking", f"Calling {event.data['name']}...")
             elif event.kind is AgentEventKind.TOOL_CALL_COMPLETED:
+                output = event.data.get("output", {})
                 yield _sse(
                     "tool_call",
                     {
                         "tool": event.data["name"],
                         "parameters": event.data.get("arguments", {}),
-                        "result": json.dumps(event.data["output"], ensure_ascii=False, default=str)[
+                        "result": json.dumps(output, ensure_ascii=False, default=str)[
                             :300
                         ],
                         "status": "success",
                     },
                 )
+                # Emit source citations for web search results
+                if event.data["name"] == "web_search" and isinstance(output, dict):
+                    sources = [
+                        {"title": r.get("title", ""), "url": r.get("url", "")}
+                        for r in output.get("results", [])
+                        if r.get("url")
+                    ]
+                    if sources:
+                        yield _sse("sources", sources)
             elif event.kind is AgentEventKind.TEXT_DELTA:
                 yield _sse("token", event.data["text"])
 
