@@ -69,7 +69,7 @@
   // ── Health check ───────────────────────────────────────────────────
   async function loadHealth() {
     try {
-      const r = await fetch('/api/admin/health');
+      const r = await fetch('/healthz');
       if (!r.ok) throw new Error();
       const d = await r.json();
       model = d.llm_model || 'Configured model';

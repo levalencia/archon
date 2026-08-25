@@ -142,8 +142,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/healthz")
     async def healthz() -> dict:
-        """Liveness probe."""
-        return {"status": "alive"}
+        """Liveness probe — also returns model info for the UI."""
+        return {
+            "status": "alive",
+            "llm_model": app.state.settings.llm_model,
+            "llm_provider": app.state.settings.llm_provider,
+        }
 
     @app.get("/readyz")
     async def readyz():
