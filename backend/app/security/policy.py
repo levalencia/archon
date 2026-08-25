@@ -112,7 +112,16 @@ def _canonical_hostname(value: str) -> str:
     try:
         return str(ipaddress.IPv4Address(ascii_host))
     except ipaddress.AddressValueError:
-        if all(character.isdigit() or character == "." for character in ascii_host):
+        labels = ascii_host.split(".")
+        if all(
+            label.isdigit()
+            or (
+                label.startswith("0x")
+                and len(label) > 2
+                and all(character in "0123456789abcdef" for character in label[2:])
+            )
+            for label in labels
+        ):
             raise ValueError("host is a noncanonical IPv4 numeric alias") from None
     if len(ascii_host) > 253:
         raise ValueError("host is too long")

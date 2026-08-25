@@ -167,9 +167,30 @@ class TestPolicyModels:
         with pytest.raises(ValueError, match="tool"):
             PolicyRequest(" ", (), frozenset({RiskClass.READ}))
 
+    @pytest.mark.parametrize(
+        "alias",
+        [
+            "0x7f000001",
+            "0X7F000001",
+            "0x7f.0.0.1",
+            "0X7F.0.0.1",
+            "127.0x0.0.1",
+            "127.0X0.0.1",
+            "0x7f.1",
+            "0X7F.01",
+        ],
+    )
+    def test_hexadecimal_legacy_ipv4_aliases_are_rejected(self, alias: str) -> None:
+        with pytest.raises(ValueError, match="noncanonical IPv4 numeric alias"):
+            resource(ResourceKind.HOST, alias)
+
     def test_hosts_use_idna2008_uts46_and_canonical_ipv4(self) -> None:
         assert resource(ResourceKind.HOST, "faß.de").pattern == "xn--fa-hia.de"
         assert resource(ResourceKind.HOST, "127.0.0.1").pattern == "127.0.0.1"
+
+    @pytest.mark.parametrize("hostname", ["x.example", "0xcorp.example", "0xface.example"])
+    def test_non_numeric_hostnames_containing_x_are_accepted(self, hostname: str) -> None:
+        assert resource(ResourceKind.HOST, hostname).pattern == hostname
 
 
 @pytest.mark.unit
