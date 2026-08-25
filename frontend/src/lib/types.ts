@@ -3,7 +3,7 @@ export type Role = 'user' | 'assistant';
 export interface ToolCall { tool: string; parameters?: Record<string, unknown>; result?: unknown; status?: string; elapsed_ms?: number }
 export interface Skill { name: string; description?: string }
 export interface ThinkingStep { type: string; detail: string; done?: boolean; elapsed_ms?: number }
-export interface ContextStats { tokens?: number; budget?: number; utilization_pct?: number; compacted?: boolean; tokens_before?: number; tokens_after?: number; saved_pct?: number }
+export interface ContextStats { tokens?: number; budget?: number; utilization_pct?: number; compacted?: boolean; tokens_before?: number; tokens_after?: number; tokens_saved?: number; saved_pct?: number; messages?: number; messages_before?: number; messages_after?: number }
 export interface Artifact { id: string; title: string; type: string; language?: string; content_length: number; version?: number }
 export interface Message {
   id: string | number; role: Role; content: string; timestamp: string;

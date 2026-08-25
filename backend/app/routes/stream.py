@@ -77,6 +77,27 @@ async def chat_stream_real(
             [body.image] if body.image else None,
             user["user_id"],
         )
+
+        # Auto-compact context if approaching token limit
+        from app.runtime.models import Role as MRole
+        from app.services.auto_compact import auto_compact_context
+
+        raw_msgs = [{"role": m.role.value, "content": m.content} for m in messages]
+        raw_msgs, compact_stats = await auto_compact_context(
+            raw_msgs,
+            llm_chat_fn=get_llm_client(settings).chat
+            if hasattr(get_llm_client(settings), "chat")
+            else None,
+            max_tokens=settings.context_length,
+        )
+        yield _sse("context", compact_stats)
+
+        if compact_stats.get("compacted"):
+            # Rebuild typed messages from compacted raw messages
+            from app.runtime.models import Message as MMsg
+
+            messages = [MMsg(MRole(m["role"]), m["content"]) for m in raw_msgs]
+
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
         runtime = AgentRuntime(
             as_model_provider(get_llm_client(settings)),
