@@ -276,6 +276,8 @@ class SecureToolRegistry:
         tool = self._tools.get(call.name)
         if tool is None:
             raise PolicyMetadataError(f"Unknown tool: {call.name}")
+        if not tool.risk_classes:
+            raise PolicyMetadataError(f"Tool '{call.name}' has no risk classification")
 
         resources: tuple[ResourcePattern, ...] = ()
         if tool.resource_resolver is not None:

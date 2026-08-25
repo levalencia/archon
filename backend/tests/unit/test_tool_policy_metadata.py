@@ -8,13 +8,7 @@ import pytest
 
 from app.routes.chat import _create_tool_registry
 from app.runtime.models import ToolCall
-from app.security.policy import (
-    PolicyAction,
-    ResourceKind,
-    ResourcePattern,
-    RiskClass,
-    RulePolicyEngine,
-)
+from app.security.policy import ResourceKind, ResourcePattern, RiskClass
 from app.tools.builtin import register_builtin_tools
 from app.tools.registry import (
     PolicyMetadataError,
@@ -141,14 +135,27 @@ class TestPolicyRequestBridge:
         with pytest.raises(PolicyMetadataError, match="TOOL.*sole tool identity"):
             registry.policy_request(ToolCall("call-1", "safe_name", {}))
 
-    def test_unclassified_legacy_registration_is_constructible_but_denied(self) -> None:
+    async def test_unclassified_legacy_registration_and_execution_remain_compatible(
+        self,
+    ) -> None:
+        resolver_calls: list[object] = []
+
+        def resolver(arguments: object) -> tuple[ResourcePattern, ...]:
+            resolver_calls.append(arguments)
+            return ()
+
         registry = SecureToolRegistry()
-        registry.register("legacy", _handler)
+        registry.register("legacy", _handler, resource_resolver=resolver)
+        secret = "do-not-leak-this-token"
+        call = ToolCall("call-1", "legacy", {"token": secret})
 
-        request = registry.policy_request(ToolCall("call-1", "legacy", {}))
+        with pytest.raises(PolicyMetadataError) as error:
+            registry.policy_request(call)
 
-        assert request.risk_classes == frozenset()
-        assert RulePolicyEngine([]).evaluate(request).action is PolicyAction.DENY
+        assert "legacy" in str(error.value)
+        assert secret not in str(error.value)
+        assert resolver_calls == []
+        assert await registry.execute(call) == {"ok": True}
 
     def test_list_tools_exposes_only_safe_policy_metadata(self) -> None:
         registry = SecureToolRegistry()
