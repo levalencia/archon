@@ -32,16 +32,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite+aiosqlite:///archon.db"
-    redis_url: str = "redis://localhost:6379/0"
-
-    # Auth
-    jwt_secret: str = (
-        "archon-dev-secret-change-in-prod"  # How many skills to search per query (1-10)
-    )
-    llm_max_tokens: int = 4096
-
-    # Database
-    database_url: str = "postgresql+asyncpg://archon:archon_dev@localhost:5432/archon"
+    vector_store_backend: str = "memory"  # memory | postgres
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

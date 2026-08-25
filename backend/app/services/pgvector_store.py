@@ -217,6 +217,10 @@ class PgVectorStore:
             await session.commit()
             return len(rows)
 
+    def stats(self) -> dict:
+        """Return store statistics (sync, best-effort)."""
+        return {"total_chunks": -1, "total_documents": -1, "store_type": "postgres"}
+
     @staticmethod
     def _cosine_similarity(a: list[float], b: list[float]) -> float:
         dot = sum(x * y for x, y in zip(a, b, strict=False))

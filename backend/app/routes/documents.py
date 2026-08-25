@@ -9,6 +9,7 @@ DELETE /api/documents/{id}      — Delete a document
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -26,10 +27,37 @@ router = APIRouter(
     prefix="/api/documents", tags=["documents"], dependencies=[Depends(get_current_user)]
 )
 
-# Module-level stores
-_vector_store = VectorStore()
+# Module-level stores (lazy-initialized)
+_vector_store: Any = None
 _embedding_service: EmbeddingService | None = None
 _document_registry: dict[str, dict] = {}
+
+
+def _get_vector_store(request: Request) -> Any:
+    """Lazy-initialize vector store from app settings."""
+    global _vector_store  # noqa: PLW0603
+    if _vector_store is not None:
+        return _vector_store
+
+    settings = request.app.state.settings
+    backend = getattr(settings, "vector_store_backend", "memory")
+
+    if backend == "postgres":
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        from app.services.pgvector_store import PgVectorStore
+
+        engine = create_async_engine(settings.database_url, echo=False)
+        sf = async_sessionmaker(engine, expire_on_commit=False)
+        _vector_store = PgVectorStore(sf)
+        # Store engine for table creation
+        _vector_store._engine = engine  # type: ignore[attr-defined]
+        logger.info("vector_store_initialized", backend="postgres", url=settings.database_url)
+    else:
+        _vector_store = VectorStore()
+        logger.info("vector_store_initialized", backend="memory")
+
+    return _vector_store
 
 
 def _get_embedding_service(request: Request) -> EmbeddingService:
@@ -92,9 +120,17 @@ async def upload_document(
     doc_id = str(uuid.uuid4())
     settings = request.app.state.settings
     llm = create_llm_client(settings)
+    store = _get_vector_store(request)
+
+    # Ensure tables exist for postgres backend
+    if hasattr(store, "_engine"):
+        from app.services.db_store import Base
+
+        async with store._engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     pipeline = RAGPipeline(
-        vector_store=_vector_store,
+        vector_store=store,
         embedding_service=_get_embedding_service(request),
         llm=llm,
     )
@@ -132,9 +168,10 @@ async def query_documents(
     """Query ingested documents using RAG pipeline."""
     settings = request.app.state.settings
     llm = create_llm_client(settings)
+    store = _get_vector_store(request)
 
     pipeline = RAGPipeline(
-        vector_store=_vector_store,
+        vector_store=store,
         embedding_service=_get_embedding_service(request),
         llm=llm,
         top_k=body.top_k,
@@ -176,12 +213,14 @@ async def list_documents(
 @router.delete("/{document_id}", status_code=204)
 async def delete_document(
     document_id: str,
+    request: Request,
     user: dict = Depends(get_current_user),  # noqa: B008
 ) -> None:
     """Delete a document and its chunks from the vector store."""
     meta = _document_registry.get(document_id)
     if not meta or meta["user_id"] != user["user_id"]:
         raise HTTPException(status_code=404, detail="Document not found")
-    await _vector_store.delete_document(document_id)
+    store = _get_vector_store(request)
+    await store.delete_document(document_id)
     _document_registry.pop(document_id, None)
     logger.info("document_deleted", document_id=document_id)
