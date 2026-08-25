@@ -13,9 +13,9 @@ from app.memory.advanced import get_token_count, summarize_messages
 logger = structlog.get_logger()
 
 # Config
-MAX_CONTEXT_TOKENS = 8000  # Claude Opus can handle 200K but we keep it efficient
+MAX_CONTEXT_TOKENS = 200000  # Claude Opus can handle 200K but we keep it efficient
 COMPACT_THRESHOLD = 0.75  # Trigger at 75% full
-KEEP_RECENT = 10  # Always keep last N messages
+KEEP_RECENT = 10  # Always keep last N messages (adjusted down if few messages)
 
 
 async def auto_compact_context(
@@ -48,16 +48,6 @@ async def auto_compact_context(
     system_msgs = [m for m in messages if m.get("role") == "system"]
     conv_msgs = [m for m in messages if m.get("role") != "system"]
 
-    if len(conv_msgs) <= keep_recent:
-        total_tokens = sum(get_token_count(m.get("content", "")) + 4 for m in messages)
-        return messages, {
-            "compacted": False,
-            "tokens": total_tokens,
-            "budget": max_tokens,
-            "utilization_pct": round(total_tokens / max_tokens * 100, 1),
-            "messages": len(messages),
-        }
-
     # Count tokens
     total_tokens = sum(get_token_count(m.get("content", "")) + 4 for m in messages)
     budget = max_tokens
@@ -72,9 +62,20 @@ async def auto_compact_context(
             "messages": len(messages),
         }
 
-    # COMPACT: summarize old messages, keep recent
-    old_msgs = conv_msgs[:-keep_recent]
-    recent_msgs = conv_msgs[-keep_recent:]
+    # Need to compact — but need at least 2 conv messages to split
+    if len(conv_msgs) < 2:
+        return messages, {
+            "compacted": False,
+            "tokens": total_tokens,
+            "budget": budget,
+            "utilization_pct": round(utilization * 100, 1),
+            "messages": len(messages),
+        }
+
+    # Adjust keep_recent down if we have few messages
+    actual_keep = min(keep_recent, max(1, len(conv_msgs) - 1))
+    old_msgs = conv_msgs[:-actual_keep]
+    recent_msgs = conv_msgs[-actual_keep:]
 
     logger.info(
         "context_compacting",
