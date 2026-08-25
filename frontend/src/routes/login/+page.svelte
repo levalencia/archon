@@ -1,10 +1,13 @@
 <script lang="ts">
+  import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-svelte';
+
   let mode = $state<'login' | 'register'>('login');
   let username = $state('');
   let password = $state('');
   let email = $state('');
   let error = $state('');
   let loading = $state(false);
+  let showPassword = $state(false);
 
   async function handleSubmit() {
     error = '';
@@ -41,11 +44,13 @@
   }
 </script>
 
-<div class="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
-  <div class="w-full max-w-md p-8">
+<div class="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4">
+  <div class="w-full max-w-md">
     <!-- Logo -->
     <div class="text-center mb-8">
-      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--purple)] flex items-center justify-center text-3xl font-bold text-white mx-auto mb-4">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--purple)]
+        flex items-center justify-center text-3xl font-bold text-white mx-auto mb-4
+        shadow-[0_0_30px_rgba(56,189,248,0.2)]">
         A
       </div>
       <h1 class="text-2xl font-semibold text-[var(--text-primary)]">Archon</h1>
@@ -53,32 +58,37 @@
     </div>
 
     <!-- Form card -->
-    <div class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl p-6">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl p-6
+      shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
       <!-- Tabs -->
       <div class="flex mb-6 bg-[var(--bg-tertiary)] rounded-lg p-1">
         <button
           onclick={() => { mode = 'login'; error = ''; }}
-          class="flex-1 py-2 rounded-md text-sm font-medium transition-all cursor-pointer
+          class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer
             {mode === 'login'
-              ? 'bg-[var(--accent-glow)] text-[var(--accent)]'
+              ? 'bg-[var(--accent-glow)] text-[var(--accent)] shadow-sm'
               : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}"
         >
+          <LogIn size={14} />
           Sign In
         </button>
         <button
           onclick={() => { mode = 'register'; error = ''; }}
-          class="flex-1 py-2 rounded-md text-sm font-medium transition-all cursor-pointer
+          class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer
             {mode === 'register'
-              ? 'bg-[var(--accent-glow)] text-[var(--accent)]'
+              ? 'bg-[var(--accent-glow)] text-[var(--accent)] shadow-sm'
               : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}"
         >
+          <UserPlus size={14} />
           Register
         </button>
       </div>
 
       <!-- Error -->
       {#if error}
-        <div class="mb-4 px-4 py-2 bg-[rgba(248,81,73,0.1)] border border-[var(--error)] rounded-lg text-sm text-[var(--error)]">
+        <div class="mb-4 px-4 py-2.5 bg-[rgba(248,81,73,0.1)] border border-[var(--error)]
+          rounded-lg text-sm text-[var(--error)] flex items-center gap-2">
+          <span class="shrink-0 w-1.5 h-1.5 rounded-full bg-[var(--error)]"></span>
           {error}
         </div>
       {/if}
@@ -87,53 +97,93 @@
       <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
         <div class="space-y-4">
           <div>
-            <label for="username" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Username</label>
+            <label for="username" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+              Username
+            </label>
             <input
               id="username"
               type="text"
               bind:value={username}
               required
               minlength="3"
-              class="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)] transition-colors"
+              autocomplete="username"
+              class="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg
+                text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)]
+                transition-colors placeholder:text-[var(--text-muted)]"
               placeholder="Enter username"
             />
           </div>
 
           {#if mode === 'register'}
             <div>
-              <label for="email" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Email</label>
+              <label for="email" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                Email
+              </label>
               <input
                 id="email"
                 type="email"
                 bind:value={email}
-                class="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)] transition-colors"
+                autocomplete="email"
+                class="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg
+                  text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)]
+                  transition-colors placeholder:text-[var(--text-muted)]"
                 placeholder="Optional"
               />
             </div>
           {/if}
 
           <div>
-            <label for="password" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Password</label>
-            <input
-              id="password"
-              type="password"
-              bind:value={password}
-              required
-              minlength="6"
-              class="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)] transition-colors"
-              placeholder="Enter password"
-            />
+            <label for="password" class="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+              Password
+            </label>
+            <div class="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                bind:value={password}
+                required
+                minlength="6"
+                autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
+                class="w-full px-4 py-2.5 pr-10 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg
+                  text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)]
+                  transition-colors placeholder:text-[var(--text-muted)]"
+                placeholder="Enter password"
+              />
+              <button
+                type="button"
+                onclick={() => showPassword = !showPassword}
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]
+                  hover:text-[var(--text-secondary)] transition-colors cursor-pointer"
+                tabindex="-1"
+              >
+                {#if showPassword}
+                  <EyeOff size={16} />
+                {:else}
+                  <Eye size={16} />
+                {/if}
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading || !username || !password}
-            class="w-full py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer
+            class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium
+              transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
               {loading
-                ? 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] cursor-not-allowed'
-                : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]'}"
+                ? 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
+                : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] shadow-[0_0_12px_rgba(56,189,248,0.15)]'}"
           >
-            {loading ? '...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+            {#if loading}
+              <span class="w-4 h-4 border-2 border-[var(--text-muted)] border-t-transparent rounded-full animate-spin"></span>
+              Processing…
+            {:else if mode === 'login'}
+              <LogIn size={14} />
+              Sign In
+            {:else}
+              <UserPlus size={14} />
+              Create Account
+            {/if}
           </button>
         </div>
       </form>

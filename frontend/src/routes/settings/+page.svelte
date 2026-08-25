@@ -1,5 +1,7 @@
 <script lang="ts">
   import { authenticatedFetch } from '$lib/auth';
+    import { Settings, Package, GitBranch, Trash2, Plus, Save, Check } from 'lucide-svelte';
+
   let skillsTopK = $state(3);
   let loading = $state(false);
   let saved = $state(false);
@@ -7,156 +9,206 @@
   let importRepo = $state('');
   let importPath = $state('SKILL.md');
   let importStatus = $state('');
-  let metrics: any = $state(null);
+  let importLoading = $state(false);
 
   async function loadSettings() {
-    const r = await authenticatedFetch('/api/admin/settings');
-    const d = await r.json();
-    skillsTopK = d.settings?.skills_top_k || 3;
-
-    const sr = await authenticatedFetch('/api/skills');
-    skills = await sr.json();
-
-    const mr = await authenticatedFetch('/api/admin/metrics');
-    metrics = await mr.json();
+    try {
+      const sr = await authenticatedFetch('/api/skills');
+      if (sr.ok) skills = await sr.json();
+    } catch { /* ignore */ }
   }
 
   async function saveSettings() {
     loading = true;
-    await authenticatedFetch('/api/admin/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skills_top_k: skillsTopK }),
-    });
-    saved = true;
+    try {
+      await authenticatedFetch('/api/skills', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ top_k: skillsTopK }),
+      });
+      saved = true;
+      setTimeout(() => saved = false, 2000);
+    } catch { /* ignore */ }
     loading = false;
-    setTimeout(() => saved = false, 2000);
   }
 
   async function importSkill() {
     if (!importRepo) return;
-    importStatus = 'importing...';
-    const r = await authenticatedFetch('/api/skills/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo: importRepo, path: importPath }),
-    });
-    const d = await r.json();
-    importStatus = d.error ? `Error: ${d.error}` : `Imported: ${d.name} (${d.content_length} chars)`;
-    importRepo = '';
-    const sr = await authenticatedFetch('/api/skills');
-    skills = await sr.json();
+    importLoading = true;
+    importStatus = 'Importing…';
+    try {
+      const r = await authenticatedFetch('/api/skills/import/github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo: importRepo, path: importPath }),
+      });
+      const d = await r.json();
+      importStatus = d.error ? `Error: ${d.error}` : `Imported: ${d.name} (${d.content_length} chars)`;
+      importRepo = '';
+      await loadSettings();
+    } catch {
+      importStatus = 'Import failed — check repo path';
+    }
+    importLoading = false;
   }
 
-  async function deleteSkill(name: string) {
-    await authenticatedFetch(`/api/skills/${name}`, { method: 'DELETE' });
-    const sr = await authenticatedFetch('/api/skills');
-    skills = await sr.json();
+  async function deleteSkill(id: string) {
+    await authenticatedFetch(`/api/skills/${id}`, { method: 'DELETE' });
+    await loadSettings();
   }
 
   $effect(() => { loadSettings(); });
 </script>
 
-<div class="max-w-4xl mx-auto p-6">
-  <h1 class="text-xl font-semibold text-[var(--text-primary)] mb-6">⚙️ Settings</h1>
+<div class="max-w-4xl mx-auto p-6 space-y-6">
+  <!-- Page header -->
+  <div class="flex items-center gap-3">
+    <div class="p-2 rounded-lg bg-[var(--bg-tertiary)]">
+      <Settings size={20} class="text-[var(--accent)]" />
+    </div>
+    <div>
+      <h1 class="text-xl font-semibold text-[var(--text-primary)]">Settings</h1>
+      <p class="text-xs text-[var(--text-muted)]">Skills configuration & management</p>
+    </div>
+  </div>
 
-  <!-- Skills Settings -->
-  <section class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5 mb-6">
-    <h2 class="text-base font-semibold text-[var(--text-primary)] mb-4">Skills Configuration</h2>
+  <!-- Skills Configuration -->
+  <section class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-5">
+      <Package size={16} class="text-[var(--accent)]" />
+      <h2 class="text-base font-semibold text-[var(--text-primary)]">Skills Configuration</h2>
+    </div>
 
-    <div class="flex items-center gap-4 mb-4">
-      <label for="skills-top-k" class="text-sm text-[var(--text-secondary)]">Skills per query (top K):</label>
+    <!-- Top-K Slider -->
+    <div class="mb-5">
+      <label for="skills-top-k" class="block text-sm text-[var(--text-secondary)] mb-2">
+        Skills per query (top K): <span class="font-semibold text-[var(--accent)]">{skillsTopK}</span>
+      </label>
+      <div class="flex items-center gap-4">
+        <input
+          id="skills-top-k"
+          type="range"
+          bind:value={skillsTopK}
+          min="1" max="10" step="1"
+          class="flex-1 h-2 rounded-full appearance-none cursor-pointer
+            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--accent)]
+            [&::-webkit-slider-thumb]:shadow-[0_0_8px_var(--accent-glow)]
+            [&::-webkit-slider-runnable-track]:bg-[var(--bg-tertiary)] [&::-webkit-slider-runnable-track]:rounded-full"
+        />
+        <span class="text-xs text-[var(--text-muted)] w-8 text-right">{skillsTopK}/10</span>
+      </div>
+    </div>
+
+    <button
+      onclick={saveSettings}
+      disabled={loading}
+      class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer
+        {saved
+          ? 'bg-[rgba(63,185,80,0.15)] text-[var(--success)] border border-[var(--success)]'
+          : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]'}"
+    >
+      {#if saved}
+        <Check size={14} />
+        Saved
+      {:else}
+        <Save size={14} />
+        {loading ? 'Saving…' : 'Save Settings'}
+      {/if}
+    </button>
+  </section>
+
+  <!-- Import from GitHub -->
+  <section class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-4">
+      <GitBranch size={16} class="text-[var(--text-secondary)]" />
+      <h2 class="text-base font-semibold text-[var(--text-primary)]">Import from GitHub</h2>
+    </div>
+
+    <div class="flex gap-2">
       <input
-        id="skills-top-k"
-        type="number"
-        bind:value={skillsTopK}
-        min="1" max="10"
-        class="w-20 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm"
+        type="text"
+        bind:value={importRepo}
+        placeholder="owner/repo (e.g. mattpocock/skills)"
+        class="flex-1 px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg
+          text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)] transition-colors"
+      />
+      <input
+        type="text"
+        bind:value={importPath}
+        placeholder="path/to/SKILL.md"
+        class="w-48 px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg
+          text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)] transition-colors"
       />
       <button
-        onclick={saveSettings}
-        disabled={loading}
-        class="px-4 py-1.5 bg-[var(--accent)] text-white rounded-lg text-sm hover:bg-[var(--accent-hover)] cursor-pointer"
+        onclick={importSkill}
+        disabled={importLoading || !importRepo}
+        class="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-tertiary)] border border-[var(--border)]
+          rounded-lg text-[var(--text-primary)] text-sm hover:border-[var(--accent)] transition-colors cursor-pointer
+          disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {saved ? '✓ Saved' : 'Save'}
+        <Plus size={14} />
+        {importLoading ? 'Importing…' : 'Import'}
       </button>
     </div>
+    {#if importStatus}
+      <p class="text-xs mt-2 {importStatus.startsWith('Error') ? 'text-[var(--error)]' : 'text-[var(--success)]'}">
+        {importStatus}
+      </p>
+    {/if}
+  </section>
 
-    <!-- Import from GitHub -->
-    <div class="border-t border-[var(--border)] pt-4 mt-4">
-      <h3 class="text-sm font-medium text-[var(--text-primary)] mb-3">Import Skill from GitHub</h3>
-      <div class="flex gap-2">
-        <input
-          type="text"
-          bind:value={importRepo}
-          placeholder="owner/repo (e.g. mattpocock/skills)"
-          class="flex-1 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm"
-        />
-        <input
-          type="text"
-          bind:value={importPath}
-          placeholder="path/to/SKILL.md"
-          class="w-48 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm"
-        />
-        <button
-          onclick={importSkill}
-          class="px-4 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm hover:border-[var(--accent)] cursor-pointer"
-        >
-          Import
-        </button>
+  <!-- Skills List -->
+  <section class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <Package size={16} class="text-[var(--purple)]" />
+        <h2 class="text-base font-semibold text-[var(--text-primary)]">
+          Registered Skills
+        </h2>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
+          {skills.length}
+        </span>
       </div>
-      {#if importStatus}
-        <p class="text-xs text-[var(--text-muted)] mt-2">{importStatus}</p>
-      {/if}
     </div>
 
-    <!-- Skills list -->
-    <div class="border-t border-[var(--border)] pt-4 mt-4">
-      <h3 class="text-sm font-medium text-[var(--text-primary)] mb-3">
-        Registered Skills ({skills.length})
-      </h3>
+    {#if skills.length === 0}
+      <div class="text-center py-8 text-[var(--text-muted)]">
+        <Package size={32} class="mx-auto mb-2 opacity-40" />
+        <p class="text-sm">No skills registered yet</p>
+        <p class="text-xs mt-1">Import one from GitHub above</p>
+      </div>
+    {:else}
       <div class="space-y-2">
         {#each skills as skill}
-          <div class="flex items-center justify-between px-3 py-2 bg-[var(--bg-tertiary)] rounded-lg">
-            <div>
-              <span class="text-sm text-[var(--text-primary)]">{skill.name}</span>
-              <span class="text-xs text-[var(--text-muted)] ml-2">{skill.content_length} chars</span>
-              {#if skill.source_url}
-                <span class="text-[10px] text-[var(--accent)] ml-2">GitHub</span>
-              {:else}
-                <span class="text-[10px] text-[var(--text-muted)] ml-2">built-in</span>
-              {/if}
+          <div class="flex items-center justify-between px-4 py-3 bg-[var(--bg-tertiary)] rounded-lg
+            border border-transparent hover:border-[var(--border)] transition-colors group">
+            <div class="flex items-center gap-3">
+              <Package size={14} class="text-[var(--text-muted)]" />
+              <div>
+                <span class="text-sm font-medium text-[var(--text-primary)]">{skill.name}</span>
+                <span class="text-xs text-[var(--text-muted)] ml-2">{skill.content_length} chars</span>
+                {#if skill.source_url}
+                  <span class="inline-flex items-center gap-1 text-[10px] text-[var(--accent)] ml-2">
+                    <GitBranch size={10} /> GitHub
+                  </span>
+                {:else}
+                  <span class="text-[10px] text-[var(--text-muted)] ml-2">built-in</span>
+                {/if}
+              </div>
             </div>
             <button
-              onclick={() => deleteSkill(skill.name)}
-              class="text-xs text-[var(--text-muted)] hover:text-[var(--error)] cursor-pointer"
+              onclick={() => deleteSkill(skill.id || skill.name)}
+              class="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--error)]
+                hover:bg-[rgba(248,81,73,0.1)] transition-colors cursor-pointer
+                opacity-0 group-hover:opacity-100"
+              title="Delete skill"
             >
-              ✕
+              <Trash2 size={14} />
             </button>
           </div>
         {/each}
       </div>
-    </div>
+    {/if}
   </section>
-
-  <!-- Metrics -->
-  {#if metrics}
-    <section class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
-      <h2 class="text-base font-semibold text-[var(--text-primary)] mb-4">📊 Metrics</h2>
-      <div class="grid grid-cols-4 gap-3">
-        <div class="p-3 bg-[var(--bg-tertiary)] rounded-lg">
-          <div class="text-[11px] text-[var(--text-muted)]">Uptime</div>
-          <div class="text-lg font-semibold text-[var(--text-primary)]">
-            {Math.round((metrics.uptime_seconds || 0) / 60)}m
-          </div>
-        </div>
-        <div class="p-3 bg-[var(--bg-tertiary)] rounded-lg">
-          <div class="text-[11px] text-[var(--text-muted)]">Circuit Breakers</div>
-          <div class="text-lg font-semibold text-[var(--success)]">
-            {metrics.circuit_breaker_count || 0}
-          </div>
-        </div>
-      </div>
-    </section>
-  {/if}
 </div>

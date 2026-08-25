@@ -1,8 +1,15 @@
 <script lang="ts">
   import '../app.css';
+  import { page } from '$app/stores';
+  import AppShell from '$lib/components/AppShell.svelte';
+
   let { children } = $props();
 </script>
 
-<div class="flex h-[100dvh] overflow-hidden">
+{#if $page.url.pathname === '/login'}
   {@render children()}
-</div>
+{:else}
+  <AppShell>
+    {@render children()}
+  </AppShell>
+{/if}

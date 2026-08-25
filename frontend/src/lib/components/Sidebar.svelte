@@ -10,9 +10,8 @@
 </script>
 
 <div class="sidebar-shell">
-  <header class="brand">
-    <div class="brand-mark" aria-hidden="true">A</div>
-    <div><strong>Archon</strong><span>Reliability Workbench</span></div>
+  <header class="brand" style="height:auto; padding:12px 16px;">
+    <div><strong style="font-size:13px;">Conversations</strong></div>
     <button class="icon-button mobile-only" aria-label="Close conversations" onclick={onClose}>×</button>
   </header>
   <button class="primary new-chat" onclick={onNew}>New conversation</button>
@@ -30,5 +29,4 @@
       </div>
     {/each}{/if}
   </nav>
-  <footer class="side-links"><a href="/dashboard">Dashboard</a><a href="/documents">Documents</a><a href="/eval">Evaluations</a><a href="/settings">Settings</a></footer>
 </div>
