@@ -189,11 +189,20 @@
         };
         // Populate context from done event if no explicit context event was sent
         if (!context) {
-          const budget = 200000; // default context length
+          const budget = 200000;
           context = {
             tokens: tokensUsed,
             budget,
             utilization_pct: Math.round((tokensUsed / budget) * 100),
+          };
+          am.context_stats = context;
+        } else {
+          // Update context with output tokens added
+          const totalTokens = (context.tokens || 0) + tokensUsed;
+          context = {
+            ...context,
+            tokens: totalTokens,
+            utilization_pct: Math.round((totalTokens / (context.budget || 200000)) * 100),
           };
           am.context_stats = context;
         }
