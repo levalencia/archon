@@ -1,8 +1,8 @@
 """Secure tool registry with permission checks, timeout enforcement, and audit logging.
 
 Every tool call goes through:
-1. Permission check (is this agent allowed to use this tool?)
-2. Input validation (does the input match the schema?)
+1. Input validation (does the input match the schema?)
+2. Permission check (is this agent allowed to use this tool?)
 3. Timeout enforcement (asyncio.wait_for prevents hanging tools)
 4. Audit logging (every call logged with correlation ID)
 
@@ -84,14 +84,9 @@ def resolve_workspace_path(arguments: Mapping[str, Any]) -> tuple[ResourcePatter
     path = arguments.get("path")
     if not isinstance(path, str):
         raise ValueError("path argument must be a string")
-    workspace_root = arguments.get("workspace_root")
-    if workspace_root is not None and not isinstance(workspace_root, (str, os.PathLike)):
-        raise ValueError("workspace_root argument must be a path")
-    root_value = (
-        workspace_root
-        if workspace_root is not None
-        else os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
-    )
+    # The root is trusted server configuration. It must never be selected by model-controlled
+    # tool arguments; registry validation also rejects ``workspace_root`` for all live tools.
+    root_value = os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
     root = Path(root_value).resolve(strict=False)
     requested = Path(path)
     candidate = requested if requested.is_absolute() else root / requested
@@ -171,6 +166,32 @@ class SecureToolRegistry:
         )
         logger.info("tool_registered", name=canonical_name, description=description)
 
+    @staticmethod
+    def _validate_arguments(tool: ToolDefinition, arguments: Mapping[str, Any]) -> dict[str, Any]:
+        """Return detached arguments after applying the tool's declared field policy.
+
+        Required names remain declarations when a compact schema omits ``properties``. Unknown
+        fields fail closed unless the schema deliberately opts into ``additionalProperties``.
+        Error messages never include caller-controlled names or values.
+        """
+        schema = cast(Mapping[str, Any], tool.input_schema)
+        required_fields = schema.get("required", ())
+        # Schema shape is trusted registration metadata; normalize only its field declarations.
+        allowed_fields = set(required_fields)
+        properties = schema.get("properties")
+        if isinstance(properties, Mapping):
+            allowed_fields.update(properties)
+
+        for field in required_fields:
+            if field not in arguments:
+                raise ValueError(f"Missing required parameter: {field}")
+        if schema.get("additionalProperties") is not True and any(
+            field not in allowed_fields for field in arguments
+        ):
+            raise ValueError("Unexpected parameter(s) supplied")
+
+        return copy.deepcopy(dict(arguments))
+
     async def execute(
         self, call: ToolCall | str, parameters: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -191,7 +212,10 @@ class SecureToolRegistry:
 
         tool = self._tools[tool_name]
 
-        # 2. Permission check
+        # 2. Input validation. This must precede every permission or execution hook.
+        parameters = self._validate_arguments(tool, parameters)
+
+        # 3. Permission check
         if self._permissions and tool.required_permissions:
             for perm in tool.required_permissions:
                 allowed = await self._permissions.check(
@@ -213,14 +237,6 @@ class SecureToolRegistry:
                         )
                     error_msg = f"Permission denied for {perm} on {tool_name}"
                     raise PermissionError(error_msg)
-
-        # 3. Input validation
-        schema = cast(Mapping[str, Any], tool.input_schema)
-        required_fields = schema.get("required", [])
-        for field in required_fields:
-            if field not in parameters:
-                error_msg = f"Missing required parameter: {field}"
-                raise ValueError(error_msg)
 
         # 4. Execute with timeout
         try:
@@ -320,10 +336,11 @@ class SecureToolRegistry:
         if not tool.risk_classes:
             raise PolicyMetadataError(f"Tool '{tool_name}' has no risk classification")
 
+        parameters = self._validate_arguments(tool, call.arguments)
         resources: tuple[ResourcePattern, ...] = ()
         if tool.resource_resolver is not None:
             try:
-                resolved = tool.resource_resolver(_deep_freeze(call.arguments))
+                resolved = tool.resource_resolver(_deep_freeze(parameters))
                 if not isinstance(resolved, tuple) or not all(
                     isinstance(resource, ResourcePattern) for resource in resolved
                 ):

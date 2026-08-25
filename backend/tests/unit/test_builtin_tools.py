@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from app.runtime.models import ToolCall
 from app.tools import builtin as builtin_module
 from app.tools import web_search as web_search_module
 from app.tools.builtin import (
@@ -291,3 +292,41 @@ class TestRegisterBuiltinTools:
         assert "list_directory" in names
         assert "write_file" in names
         assert len(names) == 6
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("tool_name", "arguments", "outside_path"),
+        [
+            ("read_file", {"path": "/etc/passwd", "workspace_root": "/"}, None),
+            ("list_directory", {"path": "/etc", "workspace_root": "/"}, None),
+            (
+                "write_file",
+                {
+                    "path": "/tmp/archon-registry-escape.txt",
+                    "content": "blocked",
+                    "workspace_root": "/",
+                },
+                Path("/tmp/archon-registry-escape.txt"),
+            ),
+        ],
+    )
+    async def test_registry_rejects_workspace_override_without_access(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        tool_name: str,
+        arguments: dict[str, object],
+        outside_path: Path | None,
+    ) -> None:
+        monkeypatch.setenv("ARCHON_WORKSPACE_ROOT", str(tmp_path))
+        if outside_path is not None:
+            outside_path.unlink(missing_ok=True)
+        registry = SecureToolRegistry()
+        register_builtin_tools(registry)
+
+        with pytest.raises(ValueError, match="Unexpected parameter"):
+            await registry.execute(ToolCall("call-1", tool_name, arguments))
+
+        if outside_path is not None:
+            assert not outside_path.exists()

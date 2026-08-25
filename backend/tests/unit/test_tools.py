@@ -96,7 +96,7 @@ class TestToolExecution:
     @pytest.mark.asyncio
     async def test_execute_sync_tool(self) -> None:
         registry = SecureToolRegistry()
-        registry.register("search", sync_tool)
+        registry.register("search", sync_tool, input_schema={"required": ["query"]})
 
         result = await registry.execute("search", {"query": "weather"})
         assert result["result"] == "Found: weather"
@@ -105,7 +105,7 @@ class TestToolExecution:
     @pytest.mark.asyncio
     async def test_execute_async_tool(self) -> None:
         registry = SecureToolRegistry()
-        registry.register("search", async_tool)
+        registry.register("search", async_tool, input_schema={"required": ["query"]})
 
         result = await registry.execute("search", {"query": "news"})
         assert result["result"] == "Async found: news"
@@ -135,7 +135,7 @@ class TestToolTimeout:
     @pytest.mark.asyncio
     async def test_timeout_enforcement(self) -> None:
         registry = SecureToolRegistry()
-        registry.register("slow", slow_tool, timeout=1)
+        registry.register("slow", slow_tool, input_schema={"required": ["seconds"]}, timeout=1)
 
         with pytest.raises(TimeoutError, match="timed out"):
             await registry.execute("slow", {"seconds": 10.0})
@@ -144,7 +144,7 @@ class TestToolTimeout:
     @pytest.mark.asyncio
     async def test_fast_tool_within_timeout(self) -> None:
         registry = SecureToolRegistry()
-        registry.register("fast", async_tool, timeout=5)
+        registry.register("fast", async_tool, input_schema={"required": ["query"]}, timeout=5)
 
         result = await registry.execute("fast", {"query": "quick"})
         assert result["result"] == "Async found: quick"
@@ -158,7 +158,12 @@ class TestToolPermissions:
     async def test_allowed_permission(self) -> None:
         perms = SimplePermissions(allowed=True)
         registry = SecureToolRegistry(permissions=perms)
-        registry.register("search", sync_tool, required_permissions=["read"])
+        registry.register(
+            "search",
+            sync_tool,
+            required_permissions=["read"],
+            input_schema={"required": ["query"]},
+        )
 
         result = await registry.execute("search", {"query": "test"})
         assert result["result"] == "Found: test"
@@ -169,7 +174,12 @@ class TestToolPermissions:
     async def test_denied_permission_raises(self) -> None:
         perms = SimplePermissions(allowed=False)
         registry = SecureToolRegistry(permissions=perms)
-        registry.register("search", sync_tool, required_permissions=["read"])
+        registry.register(
+            "search",
+            sync_tool,
+            required_permissions=["read"],
+            input_schema={"required": ["query"]},
+        )
 
         with pytest.raises(PermissionError, match="Permission denied"):
             await registry.execute("search", {"query": "test"})
@@ -179,7 +189,9 @@ class TestToolPermissions:
     async def test_no_permissions_required_skips_check(self) -> None:
         perms = SimplePermissions(allowed=False)
         registry = SecureToolRegistry(permissions=perms)
-        registry.register("search", sync_tool)  # No required_permissions
+        registry.register(
+            "search", sync_tool, input_schema={"required": ["query"]}
+        )  # No required_permissions
 
         result = await registry.execute("search", {"query": "test"})
         assert result["result"] == "Found: test"
@@ -224,7 +236,7 @@ class TestToolAudit:
     async def test_success_logged(self) -> None:
         audit = SimpleAudit()
         registry = SecureToolRegistry(audit=audit)
-        registry.register("search", sync_tool)
+        registry.register("search", sync_tool, input_schema={"required": ["query"]})
 
         await registry.execute("search", {"query": "test"})
 
@@ -238,7 +250,12 @@ class TestToolAudit:
         perms = SimplePermissions(allowed=False)
         audit = SimpleAudit()
         registry = SecureToolRegistry(permissions=perms, audit=audit)
-        registry.register("search", sync_tool, required_permissions=["read"])
+        registry.register(
+            "search",
+            sync_tool,
+            required_permissions=["read"],
+            input_schema={"required": ["query"]},
+        )
 
         with pytest.raises(PermissionError):
             await registry.execute("search", {"query": "test"})
@@ -252,7 +269,7 @@ class TestToolAudit:
     async def test_timeout_logged(self) -> None:
         audit = SimpleAudit()
         registry = SecureToolRegistry(audit=audit)
-        registry.register("slow", slow_tool, timeout=1)
+        registry.register("slow", slow_tool, input_schema={"required": ["seconds"]}, timeout=1)
 
         with pytest.raises(TimeoutError):
             await registry.execute("slow", {"seconds": 10.0})

@@ -84,6 +84,108 @@ class TestTypedMetadata:
 
 
 class TestPolicyRequestBridge:
+    @pytest.mark.parametrize(
+        ("tool_name", "arguments"),
+        [
+            ("read_file", {"path": "/etc/passwd", "workspace_root": "/"}),
+            ("list_directory", {"path": "/etc", "workspace_root": "/"}),
+            (
+                "write_file",
+                {"path": "/tmp/registry-escape", "content": "blocked", "workspace_root": "/"},
+            ),
+        ],
+    )
+    def test_live_file_policy_rejects_workspace_root_override_before_resolver(
+        self, tool_name: str, arguments: dict[str, object]
+    ) -> None:
+        registry = SecureToolRegistry()
+        register_builtin_tools(registry)
+
+        with pytest.raises(ValueError, match="Unexpected parameter") as captured:
+            registry.policy_request(ToolCall("call-1", tool_name, arguments))
+
+        assert "/" not in str(captured.value)
+
+    async def test_policy_and_execute_share_validation_and_validated_parameters(self) -> None:
+        resolver_seen: list[dict[str, object]] = []
+        handler_seen: list[dict[str, object]] = []
+
+        def resolver(arguments: object) -> tuple[ResourcePattern, ...]:
+            resolver_seen.append(dict(arguments))  # type: ignore[arg-type]
+            return ()
+
+        async def handler(**arguments: object) -> dict[str, bool]:
+            handler_seen.append(arguments)
+            return {"ok": True}
+
+        registry = SecureToolRegistry()
+        registry.register(
+            "reader",
+            handler,
+            input_schema={
+                "required": ["path"],
+                "properties": {"path": {"type": "string"}, "encoding": {"type": "string"}},
+            },
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=resolver,
+        )
+        call = ToolCall("call-1", "reader", {"path": "notes.txt", "encoding": "utf-8"})
+
+        registry.policy_request(call)
+        assert await registry.execute(call) == {"ok": True}
+        assert resolver_seen == handler_seen == [{"path": "notes.txt", "encoding": "utf-8"}]
+
+    async def test_unexpected_arguments_fail_before_every_security_and_execution_hook(self) -> None:
+        events: list[str] = []
+
+        class Permissions:
+            async def check(self, **_arguments: object) -> bool:
+                events.append("permission")
+                return True
+
+        def resolver(_arguments: object) -> tuple[ResourcePattern, ...]:
+            events.append("resolver")
+            return ()
+
+        async def handler(path: str) -> dict[str, str]:
+            events.append("handler")
+            return {"path": path}
+
+        registry = SecureToolRegistry(permissions=Permissions())  # type: ignore[arg-type]
+        registry.register(
+            "reader",
+            handler,
+            required_permissions=["read"],
+            input_schema={"required": ["path"]},
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=resolver,
+        )
+        secret = "classified-value"
+        call = ToolCall("call-1", "reader", {"path": "notes.txt", "extra": secret})
+
+        with pytest.raises(ValueError, match="Unexpected parameter") as policy_error:
+            registry.policy_request(call)
+        with pytest.raises(ValueError, match="Unexpected parameter") as execute_error:
+            await registry.execute(call)
+
+        assert secret not in str(policy_error.value)
+        assert secret not in str(execute_error.value)
+        assert events == []
+
+    async def test_explicit_additional_properties_true_allows_extra_arguments(self) -> None:
+        registry = SecureToolRegistry()
+        registry.register(
+            "legacy",
+            _handler,
+            input_schema={"additionalProperties": True},
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=lambda arguments: () if arguments["extra"] == "allowed" else (),
+        )
+        call = ToolCall("call-1", "legacy", {"extra": "allowed"})
+
+        assert registry.policy_request(call).tool_name == "legacy"
+        assert await registry.execute(call) == {"ok": True}
+
     def test_registration_and_all_lookups_use_canonical_tool_identity(self) -> None:
         registry = SecureToolRegistry()
         registry.register("  CAFE\u0301  ", _handler, risk_classes=frozenset({RiskClass.READ}))
@@ -135,6 +237,7 @@ class TestPolicyRequestBridge:
         registry.register(
             "fetch",
             _handler,
+            input_schema={"required": ["url"]},
             risk_classes=frozenset({RiskClass.READ, RiskClass.NETWORK}),
             resource_resolver=resolver,
             requires_approval=True,
@@ -165,6 +268,7 @@ class TestPolicyRequestBridge:
         registry.register(
             "read_file",
             _handler,
+            input_schema={"required": ["path"]},
             risk_classes=frozenset({RiskClass.READ}),
             resource_resolver=lambda _arguments: result,  # type: ignore[return-value]
         )
@@ -181,6 +285,7 @@ class TestPolicyRequestBridge:
         registry.register(
             "read_file",
             _handler,
+            input_schema={"required": ["path"]},
             risk_classes=frozenset({RiskClass.READ}),
             resource_resolver=broken,
         )
@@ -200,6 +305,7 @@ class TestPolicyRequestBridge:
         registry.register(
             "reader",
             _handler,
+            input_schema={"required": ["nested"]},
             risk_classes=frozenset({RiskClass.READ}),
             resource_resolver=mutating,
         )
@@ -221,6 +327,7 @@ class TestPolicyRequestBridge:
         registry.register(
             "fetch",
             _handler,
+            input_schema={"required": ["token"]},
             risk_classes=frozenset({RiskClass.NETWORK}),
             resource_resolver=broken,
         )
@@ -254,7 +361,12 @@ class TestPolicyRequestBridge:
             return ()
 
         registry = SecureToolRegistry()
-        registry.register("legacy", _handler, resource_resolver=resolver)
+        registry.register(
+            "legacy",
+            _handler,
+            input_schema={"additionalProperties": True},
+            resource_resolver=resolver,
+        )
         secret = "do-not-leak-this-token"
         call = ToolCall("call-1", "legacy", {"token": secret})
 
@@ -296,6 +408,17 @@ class TestWorkspacePathResolver:
         assert relative == (ResourcePattern(ResourceKind.PATH, str(root / "file.txt")),)
         assert absolute == (ResourcePattern(ResourceKind.PATH, str(root / "dir" / "item.txt")),)
 
+    def test_ignores_untrusted_workspace_root_argument(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        root = tmp_path / "workspace"
+        root.mkdir()
+        monkeypatch.setenv("ARCHON_WORKSPACE_ROOT", str(root))
+
+        resolved = resolve_workspace_path({"path": "file.txt", "workspace_root": "/"})
+
+        assert resolved == (ResourcePattern(ResourceKind.PATH, str(root / "file.txt")),)
+
     @pytest.mark.parametrize("arguments", [{}, {"path": 123}])
     def test_requires_a_string_path(self, arguments: dict[str, object]) -> None:
         with pytest.raises(ValueError, match="path.*string"):
@@ -303,6 +426,20 @@ class TestWorkspacePathResolver:
 
 
 class TestLiveClassifications:
+    @pytest.mark.parametrize(
+        ("tool_name", "arguments"),
+        [
+            ("memory", {"action": "replace", "old_text": "old", "content": "new"}),
+            ("terminal", {"command": "printf ok", "timeout": 1}),
+            ("background_task", {"action": "status", "task_id": "task-1"}),
+        ],
+    )
+    def test_live_optional_schema_fields_pass_policy_validation(
+        self, tool_name: str, arguments: dict[str, object]
+    ) -> None:
+        request = _create_tool_registry().policy_request(ToolCall("call-1", tool_name, arguments))
+        assert request.tool_name == tool_name
+
     def test_chat_registry_classifies_every_live_tool(self) -> None:
         registry = _create_tool_registry()
         expected = {
