@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
+    memory_backend: str = "file"  # file | redis
 
     # Observability
     otel_endpoint: str = ""
@@ -45,6 +46,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = "dev-secret-change-in-production"
     encryption_master_key: str = ""
+    memory_encryption_enabled: bool = False
     admin_usernames: list[str] = ["admin"]
 
     # Rate Limiting

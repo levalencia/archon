@@ -230,3 +230,149 @@ async def evaluate(body: EvaluateRequest) -> EvaluateResponse:
 async def list_evaluators() -> dict:
     """List available evaluator names."""
     return {"evaluators": AVAILABLE_EVALUATORS}
+
+
+# ---------------------------------------------------------------------------
+# A/B testing endpoint
+# ---------------------------------------------------------------------------
+
+from app.eval.ab_testing import ABTestManager, ABVariant
+
+
+class ABTestRequest(BaseModel):
+    question: str
+    models: list[str]  # e.g. ["model-a", "model-b"]
+    system_prompt_a: str = "You are a helpful assistant."
+    system_prompt_b: str = "You are a helpful assistant."
+
+
+class ABTestResponse(BaseModel):
+    test_name: str
+    question: str
+    variants: list[dict]
+
+
+@router.post("/ab-test", response_model=ABTestResponse)
+async def ab_test(body: ABTestRequest) -> ABTestResponse:
+    """Run the same question against two model configs and compare responses.
+
+    Creates an ad-hoc A/B test, sends the question to both variants via a
+    simple mock agent function, evaluates faithfulness/relevance, and returns
+    comparative stats.
+    """
+    import time as _time
+
+    manager = ABTestManager()
+    test_name = f"ab-{int(_time.time())}"
+
+    variant_a = ABVariant(
+        name=body.models[0],
+        config={"model": body.models[0], "system_prompt": body.system_prompt_a},
+    )
+    variant_b = ABVariant(
+        name=body.models[1] if len(body.models) > 1 else body.models[0],
+        config={"model": body.models[1] if len(body.models) > 1 else body.models[0], "system_prompt": body.system_prompt_b},
+    )
+
+    manager.create_test(test_name, variant_a, variant_b)
+
+    # Run the question against both variants using a mock agent
+    for variant in [variant_a, variant_b]:
+        start = _time.monotonic()
+        # Use a simple mock response incorporating the model name
+        response_text = f"Response from {variant.name}: The answer to '{body.question}' is provided by {variant.name}."
+        latency_ms = (_time.monotonic() - start) * 1000
+        tokens = len(response_text.split())
+
+        # Evaluate
+        faith = evaluate_faithfulness(response_text, body.question)
+        rel = evaluate_relevance(response_text, body.question)
+        score = (faith.score + rel.score) / 2.0
+
+        manager.record_result(test_name, variant.name, latency_ms, tokens, score)
+
+    results = manager.get_results(test_name)
+    return ABTestResponse(
+        test_name=test_name,
+        question=body.question,
+        variants=results["variants"] if results else [],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Eval harness batch endpoint
+# ---------------------------------------------------------------------------
+
+from app.eval.harness import EvalCase, EvalHarness
+
+
+class HarnessTestCase(BaseModel):
+    question: str
+    context: str = ""
+    expected_answer: str | None = None
+    expected_contains: list[str] = []
+    expected_not_contains: list[str] = []
+    tags: list[str] = []
+
+
+class HarnessRequest(BaseModel):
+    test_cases: list[HarnessTestCase]
+    quality_threshold: float = 0.85
+
+
+class HarnessResultOut(BaseModel):
+    total: int
+    passed: int
+    failed: int
+    avg_score: float
+    avg_latency_ms: float
+    pass_rate: float
+    passed_quality_gate: bool
+    results: list[dict]
+
+
+@router.post("/harness", response_model=HarnessResultOut)
+async def eval_harness(body: HarnessRequest) -> HarnessResultOut:
+    """Run a batch of test cases through the eval harness and return results."""
+
+    # Simple agent function that echoes context + question for evaluation
+    async def _mock_agent(input_text: str) -> str:
+        return f"Based on the provided information, the answer is related to: {input_text}"
+
+    harness = EvalHarness(agent_fn=_mock_agent, quality_threshold=body.quality_threshold)
+
+    for i, tc in enumerate(body.test_cases):
+        case = EvalCase(
+            id=f"case-{i}",
+            input=tc.question,
+            expected_output=tc.expected_answer,
+            expected_contains=tc.expected_contains,
+            expected_not_contains=tc.expected_not_contains,
+            tags=tc.tags,
+        )
+        harness.add_case(case)
+
+    summary = await harness.run()
+    passed_gate = harness.quality_gate(summary)
+
+    return HarnessResultOut(
+        total=summary.total,
+        passed=summary.passed,
+        failed=summary.failed,
+        avg_score=summary.avg_score,
+        avg_latency_ms=summary.avg_latency_ms,
+        pass_rate=summary.pass_rate,
+        passed_quality_gate=passed_gate,
+        results=[
+            {
+                "case_id": r.case_id,
+                "passed": r.passed,
+                "score": r.score,
+                "response": r.response[:200],
+                "latency_ms": r.latency_ms,
+                "checks": r.checks,
+                "error": r.error,
+            }
+            for r in summary.results
+        ],
+    )

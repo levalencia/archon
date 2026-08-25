@@ -188,6 +188,7 @@ class SessionStore:
 # Singletons
 _persistent_memory: PersistentMemory | None = None
 _session_store: SessionStore | None = None
+_redis_memory: "RedisMemory | None" = None  # type: ignore[name-defined]  # noqa: F821
 
 
 def get_persistent_memory() -> PersistentMemory:
@@ -202,3 +203,42 @@ def get_session_store() -> SessionStore:
     if _session_store is None:
         _session_store = SessionStore()
     return _session_store
+
+
+async def get_redis_memory():
+    """Get a RedisMemory instance when memory_backend='redis'.
+
+    Returns the RedisMemory hot tier if configured and connectable,
+    otherwise returns None (caller should fall back to file-only).
+    """
+    global _redis_memory
+    if _redis_memory is not None:
+        return _redis_memory
+
+    try:
+        from app.config import get_settings
+        settings = get_settings()
+    except Exception:
+        return None
+
+    if settings.memory_backend != "redis":
+        return None
+
+    from app.memory.redis_memory import RedisMemory
+
+    rm = RedisMemory(redis_url=settings.redis_url)
+    connected = await rm.connect()
+    if connected:
+        _redis_memory = rm
+        return _redis_memory
+
+    logger.warning("redis_memory_fallback", reason="connection failed, using file-only")
+    return None
+
+
+def reset_singletons() -> None:
+    """Reset all singletons — for testing only."""
+    global _persistent_memory, _session_store, _redis_memory
+    _persistent_memory = None
+    _session_store = None
+    _redis_memory = None
