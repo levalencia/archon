@@ -1,78 +1,33 @@
-# Archon Implementation Status
+# Archon Implementation Status — Superseded
 
-**Last verified:** 2026-08-24  
-**Branch basis:** local `main` at `9462518` after runtime hardening and remaining-work plan  
-**Acceptance command:** `./scripts/verify.sh`
+> **Archived on 2026-08-25.** The [canonical implementation evidence matrix](IMPLEMENTATION-EVIDENCE.md) replaces this document as the source of truth.
 
-This document is the source of truth for implementation claims. A source file alone does not make a capability complete.
+## Why this status was superseded
 
-## Status definitions
+This file previously described a 2026-08-24 baseline at local `main` revision `9462518`. It reported 371 backend tests, 74% coverage, clean Ruff, 6 frontend unit tests, and a capability table based on **Implemented**, **Wired**, **Tested**, and **Demo-ready**.
 
-- **Implemented:** meaningful code exists.
-- **Wired:** the default live request path invokes it.
-- **Tested:** deterministic automated tests exercise the live contract.
-- **Demo-ready:** the behavior is reliable and visible in the current UI.
+Those values are historical, not current. A fresh audit at `27952f4` found:
 
-## Verified baseline
+- 466 backend tests passed, 0 skipped, with 81.84% aggregate coverage;
+- Ruff failed with 50 errors and 16 files needing formatting;
+- 4 Vitest tests and 2 Playwright scenarios;
+- Svelte check at 0 errors and 1 warning, with a passing frontend build;
+- a passing local Docker `/healthz` smoke using `mock-model/mock`;
+- the last 10 remote CI runs failed, while local `main` was 54 commits ahead and had not been pushed.
 
-| Gate | Result |
-|---|---|
-| Backend Ruff | Pass |
-| Backend tests | 371 passed, 0 skipped |
-| Backend measured coverage | 74% |
-| Svelte and TypeScript checks | 0 errors, 0 warnings |
-| Frontend unit tests | 6 passed |
-| Frontend browser tests | 2 passed, desktop and mobile |
-| Frontend production build | Pass |
-| Backend Docker smoke | Pass, `/healthz` |
-| Live Foundry and Brave regression | Pass: 5 distinct searches, 0 duplicates, 3 iterations, `completed` |
+The prior capability table also overstated several areas. In particular, it did not represent the approval bypass, host-process execution, global plaintext memory, PII-before-persistence, mock/default RAG, MCP/task scaffolding, sequential multi-agent pipeline, mock evaluations, transient run evidence, or absent deployment proof with enough precision.
 
-## Capability matrix
+## Current claim policy
 
-| Capability | Implemented | Wired | Tested | Demo-ready | Notes |
-|---|---:|---:|---:|---:|---|
-| Typed agent runtime | Yes | Yes | Yes | Yes | Default chat and SSE path |
-| Native Anthropic and Foundry tool calls | Yes | Yes | Yes | Yes | Normalized `tool_use` blocks |
-| Explicit run stop reasons and budgets | Yes | Yes | Yes | Yes | Iteration, tools, tokens, time; forced tool-free final synthesis |
-| Per-request runtime events | Yes | Yes | Yes | Yes | No shared-method monkey-patching |
-| Robust frontend SSE parser | Yes | Yes | Yes | Yes | Split chunks, multiline data, terminal flush |
-| URL-addressable conversations | Yes | Yes | Yes | Yes | `/chat/[id]` |
-| Workbench desktop/mobile shell | Yes | Yes | Yes | Yes | Browser-tested |
-| Sanitized Markdown rendering | Yes | Yes | Yes | Yes | DOMPurify after Markdown rendering |
-| Unified persistent conversation repository | Yes | Yes | Yes | Yes | Shared by conversation CRUD, chat, stream, and history |
-| Persistent identity and API keys | Yes | Yes | Yes | Yes | Salted scrypt, standard HS256 JWT, hashed API keys |
-| Resource ownership enforcement | Yes | Yes | Yes | Yes | Conversation, document, artifact, log and admin boundaries tested |
-| Security headers and CSRF | Yes | Yes | Yes | Yes | Cookie double-submit; Bearer/API-key exemption |
-| Default tool permission policy | Partial | Yes | Yes | Partial | File reads are workspace-contained; general approval UI remains planned |
-| Grounded research workflow | Yes | Yes | Yes | Partial | Offline cited workflow plus live Foundry and Brave runtime regression |
-| Evidence and citation verification | Yes | Yes | Yes | Partial | 12 golden cases; currently used by `/v1/research` |
-| Durable replayable run events | Partial | No | Partial | No | Events stream live but are not durably replayed |
-| RAG with real durable embeddings | Partial/demo | Yes | Partial | No | Default route uses mock embeddings/in-memory vectors |
-| Multi-agent coordinator | Yes | No | Unit only | No | Not part of default chat path |
-| OpenTelemetry export | Yes | Configurable | Yes | Partial | Composite runtime sink; exporter activates when configured |
-| Rate limiter | Yes | No | Unit only | No | Not installed on the live API path |
-| MCP client integration | No | No | No | No | Planned after core reliability work |
-| Human approval gates | No | No | No | No | Planned after permission policy |
-| Verified cloud deployment | Manifests only | No | No | No | Requires a real deployment and smoke test |
+Use [Implementation Evidence](IMPLEMENTATION-EVIDENCE.md), which separates:
 
-## Active implementation order
+1. **Exists** — meaningful code or artifact presence;
+2. **Wired** — invocation by a product/API path;
+3. **Tested** — relevant automated behavior evidence;
+4. **Observed** — behavior directly exercised during audit;
+5. **UI** — visible or operable product evidence;
+6. **Deployed** — verified non-local environment evidence.
 
-1. Durable, owner-scoped run-event replay in API and Workbench.
-2. Permission policy and human approval flow for sensitive tools.
-3. Governed MCP adapter using the existing typed tool contract.
-4. One bounded specialist delegation workflow.
-5. Verified deployment and published benchmark results.
+A source file does not imply wiring. Wiring does not imply tests. Tests do not imply direct observation, UI completion, deployment, security, or production readiness. Mocks, stubs, flags, manifests, and local container smoke must remain explicitly labeled.
 
-## Known test debt
-
-All previously skipped backend tests have deterministic replacements. The current backend suite reports zero skipped tests. Live provider checks remain separate from the deterministic CI gate.
-
-## Claim policy
-
-Documentation and interview material must use these terms precisely:
-
-- **Implemented** does not imply wired.
-- **Wired** does not imply tested.
-- **Tested** does not imply deployed.
-- **Manifest present** does not imply cloud deployment.
-- **Mock-backed demo** does not imply production RAG or production security.
+The historical matrix is available in git history. It is intentionally not duplicated here so this file cannot drift into a second source of truth.

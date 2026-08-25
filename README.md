@@ -10,7 +10,7 @@
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-[Quick Start](#quick-start) · [Verified Today](#verified-today) · [Architecture](#architecture) · [Limitations](#current-limitations)
+[Quick Start](#quick-start) · [Evidence Matrix](docs/IMPLEMENTATION-EVIDENCE.md) · [Architecture](#architecture) · [Limitations](#current-limitations)
 
 </div>
 
@@ -25,28 +25,20 @@ Archon is a portfolio and learning project for production-oriented agent enginee
 - typed runtime events and explicit stop reasons;
 - conversation history and context composition;
 - web evidence, citations, and evaluation;
-- responsive run inspection on desktop and mobile;
+- visual run inspection on desktop, with mobile behavior still being hardened;
 - provider adapters without an orchestration framework dependency.
 
-## Verified today
+## Verification status
 
-The repository includes a reproducible acceptance command:
+The repository includes a local acceptance command:
 
 ```bash
 ./scripts/verify.sh
 ```
 
-At the latest local verification, it exercised:
+The fresh 2026-08-25 audit at `27952f4` found **466 backend tests passed, 0 skipped**, with **81.84% aggregate coverage**. It also found that the full gate was **not green**: Ruff reported 50 lint errors and 16 files needing formatting. Frontend evidence was 4 Vitest tests, 2 Playwright scenarios, Svelte check at 0 errors/1 warning, and a passing production build. A local Docker build and `/healthz` smoke passed with `mock-model/mock`; this is not deployment evidence. The last 10 remote CI runs had failed, and the audited local work had not been pushed.
 
-- Ruff lint and formatting;
-- 414 backend tests with 75% measured coverage;
-- Svelte and TypeScript checks with zero diagnostics;
-- 4 Vitest tests;
-- 2 Playwright workflows covering desktop and mobile;
-- frontend production build;
-- backend Docker image build and `/healthz` smoke test.
-
-These numbers describe the current local branch and should be updated whenever the suite changes. CI executes the same core quality gates.
+See the [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) for exact definitions, capability depth, and limitations. Do not infer production readiness from test count, source-file presence, or a local smoke test.
 
 ## Quick start
 
@@ -101,39 +93,19 @@ flowchart LR
 5. Runtime events are sent to the SSE route without monkey-patching shared objects.
 6. The UI renders the answer first and exposes Run, Evidence, Context, and Logs through an inspector.
 
-## Implemented and wired
+## Evidence-based capability summary
 
-| Capability | Status | Evidence |
-|---|---|---|
-| Typed agent runtime and budgets | Wired and tested | `backend/app/runtime/`, runtime unit and SSE tests |
-| Native Anthropic/Foundry tool-use normalization | Wired and tested | `backend/app/runtime/anthropic.py` |
-| Provider-neutral adapters | Wired; provider depth varies | `backend/app/agents/` |
-| Seven default tools | Wired; policies still being hardened | `backend/app/routes/chat.py` |
-| SSE runtime events | Wired and tested | `backend/app/routes/stream.py` |
-| Conversation UI and URL routing | Wired and browser-tested | `/chat/[id]` |
-| Robust incremental SSE parser | Wired and unit-tested | `frontend/src/lib/sse.ts` |
-| Markdown sanitization | Wired | `ChatMessages.svelte` with DOMPurify |
-| Desktop/mobile workbench | Wired and Playwright-tested | `frontend/tests/workbench.spec.ts` |
-| Docker backend smoke test | Wired | `scripts/verify.sh` |
+The strongest demonstrated core is the typed budgeted runtime, native Anthropic/Foundry tool handling, live SSE evidence, authenticated conversations, and tool contracts. Provider parity is partial. RAG durability, user-scoped memory, execution isolation, approvals, MCP, multi-agent security, evaluations, durable run replay, and cloud deployment are incomplete or unverified.
 
-## Implemented but not yet production-ready
-
-| Capability | Current reality |
-|---|---|
-| Authentication | Components exist, but route ownership and persistent identity are still being consolidated. |
-| Conversation persistence | Messages persist, but metadata and routes are being unified behind one repository. |
-| RAG | The public route currently uses mock embeddings and an in-memory vector store. |
-| Multi-agent orchestration | Coordinator modules exist, but the main chat path uses the typed single-agent runtime. |
-| OpenTelemetry | Exporter modules exist; startup/export wiring is incomplete. |
-| Security middleware | Implemented modules require full live-path integration and adversarial tests. |
-| Redis/PostgreSQL | Optional infrastructure exists; local fallback paths remain the most exercised. |
-| Image generation | Mock rendering is available; hosted generation is provider-dependent. |
+The [canonical evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) evaluates each capability independently as **Exists**, **Wired**, **Tested**, **Observed**, **UI**, and **Deployed**. It supersedes older feature-count and completion scorecards.
 
 ## Current limitations
 
 - This is not yet a multi-tenant production service.
-- The remaining skipped backend tests must be replaced or justified.
-- Authentication, ownership, artifacts, logs, and tool permissions still require end-to-end hardening.
+- Backend tests report zero skipped, but lint/format gates and remote CI evidence were red at the audited revision.
+- Authentication is meaningful for conversations and some resources, but memory, tasks, MCP, and approvals still have ownership gaps.
+- Python and terminal tools execute host subprocesses; they are not secure sandboxes.
+- Tool approval can be bypassed on the synchronous chat path and is not represented by durable owner-scoped receipts.
 - RAG quality cannot be claimed until real embeddings, durable vector storage, and retrieval evaluations replace the demo defaults.
 - The legacy ReAct implementation remains in the codebase for compatibility but is not the preferred live runtime.
 - Provider token streaming is not equally capable across every adapter.
@@ -183,7 +155,7 @@ npm run build
 - Typed contracts at provider, tool, event, persistence, and evaluation boundaries.
 - Deterministic tests for control flow; real-provider smoke tests are separate and credential-dependent.
 - Progressive disclosure: answer first, execution details on demand.
-- Claims in documentation must distinguish **implemented**, **wired**, **tested**, and **deployed**.
+- Claims in documentation must use the six dimensions in the [canonical evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md).
 
 ## Roadmap
 
