@@ -206,6 +206,22 @@ class TestFileTool:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_write_file_creates_missing_directories(self, workspace: Path) -> None:
+        path = workspace / "one" / "two" / "new.txt"
+        result = await write_file_tool("one/two/new.txt", "nested", workspace_root=workspace)
+        assert result["status"] == "written"
+        assert path.read_text() == "nested"
+        assert path.stat().st_mode & 0o777 == 0o600
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", ["", "./test.txt", "subdir/../test.txt", "subdir//file"])
+    async def test_file_tools_reject_invalid_components(self, workspace: Path, path: str) -> None:
+        result = await read_file_tool(path, workspace_root=workspace)
+        assert "error" in result
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("operation", ["list", "write"])
     async def test_list_and_write_reject_workspace_escapes(
         self, workspace: Path, operation: str
@@ -232,32 +248,61 @@ class TestFileTool:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_list_rechecks_containment_after_symlink_swap(
-        self, workspace: Path, monkeypatch: pytest.MonkeyPatch
+    @pytest.mark.parametrize("operation", ["read", "list", "write"])
+    async def test_intermediate_symlink_swap_cannot_escape_workspace(
+        self,
+        workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        operation: str,
     ) -> None:
-        inside = workspace / "inside"
-        inside.mkdir()
-        outside = workspace.parent / "outside-list-swap"
+        intermediate = workspace / "swap"
+        intermediate.mkdir()
+        (intermediate / "child").mkdir()
+        (intermediate / "child" / "secret.txt").write_text("inside")
+        outside = workspace.parent / f"outside-{operation}-swap"
         outside.mkdir()
-        link = workspace / "swap"
-        link.symlink_to(inside, target_is_directory=True)
-        original = builtin_module._contained_path
-        calls = 0
+        (outside / "child").mkdir()
+        (outside / "child" / "secret.txt").write_text("outside-secret")
+        parked = workspace / "parked"
+        original_open = builtin_module.os.open
+        swapped = False
 
-        def swap_then_resolve(*args: object, **kwargs: object) -> tuple[Path, Path]:
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                link.unlink()
-                link.symlink_to(outside, target_is_directory=True)
-            return original(*args, **kwargs)  # type: ignore[arg-type]
+        def swap_before_component_open(
+            path: str | bytes | Path,
+            flags: int,
+            mode: int = 0o777,
+            *,
+            dir_fd: int | None = None,
+        ) -> int:
+            nonlocal swapped
+            if path == "swap" and dir_fd is not None and not swapped:
+                intermediate.rename(parked)
+                intermediate.symlink_to(outside, target_is_directory=True)
+                swapped = True
+            return original_open(path, flags, mode, dir_fd=dir_fd)
 
-        monkeypatch.setattr(builtin_module, "_contained_path", swap_then_resolve)
+        monkeypatch.setattr(builtin_module.os, "open", swap_before_component_open)
         try:
-            result = await list_directory_tool("swap", workspace_root=workspace)
-            assert "outside workspace" in result["error"]
+            if operation == "read":
+                result = await read_file_tool("swap/child/secret.txt", workspace_root=workspace)
+                assert result.get("content") != "outside-secret"
+            elif operation == "list":
+                result = await list_directory_tool("swap/child", workspace_root=workspace)
+                assert "secret.txt" not in {item["name"] for item in result.get("items", [])}
+            else:
+                result = await write_file_tool(
+                    "swap/child/created.txt", "outside-write", workspace_root=workspace
+                )
+                assert not (outside / "child" / "created.txt").exists()
+            assert "error" in result
         finally:
-            link.unlink()
+            monkeypatch.setattr(builtin_module.os, "open", original_open)
+            if intermediate.is_symlink():
+                intermediate.unlink()
+            if parked.exists():
+                parked.rename(intermediate)
+            (outside / "child" / "secret.txt").unlink()
+            (outside / "child").rmdir()
             outside.rmdir()
 
     @pytest.mark.unit

@@ -14,6 +14,7 @@ import math
 import operator
 import os
 import stat
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -146,57 +147,172 @@ def _workspace_root(workspace_root: str | Path | None = None) -> Path:
     return Path(root_value).resolve()
 
 
-def _contained_path(
-    path: str | Path, workspace_root: str | Path | None = None, *, strict: bool
-) -> tuple[Path, Path]:
-    root = _workspace_root(workspace_root)
-    requested = Path(path)
-    candidate = requested if requested.is_absolute() else root / requested
-    resolved = candidate.resolve(strict=strict)
-    resolved.relative_to(root)
-    return root, resolved
+_SECURE_TRAVERSAL_AVAILABLE = (
+    hasattr(os, "O_DIRECTORY")
+    and hasattr(os, "O_NOFOLLOW")
+    and os.open in os.supports_dir_fd
+    and os.mkdir in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
+    and os.stat in os.supports_follow_symlinks
+    and os.listdir in os.supports_fd
+)
+_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+
+
+def _relative_workspace_components(
+    path: str | Path,
+    root: Path,
+    workspace_root: str | Path | None,
+) -> list[str]:
+    """Return lexical path components without resolving any requested component."""
+    raw_path = os.fspath(path)
+    if not isinstance(raw_path, str):
+        raise ValueError("Workspace paths must be text")
+    if not raw_path or any(ord(character) < 32 or ord(character) == 127 for character in raw_path):
+        raise ValueError("Invalid workspace path")
+    if "//" in raw_path or (raw_path.endswith(os.sep) and raw_path != os.sep):
+        raise ValueError("Invalid workspace path component")
+
+    requested = Path(raw_path)
+    if requested.is_absolute():
+        roots = [root]
+        root_value = (
+            workspace_root
+            if workspace_root is not None
+            else os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
+        )
+        lexical_root = Path(os.path.abspath(os.fspath(root_value)))
+        if lexical_root not in roots:
+            roots.append(lexical_root)
+        relative: Path | None = None
+        matched_root: Path | None = None
+        for allowed_root in roots:
+            try:
+                relative = requested.relative_to(allowed_root)
+                matched_root = allowed_root
+                break
+            except ValueError:
+                continue
+        if relative is None or matched_root is None:
+            raise ValueError("Path is outside workspace")
+    else:
+        relative = requested
+        matched_root = None
+
+    # A single dot names the workspace root for compatibility with the list tool.
+    if raw_path == "." or relative == Path("."):
+        return []
+    raw_components = raw_path.split(os.sep)
+    if requested.is_absolute():
+        if matched_root is None:  # pragma: no cover - guarded above
+            raise ValueError("Path is outside workspace")
+        root_prefix = str(matched_root)
+        relative_text = raw_path[len(root_prefix) :].removeprefix(os.sep)
+        raw_components = relative_text.split(os.sep)
+    if any(component in {"", ".", ".."} for component in raw_components):
+        raise ValueError("Invalid workspace path component")
+    components = list(relative.parts)
+    if any(component in {"", ".", ".."} for component in components):
+        raise ValueError("Invalid workspace path component")
+    return components
+
+
+def _open_workspace_directory(root: Path, components: list[str], *, create: bool = False) -> int:
+    """Open a workspace directory by walking trusted directory descriptors."""
+    if not _SECURE_TRAVERSAL_AVAILABLE:
+        raise NotImplementedError("Secure workspace traversal is unavailable")
+
+    current_fd = os.open(root, _DIRECTORY_OPEN_FLAGS)
+    try:
+        for component in components:
+            try:
+                next_fd = os.open(component, _DIRECTORY_OPEN_FLAGS, dir_fd=current_fd)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                with suppress(FileExistsError):
+                    os.mkdir(component, mode=0o700, dir_fd=current_fd)
+                next_fd = os.open(component, _DIRECTORY_OPEN_FLAGS, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except BaseException:
+        os.close(current_fd)
+        raise
+
+
+def _path_result(root: Path, components: list[str]) -> str:
+    return str(root.joinpath(*components))
 
 
 async def read_file_tool(
     path: str | Path, workspace_root: str | Path | None = None, max_size: int = MAX_READ_FILE_BYTES
 ) -> dict:
-    """Read a regular file contained by the configured workspace root."""
-    root = _workspace_root(workspace_root)
+    """Read a regular file through a no-follow workspace descriptor chain."""
+    directory_fd: int | None = None
+    file_fd: int | None = None
     try:
-        requested = Path(path)
-        candidate = requested if requested.is_absolute() else root / requested
-        file_path = candidate.resolve(strict=True)
-        file_path.relative_to(root)
-        file_stat = file_path.stat()
+        root = _workspace_root(workspace_root)
+        components = _relative_workspace_components(path, root, workspace_root)
+        if not components:
+            return {"error": f"Not a regular file: {path}"}
+        directory_fd = _open_workspace_directory(root, components[:-1])
+        file_fd = os.open(
+            components[-1],
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=directory_fd,
+        )
+        file_stat = os.fstat(file_fd)
         if not stat.S_ISREG(file_stat.st_mode):
             return {"error": f"Not a regular file: {path}"}
         if file_stat.st_size > max_size:
             return {"error": f"File exceeds maximum size of {max_size} bytes: {path}"}
-        content = file_path.read_text(encoding="utf-8")
-        return {"content": content, "path": str(file_path), "size": file_stat.st_size}
-    except (FileNotFoundError, RuntimeError):
+
+        chunks: list[bytes] = []
+        remaining = max_size + 1
+        while remaining > 0:
+            chunk = os.read(file_fd, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        content_bytes = b"".join(chunks)
+        if len(content_bytes) > max_size:
+            return {"error": f"File exceeds maximum size of {max_size} bytes: {path}"}
+        content = content_bytes.decode("utf-8")
+        return {
+            "content": content,
+            "path": _path_result(root, components),
+            "size": len(content_bytes),
+        }
+    except FileNotFoundError:
         return {"error": f"File not found: {path}"}
-    except ValueError:
+    except NotImplementedError:
+        return {"error": "Secure workspace traversal is unavailable"}
+    except (RuntimeError, TypeError, ValueError):
         return {"error": f"Path is outside workspace: {path}"}
-    except (OSError, UnicodeError) as e:
-        return {"error": f"Error reading file: {e}"}
+    except (OSError, UnicodeError):
+        return {"error": f"Path is outside workspace: {path}"}
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
 
 
 async def list_directory_tool(path: str | Path, workspace_root: str | Path | None = None) -> dict:
-    """List a directory contained by the configured workspace root."""
+    """List a directory through a no-follow workspace descriptor chain."""
+    directory_fd: int | None = None
     try:
-        _, dir_path = _contained_path(path, workspace_root, strict=True)
-        if not dir_path.is_dir():
-            return {"error": f"Not a directory: {path}"}
-
-        # Re-resolve immediately before enumeration so a changed symlink fails closed.
-        _, dir_path = _contained_path(path, workspace_root, strict=True)
+        root = _workspace_root(workspace_root)
+        components = _relative_workspace_components(path, root, workspace_root)
+        directory_fd = _open_workspace_directory(root, components)
         items = []
-        for item in sorted(dir_path.iterdir()):
-            item_stat = item.lstat()
+        for name in sorted(os.listdir(directory_fd)):
+            item_stat = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
             items.append(
                 {
-                    "name": item.name,
+                    "name": name,
                     "type": (
                         "file"
                         if stat.S_ISREG(item_stat.st_mode)
@@ -209,46 +325,55 @@ async def list_directory_tool(path: str | Path, workspace_root: str | Path | Non
                     "size": item_stat.st_size if stat.S_ISREG(item_stat.st_mode) else 0,
                 }
             )
-        return {"path": str(dir_path), "items": items, "count": len(items)}
+        return {"path": _path_result(root, components), "items": items, "count": len(items)}
     except FileNotFoundError:
         return {"error": f"Directory not found: {path}"}
-    except (RuntimeError, ValueError):
+    except NotImplementedError:
+        return {"error": "Secure workspace traversal is unavailable"}
+    except (RuntimeError, TypeError, ValueError):
         return {"error": f"Path is outside workspace: {path}"}
-    except OSError as error:
-        return {"error": f"Error listing directory: {error}"}
+    except OSError:
+        return {"error": f"Path is outside workspace: {path}"}
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
 
 
 async def write_file_tool(
     path: str | Path, content: str, workspace_root: str | Path | None = None
 ) -> dict:
-    """Write a file without escaping or following a final workspace symlink."""
+    """Write a file through a no-follow workspace descriptor chain."""
     directory_fd: int | None = None
     file_fd: int | None = None
     try:
         root = _workspace_root(workspace_root)
-        requested = Path(path)
-        candidate = requested if requested.is_absolute() else root / requested
-
-        # Resolve existing components before creating directories, then recheck the resulting
-        # parent immediately before opening the file.
-        candidate.parent.resolve(strict=False).relative_to(root)
-        candidate.parent.mkdir(parents=True, exist_ok=True)
-        parent = candidate.parent.resolve(strict=True)
-        parent.relative_to(root)
-
-        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-        directory_fd = os.open(parent, directory_flags)
-        file_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
-        file_fd = os.open(candidate.name, file_flags, 0o600, dir_fd=directory_fd)
-        with os.fdopen(file_fd, "w", encoding="utf-8") as output:
-            file_fd = None
-            output.write(content)
-        file_path = parent / candidate.name
-        return {"path": str(file_path), "size": len(content), "status": "written"}
-    except (RuntimeError, ValueError):
+        components = _relative_workspace_components(path, root, workspace_root)
+        if not components:
+            return {"error": f"Not a regular file: {path}"}
+        encoded_content = content.encode("utf-8")
+        directory_fd = _open_workspace_directory(root, components[:-1], create=True)
+        file_fd = os.open(
+            components[-1],
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=directory_fd,
+        )
+        written = 0
+        while written < len(encoded_content):
+            written += os.write(file_fd, encoded_content[written:])
+        return {
+            "path": _path_result(root, components),
+            "size": written,
+            "status": "written",
+        }
+    except FileNotFoundError:
+        return {"error": f"Unable to write file safely: {path}"}
+    except NotImplementedError:
+        return {"error": "Secure workspace traversal is unavailable"}
+    except (RuntimeError, TypeError, ValueError):
         return {"error": f"Path is outside workspace: {path}"}
-    except (OSError, TypeError, UnicodeError) as error:
-        return {"error": f"Error writing file: {error}"}
+    except (OSError, UnicodeError):
+        return {"error": f"Path is outside workspace: {path}"}
     finally:
         if file_fd is not None:
             os.close(file_fd)
