@@ -36,7 +36,9 @@ from app.tools.builtin import (
 from app.tools.image_gen import image_gen_tool
 from app.tools.registry import SecureToolRegistry
 from app.tools.sandbox import execute_sandboxed
+from app.tools.terminal import terminal_tool
 from app.tools.web_search import web_search_tool
+from app.services.task_queue import get_task_queue
 
 logger = structlog.get_logger()
 
@@ -178,6 +180,47 @@ def _create_tool_registry() -> SecureToolRegistry:
         },
         timeout=15,
         requires_approval=True,
+    )
+
+    registry.register(
+        name="terminal",
+        handler=terminal_tool,
+        description="Execute a shell command safely. Returns stdout, stderr, exit_code.",
+        input_schema={
+            "required": ["command"],
+            "properties": {
+                "command": {"type": "string", "description": "Shell command to execute"},
+                "timeout": {"type": "integer", "description": "Max seconds (default 30, max 120)"},
+            },
+        },
+        timeout=30,
+        requires_approval=True,
+    )
+
+    async def _background_task_handler(action: str, task_id: str = "") -> dict:
+        """Manage background tasks: submit, status, list."""
+        queue = get_task_queue()
+        if action == "list":
+            return {"tasks": queue.list_tasks()}
+        if action == "status" and task_id:
+            status = queue.get_status(task_id)
+            if status is None:
+                return {"error": f"Task not found: {task_id}"}
+            return status
+        return {"error": f"Unknown action: {action}. Use 'list' or 'status'."}
+
+    registry.register(
+        name="background_task",
+        handler=_background_task_handler,
+        description="Manage background tasks: list all tasks or check status of a specific task.",
+        input_schema={
+            "required": ["action"],
+            "properties": {
+                "action": {"type": "string", "description": "'list' or 'status'"},
+                "task_id": {"type": "string", "description": "Task ID (for status action)"},
+            },
+        },
+        timeout=10,
     )
 
     return registry

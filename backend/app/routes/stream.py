@@ -202,6 +202,8 @@ async def chat_stream_real(
                     "tool": event.data["name"],
                     "tool_call_id": event.data["id"],
                 })
+            elif event.kind is AgentEventKind.TOOL_PROGRESS:
+                yield _sse("thinking", f"[{event.data['name']}] {event.data['chunk']}")
 
         result = await task
         await memory.store(conv_id, "user", body.message, user["user_id"])

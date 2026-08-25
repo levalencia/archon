@@ -18,6 +18,7 @@ class AgentEventKind(StrEnum):
     TEXT_DELTA = "text_delta"
     TOOL_CALL_REQUESTED = "tool_call_requested"
     TOOL_CALL_COMPLETED = "tool_call_completed"
+    TOOL_PROGRESS = "tool_progress"
     APPROVAL_REQUIRED = "approval_required"
     TOOL_DENIED = "tool_denied"
     RUN_STOPPED = "run_stopped"

@@ -21,13 +21,23 @@ import json
 
 import structlog
 
+from app.agents.agent_auth import AgentToken, check_permission, verify_agent_token
 from app.agents.protocols import LLMClient
+from app.agents.secure_channel import SecureChannel, SignedMessage
 
 logger = structlog.get_logger()
 
 
 class SpecialistAgent:
     """Base class for specialist agents. Each specialist has a role and LLM."""
+
+    # Map role -> required permission for execute()
+    _ROLE_PERMISSION_MAP: dict[str, str] = {
+        "query_decomposition": "plan",
+        "information_retrieval": "search",
+        "quality_validation": "evaluate",
+        "answer_synthesis": "synthesize",
+    }
 
     def __init__(
         self,
@@ -40,9 +50,36 @@ class SpecialistAgent:
         self.role = role
         self.llm = llm
         self.system_prompt = system_prompt
+        self.token: AgentToken | None = None
+        self._secure_channel: SecureChannel | None = None
+
+    def set_token(self, token: AgentToken) -> None:
+        """Assign an auth token to this agent."""
+        self.token = token
+
+    def set_secure_channel(self, channel: SecureChannel) -> None:
+        """Assign a secure communication channel."""
+        self._secure_channel = channel
 
     async def execute(self, task: str, context: dict | None = None) -> dict:
-        """Execute the specialist's task."""
+        """Execute the specialist's task.
+
+        If an auth token is set, permission is checked before execution.
+        If a secure channel is set, the outgoing result is signed.
+        """
+        # Auth check
+        if self.token is not None:
+            required = self._ROLE_PERMISSION_MAP.get(self.role, self.role)
+            if not check_permission(self.token, required):
+                logger.warning("agent_auth_denied", agent=self.name, required=required)
+                return {
+                    "agent": self.name,
+                    "role": self.role,
+                    "response": f"Permission denied: {required}",
+                    "task": task,
+                    "auth_error": True,
+                }
+
         messages = []
         if self.system_prompt:
             messages.append({"role": "system", "content": self.system_prompt})
@@ -63,12 +100,19 @@ class SpecialistAgent:
             response_length=len(response),
         )
 
-        return {
+        result: dict = {
             "agent": self.name,
             "role": self.role,
             "response": response,
             "task": task,
         }
+
+        # Sign outgoing message if secure channel is available
+        if self._secure_channel is not None:
+            signed = self._secure_channel.sign_message(self.name, "coordinator", response)
+            result["signed_message"] = signed.to_dict()
+
+        return result
 
 
 class PlannerAgent(SpecialistAgent):
@@ -137,6 +181,9 @@ class AgentCoordinator:
 
     The Coordinator decides which specialists to invoke based on the query.
     It follows a pipeline: Plan → Retrieve → Validate → Synthesize.
+
+    Optional *channel_secret* enables HMAC-signed inter-agent messages.
+    When set, auth tokens are also issued to each specialist automatically.
     """
 
     def __init__(
@@ -145,17 +192,29 @@ class AgentCoordinator:
         retriever: RetrieverAgent,
         validator: ValidatorAgent,
         synthesizer: SynthesizerAgent,
+        channel_secret: str | None = None,
     ) -> None:
         self.planner = planner
         self.retriever = retriever
         self.validator = validator
         self.synthesizer = synthesizer
+        self.channel_secret = channel_secret
         self._agents = {
             "planner": planner,
             "retriever": retriever,
             "validator": validator,
             "synthesizer": synthesizer,
         }
+
+        # Set up secure channel + auth tokens when secret is provided
+        if channel_secret:
+            from app.agents.agent_auth import create_agent_token
+
+            channel = SecureChannel(channel_secret)
+            for agent in self._agents.values():
+                agent.set_secure_channel(channel)
+                token = create_agent_token(agent.name, agent.role)
+                agent.set_token(token)
 
     async def orchestrate(
         self,

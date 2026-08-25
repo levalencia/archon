@@ -249,6 +249,22 @@ class AgentRuntime:
                     serialized = json.dumps(
                         output, sort_keys=True, separators=(",", ":"), default=str
                     )
+                    # Emit TOOL_PROGRESS chunks for large results
+                    if len(serialized) > 500:
+                        chunk_size = 500
+                        for i in range(0, len(serialized), chunk_size):
+                            chunk = serialized[i : i + chunk_size]
+                            await self._emit(
+                                AgentEventKind.TOOL_PROGRESS,
+                                iterations,
+                                {
+                                    "id": call.id,
+                                    "name": call.name,
+                                    "chunk": chunk,
+                                    "offset": i,
+                                    "total": len(serialized),
+                                },
+                            )
                     if len(serialized) > self._budget.max_tool_result_chars:
                         serialized = (
                             serialized[: self._budget.max_tool_result_chars] + "...[truncated]"

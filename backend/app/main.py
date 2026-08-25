@@ -35,8 +35,10 @@ from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
 from app.routes.memory import router as memory_router
 from app.routes.mcp import router as mcp_router
+from app.routes.compliance import router as compliance_router
 from app.routes.multi_agent import router as multi_agent_router
 from app.routes.stream import router as stream_router
+from app.routes.tasks import router as tasks_router
 from app.security.auth import AuthRepository
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
@@ -130,7 +132,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(research_router)
     app.include_router(memory_router)
     app.include_router(multi_agent_router)
+    app.include_router(compliance_router)
     app.include_router(mcp_router)
+    app.include_router(tasks_router)
 
     @app.get("/metrics")
     async def prometheus_metrics():
