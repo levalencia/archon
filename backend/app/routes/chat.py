@@ -114,7 +114,14 @@ def _create_tool_registry() -> SecureToolRegistry:
         name="web_search",
         handler=web_search_tool,
         description="Search the web for current information. Returns titles, URLs, snippets.",
-        input_schema={"required": ["query"]},
+        input_schema={
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"},
+                "max_results": {"type": "integer"},
+            },
+        },
         timeout=30,
         risk_classes=frozenset({RiskClass.NETWORK}),
     )
@@ -122,7 +129,13 @@ def _create_tool_registry() -> SecureToolRegistry:
         name="read_file",
         handler=read_file_tool,
         description="Read the contents of a file by path",
-        input_schema={"required": ["path"]},
+        input_schema={
+            "required": ["path"],
+            "properties": {
+                "path": {"type": "string"},
+                "max_size": {"type": "integer"},
+            },
+        },
         timeout=10,
         risk_classes=frozenset({RiskClass.READ}),
         resource_resolver=resolve_workspace_path,
@@ -142,7 +155,14 @@ def _create_tool_registry() -> SecureToolRegistry:
         name="image_gen",
         handler=image_gen_tool,
         description="Generate an image from a text description. Returns image URL.",
-        input_schema={"required": ["prompt"]},
+        input_schema={
+            "required": ["prompt"],
+            "properties": {
+                "prompt": {"type": "string"},
+                "provider": {"type": "string"},
+                "size": {"type": "string"},
+            },
+        },
         timeout=60,
         risk_classes=frozenset({RiskClass.NETWORK, RiskClass.EXTERNAL_SIDE_EFFECT}),
     )
@@ -172,7 +192,13 @@ def _create_tool_registry() -> SecureToolRegistry:
         name="session_search",
         handler=session_search_tool,
         description="Search past conversations. Use when user asks about previous discussions.",
-        input_schema={"required": ["query"]},
+        input_schema={
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer"},
+            },
+        },
         risk_classes=frozenset({RiskClass.READ}),
     )
 

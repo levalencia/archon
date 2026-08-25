@@ -283,7 +283,14 @@ def register_builtin_tools(registry: object) -> None:
         name="web_search",
         handler=web_search_tool,
         description="Search the web for information",
-        input_schema={"required": ["query"]},
+        input_schema={
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"},
+                "max_results": {"type": "integer"},
+            },
+        },
         timeout=30,
         risk_classes=frozenset({RiskClass.NETWORK}),
     )
@@ -292,7 +299,13 @@ def register_builtin_tools(registry: object) -> None:
         handler=read_file_tool,
         description="Read the contents of a file",
         required_permissions=["read_file"],
-        input_schema={"required": ["path"]},
+        input_schema={
+            "required": ["path"],
+            "properties": {
+                "path": {"type": "string"},
+                "max_size": {"type": "integer"},
+            },
+        },
         timeout=10,
         risk_classes=frozenset({RiskClass.READ}),
         resource_resolver=resolve_workspace_path,
