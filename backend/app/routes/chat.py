@@ -23,6 +23,7 @@ from app.routes.skills import get_skill_registry
 from app.runtime import AgentRuntime, RuntimeBudget
 from app.runtime.support import as_model_provider, prepare_messages
 from app.security.auth import get_current_user
+from app.security.policy import RiskClass
 from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.conversations import ConversationRepository
 from app.services.task_queue import get_task_queue
@@ -35,7 +36,7 @@ from app.tools.builtin import (
     write_file_tool,
 )
 from app.tools.image_gen import image_gen_tool
-from app.tools.registry import SecureToolRegistry
+from app.tools.registry import SecureToolRegistry, resolve_workspace_path
 from app.tools.sandbox import execute_sandboxed
 from app.tools.terminal import terminal_tool
 from app.tools.web_search import web_search_tool
@@ -99,6 +100,7 @@ def _create_tool_registry() -> SecureToolRegistry:
         description="Evaluate math expressions: +, -, *, /, sqrt, sin, cos, log, pi",
         input_schema={"required": ["expression"]},
         timeout=5,
+        risk_classes=frozenset({RiskClass.READ}),
     )
     registry.register(
         name="datetime",
@@ -106,6 +108,7 @@ def _create_tool_registry() -> SecureToolRegistry:
         description="Get current date, time, timestamp, timezone info",
         input_schema={"required": ["query"]},
         timeout=5,
+        risk_classes=frozenset({RiskClass.READ}),
     )
     registry.register(
         name="web_search",
@@ -113,6 +116,7 @@ def _create_tool_registry() -> SecureToolRegistry:
         description="Search the web for current information. Returns titles, URLs, snippets.",
         input_schema={"required": ["query"]},
         timeout=30,
+        risk_classes=frozenset({RiskClass.NETWORK}),
     )
     registry.register(
         name="read_file",
@@ -120,6 +124,8 @@ def _create_tool_registry() -> SecureToolRegistry:
         description="Read the contents of a file by path",
         input_schema={"required": ["path"]},
         timeout=10,
+        risk_classes=frozenset({RiskClass.READ}),
+        resource_resolver=resolve_workspace_path,
     )
     registry.register(
         name="write_file",
@@ -128,6 +134,8 @@ def _create_tool_registry() -> SecureToolRegistry:
         input_schema={"required": ["path", "content"]},
         timeout=10,
         requires_approval=True,
+        risk_classes=frozenset({RiskClass.WRITE}),
+        resource_resolver=resolve_workspace_path,
     )
 
     registry.register(
@@ -136,6 +144,7 @@ def _create_tool_registry() -> SecureToolRegistry:
         description="Generate an image from a text description. Returns image URL.",
         input_schema={"required": ["prompt"]},
         timeout=60,
+        risk_classes=frozenset({RiskClass.NETWORK, RiskClass.EXTERNAL_SIDE_EFFECT}),
     )
 
     registry.register(
@@ -156,6 +165,7 @@ def _create_tool_registry() -> SecureToolRegistry:
             },
         },
         requires_approval=True,
+        risk_classes=frozenset({RiskClass.READ, RiskClass.WRITE}),
     )
 
     registry.register(
@@ -163,6 +173,7 @@ def _create_tool_registry() -> SecureToolRegistry:
         handler=session_search_tool,
         description="Search past conversations. Use when user asks about previous discussions.",
         input_schema={"required": ["query"]},
+        risk_classes=frozenset({RiskClass.READ}),
     )
 
     async def _code_execute_handler(code: str) -> dict:
@@ -183,6 +194,7 @@ def _create_tool_registry() -> SecureToolRegistry:
         },
         timeout=15,
         requires_approval=True,
+        risk_classes=frozenset({RiskClass.EXECUTE}),
     )
 
     registry.register(
@@ -198,6 +210,7 @@ def _create_tool_registry() -> SecureToolRegistry:
         },
         timeout=30,
         requires_approval=True,
+        risk_classes=frozenset({RiskClass.EXECUTE}),
     )
 
     async def _background_task_handler(action: str, task_id: str = "") -> dict:
@@ -224,6 +237,7 @@ def _create_tool_registry() -> SecureToolRegistry:
             },
         },
         timeout=10,
+        risk_classes=frozenset({RiskClass.READ}),
     )
 
     return registry

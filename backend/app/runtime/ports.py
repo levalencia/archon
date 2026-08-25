@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
 from app.runtime.models import Message, ModelResponse, ToolCall, ToolDefinition
+from app.security.policy import PolicyRequest
 
 
 class ModelProvider(Protocol):
@@ -23,3 +24,5 @@ class ToolExecutor(Protocol):
     async def execute(self, call: ToolCall) -> Mapping[str, Any]: ...
 
     def definitions(self) -> Sequence[ToolDefinition]: ...
+
+    def policy_request(self, call: ToolCall) -> PolicyRequest: ...

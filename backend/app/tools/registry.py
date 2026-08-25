@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from collections.abc import Callable
+import os
+from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -23,11 +25,36 @@ from app.agents.protocols import AuditLog, PermissionChecker
 from app.observability.logging import get_correlation_id
 from app.runtime.models import ToolCall
 from app.runtime.models import ToolDefinition as RuntimeToolDefinition
+from app.security.policy import PolicyRequest, ResourceKind, ResourcePattern, RiskClass
 
 logger = structlog.get_logger()
 
 # Default timeout for tool execution (seconds)
 DEFAULT_TOOL_TIMEOUT = 30
+
+ResourceResolver = Callable[[Mapping[str, Any]], tuple[ResourcePattern, ...]]
+
+
+class PolicyMetadataError(ValueError):
+    """Policy metadata is missing or cannot be resolved safely."""
+
+
+def resolve_workspace_path(arguments: Mapping[str, Any]) -> tuple[ResourcePattern, ...]:
+    """Resolve a tool ``path`` argument against ``ARCHON_WORKSPACE_ROOT``.
+
+    This supplies a canonical lexical identity to policy evaluation only. Tool execution must
+    independently recheck workspace containment immediately before filesystem access because
+    symlinks and other filesystem state can change between policy evaluation and use (TOCTOU).
+    """
+
+    path = arguments.get("path")
+    if not isinstance(path, str):
+        raise ValueError("path argument must be a string")
+    root = Path(os.environ.get("ARCHON_WORKSPACE_ROOT", Path.cwd())).resolve(strict=False)
+    requested = Path(path)
+    candidate = requested if requested.is_absolute() else root / requested
+    resolved = candidate.resolve(strict=False)
+    return (ResourcePattern(ResourceKind.PATH, resolved.as_posix()),)
 
 
 class ToolDefinition:
@@ -39,10 +66,18 @@ class ToolDefinition:
         handler: Callable[..., Any],
         description: str = "",
         required_permissions: list[str] | None = None,
-        input_schema: dict | None = None,
+        input_schema: dict[str, Any] | None = None,
         timeout: int = DEFAULT_TOOL_TIMEOUT,
         requires_approval: bool = False,
+        risk_classes: frozenset[RiskClass] = frozenset(),
+        resource_resolver: ResourceResolver | None = None,
     ) -> None:
+        if not isinstance(risk_classes, frozenset) or not all(
+            isinstance(risk, RiskClass) for risk in risk_classes
+        ):
+            raise TypeError("risk_classes must be a frozenset of RiskClass values")
+        if resource_resolver is not None and not callable(resource_resolver):
+            raise TypeError("resource_resolver must be callable")
         self.name = name
         self.handler = handler
         self.description = description
@@ -50,6 +85,8 @@ class ToolDefinition:
         self.input_schema = input_schema or {}
         self.timeout = timeout
         self.requires_approval = requires_approval
+        self.risk_classes = risk_classes
+        self.resource_resolver = resource_resolver
 
 
 class SecureToolRegistry:
@@ -75,9 +112,11 @@ class SecureToolRegistry:
         handler: Callable[..., Any],
         description: str = "",
         required_permissions: list[str] | None = None,
-        input_schema: dict | None = None,
+        input_schema: dict[str, Any] | None = None,
         timeout: int | None = None,
         requires_approval: bool = False,
+        risk_classes: frozenset[RiskClass] = frozenset(),
+        resource_resolver: ResourceResolver | None = None,
     ) -> None:
         """Register a tool."""
         self._tools[name] = ToolDefinition(
@@ -88,10 +127,14 @@ class SecureToolRegistry:
             input_schema=input_schema,
             timeout=timeout or self._default_timeout,
             requires_approval=requires_approval,
+            risk_classes=risk_classes,
+            resource_resolver=resource_resolver,
         )
         logger.info("tool_registered", name=name, description=description)
 
-    async def execute(self, call: ToolCall | str, parameters: dict | None = None) -> dict:
+    async def execute(
+        self, call: ToolCall | str, parameters: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Execute a typed call (or legacy name/parameters) through all security gates."""
         if isinstance(call, ToolCall):
             tool_name = call.name
@@ -201,13 +244,15 @@ class SecureToolRegistry:
             return result
         return {"result": result}
 
-    def list_tools(self) -> list[dict]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """List all registered tools with their schemas."""
         return [
             {
                 "name": tool.name,
                 "description": tool.description,
                 "input_schema": tool.input_schema,
+                "risk_classes": sorted(risk.value for risk in tool.risk_classes),
+                "requires_approval": tool.requires_approval,
             }
             for tool in self._tools.values()
         ]
@@ -225,6 +270,44 @@ class SecureToolRegistry:
     def get_tool(self, name: str) -> ToolDefinition | None:
         """Get a tool definition by name."""
         return self._tools.get(name)
+
+    def policy_request(self, call: ToolCall) -> PolicyRequest:
+        """Build fail-closed policy input from a typed provider tool call."""
+        tool = self._tools.get(call.name)
+        if tool is None:
+            raise PolicyMetadataError(f"Unknown tool: {call.name}")
+
+        resources: tuple[ResourcePattern, ...] = ()
+        if tool.resource_resolver is not None:
+            try:
+                resolved = tool.resource_resolver(call.arguments)
+                if not isinstance(resolved, tuple) or not all(
+                    isinstance(resource, ResourcePattern) for resource in resolved
+                ):
+                    raise TypeError(
+                        "resolver must return a tuple containing only ResourcePattern values"
+                    )
+                if any(resource.kind is ResourceKind.TOOL for resource in resolved):
+                    raise ValueError(
+                        "resolver cannot return TOOL resources; tool_name is the sole tool identity"
+                    )
+                resources = resolved
+            except Exception as error:
+                raise PolicyMetadataError(
+                    f"resource resolver failed for tool '{call.name}': {error}"
+                ) from error
+
+        try:
+            return PolicyRequest(
+                tool_name=call.name,
+                resources=resources,
+                risk_classes=tool.risk_classes,
+                legacy_requires_approval=tool.requires_approval,
+            )
+        except (TypeError, ValueError) as error:
+            raise PolicyMetadataError(
+                f"invalid policy metadata for tool '{call.name}': {error}"
+            ) from error
 
     def tool_requires_approval(self, name: str) -> bool:
         """Check if a tool requires human approval before execution."""

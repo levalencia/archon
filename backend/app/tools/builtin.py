@@ -19,6 +19,7 @@ from pathlib import Path
 
 import structlog
 
+from app.security.policy import RiskClass
 from app.tools.memory_tools import memory_tool, session_search_tool  # noqa: F401 — re-exported
 from app.tools.web_search import web_search_tool
 
@@ -194,7 +195,7 @@ async def write_file_tool(path: str, content: str) -> dict:
 
 def register_builtin_tools(registry: object) -> None:
     """Register all built-in tools with a SecureToolRegistry."""
-    from app.tools.registry import SecureToolRegistry
+    from app.tools.registry import SecureToolRegistry, resolve_workspace_path
 
     if not isinstance(registry, SecureToolRegistry):
         return
@@ -205,6 +206,7 @@ def register_builtin_tools(registry: object) -> None:
         description="Evaluate math expressions (+, -, *, /, sqrt, pi)",
         input_schema={"required": ["expression"]},
         timeout=5,
+        risk_classes=frozenset({RiskClass.READ}),
     )
     registry.register(
         name="datetime",
@@ -212,6 +214,7 @@ def register_builtin_tools(registry: object) -> None:
         description="Get current date, time, timestamp info",
         input_schema={"required": ["query"]},
         timeout=5,
+        risk_classes=frozenset({RiskClass.READ}),
     )
     registry.register(
         name="web_search",
@@ -219,6 +222,7 @@ def register_builtin_tools(registry: object) -> None:
         description="Search the web for information",
         input_schema={"required": ["query"]},
         timeout=30,
+        risk_classes=frozenset({RiskClass.NETWORK}),
     )
     registry.register(
         name="read_file",
@@ -227,6 +231,8 @@ def register_builtin_tools(registry: object) -> None:
         required_permissions=["read_file"],
         input_schema={"required": ["path"]},
         timeout=10,
+        risk_classes=frozenset({RiskClass.READ}),
+        resource_resolver=resolve_workspace_path,
     )
     registry.register(
         name="list_directory",
@@ -235,6 +241,8 @@ def register_builtin_tools(registry: object) -> None:
         required_permissions=["list_directory"],
         input_schema={"required": ["path"]},
         timeout=10,
+        risk_classes=frozenset({RiskClass.READ}),
+        resource_resolver=resolve_workspace_path,
     )
     registry.register(
         name="write_file",
@@ -244,5 +252,7 @@ def register_builtin_tools(registry: object) -> None:
         input_schema={"required": ["path", "content"]},
         timeout=10,
         requires_approval=True,
+        risk_classes=frozenset({RiskClass.WRITE}),
+        resource_resolver=resolve_workspace_path,
     )
     logger.info("builtin_tools_registered", count=6)
