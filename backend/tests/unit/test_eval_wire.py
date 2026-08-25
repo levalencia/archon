@@ -115,7 +115,7 @@ def test_cost_tracker_defaults_for_unknown_model():
         input_tokens=1000,
         output_tokens=0,
     )
-    expected = (1000 / 1000) * COST_PER_1K["default"]
+    expected = (1000 / 1000) * COST_PER_1K["default"][0]  # input rate for unknown model
     assert abs(info["cost_usd"] - expected) < 1e-8
 
 

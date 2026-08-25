@@ -9,15 +9,24 @@ import structlog
 
 logger = structlog.get_logger()
 
-# Cost per 1K tokens (approximate, configurable)
-COST_PER_1K = {
-    "llama3.1:8b": 0.0,  # Local, free
-    "llava:7b": 0.0,
-    "gpt-4o": 0.005,
-    "gpt-4o-mini": 0.00015,
-    "claude-opus-4-6": 0.015,
-    "claude-sonnet-4-20250514": 0.003,
-    "default": 0.001,
+# Cost per 1K tokens: (input_rate, output_rate)
+# Source: provider pricing pages as of Aug 2026
+COST_PER_1K: dict[str, tuple[float, float]] = {
+    # Anthropic
+    "claude-opus-4-6": (0.015, 0.075),
+    "claude-sonnet-4-20250514": (0.003, 0.015),
+    "claude-haiku-3": (0.00025, 0.00125),
+    # OpenAI
+    "gpt-4o": (0.0025, 0.01),
+    "gpt-4o-mini": (0.00015, 0.0006),
+    "gpt-4-turbo": (0.01, 0.03),
+    "o1": (0.015, 0.06),
+    # Local (free)
+    "llama3.1:8b": (0.0, 0.0),
+    "llava:7b": (0.0, 0.0),
+    # Mock / unknown
+    "mock-model": (0.0, 0.0),
+    "default": (0.001, 0.002),
 }
 
 
@@ -47,8 +56,8 @@ class CostTracker:
     ) -> dict:
         """Record token usage and calculate cost."""
         total_tokens = input_tokens + output_tokens
-        rate = COST_PER_1K.get(model, COST_PER_1K["default"])
-        cost = (total_tokens / 1000) * rate
+        input_rate, output_rate = COST_PER_1K.get(model, COST_PER_1K["default"])
+        cost = (input_tokens / 1000) * input_rate + (output_tokens / 1000) * output_rate
 
         # Update counters
         for tracker, key in [
