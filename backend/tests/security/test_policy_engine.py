@@ -252,6 +252,58 @@ class TestRulePolicyEngine:
         assert decision.action is PolicyAction.DENY
         assert "unclassified" in decision.reason.lower()
 
+    def test_generic_allow_cannot_authorize_unclassified_request(self) -> None:
+        decision = RulePolicyEngine([PolicyRule("generic", PolicyAction.ALLOW)]).evaluate(
+            request(risks=frozenset())
+        )
+        assert decision.action is PolicyAction.DENY
+        assert decision.matched_rule_id is None
+        assert "unclassified" in decision.reason.lower()
+
+    @pytest.mark.parametrize("action", [PolicyAction.ALLOW, PolicyAction.ASK])
+    def test_allow_and_ask_risk_rules_must_cover_every_requested_risk(
+        self, action: PolicyAction
+    ) -> None:
+        engine = RulePolicyEngine(
+            [
+                PolicyRule(
+                    "read-only",
+                    action,
+                    risk_classes=frozenset({RiskClass.READ}),
+                )
+            ]
+        )
+        decision = engine.evaluate(request(risks=frozenset({RiskClass.READ, RiskClass.WRITE})))
+        assert decision.action is PolicyAction.DENY
+        assert decision.matched_rule_id is None
+
+    @pytest.mark.parametrize("action", [PolicyAction.ALLOW, PolicyAction.ASK])
+    def test_allow_and_ask_risk_rules_can_cover_every_requested_risk(
+        self, action: PolicyAction
+    ) -> None:
+        engine = RulePolicyEngine(
+            [
+                PolicyRule(
+                    "full-cover",
+                    action,
+                    risk_classes=frozenset({RiskClass.READ, RiskClass.WRITE}),
+                )
+            ]
+        )
+        decision = engine.evaluate(request(risks=frozenset({RiskClass.READ, RiskClass.WRITE})))
+        assert decision.action is action
+        assert decision.matched_rule_id == "full-cover"
+
+    def test_deny_risk_rule_matches_any_denied_requested_risk_and_wins_tie(self) -> None:
+        risks = frozenset({RiskClass.READ, RiskClass.WRITE})
+        rules = [
+            PolicyRule("deny-write", PolicyAction.DENY, risk_classes=frozenset({RiskClass.WRITE})),
+            PolicyRule("allow-full", PolicyAction.ALLOW, risk_classes=risks),
+        ]
+        decision = RulePolicyEngine(rules).evaluate(request(risks=risks))
+        assert decision.action is PolicyAction.DENY
+        assert decision.matched_rule_id == "deny-write"
+
     @pytest.mark.parametrize(
         "risk",
         [

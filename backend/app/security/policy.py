@@ -263,14 +263,26 @@ class RulePolicyEngine:
         object.__setattr__(self, "default_action", action)
 
     def evaluate(self, request: PolicyRequest) -> PolicyDecision:
+        if not request.risk_classes:
+            return PolicyDecision(
+                PolicyAction.DENY,
+                request.risk_classes,
+                None,
+                "unclassified request denied by safety fallback",
+            )
+
         tool = ResourcePattern(ResourceKind.TOOL, request.tool_name)
         concrete_resources = (tool, *request.resources)
         matches: list[tuple[tuple[int, int, int], int, PolicyRule]] = []
         for index, rule in enumerate(self.rules):
             if not rule.enabled:
                 continue
-            if rule.risk_classes and not rule.risk_classes.intersection(request.risk_classes):
-                continue
+            if rule.risk_classes:
+                if rule.action is PolicyAction.DENY:
+                    if rule.risk_classes.isdisjoint(request.risk_classes):
+                        continue
+                elif not request.risk_classes.issubset(rule.risk_classes):
+                    continue
             if not all(
                 any(_resource_matches(rule_resource, concrete) for concrete in concrete_resources)
                 for rule_resource in rule.resources
@@ -300,7 +312,7 @@ class RulePolicyEngine:
                 "legacy approval requirement requested human approval",
             )
         side_effecting = request.risk_classes.difference({RiskClass.READ})
-        if not request.risk_classes or side_effecting:
+        if side_effecting:
             return PolicyDecision(
                 PolicyAction.DENY,
                 request.risk_classes,
