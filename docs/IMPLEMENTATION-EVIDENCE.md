@@ -2,11 +2,12 @@
 
 **Canonical status source**
 
-- **Last audited:** 2026-08-25
-- **Audited revision:** `27952f4` on local `main`
-- **Repository state:** local `main` was 54 commits ahead of `origin/main`; the audited work had not been pushed
+- **Current verified local baseline:** `b63851d` on local `main` (2026-08-25)
+- **Baseline repository state:** clean after acceptance; local `main` was 59 commits ahead of `origin/main`
+- **Historical capability audit snapshot:** `27952f4` on local `main` (2026-08-25)
+- **Remote status:** the current baseline has not been pushed or rerun in remote CI; the last known remote runs failed
 
-This is the sole canonical matrix for current implementation and release claims. Other summaries must link here rather than maintain competing scorecards. The detailed findings remain in [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md) and the [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md).
+This is the sole canonical mutable source for implementation status and release-gate metrics. Other summaries must link here rather than maintain competing scorecards. The capability matrix and detailed findings come from the historical audit snapshot and remain unchanged by the Sprint 0 gate cleanup. See [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md) and the [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md).
 
 ## How to read the matrix
 
@@ -21,27 +22,30 @@ A capability is evaluated on six independent evidence dimensions:
 
 Legend: **Yes** = supported by evidence; **Partial** = limited or qualified evidence; **No** = absent or contradicted; **N/A** = not applicable. None of these columns alone means production-ready.
 
-## Fresh quality-gate evidence
+## Current verified local quality-gate evidence
 
-These are results from the audited revision, not claims that the current documentation branch has made the gates green.
+These results were freshly observed on local `main` at `b63851d`. They establish a green **local Sprint 0 acceptance baseline**, not remote CI success, deployment, production readiness, or any change to the capability ratings below.
 
 | Gate | Fresh result | Status |
 |---|---|---|
+| Ruff check | No violations | Pass |
+| Ruff format check | 163 files already formatted | Pass |
+| Bandit scan | 16 low, 0 medium, 0 high; `-ll` gate passed | Pass; static scan only |
 | Backend tests | 466 passed, 0 skipped | Pass |
 | Backend coverage | 81.84% | Measured; aggregate coverage is not integration proof |
-| Ruff lint | 50 errors | **Fail** |
-| Ruff format check | 16 files require formatting | **Fail** |
-| Bandit | 0 medium/high findings | Pass; static scan only |
-| Strict Mypy | 395 errors across the full app | **Fail** |
-| Svelte check | 0 errors, 1 warning | Pass with warning |
+| Svelte check | 0 errors, 0 warnings | Pass |
 | Frontend unit tests | 4 Vitest tests across 2 files | Pass; shallow coverage |
-| Browser tests | 2 Playwright scenarios | Pass; chat desktop/mobile only |
 | Frontend production build | Build completed | Pass |
-| NPM production audit | 0 vulnerabilities | Pass |
+| Browser tests | 2 Playwright scenarios | Pass; chat desktop/mobile only |
 | Docker smoke | Image built; `/healthz` passed with `mock-model/mock` | Pass locally; not a deployment |
-| Remote CI | Last 10 runs failed; audited local work was not pushed | **No green remote evidence** |
+| Repository diff check | Clean | Pass |
+| Remote CI | Not rerun; last known remote runs failed | **No green remote evidence** |
 
-**Release-gate verdict:** not green at the audited revision. The 466-test result is valid, but “all gates green” is not.
+**Local release-gate verdict:** Sprint 0 acceptance passed at `b63851d`. The branch was clean after the run. No push or remote CI rerun occurred.
+
+## Historical audit snapshot
+
+The capability matrix below remains the audit judgment recorded at `27952f4`, when Ruff reported 50 lint errors, Ruff format reported 16 files requiring formatting, strict Mypy reported 395 errors, and Svelte check reported one warning. Sprint 0 resolved the local acceptance-gate failures listed above, but gate health alone does not prove that any product capability became more complete, better wired, deployed, or production-ready.
 
 ## Capability evidence matrix
 
