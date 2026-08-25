@@ -37,7 +37,7 @@
     importLoading = true;
     importStatus = 'Importing…';
     try {
-      const r = await authenticatedFetch('/api/skills/import/github', {
+      const r = await authenticatedFetch('/api/skills/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo: importRepo, path: importPath }),

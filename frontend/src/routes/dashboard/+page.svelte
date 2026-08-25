@@ -132,7 +132,7 @@
         <FileText size={16} strokeWidth={2} class="icon-accent" />
         Recent Audit
       </h2>
-      {#await authenticatedFetch('/api/admin/audit-log?limit=10').then(r => r.json())}
+      {#await authenticatedFetch('/api/admin/audit?limit=10').then(r => r.json())}
         <div class="empty-hint">Loading...</div>
       {:then data}
         {#if data.count === 0}

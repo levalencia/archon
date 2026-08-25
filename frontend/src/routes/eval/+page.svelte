@@ -9,7 +9,7 @@
   async function runRedTeam() {
     running = 'redteam';
     try {
-      const r = await authenticatedFetch('/api/eval/red-team', { method: 'POST' });
+      const r = await authenticatedFetch('/api/security/red-team', { method: 'POST' });
       redTeamResults = await r.json();
     } catch {
       redTeamResults = { error: 'Red team test failed' };
@@ -20,7 +20,7 @@
   async function runFuzz() {
     running = 'fuzz';
     try {
-      const r = await authenticatedFetch('/api/eval/fuzz', { method: 'POST' });
+      const r = await authenticatedFetch('/api/security/fuzz', { method: 'POST' });
       fuzzResults = await r.json();
     } catch {
       fuzzResults = { error: 'Fuzz test failed' };
