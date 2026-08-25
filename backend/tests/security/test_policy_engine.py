@@ -90,6 +90,53 @@ class TestPolicyModels:
         with pytest.raises(ValueError, match="concrete"):
             request(resource(ResourceKind.HOST, "*.example.com"))
 
+    @pytest.mark.parametrize("model", ["rule", "request"])
+    def test_resource_elements_must_be_resource_patterns(self, model: str) -> None:
+        invalid_resources = ("/tmp/not-a-resource-pattern",)
+        with pytest.raises(TypeError, match="resources must contain only ResourcePattern"):
+            if model == "rule":
+                PolicyRule("invalid", PolicyAction.DENY, invalid_resources)  # type: ignore[arg-type]
+            else:
+                PolicyRequest(
+                    "read_file",
+                    invalid_resources,  # type: ignore[arg-type]
+                    frozenset({RiskClass.READ}),
+                )
+
+    def test_rule_rejects_duplicate_canonical_resources(self) -> None:
+        with pytest.raises(ValueError, match="duplicate canonical resource"):
+            PolicyRule(
+                "duplicate",
+                PolicyAction.ALLOW,
+                (
+                    resource(ResourceKind.TOOL, "READ_FILE"),
+                    resource(ResourceKind.TOOL, " read_file "),
+                ),
+            )
+
+    @pytest.mark.parametrize("invalid", [0, 1, "true", None])
+    def test_enabled_must_be_an_exact_bool(self, invalid: object) -> None:
+        with pytest.raises(TypeError, match="enabled must be a bool"):
+            PolicyRule("invalid-enabled", PolicyAction.ALLOW, enabled=invalid)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize("invalid", [0, 1, "false", None])
+    def test_legacy_requires_approval_must_be_an_exact_bool(self, invalid: object) -> None:
+        with pytest.raises(TypeError, match="legacy_requires_approval must be a bool"):
+            PolicyRequest(
+                "read_file",
+                (),
+                frozenset({RiskClass.READ}),
+                legacy_requires_approval=invalid,  # type: ignore[arg-type]
+            )
+
+    def test_description_allows_empty_but_rejects_non_strings_and_controls(self) -> None:
+        assert PolicyRule("empty-description", PolicyAction.ALLOW, description="").description == ""
+        with pytest.raises(TypeError, match="description must be a string"):
+            PolicyRule("non-string", PolicyAction.ALLOW, description=7)  # type: ignore[arg-type]
+        for invalid in ("line\nbreak", "tab\tcharacter", "zero\x00byte"):
+            with pytest.raises(ValueError, match="control characters"):
+                PolicyRule("control", PolicyAction.ALLOW, description=invalid)
+
     @pytest.mark.parametrize(
         ("kind", "pattern"),
         [
@@ -104,6 +151,10 @@ class TestPolicyModels:
             (ResourceKind.HOST, "user@example.com"),
             (ResourceKind.HOST, "example.com:443"),
             (ResourceKind.HOST, ".example.com"),
+            (ResourceKind.HOST, "bad_host.example"),
+            (ResourceKind.HOST, "127.1"),
+            (ResourceKind.HOST, "2130706433"),
+            (ResourceKind.HOST, "0177.0.0.1"),
         ],
     )
     def test_malformed_resources_are_rejected(self, kind: ResourceKind, pattern: str) -> None:
@@ -115,6 +166,10 @@ class TestPolicyModels:
             PolicyRule(" ", PolicyAction.ALLOW)
         with pytest.raises(ValueError, match="tool"):
             PolicyRequest(" ", (), frozenset({RiskClass.READ}))
+
+    def test_hosts_use_idna2008_uts46_and_canonical_ipv4(self) -> None:
+        assert resource(ResourceKind.HOST, "faß.de").pattern == "xn--fa-hia.de"
+        assert resource(ResourceKind.HOST, "127.0.0.1").pattern == "127.0.0.1"
 
 
 @pytest.mark.unit
@@ -331,13 +386,26 @@ class TestRulePolicyEngine:
 class TestArgumentsHash:
     def test_hash_is_canonical_across_mapping_order(self) -> None:
         left = {"b": [True, None, {"z": "é"}], "a": 1}
-        right = {"a": 1, "b": [True, None, {"z": "e\u0301"}]}
+        right = {"a": 1, "b": [True, None, {"z": "é"}]}
         assert arguments_hash(left) == arguments_hash(right)
         assert canonical_arguments_hash(left) == arguments_hash(left)
         assert len(arguments_hash(left)) == 64
 
     def test_hash_distinguishes_json_types(self) -> None:
         assert arguments_hash({"value": 1}) != arguments_hash({"value": "1"})
+
+    def test_hash_preserves_exact_unicode_string_and_key_semantics(self) -> None:
+        assert arguments_hash({"value": "é"}) != arguments_hash({"value": "e\u0301"})
+        assert arguments_hash({"é": "value"}) != arguments_hash({"e\u0301": "value"})
+
+        distinct_keys = {"é": 1, "e\u0301": 2}
+        assert len(arguments_hash(distinct_keys)) == 64
+
+    def test_hash_rejects_cycles(self) -> None:
+        cyclic: list[object] = []
+        cyclic.append(cyclic)
+        with pytest.raises(ValueError, match="cycles"):
+            arguments_hash(cyclic)
 
     @pytest.mark.parametrize(
         "invalid",

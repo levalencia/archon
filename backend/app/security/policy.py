@@ -1,12 +1,16 @@
 """Pure, deterministic policy models and rule evaluation.
 
-This module deliberately has no persistence, routing, or runtime dependencies.  Values are
-canonicalized at the boundary so equivalent requests always produce the same decision.
+This module deliberately has no persistence, routing, filesystem I/O, or runtime dependencies.
+Path normalization and matching are lexical only: they do not resolve symlinks or provide a
+filesystem containment guarantee. Execution-layer resource resolvers must pass resolved,
+canonical paths into policy evaluation and recheck containment immediately before execution to
+protect against symlink changes and other TOCTOU races.
 """
 
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import math
 import posixpath
@@ -15,6 +19,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
+
+import idna
 
 
 class PolicyAction(StrEnum):
@@ -100,9 +106,14 @@ def _canonical_hostname(value: str) -> str:
     if not value or value.startswith("."):
         raise ValueError("host must be non-empty and cannot start with a dot")
     try:
-        ascii_host = value.encode("idna").decode("ascii").lower()
-    except UnicodeError as error:
+        ascii_host = idna.encode(value, uts46=True, std3_rules=True).decode("ascii").lower()
+    except idna.IDNAError as error:
         raise ValueError("host is not valid IDNA") from error
+    try:
+        return str(ipaddress.IPv4Address(ascii_host))
+    except ipaddress.AddressValueError:
+        if all(character.isdigit() or character == "." for character in ascii_host):
+            raise ValueError("host is a noncanonical IPv4 numeric alias") from None
     if len(ascii_host) > 253:
         raise ValueError("host is too long")
     labels = ascii_host.split(".")
@@ -140,7 +151,10 @@ def _canonical_resource(kind: ResourceKind, value: str, *, pattern: bool) -> str
 
 @dataclass(frozen=True, slots=True)
 class ResourcePattern:
-    """A canonical resource value, optionally containing a narrow rule wildcard."""
+    """A canonical resource value, optionally containing a narrow rule wildcard.
+
+    Path values are canonical only in the lexical policy-domain sense; see the module contract.
+    """
 
     kind: ResourceKind
     pattern: str
@@ -168,12 +182,21 @@ class PolicyRule:
         object.__setattr__(self, "id", _text(self.id, "rule id"))
         action = self.action if isinstance(self.action, PolicyAction) else PolicyAction(self.action)
         object.__setattr__(self, "action", action)
-        object.__setattr__(self, "resources", tuple(self.resources))
+        resources = tuple(self.resources)
+        if not all(isinstance(resource, ResourcePattern) for resource in resources):
+            raise TypeError("rule resources must contain only ResourcePattern values")
+        if len(resources) != len(set(resources)):
+            raise ValueError("rule resources cannot contain a duplicate canonical resource")
+        object.__setattr__(self, "resources", resources)
         object.__setattr__(
             self, "risk_classes", frozenset(RiskClass(risk) for risk in self.risk_classes)
         )
         if not isinstance(self.description, str):
             raise TypeError("rule description must be a string")
+        if any(unicodedata.category(character).startswith("C") for character in self.description):
+            raise ValueError("rule description cannot contain control characters")
+        if type(self.enabled) is not bool:
+            raise TypeError("rule enabled must be a bool")
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,12 +209,16 @@ class PolicyRequest:
     def __post_init__(self) -> None:
         object.__setattr__(self, "tool_name", _canonical_tool(self.tool_name, pattern=False))
         resources = tuple(self.resources)
+        if not all(isinstance(resource, ResourcePattern) for resource in resources):
+            raise TypeError("request resources must contain only ResourcePattern values")
         if any(resource.is_wildcard for resource in resources):
             raise ValueError("request resources must be concrete, not wildcard patterns")
         object.__setattr__(self, "resources", resources)
         object.__setattr__(
             self, "risk_classes", frozenset(RiskClass(risk) for risk in self.risk_classes)
         )
+        if type(self.legacy_requires_approval) is not bool:
+            raise TypeError("request legacy_requires_approval must be a bool")
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,7 +362,7 @@ def _canonical_json_value(value: object, active: set[int]) -> object:
             raise ValueError("arguments cannot contain NaN or infinity")
         return value
     if isinstance(value, str):
-        return unicodedata.normalize("NFC", value)
+        return value
     if isinstance(value, Mapping):
         identity = id(value)
         if identity in active:
@@ -346,10 +373,7 @@ def _canonical_json_value(value: object, active: set[int]) -> object:
             for key, item in value.items():
                 if not isinstance(key, str):
                     raise TypeError("argument object keys must be strings")
-                canonical_key = unicodedata.normalize("NFC", key)
-                if canonical_key in normalized:
-                    raise ValueError("argument keys collide after Unicode normalization")
-                normalized[canonical_key] = _canonical_json_value(item, active)
+                normalized[key] = _canonical_json_value(item, active)
             return normalized
         finally:
             active.remove(identity)
@@ -366,7 +390,11 @@ def _canonical_json_value(value: object, active: set[int]) -> object:
 
 
 def canonical_arguments_hash(arguments: object) -> str:
-    """Return SHA-256 of canonical JSON arguments, rejecting non-JSON values."""
+    """Hash canonical JSON structure while preserving exact string and key code points.
+
+    Mapping order is canonicalized; list order remains significant. Non-JSON values, non-finite
+    floats, non-string mapping keys, and cyclic containers are rejected.
+    """
 
     normalized = _canonical_json_value(arguments, set())
     encoded = json.dumps(
