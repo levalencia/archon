@@ -94,9 +94,9 @@
               {#if msg.thinking_steps?.length}
                 <p class="detail-label">Steps</p>
                 {#each msg.thinking_steps as step}
-                  <div class="detail-row">
-                    <span class="status-dot"></span>
-                    <span>{step.detail}</span>
+                  <div class="detail-row" style={step.type === 'compaction' ? 'background:rgba(85,214,190,0.08);border-radius:6px;padding:6px 12px;margin:2px 0' : ''}>
+                    <span class="status-dot" style={step.type === 'compaction' ? 'background:var(--accent)' : ''}></span>
+                    <span style={step.type === 'compaction' ? 'color:var(--accent);font-weight:600' : ''}>{step.detail}</span>
                     {#if step.elapsed_ms != null}
                       <span style="color:var(--muted);font-size:10px;font-family:var(--font-mono);margin-left:auto;white-space:nowrap">
                         {fmtMs(step.elapsed_ms)}

@@ -175,7 +175,18 @@
         artifacts = [...artifacts, a];
       } catch { /* skip */ }
     } else if (event.event === 'context') {
-      try { context = JSON.parse(payload); am.context_stats = context; } catch { /* skip */ }
+      try {
+        context = JSON.parse(payload);
+        am.context_stats = context;
+        // If compaction happened, add it as a visible thinking step
+        if (context.compacted) {
+          am.thinking_steps = [...(am.thinking_steps || []), {
+            type: 'compaction',
+            detail: `⚡ Context compacted: ${context.tokens_before?.toLocaleString()} → ${context.tokens_after?.toLocaleString()} tokens (${context.saved_pct}% saved, ${context.messages_before} → ${context.messages_after} messages)`,
+            elapsed_ms: am.startedAt ? Math.round(performance.now() - am.startedAt) : 0,
+          }];
+        }
+      } catch { /* skip */ }
     } else if (event.event === 'done') {
       try {
         const d = JSON.parse(payload);
