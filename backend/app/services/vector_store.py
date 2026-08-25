@@ -106,9 +106,18 @@ class VectorStore:
         return {
             "total_chunks": len(self._chunks),
             "total_documents": len(self._documents),
+            "store_type": "memory",
             "embedding_dimensions": (
                 len(next(iter(self._chunks.values())).embedding)
                 if self._chunks and next(iter(self._chunks.values())).embedding
                 else 0
             ),
+        }
+
+    def stats(self) -> dict:
+        """Synchronous store statistics summary."""
+        return {
+            "total_chunks": len(self._chunks),
+            "total_documents": len(self._documents),
+            "store_type": "memory",
         }

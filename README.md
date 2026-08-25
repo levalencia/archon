@@ -39,9 +39,9 @@ The repository includes a reproducible acceptance command:
 At the latest local verification, it exercised:
 
 - Ruff lint and formatting;
-- 371 backend tests with 75% measured coverage;
+- 396 backend tests with 75% measured coverage;
 - Svelte and TypeScript checks with zero diagnostics;
-- 5 Vitest tests;
+- 4 Vitest tests;
 - 2 Playwright workflows covering desktop and mobile;
 - frontend production build;
 - backend Docker image build and `/healthz` smoke test.

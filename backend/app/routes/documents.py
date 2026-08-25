@@ -28,8 +28,23 @@ router = APIRouter(
 
 # Module-level stores
 _vector_store = VectorStore()
-_embedding_service = EmbeddingService(provider="mock", dimensions=256)
+_embedding_service: EmbeddingService | None = None
 _document_registry: dict[str, dict] = {}
+
+
+def _get_embedding_service(request: Request) -> EmbeddingService:
+    """Lazy-initialize EmbeddingService from app settings on first request."""
+    global _embedding_service  # noqa: PLW0603
+    if _embedding_service is None:
+        settings = request.app.state.settings
+        api_key = settings.embedding_api_key or settings.llm_api_key
+        _embedding_service = EmbeddingService(
+            provider=settings.embedding_provider,
+            model=settings.embedding_model,
+            api_key=api_key,
+            dimensions=settings.embedding_dimensions,
+        )
+    return _embedding_service
 
 
 class DocumentUpload(BaseModel):
@@ -80,7 +95,7 @@ async def upload_document(
 
     pipeline = RAGPipeline(
         vector_store=_vector_store,
-        embedding_service=_embedding_service,
+        embedding_service=_get_embedding_service(request),
         llm=llm,
     )
 
@@ -120,7 +135,7 @@ async def query_documents(
 
     pipeline = RAGPipeline(
         vector_store=_vector_store,
-        embedding_service=_embedding_service,
+        embedding_service=_get_embedding_service(request),
         llm=llm,
         top_k=body.top_k,
         min_score=-1.0,  # Mock embeddings need low threshold

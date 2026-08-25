@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = ""
 
+    # Embeddings
+    embedding_provider: str = "mock"  # mock | openai
+    embedding_model: str = "text-embedding-3-small"
+    embedding_api_key: str = ""  # falls back to llm_api_key if empty
+    embedding_dimensions: int = 256
+
     # Skills
     skills_top_k: int = 3
     image_gen_provider: str = "mock"  # mock | together | openai

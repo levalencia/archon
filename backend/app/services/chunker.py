@@ -190,14 +190,45 @@ class EmbeddingService:
         """Generate embedding vector for text."""
         if self.provider == "mock":
             return self._mock_embed(text)
+        if self.provider == "openai":
+            results = await self._openai_embed([text])
+            return results[0]
 
-        # TODO: Real embedding providers (OpenAI, local)
         msg = f"Embedding provider '{self.provider}' not yet implemented"
         raise NotImplementedError(msg)
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts."""
+        if self.provider == "openai":
+            return await self._openai_embed(texts)
         return [await self.embed(text) for text in texts]
+
+    async def _openai_embed(self, texts: list[str]) -> list[list[float]]:
+        """Call OpenAI embeddings API via httpx."""
+        import httpx
+
+        if not self.api_key:
+            msg = "OpenAI embedding provider requires an API key (set embedding_api_key or llm_api_key)"
+            raise ValueError(msg)
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/embeddings",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "input": texts,
+                    "model": self.model,
+                    "dimensions": self.dimensions,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        embeddings = [item["embedding"] for item in data["data"]]
+        return embeddings
 
     def _mock_embed(self, text: str) -> list[float]:
         """Deterministic mock embedding based on text hash.
