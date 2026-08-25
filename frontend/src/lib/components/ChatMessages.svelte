@@ -49,6 +49,33 @@
           <header>
             <strong>{msg.role === 'assistant' ? 'Archon' : 'You'}</strong>
             <time>{msg.timestamp}</time>
+            {#if msg.evalScores?.length}
+              {@const avg = msg.evalScores.reduce((s, e) => s + e.score, 0) / msg.evalScores.length}
+              <span class="eval-badge" style="
+                position:relative;
+                display:inline-flex;align-items:center;gap:4px;
+                margin-left:8px;padding:2px 8px;
+                border-radius:12px;font-size:10px;font-weight:600;cursor:default;
+                background:{avg >= 0.7 ? 'rgba(63,185,80,0.12)' : avg >= 0.4 ? 'rgba(240,189,98,0.12)' : 'rgba(255,107,114,0.12)'};
+                color:{avg >= 0.7 ? 'var(--success)' : avg >= 0.4 ? 'var(--warning)' : 'var(--error)'};
+              ">
+                {avg >= 0.7 ? '✓' : avg >= 0.4 ? '~' : '✗'} {(avg * 100).toFixed(0)}%
+                <span class="eval-tooltip" style="
+                  display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+                  background:var(--panel);border:1px solid var(--border);border-radius:8px;
+                  padding:10px 12px;min-width:200px;z-index:50;
+                  font-size:11px;font-weight:400;color:var(--text);text-align:left;
+                  box-shadow:0 8px 24px rgba(0,0,0,0.4);white-space:nowrap;
+                ">
+                  {#each msg.evalScores as ev}
+                    <div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;{ev.score >= 0.7 ? 'color:var(--success)' : ev.score >= 0.4 ? 'color:var(--warning)' : 'color:var(--error)'}">
+                      <span style="text-transform:capitalize">{ev.name}</span>
+                      <strong>{(ev.score * 100).toFixed(0)}%</strong>
+                    </div>
+                  {/each}
+                </span>
+              </span>
+            {/if}
           </header>
 
           <!-- Reasoning & actions (with live timer) -->
@@ -164,3 +191,9 @@
     {/if}
   </div>
 </div>
+
+<style>
+  .eval-badge:hover .eval-tooltip {
+    display: block !important;
+  }
+</style>

@@ -11,6 +11,7 @@ export interface Message {
   sources?: Array<{ title: string; url?: string; score?: number }>; artifacts?: Artifact[];
   iterations?: number; context_stats?: ContextStats;
   startedAt?: number; // performance.now() when the message started
+  evalScores?: { name: string; score: number; reason: string }[];
 }
 export interface RunStats { latency: string; tokens: string; tools: number; iterations: number; cost?: string }
 export interface LogEntry { ts?: string; level?: string; event?: string; data?: Record<string, unknown> }

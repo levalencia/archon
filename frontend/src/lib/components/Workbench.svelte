@@ -222,6 +222,13 @@
       } catch { /* skip */ }
     }
 
+    // Handle eval scores (auto-quality assessment)
+    if (event.event === 'eval') {
+      try {
+        am.evalScores = JSON.parse(payload);
+      } catch { /* skip */ }
+    }
+
     messages = [...messages.slice(0, -1), { ...am }];
   }
 

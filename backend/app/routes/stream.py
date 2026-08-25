@@ -189,6 +189,28 @@ async def chat_stream_real(
             },
         )
 
+        # Auto-evaluate response quality
+        from app.eval.evaluators import (
+            evaluate_cost,
+            evaluate_faithfulness,
+            evaluate_relevance,
+            evaluate_safety,
+        )
+
+        # Build context from tool results for faithfulness check
+        tool_context = " ".join(
+            json.dumps(tc.get("output", ""), default=str)[:500]
+            for tc in (result.tool_calls or [])
+            if tc.get("output")
+        )
+        scores = [
+            evaluate_faithfulness(result.content, tool_context or body.message),
+            evaluate_relevance(result.content, body.message),
+            evaluate_safety(result.content),
+            evaluate_cost(result.usage.total_tokens),
+        ]
+        yield _sse("eval", [{"name": s.name, "score": s.score, "reason": s.reason} for s in scores])
+
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
