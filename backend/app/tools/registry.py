@@ -13,11 +13,15 @@ Concept: Layer 3 - Tools (registered, validated, timeout-enforced, audited)
 from __future__ import annotations
 
 import asyncio
+import copy
 import inspect
 import os
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
-from typing import Any
+from types import MappingProxyType
+from typing import Any, cast
 
 import structlog
 
@@ -25,7 +29,13 @@ from app.agents.protocols import AuditLog, PermissionChecker
 from app.observability.logging import get_correlation_id
 from app.runtime.models import ToolCall
 from app.runtime.models import ToolDefinition as RuntimeToolDefinition
-from app.security.policy import PolicyRequest, ResourceKind, ResourcePattern, RiskClass
+from app.security.policy import (
+    PolicyRequest,
+    ResourceKind,
+    ResourcePattern,
+    RiskClass,
+    canonical_tool_name,
+)
 
 logger = structlog.get_logger()
 
@@ -33,6 +43,30 @@ logger = structlog.get_logger()
 DEFAULT_TOOL_TIMEOUT = 30
 
 ResourceResolver = Callable[[Mapping[str, Any]], tuple[ResourcePattern, ...]]
+
+
+def _deep_freeze(value: Any) -> Any:
+    """Copy JSON-like metadata into recursively immutable containers."""
+    if value is None or isinstance(value, (bool, int, float, str, bytes)):
+        return value
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _deep_freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_deep_freeze(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_deep_freeze(item) for item in value)
+    raise TypeError(f"unsupported mutable metadata value: {type(value).__name__}")
+
+
+def _deep_thaw(value: Any) -> Any:
+    """Return detached mutable containers for public metadata views."""
+    if isinstance(value, Mapping):
+        return {key: _deep_thaw(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_deep_thaw(item) for item in value]
+    if isinstance(value, frozenset):
+        return {_deep_thaw(item) for item in value}
+    return copy.deepcopy(value)
 
 
 class PolicyMetadataError(ValueError):
@@ -50,43 +84,45 @@ def resolve_workspace_path(arguments: Mapping[str, Any]) -> tuple[ResourcePatter
     path = arguments.get("path")
     if not isinstance(path, str):
         raise ValueError("path argument must be a string")
-    root = Path(os.environ.get("ARCHON_WORKSPACE_ROOT", Path.cwd())).resolve(strict=False)
+    workspace_root = arguments.get("workspace_root")
+    if workspace_root is not None and not isinstance(workspace_root, (str, os.PathLike)):
+        raise ValueError("workspace_root argument must be a path")
+    root_value = (
+        workspace_root
+        if workspace_root is not None
+        else os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
+    )
+    root = Path(root_value).resolve(strict=False)
     requested = Path(path)
     candidate = requested if requested.is_absolute() else root / requested
     resolved = candidate.resolve(strict=False)
     return (ResourcePattern(ResourceKind.PATH, resolved.as_posix()),)
 
 
+@dataclass(frozen=True, slots=True)
 class ToolDefinition:
     """A registered tool with its metadata."""
 
-    def __init__(
-        self,
-        name: str,
-        handler: Callable[..., Any],
-        description: str = "",
-        required_permissions: list[str] | None = None,
-        input_schema: dict[str, Any] | None = None,
-        timeout: int = DEFAULT_TOOL_TIMEOUT,
-        requires_approval: bool = False,
-        risk_classes: frozenset[RiskClass] = frozenset(),
-        resource_resolver: ResourceResolver | None = None,
-    ) -> None:
-        if not isinstance(risk_classes, frozenset) or not all(
-            isinstance(risk, RiskClass) for risk in risk_classes
+    name: str
+    handler: Callable[..., Any]
+    description: str = ""
+    required_permissions: tuple[str, ...] | list[str] | None = None
+    input_schema: Mapping[str, Any] | None = None
+    timeout: int = DEFAULT_TOOL_TIMEOUT
+    requires_approval: bool = False
+    risk_classes: frozenset[RiskClass] = dataclass_field(default_factory=frozenset)
+    resource_resolver: ResourceResolver | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.risk_classes, frozenset) or not all(
+            isinstance(risk, RiskClass) for risk in self.risk_classes
         ):
             raise TypeError("risk_classes must be a frozenset of RiskClass values")
-        if resource_resolver is not None and not callable(resource_resolver):
+        if self.resource_resolver is not None and not callable(self.resource_resolver):
             raise TypeError("resource_resolver must be callable")
-        self.name = name
-        self.handler = handler
-        self.description = description
-        self.required_permissions = required_permissions or []
-        self.input_schema = input_schema or {}
-        self.timeout = timeout
-        self.requires_approval = requires_approval
-        self.risk_classes = risk_classes
-        self.resource_resolver = resource_resolver
+        object.__setattr__(self, "name", canonical_tool_name(self.name))
+        object.__setattr__(self, "required_permissions", tuple(self.required_permissions or ()))
+        object.__setattr__(self, "input_schema", _deep_freeze(self.input_schema or {}))
 
 
 class SecureToolRegistry:
@@ -119,8 +155,11 @@ class SecureToolRegistry:
         resource_resolver: ResourceResolver | None = None,
     ) -> None:
         """Register a tool."""
-        self._tools[name] = ToolDefinition(
-            name=name,
+        canonical_name = canonical_tool_name(name)
+        if canonical_name in self._tools:
+            raise ValueError(f"tool already registered: {canonical_name}")
+        self._tools[canonical_name] = ToolDefinition(
+            name=canonical_name,
             handler=handler,
             description=description,
             required_permissions=required_permissions,
@@ -130,17 +169,17 @@ class SecureToolRegistry:
             risk_classes=risk_classes,
             resource_resolver=resource_resolver,
         )
-        logger.info("tool_registered", name=name, description=description)
+        logger.info("tool_registered", name=canonical_name, description=description)
 
     async def execute(
         self, call: ToolCall | str, parameters: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Execute a typed call (or legacy name/parameters) through all security gates."""
         if isinstance(call, ToolCall):
-            tool_name = call.name
+            tool_name = canonical_tool_name(call.name)
             parameters = dict(call.arguments)
         else:
-            tool_name = call
+            tool_name = canonical_tool_name(call)
             parameters = parameters or {}
         correlation_id = get_correlation_id()
 
@@ -176,7 +215,8 @@ class SecureToolRegistry:
                     raise PermissionError(error_msg)
 
         # 3. Input validation
-        required_fields = tool.input_schema.get("required", [])
+        schema = cast(Mapping[str, Any], tool.input_schema)
+        required_fields = schema.get("required", [])
         for field in required_fields:
             if field not in parameters:
                 error_msg = f"Missing required parameter: {field}"
@@ -250,7 +290,7 @@ class SecureToolRegistry:
             {
                 "name": tool.name,
                 "description": tool.description,
-                "input_schema": tool.input_schema,
+                "input_schema": _deep_thaw(tool.input_schema),
                 "risk_classes": sorted(risk.value for risk in tool.risk_classes),
                 "requires_approval": tool.requires_approval,
             }
@@ -261,7 +301,7 @@ class SecureToolRegistry:
         """Return provider-neutral schemas for native provider tool calling."""
         definitions = []
         for tool in self._tools.values():
-            schema = dict(tool.input_schema)
+            schema = _deep_thaw(tool.input_schema)
             schema.setdefault("type", "object")
             schema.setdefault("properties", {})
             definitions.append(RuntimeToolDefinition(tool.name, tool.description, schema))
@@ -269,20 +309,21 @@ class SecureToolRegistry:
 
     def get_tool(self, name: str) -> ToolDefinition | None:
         """Get a tool definition by name."""
-        return self._tools.get(name)
+        return self._tools.get(canonical_tool_name(name))
 
     def policy_request(self, call: ToolCall) -> PolicyRequest:
         """Build fail-closed policy input from a typed provider tool call."""
-        tool = self._tools.get(call.name)
+        tool_name = canonical_tool_name(call.name)
+        tool = self._tools.get(tool_name)
         if tool is None:
-            raise PolicyMetadataError(f"Unknown tool: {call.name}")
+            raise PolicyMetadataError(f"Unknown tool: {tool_name}")
         if not tool.risk_classes:
-            raise PolicyMetadataError(f"Tool '{call.name}' has no risk classification")
+            raise PolicyMetadataError(f"Tool '{tool_name}' has no risk classification")
 
         resources: tuple[ResourcePattern, ...] = ()
         if tool.resource_resolver is not None:
             try:
-                resolved = tool.resource_resolver(call.arguments)
+                resolved = tool.resource_resolver(_deep_freeze(call.arguments))
                 if not isinstance(resolved, tuple) or not all(
                     isinstance(resource, ResourcePattern) for resource in resolved
                 ):
@@ -296,24 +337,24 @@ class SecureToolRegistry:
                 resources = resolved
             except Exception as error:
                 raise PolicyMetadataError(
-                    f"resource resolver failed for tool '{call.name}': {error}"
+                    f"resource resolver failed for tool '{tool_name}'"
                 ) from error
 
         try:
             return PolicyRequest(
-                tool_name=call.name,
+                tool_name=tool_name,
                 resources=resources,
                 risk_classes=tool.risk_classes,
                 legacy_requires_approval=tool.requires_approval,
             )
         except (TypeError, ValueError) as error:
             raise PolicyMetadataError(
-                f"invalid policy metadata for tool '{call.name}': {error}"
+                f"invalid policy metadata for tool '{tool_name}': {error}"
             ) from error
 
     def tool_requires_approval(self, name: str) -> bool:
         """Check if a tool requires human approval before execution."""
-        tool = self._tools.get(name)
+        tool = self._tools.get(canonical_tool_name(name))
         if tool is None:
             return False
         return tool.requires_approval

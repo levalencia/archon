@@ -73,6 +73,12 @@ def _canonical_tool(value: str, *, pattern: bool) -> str:
     return value
 
 
+def canonical_tool_name(value: str) -> str:
+    """Return the canonical concrete tool identity used by policy and registries."""
+
+    return _canonical_tool(value, pattern=False)
+
+
 def _normalize_absolute_path(value: str) -> str:
     value = value.replace("\\", "/")
     if not value.startswith("/"):

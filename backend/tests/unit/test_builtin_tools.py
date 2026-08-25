@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from app.tools import builtin as builtin_module
 from app.tools import web_search as web_search_module
 from app.tools.builtin import (
     calculator_tool,
@@ -188,7 +189,7 @@ class TestFileTool:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_list_directory(self, workspace: Path) -> None:
-        result = await list_directory_tool(str(workspace))
+        result = await list_directory_tool(".", workspace_root=workspace)
         assert result["count"] == 3
         names = [i["name"] for i in result["items"]]
         assert "test.txt" in names
@@ -197,10 +198,80 @@ class TestFileTool:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_write_file(self, workspace: Path) -> None:
-        path = str(workspace / "new.txt")
-        result = await write_file_tool(path, "New content")
+        path = workspace / "new.txt"
+        result = await write_file_tool("new.txt", "New content", workspace_root=workspace)
         assert result["status"] == "written"
-        assert Path(path).read_text() == "New content"
+        assert path.read_text() == "New content"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("operation", ["list", "write"])
+    async def test_list_and_write_reject_workspace_escapes(
+        self, workspace: Path, operation: str
+    ) -> None:
+        sibling = workspace.parent / f"{workspace.name}-sibling"
+        sibling.mkdir()
+        (sibling / "target").mkdir()
+        (workspace / "escape").symlink_to(sibling / "target", target_is_directory=True)
+        try:
+            paths = [f"../{sibling.name}/target", str(sibling / "target"), "escape"]
+            for path in paths:
+                if operation == "list":
+                    result = await list_directory_tool(path, workspace_root=workspace)
+                else:
+                    result = await write_file_tool(
+                        f"{path}/new.txt", "blocked", workspace_root=workspace
+                    )
+                assert "error" in result
+                assert not (sibling / "target" / "new.txt").exists()
+        finally:
+            (workspace / "escape").unlink()
+            (sibling / "target").rmdir()
+            sibling.rmdir()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_list_rechecks_containment_after_symlink_swap(
+        self, workspace: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        inside = workspace / "inside"
+        inside.mkdir()
+        outside = workspace.parent / "outside-list-swap"
+        outside.mkdir()
+        link = workspace / "swap"
+        link.symlink_to(inside, target_is_directory=True)
+        original = builtin_module._contained_path
+        calls = 0
+
+        def swap_then_resolve(*args: object, **kwargs: object) -> tuple[Path, Path]:
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                link.unlink()
+                link.symlink_to(outside, target_is_directory=True)
+            return original(*args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(builtin_module, "_contained_path", swap_then_resolve)
+        try:
+            result = await list_directory_tool("swap", workspace_root=workspace)
+            assert "outside workspace" in result["error"]
+        finally:
+            link.unlink()
+            outside.rmdir()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_write_refuses_final_symlink(self, workspace: Path) -> None:
+        outside = workspace.parent / "outside-write-target.txt"
+        outside.write_text("unchanged")
+        (workspace / "link.txt").symlink_to(outside)
+        try:
+            result = await write_file_tool("link.txt", "pwned", workspace_root=workspace)
+            assert "error" in result
+            assert outside.read_text() == "unchanged"
+        finally:
+            (workspace / "link.txt").unlink()
+            outside.unlink()
 
 
 class TestRegisterBuiltinTools:

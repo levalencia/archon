@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
 
 from app.routes.chat import _create_tool_registry
 from app.runtime.models import ToolCall
-from app.security.policy import ResourceKind, ResourcePattern, RiskClass
+from app.security.policy import ResourceKind, ResourcePattern, RiskClass, canonical_tool_name
 from app.tools.builtin import register_builtin_tools
 from app.tools.registry import (
     PolicyMetadataError,
@@ -23,6 +24,31 @@ def _handler(**_arguments: object) -> dict[str, bool]:
 
 
 class TestTypedMetadata:
+    def test_tool_name_helper_matches_policy_canonicalization(self) -> None:
+        assert canonical_tool_name("  CAFE\u0301  ") == "café"
+        with pytest.raises(ValueError, match="control characters"):
+            canonical_tool_name("read_file\n")
+
+    def test_definition_is_deeply_immutable_and_copies_inputs(self) -> None:
+        permissions = ["read"]
+        schema = {"required": ["path"], "properties": {"path": {"type": "string"}}}
+        definition = ToolDefinition(
+            "READ_FILE", _handler, required_permissions=permissions, input_schema=schema
+        )
+        permissions.append("write")
+        schema["required"].append("secret")
+
+        assert definition.name == "read_file"
+        assert definition.required_permissions == ("read",)
+        assert tuple(definition.input_schema["required"]) == ("path",)
+        assert not hasattr(definition, "__dict__")
+        with pytest.raises(FrozenInstanceError):
+            definition.description = "changed"  # type: ignore[misc]
+        with pytest.raises(TypeError):
+            definition.input_schema["new"] = {}  # type: ignore[index]
+        with pytest.raises(TypeError):
+            definition.input_schema["properties"]["path"]["type"] = "number"  # type: ignore[index]
+
     def test_definition_keeps_immutable_typed_risks_and_resolver(self) -> None:
         def resolver(_arguments: object) -> tuple[ResourcePattern, ...]:
             return (ResourcePattern(ResourceKind.HOST, "example.com"),)
@@ -58,6 +84,45 @@ class TestTypedMetadata:
 
 
 class TestPolicyRequestBridge:
+    def test_registration_and_all_lookups_use_canonical_tool_identity(self) -> None:
+        registry = SecureToolRegistry()
+        registry.register("  CAFE\u0301  ", _handler, risk_classes=frozenset({RiskClass.READ}))
+
+        assert registry.get_tool("CAFÉ").name == "café"  # type: ignore[union-attr]
+        assert registry.tool_requires_approval(" café ") is False
+        assert registry.policy_request(ToolCall("call-1", "CAFÉ", {})).tool_name == "café"
+
+    async def test_execute_uses_canonical_tool_identity(self) -> None:
+        registry = SecureToolRegistry()
+        registry.register(" Read_File ", _handler)
+        assert await registry.execute(ToolCall("call-1", "READ_FILE", {})) == {"ok": True}
+        assert await registry.execute(" read_file ") == {"ok": True}
+
+    def test_duplicate_raw_and_canonical_registrations_are_rejected(self) -> None:
+        registry = SecureToolRegistry()
+        registry.register("Read_File", _handler)
+        with pytest.raises(ValueError, match="already registered.*read_file"):
+            registry.register("Read_File", _handler)
+        with pytest.raises(ValueError, match="already registered.*read_file"):
+            registry.register(" read_file ", _handler)
+
+    def test_metadata_views_are_defensive_deep_copies(self) -> None:
+        registry = SecureToolRegistry()
+        registry.register(
+            "reader",
+            _handler,
+            input_schema={"required": ["path"], "properties": {"path": {"type": "string"}}},
+        )
+        listed = registry.list_tools()[0]
+        listed["input_schema"]["required"].append("secret")
+        listed["input_schema"]["properties"]["path"]["type"] = "number"
+        provider = registry.definitions()[0]
+        provider.input_schema["properties"]["path"]["type"] = "boolean"  # type: ignore[index]
+
+        again = registry.list_tools()[0]["input_schema"]
+        assert again["required"] == ["path"]
+        assert again["properties"]["path"]["type"] == "string"
+
     def test_exact_tool_call_becomes_policy_request(self) -> None:
         resource = ResourcePattern(ResourceKind.HOST, "example.com")
         seen: list[object] = []
@@ -103,7 +168,9 @@ class TestPolicyRequestBridge:
             risk_classes=frozenset({RiskClass.READ}),
             resource_resolver=lambda _arguments: result,  # type: ignore[return-value]
         )
-        with pytest.raises(PolicyMetadataError, match="read_file.*tuple.*ResourcePattern"):
+        with pytest.raises(
+            PolicyMetadataError, match="resource resolver failed for tool 'read_file'"
+        ):
             registry.policy_request(ToolCall("call-1", "read_file", {"path": "file"}))
 
     def test_resolver_error_is_wrapped_and_fails_closed(self) -> None:
@@ -122,6 +189,46 @@ class TestPolicyRequestBridge:
         ):
             registry.policy_request(ToolCall("call-1", "read_file", {"path": "file"}))
 
+    def test_resolver_receives_deeply_immutable_copy_and_cannot_mutate_call(self) -> None:
+        original = {"nested": {"tokens": ["safe"]}}
+
+        def mutating(arguments: object) -> tuple[ResourcePattern, ...]:
+            arguments["nested"]["tokens"].append("changed")  # type: ignore[index,union-attr]
+            return ()
+
+        registry = SecureToolRegistry()
+        registry.register(
+            "reader",
+            _handler,
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=mutating,
+        )
+        call = ToolCall("call-1", "reader", original)
+        with pytest.raises(
+            PolicyMetadataError, match="^resource resolver failed for tool 'reader'$"
+        ):
+            registry.policy_request(call)
+        assert original == {"nested": {"tokens": ["safe"]}}
+        assert call.arguments["nested"] == {"tokens": ["safe"]}
+
+    def test_resolver_exception_message_is_stable_and_does_not_leak_secrets(self) -> None:
+        secret = "classified-api-token"
+
+        def broken(arguments: object) -> tuple[ResourcePattern, ...]:
+            raise RuntimeError(f"backend failed with {arguments!r} and {secret}")
+
+        registry = SecureToolRegistry()
+        registry.register(
+            "fetch",
+            _handler,
+            risk_classes=frozenset({RiskClass.NETWORK}),
+            resource_resolver=broken,
+        )
+        with pytest.raises(PolicyMetadataError) as captured:
+            registry.policy_request(ToolCall("call-1", "FETCH", {"token": secret}))
+        assert str(captured.value) == "resource resolver failed for tool 'fetch'"
+        assert secret not in str(captured.value)
+
     def test_resolver_cannot_inject_a_second_tool_identity(self) -> None:
         registry = SecureToolRegistry()
         registry.register(
@@ -132,7 +239,9 @@ class TestPolicyRequestBridge:
                 ResourcePattern(ResourceKind.TOOL, "different_name"),
             ),
         )
-        with pytest.raises(PolicyMetadataError, match="TOOL.*sole tool identity"):
+        with pytest.raises(
+            PolicyMetadataError, match="resource resolver failed for tool 'safe_name'"
+        ):
             registry.policy_request(ToolCall("call-1", "safe_name", {}))
 
     async def test_unclassified_legacy_registration_and_execution_remain_compatible(

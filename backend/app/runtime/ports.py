@@ -25,4 +25,8 @@ class ToolExecutor(Protocol):
 
     def definitions(self) -> Sequence[ToolDefinition]: ...
 
+
+class PolicyAwareToolExecutor(ToolExecutor, Protocol):
+    """Optional extension for runtimes that consume typed policy metadata."""
+
     def policy_request(self, call: ToolCall) -> PolicyRequest: ...

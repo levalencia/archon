@@ -137,11 +137,31 @@ async def datetime_tool(query: str = "now") -> dict:
     }
 
 
+def _workspace_root(workspace_root: str | Path | None = None) -> Path:
+    root_value = (
+        workspace_root
+        if workspace_root is not None
+        else os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
+    )
+    return Path(root_value).resolve()
+
+
+def _contained_path(
+    path: str | Path, workspace_root: str | Path | None = None, *, strict: bool
+) -> tuple[Path, Path]:
+    root = _workspace_root(workspace_root)
+    requested = Path(path)
+    candidate = requested if requested.is_absolute() else root / requested
+    resolved = candidate.resolve(strict=strict)
+    resolved.relative_to(root)
+    return root, resolved
+
+
 async def read_file_tool(
     path: str | Path, workspace_root: str | Path | None = None, max_size: int = MAX_READ_FILE_BYTES
 ) -> dict:
     """Read a regular file contained by the configured workspace root."""
-    root = Path(workspace_root or os.environ.get("ARCHON_WORKSPACE_ROOT", Path.cwd())).resolve()
+    root = _workspace_root(workspace_root)
     try:
         requested = Path(path)
         candidate = requested if requested.is_absolute() else root / requested
@@ -162,35 +182,78 @@ async def read_file_tool(
         return {"error": f"Error reading file: {e}"}
 
 
-async def list_directory_tool(path: str) -> dict:
-    """List files in a directory."""
-    dir_path = Path(path)
-    if not dir_path.exists():
-        return {"error": f"Directory not found: {path}"}
-    if not dir_path.is_dir():
-        return {"error": f"Not a directory: {path}"}
-
-    items = []
-    for item in sorted(dir_path.iterdir()):
-        items.append(
-            {
-                "name": item.name,
-                "type": "file" if item.is_file() else "directory",
-                "size": item.stat().st_size if item.is_file() else 0,
-            }
-        )
-    return {"path": str(dir_path), "items": items, "count": len(items)}
-
-
-async def write_file_tool(path: str, content: str) -> dict:
-    """Write content to a file."""
-    file_path = Path(path)
+async def list_directory_tool(path: str | Path, workspace_root: str | Path | None = None) -> dict:
+    """List a directory contained by the configured workspace root."""
     try:
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(content, encoding="utf-8")
+        _, dir_path = _contained_path(path, workspace_root, strict=True)
+        if not dir_path.is_dir():
+            return {"error": f"Not a directory: {path}"}
+
+        # Re-resolve immediately before enumeration so a changed symlink fails closed.
+        _, dir_path = _contained_path(path, workspace_root, strict=True)
+        items = []
+        for item in sorted(dir_path.iterdir()):
+            item_stat = item.lstat()
+            items.append(
+                {
+                    "name": item.name,
+                    "type": (
+                        "file"
+                        if stat.S_ISREG(item_stat.st_mode)
+                        else "directory"
+                        if stat.S_ISDIR(item_stat.st_mode)
+                        else "symlink"
+                        if stat.S_ISLNK(item_stat.st_mode)
+                        else "other"
+                    ),
+                    "size": item_stat.st_size if stat.S_ISREG(item_stat.st_mode) else 0,
+                }
+            )
+        return {"path": str(dir_path), "items": items, "count": len(items)}
+    except FileNotFoundError:
+        return {"error": f"Directory not found: {path}"}
+    except (RuntimeError, ValueError):
+        return {"error": f"Path is outside workspace: {path}"}
+    except OSError as error:
+        return {"error": f"Error listing directory: {error}"}
+
+
+async def write_file_tool(
+    path: str | Path, content: str, workspace_root: str | Path | None = None
+) -> dict:
+    """Write a file without escaping or following a final workspace symlink."""
+    directory_fd: int | None = None
+    file_fd: int | None = None
+    try:
+        root = _workspace_root(workspace_root)
+        requested = Path(path)
+        candidate = requested if requested.is_absolute() else root / requested
+
+        # Resolve existing components before creating directories, then recheck the resulting
+        # parent immediately before opening the file.
+        candidate.parent.resolve(strict=False).relative_to(root)
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        parent = candidate.parent.resolve(strict=True)
+        parent.relative_to(root)
+
+        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        directory_fd = os.open(parent, directory_flags)
+        file_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+        file_fd = os.open(candidate.name, file_flags, 0o600, dir_fd=directory_fd)
+        with os.fdopen(file_fd, "w", encoding="utf-8") as output:
+            file_fd = None
+            output.write(content)
+        file_path = parent / candidate.name
         return {"path": str(file_path), "size": len(content), "status": "written"}
-    except Exception as e:
-        return {"error": f"Error writing file: {e}"}
+    except (RuntimeError, ValueError):
+        return {"error": f"Path is outside workspace: {path}"}
+    except (OSError, TypeError, UnicodeError) as error:
+        return {"error": f"Error writing file: {error}"}
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
 
 
 def register_builtin_tools(registry: object) -> None:
