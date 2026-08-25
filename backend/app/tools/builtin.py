@@ -243,5 +243,6 @@ def register_builtin_tools(registry: object) -> None:
         required_permissions=["write_file"],
         input_schema={"required": ["path", "content"]},
         timeout=10,
+        requires_approval=True,
     )
     logger.info("builtin_tools_registered", count=6)

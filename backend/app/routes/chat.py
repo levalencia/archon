@@ -31,6 +31,7 @@ from app.tools.builtin import (
     memory_tool,
     read_file_tool,
     session_search_tool,
+    write_file_tool,
 )
 from app.tools.image_gen import image_gen_tool
 from app.tools.registry import SecureToolRegistry
@@ -117,6 +118,14 @@ def _create_tool_registry() -> SecureToolRegistry:
         description="Read the contents of a file by path",
         input_schema={"required": ["path"]},
         timeout=10,
+    )
+    registry.register(
+        name="write_file",
+        handler=write_file_tool,
+        description="Write content to a file",
+        input_schema={"required": ["path", "content"]},
+        timeout=10,
+        requires_approval=True,
     )
 
     registry.register(

@@ -7,12 +7,12 @@ from pydantic import BaseModel, Field
 
 from app.agents.llm_factory import create_llm_client
 from app.agents.multi_agent import (
-    AgentCoordinator,
     PlannerAgent,
     RetrieverAgent,
     SynthesizerAgent,
     ValidatorAgent,
 )
+from app.agents.resilient_coordinator import ResilientCoordinator
 from app.security.auth import get_current_user
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -34,7 +34,7 @@ async def multi_agent_chat(
 
     llm = create_llm_client(settings)
 
-    coordinator = AgentCoordinator(
+    coordinator = ResilientCoordinator(
         planner=PlannerAgent(llm),
         retriever=RetrieverAgent(llm),
         validator=ValidatorAgent(llm),

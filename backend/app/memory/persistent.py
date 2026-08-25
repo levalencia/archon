@@ -195,6 +195,17 @@ def get_persistent_memory() -> PersistentMemory:
     global _persistent_memory
     if _persistent_memory is None:
         _persistent_memory = PersistentMemory()
+        # Wrap with encryption if configured
+        try:
+            from app.config import get_settings
+            settings = get_settings()
+            if settings.memory_encryption_enabled and settings.encryption_master_key:
+                from app.memory.encrypted_memory import EncryptedMemoryStore
+                _encrypted_store = EncryptedMemoryStore(settings.encryption_master_key)
+                _persistent_memory._encrypted_store = _encrypted_store
+                logger.info("persistent_memory_encryption_enabled")
+        except Exception:
+            logger.debug("persistent_memory_encryption_skipped", reason="config unavailable or error")
     return _persistent_memory
 
 
