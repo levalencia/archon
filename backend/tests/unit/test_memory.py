@@ -1,4 +1,4 @@
-"""Tests for conversation memory stores (in-memory and encrypted)."""
+"""Tests for conversation memory stores (encrypted)."""
 
 from __future__ import annotations
 
@@ -6,88 +6,6 @@ import pytest
 
 from app.agents.protocols import MemoryStore
 from app.memory.encrypted_memory import EncryptedMemoryStore
-from app.memory.in_memory import InMemoryStore
-
-
-class TestInMemoryStore:
-    """In-memory store tests."""
-
-    @pytest.mark.unit
-    def test_satisfies_protocol(self) -> None:
-        store = InMemoryStore()
-        assert isinstance(store, MemoryStore)
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_store_and_retrieve(self) -> None:
-        store = InMemoryStore()
-        await store.store("conv-1", "user", "Hello")
-        await store.store("conv-1", "assistant", "Hi there!")
-
-        messages = await store.retrieve("conv-1")
-        assert len(messages) == 2
-        assert messages[0] == {"role": "user", "content": "Hello"}
-        assert messages[1] == {"role": "assistant", "content": "Hi there!"}
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_conversation_isolation(self) -> None:
-        store = InMemoryStore()
-        await store.store("conv-1", "user", "Message for conv 1")
-        await store.store("conv-2", "user", "Message for conv 2")
-
-        msg1 = await store.retrieve("conv-1")
-        msg2 = await store.retrieve("conv-2")
-        assert len(msg1) == 1
-        assert len(msg2) == 1
-        assert msg1[0]["content"] == "Message for conv 1"
-        assert msg2[0]["content"] == "Message for conv 2"
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_retrieve_with_limit(self) -> None:
-        store = InMemoryStore()
-        for i in range(10):
-            await store.store("conv-1", "user", f"Message {i}")
-
-        messages = await store.retrieve("conv-1", limit=3)
-        assert len(messages) == 3
-        assert messages[0]["content"] == "Message 7"  # Last 3
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_retrieve_empty_conversation(self) -> None:
-        store = InMemoryStore()
-        messages = await store.retrieve("nonexistent")
-        assert messages == []
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_list_conversations(self) -> None:
-        store = InMemoryStore()
-        await store.store("conv-1", "user", "a")
-        await store.store("conv-2", "user", "b")
-
-        convs = await store.list_conversations()
-        assert set(convs) == {"conv-1", "conv-2"}
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_delete_conversation(self) -> None:
-        store = InMemoryStore()
-        await store.store("conv-1", "user", "a")
-        assert await store.delete_conversation("conv-1") is True
-        assert await store.retrieve("conv-1") == []
-        assert await store.delete_conversation("conv-1") is False
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_message_count(self) -> None:
-        store = InMemoryStore()
-        assert await store.get_message_count("conv-1") == 0
-        await store.store("conv-1", "user", "a")
-        await store.store("conv-1", "assistant", "b")
-        assert await store.get_message_count("conv-1") == 2
 
 
 class TestEncryptedMemoryStore:

@@ -22,59 +22,7 @@ from app.security.auth import (
     hash_password,
     verify_password,
 )
-from app.services.context_optimizer import (
-    ContextOptimizer,
-    count_messages_tokens,
-    count_tokens,
-)
 from app.services.db_store import DatabaseStore
-
-
-class TestTokenCounting:
-    @pytest.mark.unit
-    def test_count_tokens(self) -> None:
-        assert count_tokens("hello") >= 1
-        assert count_tokens("a" * 400) > 0  # tiktoken counts real tokens
-
-    @pytest.mark.unit
-    def test_count_messages(self) -> None:
-        msgs = [
-            {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "world"},
-        ]
-        tokens = count_messages_tokens(msgs)
-        assert tokens > 0
-
-
-class TestContextOptimizer:
-    @pytest.mark.unit
-    def test_small_context_unchanged(self) -> None:
-        opt = ContextOptimizer(max_tokens=1000, reserve_for_response=100)
-        msgs = [{"role": "user", "content": "hi"}]
-        result = opt.optimize(msgs)
-        assert len(result) == 1
-
-    @pytest.mark.unit
-    def test_large_context_trimmed(self) -> None:
-        opt = ContextOptimizer(max_tokens=100, reserve_for_response=20)
-        msgs = [
-            {"role": "system", "content": "You are helpful."},
-            {"role": "user", "content": "x" * 200},
-            {"role": "assistant", "content": "y" * 200},
-            {"role": "user", "content": "latest question"},
-        ]
-        result = opt.optimize(msgs)
-        assert len(result) < len(msgs)
-        # System message should be kept
-        assert result[0]["role"] == "system"
-
-    @pytest.mark.unit
-    def test_get_stats(self) -> None:
-        opt = ContextOptimizer(max_tokens=500)
-        msgs = [{"role": "user", "content": "test"}]
-        stats = opt.get_stats(msgs)
-        assert "total_tokens" in stats
-        assert "utilization_pct" in stats
 
 
 class TestAuth:

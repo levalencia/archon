@@ -14,11 +14,6 @@ from app.memory.advanced import (
     importance_weighted_trim,
 )
 from app.memory.checkpoints import CheckpointManager
-from app.services.db_features import (
-    ConversationSharder,
-    RowLevelSecurity,
-    scan_document,
-)
 
 
 class TestCheckpoints:
@@ -143,46 +138,4 @@ class TestBatchEval:
         assert result.avg_safety == 1.0  # No PII in answers
 
 
-class TestRowLevelSecurity:
-    @pytest.mark.unit
-    def test_access_check(self) -> None:
-        rls = RowLevelSecurity()
-        rls.set_user("user-1")
-        assert rls.check_access("user-1") is True
-        assert rls.check_access("user-2") is False
 
-    @pytest.mark.unit
-    def test_admin_bypass(self) -> None:
-        rls = RowLevelSecurity()
-        rls.set_user("admin")
-        assert rls.check_access("user-1") is True
-
-
-class TestConversationSharder:
-    @pytest.mark.unit
-    def test_shard_deterministic(self) -> None:
-        sharder = ConversationSharder(num_shards=16)
-        s1 = sharder.get_shard("user-123")
-        s2 = sharder.get_shard("user-123")
-        assert s1 == s2
-        assert 0 <= s1 < 16
-
-
-class TestVirusScan:
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_safe_file(self) -> None:
-        result = await scan_document(b"Hello world", "test.txt")
-        assert result["safe"] is True
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_dangerous_extension(self) -> None:
-        result = await scan_document(b"code", "malware.exe")
-        assert result["safe"] is False
-
-    @pytest.mark.unit
-    @pytest.mark.asyncio
-    async def test_embedded_script(self) -> None:
-        result = await scan_document(b"<script>alert(1)</script>", "page.html")
-        assert result["safe"] is False

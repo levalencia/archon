@@ -7,7 +7,6 @@ import stat
 import pytest
 
 from app.services.chunker import EmbeddingService
-from app.services.db_features import ConversationSharder
 from app.tools.builtin import calculator_tool
 from app.tools.image_gen import image_gen_tool
 from app.tools.image_storage import IMAGES_DIR, image_path
@@ -48,13 +47,6 @@ async def test_calculator_whitelist_preserves_supported_math(
 ) -> None:
     result = await calculator_tool(expression)
     assert result["result"] == expected
-
-
-@pytest.mark.security
-def test_sha256_sharding_is_stable() -> None:
-    sharder = ConversationSharder(num_shards=16)
-    assert sharder.get_shard("user-123") == 8
-    assert sharder.get_shard("user-123") == sharder.get_shard("user-123")
 
 
 @pytest.mark.security

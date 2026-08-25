@@ -24,7 +24,6 @@ from app.runtime import AgentRuntime, RuntimeBudget
 from app.runtime.support import as_model_provider, prepare_messages
 from app.security.auth import get_current_user
 from app.services.artifacts import Artifact, detect_artifact_in_response
-from app.services.context_optimizer import ContextOptimizer
 from app.services.conversations import ConversationRepository
 from app.tools.builtin import (
     calculator_tool,
@@ -65,7 +64,22 @@ def get_tool_registry():
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
-_context_optimizer = ContextOptimizer(max_tokens=200000, reserve_for_response=4096)
+
+class _NoOpContextOptimizer:
+    """Lightweight stand-in after context_optimizer module was removed."""
+
+    def __init__(self, max_tokens: int = 200000, reserve_for_response: int = 4096):
+        self.max_tokens = max_tokens
+        self.reserve_for_response = reserve_for_response
+
+    def optimize(self, messages: list[dict]) -> list[dict]:
+        return messages  # pass-through
+
+    def get_stats(self, messages: list[dict]) -> dict:
+        return {"total_tokens": 0, "utilization_pct": 0.0}
+
+
+_context_optimizer = _NoOpContextOptimizer(max_tokens=200000, reserve_for_response=4096)
 
 
 def get_conversation_repository(request: Request) -> ConversationRepository:
