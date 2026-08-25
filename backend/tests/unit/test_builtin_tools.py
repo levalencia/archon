@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -203,6 +204,37 @@ class TestFileTool:
         result = await write_file_tool("new.txt", "New content", workspace_root=workspace)
         assert result["status"] == "written"
         assert path.read_text() == "New content"
+        assert path.stat().st_mode & 0o777 == 0o600
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_write_existing_file_truncates_and_enforces_private_mode(
+        self, workspace: Path
+    ) -> None:
+        path = workspace / "existing.txt"
+        path.write_text("old content that is longer")
+        path.chmod(0o644)
+
+        result = await write_file_tool("existing.txt", "new", workspace_root=workspace)
+
+        assert result["status"] == "written"
+        assert path.read_text() == "new"
+        assert path.stat().st_mode & 0o777 == 0o600
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO is not supported")
+    async def test_write_refuses_fifo_without_writing_payload(self, workspace: Path) -> None:
+        fifo = workspace / "target.fifo"
+        os.mkfifo(fifo)
+        reader_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+        try:
+            result = await write_file_tool("target.fifo", "secret", workspace_root=workspace)
+
+            assert result == {"error": "Unable to write file safely: target.fifo"}
+            assert os.read(reader_fd, 1024) == b""
+        finally:
+            os.close(reader_fd)
 
     @pytest.mark.unit
     @pytest.mark.asyncio

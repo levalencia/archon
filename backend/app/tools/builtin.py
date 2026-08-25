@@ -354,10 +354,14 @@ async def write_file_tool(
         directory_fd = _open_workspace_directory(root, components[:-1], create=True)
         file_fd = os.open(
             components[-1],
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+            os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
             0o600,
             dir_fd=directory_fd,
         )
+        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+            return {"error": f"Unable to write file safely: {path}"}
+        os.fchmod(file_fd, 0o600)
+        os.ftruncate(file_fd, 0)
         written = 0
         while written < len(encoded_content):
             written += os.write(file_fd, encoded_content[written:])
