@@ -159,7 +159,41 @@ class AgentRuntime:
                         iterations,
                         {"id": call.id, "name": call.name, "arguments": dict(call.arguments)},
                     )
-                    output = await self._within_deadline(self._tools.execute(call), started_at)
+                    try:
+                        output = await self._within_deadline(self._tools.execute(call), started_at)
+                    except Exception as tool_err:
+                        # Reflexion: feed error back to the LLM so it can self-correct
+                        error_output = {
+                            "error": f"{type(tool_err).__name__}: {tool_err}",
+                            "reflexion_hint": "The tool call failed. Analyze the error, "
+                            "adjust your approach, and try again with corrected parameters "
+                            "or a different tool.",
+                        }
+                        record = {
+                            "tool": call.name,
+                            "parameters": dict(call.arguments),
+                            "result": error_output,
+                            "status": "error",
+                        }
+                        calls.append(record)
+                        await self._emit(
+                            AgentEventKind.TOOL_CALL_COMPLETED,
+                            iterations,
+                            {
+                                "id": call.id,
+                                "name": call.name,
+                                "arguments": dict(call.arguments),
+                                "output": error_output,
+                            },
+                        )
+                        history.append(
+                            Message(
+                                Role.TOOL,
+                                json.dumps(error_output, separators=(",", ":")),
+                                tool_call_id=call.id,
+                            )
+                        )
+                        continue
                     record = {
                         "tool": call.name,
                         "parameters": dict(call.arguments),
