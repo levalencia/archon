@@ -19,11 +19,17 @@ _checkpoint_mgr = CheckpointManager()
 
 
 def _project_id(
-    value: str = Query(
-        default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
+    project_id: str = Query(
+        default="default",
+        alias="project_id",
+        description="Memory project scope for this operation.",
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9._-]+$",
     ),
 ) -> str:
-    return value
+    """Return the validated project scope supplied by the API caller."""
+    return project_id
 
 
 def _serialize_fact(fact: MemoryFact) -> dict[str, Any]:
