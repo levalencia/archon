@@ -360,7 +360,7 @@ class EmbeddingService:
                     "model": self.model,
                     "dimensions": self.dimensions,
                 },
-                extensions={"sni_hostname": original_host.encode("ascii")},
+                extensions={"sni_hostname": original_host},
             )
             resp = await client.send(request)
             resp.raise_for_status()

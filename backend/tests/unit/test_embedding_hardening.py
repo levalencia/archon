@@ -112,7 +112,7 @@ async def test_provider_pins_request_dns_and_preserves_host_and_sni(monkeypatch)
     request = client.send.call_args.args[0]
     assert str(request.url) == "https://93.184.216.34/v1/embeddings"
     assert request.headers["host"] == "api.openai.com"
-    assert request.extensions["sni_hostname"] == b"api.openai.com"
+    assert request.extensions["sni_hostname"] == "api.openai.com"
 
 
 @pytest.mark.asyncio

@@ -96,7 +96,7 @@ class TestEmbeddingServiceOpenAI:
         request = mock_client.send.call_args.args[0]
         assert request.url.path == "/v1/embeddings"
         assert request.headers["host"] == "api.openai.com"
-        assert request.extensions["sni_hostname"] == b"api.openai.com"
+        assert request.extensions["sni_hostname"] == "api.openai.com"
         assert '"model":"text-embedding-3-small"' in request.read().decode()
 
 
