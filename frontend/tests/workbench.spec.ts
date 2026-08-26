@@ -38,6 +38,57 @@ test('mobile uses navigation drawer and inspector bottom sheet', async ({ page }
   await expect(page.getByRole('tab', { name: 'Logs' })).toBeVisible();
 });
 
+test('mobile conversations dialog contains forward and reverse keyboard focus', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open conversations' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Conversations' });
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await expect(page.locator('main.main')).toHaveAttribute('inert', '');
+  for (let index = 0; index < 12; index += 1) {
+    await page.keyboard.press('Tab');
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+  for (let index = 0; index < 12; index += 1) {
+    await page.keyboard.press('Shift+Tab');
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+  await expect(page.locator('button.scrim')).toHaveAttribute('tabindex', '-1');
+});
+
+test('tablet inspector is inert while closed and traps focus while open', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 900 });
+  await page.goto('/');
+
+  const inspector = page.locator('aside.inspector-shell');
+  await expect(inspector).toHaveAttribute('role', 'dialog');
+  await expect(inspector).toHaveAttribute('inert', '');
+  for (let index = 0; index < 12; index += 1) await page.keyboard.press('Tab');
+  expect(await inspector.evaluate((element) => element.contains(document.activeElement))).toBe(false);
+
+  await page.getByRole('button', { name: 'Inspect run' }).click();
+  await expect(inspector).not.toHaveAttribute('inert', '');
+  await expect(page.locator('aside.sidebar')).toHaveAttribute('inert', '');
+  for (let index = 0; index < 12; index += 1) {
+    await page.keyboard.press(index % 2 ? 'Shift+Tab' : 'Tab');
+    expect(await inspector.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+  await expect(page.locator('button.sheet-scrim')).toHaveAttribute('tabindex', '-1');
+});
+
+test('desktop panels are complementary landmarks rather than modal dialogs', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+
+  const sidebar = page.getByRole('complementary', { name: 'Conversations' });
+  const inspector = page.getByRole('complementary', { name: 'Run inspector' });
+  await expect(sidebar).not.toHaveAttribute('inert', '');
+  await expect(inspector).not.toHaveAttribute('inert', '');
+  await expect(page.getByRole('dialog', { name: 'Conversations' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Run inspector' })).toHaveCount(0);
+});
+
 test('approval decisions include the exact SSE run binding', async ({ page }) => {
   await page.unroute('**/api/chat/stream');
   await page.route('**/api/chat/stream', route => route.fulfill({
@@ -73,6 +124,33 @@ test('approval event without a run binding fails visibly without a decision UI',
 
   await expect(page.getByRole('alert').filter({ hasText: 'missing run binding' })).toContainText('missing run binding');
   await expect(page.getByRole('dialog', { name: 'Tool approval required' })).toHaveCount(0);
+});
+
+test('approval dialog starts on deny, traps focus, and Escape denies safely', async ({ page }) => {
+  await page.unroute('**/api/chat/stream');
+  await page.route('**/api/chat/stream', route => route.fulfill({
+    status: 200,
+    contentType: 'text/event-stream',
+    body: 'event: approval_required\ndata: {"tool":"terminal","tool_call_id":"call-escape","run_id":"run-escape","parameters":{}}\n\n',
+  }));
+  let decision: unknown;
+  await page.route('**/api/chat/approve/call-escape', async route => {
+    decision = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+
+  await page.goto('/');
+  await page.getByRole('textbox', { name: 'Message' }).fill('request approval');
+  await page.getByRole('button', { name: 'Send' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Tool approval required' });
+  await expect(dialog.getByRole('button', { name: 'Deny' })).toBeFocused();
+  for (let index = 0; index < 6; index += 1) {
+    await page.keyboard.press(index % 2 ? 'Shift+Tab' : 'Tab');
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  expect(decision).toEqual({ approved: false, run_id: 'run-escape' });
 });
 
 const persistedRuns = [

@@ -38,6 +38,11 @@
   let stats: RunStats = $state({ latency: '—', tokens: '—', tools: 0, iterations: 0 });
   let pendingApproval: { tool: string; run_id: string; tool_call_id: string; parameters: Record<string, any> } | null = $state(null);
   let lastOverlayTrigger: HTMLElement | null = null;
+  let sidebarOpen = $state(false);
+  let inspectorOpen = $state(false);
+  let viewportWidth = $state(Number.POSITIVE_INFINITY);
+  let sidebarIsModal = $derived(viewportWidth <= 720);
+  let inspectorIsModal = $derived(viewportWidth <= 1050);
   let latestAssistant = $derived(messages.findLast((message) => message.role === 'assistant'));
 
   let controller: AbortController | null = null;
@@ -46,8 +51,10 @@
   // ── DOM refs ───────────────────────────────────────────────────────
   let sidebarElement: HTMLElement;
   let sidebarScrim: HTMLButtonElement;
+  let mainElement: HTMLElement;
   let inspectorElement: HTMLElement;
   let inspectorScrim: HTMLButtonElement;
+  let approvalElement = $state<HTMLElement>();
   let denyButton = $state<HTMLButtonElement>();
 
   // ── Constants ──────────────────────────────────────────────────────
@@ -60,16 +67,15 @@
   // ── Lifecycle ──────────────────────────────────────────────────────
   onMount(() => {
     hydrated = true;
-    if (isMobile()) {
-      sidebarElement.setAttribute('inert', '');
-      inspectorElement.setAttribute('inert', '');
-    }
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
     loadHealth();
     connectLogs();
     if (initialId) loadConversation(initialId, false);
     return () => {
       controller?.abort();
       logController?.abort();
+      window.removeEventListener('resize', updateViewport);
     };
   });
 
@@ -399,31 +405,74 @@
     loading = false;
   }
 
-  // ── Overlay helpers (mobile only) ───────────────────────────────────
-  function isMobile() {
-    return window.matchMedia('(max-width: 720px)').matches;
+  // ── Responsive modal helpers ────────────────────────────────────────
+  function updateViewport() {
+    const width = window.innerWidth;
+    viewportWidth = width;
+    // An overlay which becomes a persistent desktop panel is no longer open.
+    // This also keeps it closed if the viewport later returns to a breakpoint.
+    if (width > 720) sidebarOpen = false;
+    if (width > 1050) inspectorOpen = false;
   }
 
   function setOverlay(element: HTMLElement, scrim: HTMLButtonElement, open: boolean, trigger?: HTMLElement) {
     if (open) lastOverlayTrigger = trigger || document.activeElement as HTMLElement;
-    element.classList.toggle('open', open);
-    element.setAttribute('data-open', String(open));
-    // Only set inert on mobile — on desktop panels are always interactive
-    if (isMobile()) {
-      element.toggleAttribute('inert', !open);
+    if (element === sidebarElement) {
+      sidebarOpen = open && sidebarIsModal;
+      if (sidebarOpen) inspectorOpen = false;
     } else {
-      element.removeAttribute('inert');
+      inspectorOpen = open && inspectorIsModal;
+      if (inspectorOpen) sidebarOpen = false;
     }
-    scrim.classList.toggle('open', open);
-    scrim.tabIndex = open ? 0 : -1;
-    if (open) requestAnimationFrame(() => (element.querySelector('button, a, [tabindex="0"]') as HTMLElement)?.focus());
+    // Scrims are pointer targets only; they must never enter keyboard traversal.
+    scrim.tabIndex = -1;
+    if (open) requestAnimationFrame(() => getFocusable(element)[0]?.focus());
     else requestAnimationFrame(() => lastOverlayTrigger?.focus());
   }
 
+  function getFocusable(bound: HTMLElement): HTMLElement[] {
+    return Array.from(bound.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )).filter((element) => !element.closest('[inert]') && element.getClientRects().length > 0);
+  }
+
+  function trapFocus(event: KeyboardEvent, bound: HTMLElement): boolean {
+    if (event.key !== 'Tab') return false;
+    const focusable = getFocusable(bound);
+    if (!focusable.length) {
+      event.preventDefault();
+      return true;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || !bound.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (active === last || !bound.contains(active))) {
+      event.preventDefault();
+      first.focus();
+    }
+    return true;
+  }
+
   function handleKeydown(event: KeyboardEvent) {
+    if (pendingApproval && approvalElement) {
+      if (trapFocus(event, approvalElement)) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        void deny();
+      }
+      return;
+    }
+
+    const modal = inspectorOpen && inspectorIsModal
+      ? inspectorElement
+      : sidebarOpen && sidebarIsModal ? sidebarElement : undefined;
+    if (modal && trapFocus(event, modal)) return;
     if (event.key !== 'Escape') return;
-    if (inspectorElement?.dataset.open === 'true') setOverlay(inspectorElement, inspectorScrim, false);
-    else if (sidebarElement?.dataset.open === 'true') setOverlay(sidebarElement, sidebarScrim, false);
+    if (inspectorOpen) setOverlay(inspectorElement, inspectorScrim, false);
+    else if (sidebarOpen) setOverlay(sidebarElement, sidebarScrim, false);
   }
 
   function safeParameters(value: unknown): unknown {
@@ -438,6 +487,24 @@
   $effect(() => {
     if (pendingApproval) requestAnimationFrame(() => denyButton?.focus());
   });
+
+  $effect(() => {
+    // Read all responsive/modal state before applying it to the bound nodes.
+    const approvalOpen = Boolean(pendingApproval);
+    const sidebarModalOpen = sidebarIsModal && sidebarOpen;
+    const inspectorModalOpen = inspectorIsModal && inspectorOpen;
+    if (!sidebarElement || !mainElement || !inspectorElement) return;
+
+    mainElement.toggleAttribute('inert', approvalOpen || sidebarModalOpen || inspectorModalOpen);
+    sidebarElement.toggleAttribute(
+      'inert',
+      approvalOpen || inspectorModalOpen || (sidebarIsModal && !sidebarOpen),
+    );
+    inspectorElement.toggleAttribute(
+      'inert',
+      approvalOpen || sidebarModalOpen || (inspectorIsModal && !inspectorOpen),
+    );
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -445,6 +512,7 @@
   <!-- Sidebar overlay -->
   <button
     bind:this={sidebarScrim}
+    class:open={sidebarOpen && sidebarIsModal}
     class="scrim"
     aria-label="Close conversations"
     tabindex="-1"
@@ -452,7 +520,15 @@
   ></button>
 
   <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-  <aside bind:this={sidebarElement} data-open="false" class="sidebar" role="dialog" aria-modal="true" aria-label="Conversations">
+  <aside
+    bind:this={sidebarElement}
+    data-open={sidebarOpen}
+    class:open={sidebarOpen}
+    class="sidebar"
+    role={sidebarIsModal ? 'dialog' : 'complementary'}
+    aria-modal={sidebarIsModal ? 'true' : undefined}
+    aria-label="Conversations"
+  >
     <Sidebar
       activeId={currentId}
       onSelect={loadConversation}
@@ -462,7 +538,7 @@
   </aside>
 
   <!-- Main content area -->
-  <main class="main">
+  <main bind:this={mainElement} class="main">
     <header class="topbar">
       <button
         class="icon-button nav-toggle"
@@ -506,7 +582,15 @@
 
   <!-- Inspector panel -->
   <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-  <aside bind:this={inspectorElement} data-open="false" class="inspector-shell" role="dialog" aria-modal="true" aria-label="Run inspector">
+  <aside
+    bind:this={inspectorElement}
+    data-open={inspectorOpen}
+    class:open={inspectorOpen}
+    class="inspector-shell"
+    role={inspectorIsModal ? 'dialog' : 'complementary'}
+    aria-modal={inspectorIsModal ? 'true' : undefined}
+    aria-label="Run inspector"
+  >
     <button
       class="sheet-close"
       aria-label="Close inspector"
@@ -529,6 +613,7 @@
 
   <button
     bind:this={inspectorScrim}
+    class:open={inspectorOpen && inspectorIsModal}
     class="sheet-scrim"
     aria-label="Close inspector"
     tabindex="-1"
@@ -536,7 +621,7 @@
   ></button>
 
   {#if pendingApproval}
-    <div class="approval-backdrop" role="dialog" aria-modal="true" aria-label="Tool approval required">
+    <div bind:this={approvalElement} class="approval-backdrop" role="dialog" aria-modal="true" aria-label="Tool approval required">
       <div class="approval-card">
         <div class="approval-header">
           <span class="approval-icon">⚠️</span>
