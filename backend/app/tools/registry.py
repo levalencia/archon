@@ -54,9 +54,9 @@ def _value_matches_type(value: Any, declared_type: str) -> bool:
     if declared_type == "integer":
         return isinstance(value, int) and not isinstance(value, bool)
     if declared_type == "number":
-        return (
-            isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
-        )
+        if type(value) is int:
+            return True
+        return type(value) is float and math.isfinite(value)
     if declared_type == "boolean":
         return type(value) is bool
     if declared_type == "object":

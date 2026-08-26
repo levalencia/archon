@@ -86,7 +86,9 @@ def _matches_type(value: object, declared_type: str) -> bool:
     if declared_type == "integer":
         return type(value) is int
     if declared_type == "number":
-        return type(value) in (int, float) and math.isfinite(value)  # type: ignore[arg-type]
+        if type(value) is int:
+            return True
+        return type(value) is float and math.isfinite(value)
     if declared_type == "boolean":
         return type(value) is bool
     if declared_type == "object":

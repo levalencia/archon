@@ -58,6 +58,20 @@ def test_untrusted_schema_values_always_raise_stable_runtime_error(schema: objec
     assert error.value.code == "unsupported_tool_schema"
 
 
+def test_huge_json_integer_enum_and_default_do_not_overflow() -> None:
+    huge = 10**1000
+    schema = {
+        "type": "object",
+        "properties": {
+            "value": {"type": "number", "enum": [huge], "default": huge},
+        },
+        "required": ["value"],
+    }
+    normalized = normalize_input_schema(schema)
+    assert normalized["properties"]["value"]["enum"] == [huge]
+    assert "default" not in normalized["properties"]["value"]
+
+
 async def _real_provider(
     tmp_path: Path,
 ) -> tuple[DatabaseStore, MCPRepository, MCPRuntimeToolProvider]:
