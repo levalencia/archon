@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -273,6 +273,165 @@ class ApprovalRepository:
             record = self._record(rows[0]) if len(rows) == 1 else None
             await session.commit()
             return record
+
+    async def get_exact_binding(
+        self,
+        *,
+        user_id: str,
+        conversation_id: str,
+        run_id: str,
+        tool_call_id: str,
+        tool_name: str,
+        arguments_hash: str,
+        now: datetime | None = None,
+    ) -> ApprovalRecord | None:
+        """Load one exact durable receipt, lazily persisting expiry."""
+        current = _datetime(now or datetime.now(tz=UTC), "now")
+        binding = (
+            ApprovalRequestRow.user_id == _identifier(user_id, "user_id"),
+            ApprovalRequestRow.conversation_id == _identifier(conversation_id, "conversation_id"),
+            ApprovalRequestRow.run_id == _identifier(run_id, "run_id"),
+            ApprovalRequestRow.tool_call_id == _identifier(tool_call_id, "tool_call_id"),
+            ApprovalRequestRow.tool_name == _identifier(tool_name, "tool_name"),
+            ApprovalRequestRow.arguments_hash == arguments_hash,
+        )
+        async with self._sessions() as session:
+            await session.execute(
+                update(ApprovalRequestRow)
+                .where(
+                    *binding,
+                    ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                    ApprovalRequestRow.expires_at <= current,
+                )
+                .values(
+                    status=ApprovalStatus.EXPIRED.value,
+                    decision_reason="approval_expired",
+                    decided_at=current,
+                )
+            )
+            result = await session.execute(select(ApprovalRequestRow).where(*binding))
+            row = result.scalar_one_or_none()
+            await session.commit()
+            return None if row is None else self._record(row)
+
+    async def decide_unique_for_owner(
+        self,
+        *,
+        user_id: str,
+        tool_call_id: str,
+        status: ApprovalStatus,
+        reason: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """Atomically decide only an owner's unique live receipt for a tool-call ID."""
+        user_id = _identifier(user_id, "user_id")
+        tool_call_id = _identifier(tool_call_id, "tool_call_id")
+        decision = ApprovalStatus(status)
+        if decision not in {ApprovalStatus.APPROVED, ApprovalStatus.DENIED}:
+            raise ValueError("decision status must be approved or denied")
+        decision_reason = _reason(reason)
+        if decision_reason is None:
+            raise ValueError("decision reason is required")
+        current = _datetime(now or datetime.now(tz=UTC), "now")
+        owner_call = (
+            ApprovalRequestRow.user_id == user_id,
+            ApprovalRequestRow.tool_call_id == tool_call_id,
+        )
+        async with self._sessions() as session:
+            await session.execute(
+                update(ApprovalRequestRow)
+                .where(
+                    *owner_call,
+                    ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                    ApprovalRequestRow.expires_at <= current,
+                )
+                .values(
+                    status=ApprovalStatus.EXPIRED.value,
+                    decision_reason="approval_expired",
+                    decided_at=current,
+                )
+            )
+            candidates = await session.execute(
+                select(ApprovalRequestRow.id)
+                .where(
+                    *owner_call,
+                    ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                    ApprovalRequestRow.expires_at > current,
+                )
+                .limit(2)
+            )
+            approval_ids = list(candidates.scalars())
+            if len(approval_ids) != 1:
+                await session.commit()
+                return False
+            result = cast(
+                CursorResult[Any],
+                await session.execute(
+                    update(ApprovalRequestRow)
+                    .where(
+                        ApprovalRequestRow.id == approval_ids[0],
+                        ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                        ApprovalRequestRow.expires_at > current,
+                    )
+                    .values(
+                        status=decision.value,
+                        decision_reason=decision_reason,
+                        decided_at=current,
+                    )
+                ),
+            )
+            await session.commit()
+            return bool(result.rowcount == 1)
+
+    async def cancel_one(
+        self,
+        *,
+        user_id: str,
+        conversation_id: str,
+        run_id: str,
+        tool_call_id: str,
+        tool_name: str,
+        arguments_hash: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """Cancel one exact pending reservation while retaining its audit receipt."""
+        current = _datetime(now or datetime.now(tz=UTC), "now")
+        async with self._sessions() as session:
+            result = cast(
+                CursorResult[Any],
+                await session.execute(
+                    update(ApprovalRequestRow)
+                    .where(
+                        ApprovalRequestRow.user_id == _identifier(user_id, "user_id"),
+                        ApprovalRequestRow.conversation_id
+                        == _identifier(conversation_id, "conversation_id"),
+                        ApprovalRequestRow.run_id == _identifier(run_id, "run_id"),
+                        ApprovalRequestRow.tool_call_id
+                        == _identifier(tool_call_id, "tool_call_id"),
+                        ApprovalRequestRow.tool_name == _identifier(tool_name, "tool_name"),
+                        ApprovalRequestRow.arguments_hash == arguments_hash,
+                        ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                    )
+                    .values(
+                        status=ApprovalStatus.CANCELLED.value,
+                        decision_reason="approval_cancelled",
+                        decided_at=current,
+                    )
+                ),
+            )
+            await session.commit()
+            return bool(result.rowcount == 1)
+
+    async def pending_count(self, *, now: datetime | None = None) -> int:
+        """Return live durable reservations after persisting due expirations."""
+        await self.expire_due(now=now)
+        async with self._sessions() as session:
+            result = await session.execute(
+                select(func.count())
+                .select_from(ApprovalRequestRow)
+                .where(ApprovalRequestRow.status == ApprovalStatus.PENDING.value)
+            )
+            return int(result.scalar_one())
 
     async def decide_for_owner(
         self,

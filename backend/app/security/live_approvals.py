@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from app.runtime.factory import RunContext
+from app.security.approval_repository import ApprovalRecord, ApprovalRepository, ApprovalStatus
 from app.security.approvals import AuthorizationOutcome, AuthorizationRequest
 
 
@@ -138,6 +140,140 @@ class ApprovalBroker:
 @dataclass(frozen=True, slots=True)
 class BrokerToolAuthorizer:
     broker: ApprovalBroker
+    context: RunContext
+
+    async def prepare(self, request: AuthorizationRequest) -> None:
+        await self.broker.reserve(self.context, request)
+
+    async def authorize(self, request: AuthorizationRequest) -> AuthorizationOutcome:
+        return await self.broker.wait_for_decision(self.context, request)
+
+    async def cancel(self, request: AuthorizationRequest) -> None:
+        await self.broker.cancel(self.context, request)
+
+
+class DurableApprovalBroker:
+    """DB-backed approval broker whose polling works across processes and restarts."""
+
+    def __init__(
+        self,
+        repository: ApprovalRepository,
+        *,
+        timeout_seconds: float = 30.0,
+        poll_interval_seconds: float = 0.05,
+    ) -> None:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        if poll_interval_seconds <= 0:
+            raise ValueError("poll_interval_seconds must be positive")
+        self._repository = repository
+        self._ttl = timedelta(seconds=timeout_seconds)
+        self._poll_interval_seconds = poll_interval_seconds
+
+    def authorizer(self, context: RunContext) -> DurableBrokerToolAuthorizer:
+        return DurableBrokerToolAuthorizer(self, context)
+
+    async def reserve(self, context: RunContext, request: AuthorizationRequest) -> None:
+        await self._repository.reserve(
+            user_id=context.user_id,
+            conversation_id=context.conversation_id,
+            run_id=context.run_id,
+            tool_call_id=request.tool_call_id,
+            tool_name=request.tool_name,
+            arguments_hash=request.arguments_hash,
+            risk_classes=request.risk_classes,
+            matched_rule_id=request.matched_rule_id,
+            ttl=self._ttl,
+        )
+
+    async def _get(
+        self,
+        context: RunContext,
+        request: AuthorizationRequest,
+        *,
+        now: datetime | None = None,
+    ) -> ApprovalRecord | None:
+        return await self._repository.get_exact_binding(
+            user_id=context.user_id,
+            conversation_id=context.conversation_id,
+            run_id=context.run_id,
+            tool_call_id=request.tool_call_id,
+            tool_name=request.tool_name,
+            arguments_hash=request.arguments_hash,
+            now=now,
+        )
+
+    async def wait_for_decision(
+        self, context: RunContext, request: AuthorizationRequest
+    ) -> AuthorizationOutcome:
+        try:
+            record = await self._get(context, request)
+            if record is None:
+                raise RuntimeError("approval reservation is missing or does not match")
+            loop = asyncio.get_running_loop()
+            remaining = max(0.0, (record.expires_at - datetime.now(tz=UTC)).total_seconds())
+            deadline = loop.time() + remaining
+            while record.status is ApprovalStatus.PENDING:
+                delay = min(self._poll_interval_seconds, max(0.0, deadline - loop.time()))
+                if delay <= 0:
+                    record = await self._get(context, request, now=record.expires_at)
+                    break
+                await asyncio.sleep(delay)
+                record = await self._get(context, request)
+                if record is None:
+                    raise RuntimeError("approval reservation is missing or does not match")
+        except asyncio.CancelledError:
+            await self.cancel(context, request)
+            raise
+
+        if record is None:
+            raise RuntimeError("approval reservation is missing or does not match")
+        if record.status is ApprovalStatus.APPROVED:
+            approved = True
+            reason = "user_approved"
+        elif record.status is ApprovalStatus.DENIED:
+            approved = False
+            reason = "user_denied"
+        else:
+            approved = False
+            reason = record.decision_reason or "approval_unavailable"
+        return AuthorizationOutcome(
+            approved,
+            request.tool_call_id,
+            request.tool_name,
+            request.arguments_hash,
+            reason,
+        )
+
+    async def cancel(self, context: RunContext, request: AuthorizationRequest) -> None:
+        await self._repository.cancel_one(
+            user_id=context.user_id,
+            conversation_id=context.conversation_id,
+            run_id=context.run_id,
+            tool_call_id=request.tool_call_id,
+            tool_name=request.tool_name,
+            arguments_hash=request.arguments_hash,
+        )
+
+    async def decide_for_owner(self, *, user_id: str, tool_call_id: str, approved: bool) -> bool:
+        status = ApprovalStatus.APPROVED if approved else ApprovalStatus.DENIED
+        return await self._repository.decide_unique_for_owner(
+            user_id=user_id,
+            tool_call_id=tool_call_id,
+            status=status,
+            reason="user_approved" if approved else "user_denied",
+        )
+
+    async def cancel_run(self, context: RunContext) -> None:
+        await self._repository.cancel_run(user_id=context.user_id, run_id=context.run_id)
+
+    async def pending_count(self) -> int:
+        return await self._repository.pending_count()
+
+
+@dataclass(frozen=True, slots=True)
+class DurableBrokerToolAuthorizer:
+    broker: DurableApprovalBroker
     context: RunContext
 
     async def prepare(self, request: AuthorizationRequest) -> None:

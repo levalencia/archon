@@ -65,4 +65,5 @@ def create_chat_runtime(
         ),
         policy_engine=default_policy_engine(),
         authorizer=authorizer,
+        approval_timeout_seconds=settings.approval_timeout_seconds,
     )

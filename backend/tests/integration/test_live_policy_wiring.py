@@ -286,3 +286,70 @@ def test_approval_endpoint_enforces_owner_and_consumes_decision_once() -> None:
             json={"approved": False},
         )
         assert repeated.status_code == 404
+
+
+def test_pending_receipt_can_be_decided_after_app_restart(tmp_path) -> None:
+    database_url = f"sqlite+aiosqlite:///{tmp_path}/restart-approval.db"
+    settings = Settings(llm_provider="mock", debug=True, database_url=database_url)
+    owner = RunContext("placeholder", "conversation", "restart-run", "correlation")
+    approval = AuthorizationRequest(
+        "restart-call",
+        "terminal",
+        "c" * 64,
+        frozenset({RiskClass.EXECUTE}),
+        "side_effects_require_approval",
+    )
+
+    with TestClient(create_app(settings)) as first:
+        auth = first.post(
+            "/api/auth/register",
+            json={"username": "restart-owner", "password": "valid-...-123"},
+        ).json()
+        owner = RunContext(auth["user_id"], "conversation", "restart-run", "correlation")
+        assert first.portal is not None
+        first.portal.call(first.app.state.approval_broker.authorizer(owner).prepare, approval)
+
+    with TestClient(create_app(settings)) as restarted:
+        decision = restarted.post(
+            "/api/chat/approve/restart-call",
+            headers={"Authorization": f"Bearer {auth['access_token']}"},
+            json={"approved": True},
+        )
+        assert decision.status_code == 200
+        assert restarted.portal is not None
+        outcome = restarted.portal.call(
+            restarted.app.state.approval_broker.authorizer(owner).authorize, approval
+        )
+        assert outcome.approved is True
+        assert outcome.reason_code == "user_approved"
+
+
+def test_concurrent_approval_endpoints_have_one_winner(tmp_path) -> None:
+    database_url = f"sqlite+aiosqlite:///{tmp_path}/concurrent-endpoint.db"
+    settings = Settings(llm_provider="mock", debug=True, database_url=database_url)
+    with TestClient(create_app(settings)) as api:
+        auth = api.post(
+            "/api/auth/register",
+            json={"username": "race-owner", "password": "valid-...-123"},
+        ).json()
+        owner = RunContext(auth["user_id"], "conversation", "race-run", "correlation")
+        approval = AuthorizationRequest(
+            "race-call",
+            "terminal",
+            "d" * 64,
+            frozenset({RiskClass.EXECUTE}),
+            "side_effects_require_approval",
+        )
+        assert api.portal is not None
+        api.portal.call(api.app.state.approval_broker.authorizer(owner).prepare, approval)
+
+        def decide(approved: bool) -> int:
+            return api.post(
+                "/api/chat/approve/race-call",
+                headers={"Authorization": f"Bearer {auth['access_token']}"},
+                json={"approved": approved},
+            ).status_code
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            statuses = list(pool.map(decide, (True, False)))
+        assert sorted(statuses) == [200, 404]

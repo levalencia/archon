@@ -39,8 +39,9 @@ from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
+from app.security.approval_repository import ApprovalRepository
 from app.security.auth import AuthRepository
-from app.security.live_approvals import ApprovalBroker
+from app.security.live_approvals import DurableApprovalBroker
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 
@@ -73,6 +74,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
+    app.state.approval_broker = DurableApprovalBroker(
+        ApprovalRepository(auth_store.session_factory),
+        timeout_seconds=settings.approval_timeout_seconds,
+        poll_interval_seconds=settings.approval_poll_interval_seconds,
+    )
     exporter = None
     if settings.otel_endpoint:
         exporter = OTLPExporter(settings.otel_service_name, settings.otel_endpoint)
@@ -98,7 +104,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
-    app.state.approval_broker = ApprovalBroker()
 
     # --- Middleware (order matters: last added = first executed) ---
 

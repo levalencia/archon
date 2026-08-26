@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -56,6 +57,8 @@ class Settings(BaseSettings):
     # Agent
     agent_max_iterations: int = 5
     agent_token_budget: int = 64_000
+    approval_timeout_seconds: float = Field(default=30.0, gt=0)
+    approval_poll_interval_seconds: float = Field(default=0.05, gt=0)
     context_length: int = 200000  # Claude Opus: 200K, Sonnet: 200K, llama3.1: 128K
     prompt_caching_enabled: bool = True
 
