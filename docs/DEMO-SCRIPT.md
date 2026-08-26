@@ -93,8 +93,8 @@ Say:
 
 Then show DR metrics:
 
-- backup: 0.702 s;
-- clean restore RTO: 21.597 s;
+- backup: 0.343 s;
+- clean restore RTO: 21.586 s;
 - RPO: 0 record differences at snapshot;
 - restored conversation, run/events, document/chunk and terminal approval.
 

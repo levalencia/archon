@@ -64,7 +64,7 @@ Backup uses a PostgreSQL custom-format dump with no owner/ACL, mode 0600, SHA-25
 
 ## 16. What were the measured DR results?
 
-On one development Mac run with cached images: backup 0.702 seconds, restore-to-ready RTO 21.597 seconds, and zero changed records at the snapshot boundary. Those are reproducibility observations, not production SLOs. There is no PITR, remote backup store or multi-region failover evidence.
+On one development Mac run with cached images: backup 0.343 seconds, restore-to-ready RTO 21.586 seconds, and zero changed records at the snapshot boundary. Those are reproducibility observations, not production SLOs. There is no PITR, remote backup store or multi-region failover evidence.
 
 ## 17. What does the benchmark prove?
 
@@ -95,7 +95,7 @@ No public deployment or green remote CI rerun, no final external-provider accept
 - **Situation:** Static tests and local app tests were green, but the first full DR seed failed during document ingestion.
 - **Task:** Determine whether the DR harness or production data path was wrong without weakening assertions.
 - **Action:** Added safe stage markers, retained one debug stack, inspected backend logs, found PostgreSQL rejecting a NUL advisory-lock key, replaced delimiter concatenation with canonical JSON tuple serialization, added a collision/NUL regression, and reran from clean volumes.
-- **Result:** Full backup/destroy/restore passed with exact records/hashes, RTO 21.597 s and RPO 0 at snapshot.
+- **Result:** Full backup/destroy/restore passed with exact records/hashes, RTO 21.586 s and RPO 0 at snapshot.
 
 ## STAR story: truthful observability
 

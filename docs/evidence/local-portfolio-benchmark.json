@@ -12,7 +12,7 @@
     "python": "3.11.10",
     "python_implementation": "CPython"
   },
-  "generated_at_utc": "2026-08-26T23:10:00.913896Z",
+  "generated_at_utc": "2026-08-26T23:29:56.204770Z",
   "scenarios": [
     {
       "failures": [],
@@ -25,9 +25,9 @@
       },
       "iterations": 10,
       "latency_ms": {
-        "max": 1.67,
-        "p50": 0.666,
-        "p95": 1.67
+        "max": 2.269,
+        "p50": 0.893,
+        "p95": 2.269
       },
       "observation": {
         "approved": {
@@ -113,9 +113,9 @@
       },
       "iterations": 10,
       "latency_ms": {
-        "max": 0.159,
-        "p50": 0.052,
-        "p95": 0.159
+        "max": 0.479,
+        "p50": 0.099,
+        "p95": 0.479
       },
       "observation": {
         "breaker_callable_calls": 1,
@@ -154,9 +154,9 @@
       },
       "iterations": 10,
       "latency_ms": {
-        "max": 443.811,
-        "p50": 36.589,
-        "p95": 443.811
+        "max": 566.307,
+        "p50": 38.339,
+        "p95": 566.307
       },
       "observation": {
         "answer": "Alpha uses Python3 [E1]",

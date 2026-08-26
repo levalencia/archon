@@ -19,10 +19,10 @@ Archon is a serious **local portfolio system**, not a public production service.
 | Evidence | Current result |
 |---|---|
 | Verified target | Production-like local Docker Compose on macOS |
-| Backend acceptance | 1,022 tests and 86.24% coverage at the S7.1 acceptance point; final S7.5 rerun pending |
+| Backend acceptance | 1,034 tests and 86.27% coverage on final integrated candidate `60a8d6a` |
 | Frontend acceptance | Svelte 0/0, 17 Vitest, 21 Playwright |
 | Local dependency smoke | PostgreSQL 16, Redis 7, OTEL collector, backend, frontend, and loopback gateway passed |
-| DR | Backup 0.702 s; clean restore 21.597 s; 0 records lost at snapshot boundary |
+| DR | Backup 0.343 s; clean restore 21.586 s; 0 records lost at snapshot boundary |
 | Portfolio benchmark | 30/30 deterministic control-plane iterations passed; external cost $0 |
 | Public/cloud deployment | **No — explicitly deferred** |
 | Remote CI | Not rerun; no push performed |

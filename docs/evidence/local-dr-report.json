@@ -1,15 +1,15 @@
 {
   "backup": {
-    "duration_seconds": 0.702,
-    "sha256": "9cd88d6a8a6f39ffc476e351ac87c92b44af3209638bb0e6fc2346f5ad0c4285",
-    "snapshot_utc": "2026-08-26T22:49:54.714728Z"
+    "duration_seconds": 0.343,
+    "sha256": "0c6cfa7b50d5c6b9a68bcdc2623cc1556bd53d5e7b3257b5d7d2e42f952ddb36",
+    "snapshot_utc": "2026-08-26T23:29:30.200001Z"
   },
   "evidence": {
-    "approval_id": "7765989f-931e-4c53-8772-90df2a092352",
-    "conversation_id": "867ffeb6-b2ab-4e13-adcf-528a93acef2d",
-    "document_id": "1b682245-bd01-4232-adf7-e3322c95cbba",
-    "run_id": "f50d8954-fe52-4a8c-ad64-ca10ad0c899e",
-    "user_id": "5c1dfc5d-404c-4783-9f47-9a70b1229796"
+    "approval_id": "726da7b1-6aa6-40d9-a987-a81e58f94f51",
+    "conversation_id": "41a9b060-d981-42d5-8919-f85a35c2162c",
+    "document_id": "34e351b4-eb80-4010-8083-ccfc2beab2e4",
+    "run_id": "ea82e2a2-92da-4801-bd1d-cbb609d307b6",
+    "user_id": "74b88a51-7077-4281-af69-58a620b574c8"
   },
   "restored_counts": {
     "approved_terminal_approvals": 1,
@@ -19,6 +19,6 @@
   },
   "result": "passed",
   "rpo_records": 0,
-  "rto_seconds": 21.597,
+  "rto_seconds": 21.586,
   "schema_revision": "20260826_08"
 }

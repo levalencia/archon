@@ -4,9 +4,8 @@
 
 ## Baseline
 
-- **Current candidate:** `c95c0e3` on local `feature/s7-local` (2026-08-27 Europe/Brussels).
-- **Latest complete repository acceptance:** S7.1 at `44acb2e`; S7.2/S7.3 focused and real-runtime evidence are listed below.
-- **Final integrated S7.5 acceptance:** pending after documentation integration.
+- **Current accepted candidate:** `60a8d6a` on local `feature/s7-local` (2026-08-27 Europe/Brussels).
+- **Final integrated S7.5 acceptance:** passed at `60a8d6a`; the follow-up evidence-only commit changes no runtime code.
 - **Remote status:** no push and no remote CI rerun. Last remote status is not claimed green.
 - **Deployment status:** production-like **local** target observed; no non-local/public deployment. Every `Deployed` value remains **No**.
 
@@ -25,12 +24,12 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 
 ## Quality gates
 
-### Latest full acceptance at `44acb2e`
+### Final full acceptance at `60a8d6a`
 
 | Gate | Result |
 |---|---|
-| Backend tests | 1,022 passed |
-| Coverage | 86.24% aggregate |
+| Backend tests | 1,034 passed |
+| Coverage | 86.27% aggregate |
 | Ruff check / format | Pass |
 | Bandit `-ll` | Pass; no medium/high findings |
 | Svelte check | 0 errors, 0 warnings |
@@ -46,7 +45,7 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 |---|---|
 | Local Compose smoke | Backend/frontend/gateway/PostgreSQL/Redis/OTEL healthy; auth, migration 08, metrics, and exported `agent.run` span verified |
 | DR focused tests | 18 passed before S7.2 commit |
-| DR real run | Backup 0.702 s; RTO 21.597 s; RPO 0 records at snapshot; exact evidence restored |
+| DR real run | Backup 0.343 s; RTO 21.586 s; RPO 0 records at snapshot; exact evidence restored |
 | Benchmark focused tests | 6 passed, including direct CLI subprocess |
 | Benchmark strict Mypy | Pass for `scripts/portfolio_benchmark.py` |
 | Benchmark real run | 30/30 deterministic scenario iterations, 420 synthetic tokens, external cost $0, workspace unchanged |
@@ -97,7 +96,7 @@ The verified target built and started digest-pinned app/dependency images, migra
 
 ### Disaster recovery
 
-The DR run created synthetic user, conversation, run/events, document/chunk and approved terminal approval data. It produced a checksummed custom PostgreSQL dump, removed the source volume, restored into a fresh Compose project, started the application, authenticated with the restored account, and compared exact IDs/counts/hashes. The measured development-machine observation was backup 0.702 s, RTO 21.597 s, and zero changed records at the backup boundary.
+The DR run created synthetic user, conversation, run/events, document/chunk and approved terminal approval data. It produced a checksummed custom PostgreSQL dump, removed the source volume, restored into a fresh Compose project, started the application, authenticated with the restored account, and compared exact IDs/counts/hashes. The final development-machine observation was backup 0.343 s, RTO 21.586 s, and zero changed records at the backup boundary.
 
 ### Portfolio benchmark
 

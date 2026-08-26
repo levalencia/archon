@@ -60,9 +60,9 @@ BSD/macOS `mktemp` requires the `X` template at the end. Templates with `.env`/`
 
 ## Verification
 
-- Full acceptance at S7.1: 1,022 backend tests, 86.24% coverage, frontend and Docker gates green.
+- Final integrated acceptance at `60a8d6a`: 1,034 backend tests, 86.27% coverage, frontend and Docker gates green.
 - Local Compose smoke: migrations at revision 08, Redis readiness, auth, metrics and OTEL span observed.
-- DR: backup 0.702 s, clean restore 21.597 s, zero record differences at snapshot, exact restored evidence.
+- DR: backup 0.343 s, clean restore 21.586 s, zero record differences at snapshot, exact restored evidence.
 - Regression: document lock-key unit test plus real PostgreSQL document ingest during DR.
 
 ## What went well
