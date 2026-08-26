@@ -17,6 +17,21 @@ def _config(database: Path) -> Config:
     return value
 
 
+def test_postgresql_collision_objects_are_renamed_before_replacement_table() -> None:
+    """Guard the PostgreSQL-only DDL that SQLite cannot exercise."""
+    backend = Path(__file__).parents[2]
+    migration = (backend / "alembic/versions/20260826_03_run_ledger.py").read_text()
+    rename_table = migration.index('op.rename_table("runtime_events", "runtime_events_legacy")')
+    prepare_legacy = migration.index("_prepare_postgresql_legacy_table(connection)", rename_table)
+    create_replacement = migration.index("_create_runs()", prepare_legacy)
+
+    assert rename_table < prepare_legacy < create_replacement
+    assert 'get_pk_constraint("runtime_events_legacy")' in migration
+    assert "quote = preparer.quote_identifier" in migration
+    assert "pg_get_serial_sequence(:table_name, :column_name)" in migration
+    assert "quote('runtime_events_legacy_id_seq')" in migration
+
+
 def test_run_ledger_migrates_legacy_events_and_roundtrips(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
     database = tmp_path / "run-ledger-migration.db"
@@ -73,6 +88,16 @@ def test_run_ledger_migrates_legacy_events_and_roundtrips(tmp_path, monkeypatch)
         "data",
         "created_at",
     }
+    with engine.begin() as connection:
+        inserted_id = connection.execute(
+            text(
+                "INSERT INTO runtime_events "
+                "(run_id, conversation_id, correlation_id, kind, iteration, data, created_at) "
+                "VALUES ('legacy-run-2', 'conversation', 'correlation', 'run_started', 1, '{}', "
+                "CURRENT_TIMESTAMP) RETURNING id"
+            )
+        ).scalar_one()
+    assert inserted_id == 2
     command.upgrade(alembic, "head")
     assert {"runs", "runtime_events"} <= set(inspect(engine).get_table_names())
     engine.dispose()

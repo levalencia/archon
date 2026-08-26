@@ -21,6 +21,51 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _prepare_postgresql_legacy_table(connection: sa.Connection) -> None:
+    """Move PostgreSQL schema objects out of the new table's namespace.
+
+    PostgreSQL does not rename a primary-key index or an owned SERIAL sequence
+    when its table is renamed. Leaving either conventional name in place makes
+    creation of the replacement ``runtime_events`` table fail.
+    """
+    if connection.dialect.name != "postgresql":
+        return
+
+    preparer = connection.dialect.identifier_preparer
+    quote = preparer.quote_identifier
+    inspector = sa.inspect(connection)
+    primary_key = inspector.get_pk_constraint("runtime_events_legacy")
+    primary_key_name = primary_key.get("name")
+    legacy_primary_key_name = "runtime_events_legacy_pkey"
+    if primary_key_name and primary_key_name != legacy_primary_key_name:
+        connection.execute(
+            sa.text(
+                f"ALTER TABLE {quote('runtime_events_legacy')} "
+                f"RENAME CONSTRAINT {quote(primary_key_name)} "
+                f"TO {quote(legacy_primary_key_name)}"
+            )
+        )
+
+    sequence = connection.execute(
+        sa.text(
+            "SELECT namespace.nspname, sequence.relname "
+            "FROM pg_class AS sequence "
+            "JOIN pg_namespace AS namespace ON namespace.oid = sequence.relnamespace "
+            "WHERE sequence.oid = to_regclass("
+            "pg_get_serial_sequence(:table_name, :column_name))"
+        ),
+        {"table_name": "runtime_events_legacy", "column_name": "id"},
+    ).one_or_none()
+    if sequence is None or sequence.relname == "runtime_events_legacy_id_seq":
+        return
+    qualified_sequence = f"{quote(sequence.nspname)}.{quote(sequence.relname)}"
+    connection.execute(
+        sa.text(
+            f"ALTER SEQUENCE {qualified_sequence} RENAME TO {quote('runtime_events_legacy_id_seq')}"
+        )
+    )
+
+
 def _create_runs() -> None:
     op.create_table(
         "runs",
@@ -88,6 +133,7 @@ def upgrade() -> None:
     had_events = "runtime_events" in sa.inspect(connection).get_table_names()
     if had_events:
         op.rename_table("runtime_events", "runtime_events_legacy")
+        _prepare_postgresql_legacy_table(connection)
         for index in sa.inspect(connection).get_indexes("runtime_events_legacy"):
             if index["name"]:
                 op.drop_index(index["name"], table_name="runtime_events_legacy")
