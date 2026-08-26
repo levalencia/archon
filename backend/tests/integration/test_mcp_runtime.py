@@ -13,7 +13,7 @@ from app.agents.mock_llm import MockLLM
 from app.mcp.inventory import MCPInventoryService
 from app.mcp.models import MCPCallResult, ServerProfile, ToolDescriptor
 from app.mcp.repository import MCPHealth, MCPRepository
-from app.mcp.runtime import MCPRuntimeError, MCPRuntimeToolProvider
+from app.mcp.runtime import MCPRuntimeError, MCPRuntimeToolProvider, normalize_input_schema
 from app.routes.chat import get_tool_registry
 from app.runtime import (
     AgentEventKind,
@@ -31,6 +31,31 @@ from app.security.policy import RiskClass
 from app.services.db_store import DatabaseStore
 
 _SCRIPT = Path(__file__).parents[1] / "fixtures" / "mcp_test_server.py"
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        None,
+        [],
+        {"type": ["object", "null"]},
+        {"type": "object", "additionalProperties": {}},
+        {"type": "object", "properties": []},
+        {"type": "object", "required": {}},
+        {"type": "object", "required": [None]},
+        {"type": "object", "title": []},
+        {"type": "object", "properties": {"x": {"type": []}}},
+        {"type": "object", "properties": {"x": {"type": "string", "enum": {}}}},
+        {"type": "object", "properties": {"x": {"type": "integer", "enum": [True]}}},
+        {"type": "object", "properties": {"x": {"type": "number", "enum": [float("inf")]}}},
+        {"type": "object", "properties": {"x": {"type": "boolean", "default": 0}}},
+        {"type": "object", "properties": {"x": {"type": "string", "title": {}}}},
+    ],
+)
+def test_untrusted_schema_values_always_raise_stable_runtime_error(schema: object) -> None:
+    with pytest.raises(MCPRuntimeError) as error:
+        normalize_input_schema(schema)
+    assert error.value.code == "unsupported_tool_schema"
 
 
 async def _real_provider(

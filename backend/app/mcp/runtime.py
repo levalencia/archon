@@ -10,7 +10,7 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from app.mcp.client import StdioMCPClient
 from app.mcp.models import MCPCallResult, ServerProfile
@@ -48,26 +48,78 @@ def _freeze(value: Any) -> Any:
     return copy.deepcopy(value)
 
 
-def _json_scalar(value: object) -> bool:
-    return value is None or type(value) in {str, int, float, bool}
+def _valid_annotation(value: object) -> bool:
+    return type(value) is str
 
 
-def normalize_input_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
-    """Reduce remote JSON Schema to the registry's enforceable, closed subset.
+def _finite_json(value: object, seen: set[int] | None = None, depth: int = 0) -> bool:
+    if depth > 32:
+        return False
+    if value is None or type(value) in (str, int, bool):
+        return True
+    if type(value) is float:
+        return math.isfinite(value)
+    if type(value) not in (dict, list):
+        return False
+    identities = set() if seen is None else seen
+    identity = id(value)
+    if identity in identities:
+        return False
+    identities.add(identity)
+    try:
+        if type(value) is list:
+            return all(_finite_json(item, identities, depth + 1) for item in value)
+        mapping = cast(dict[object, object], value)
+        return all(
+            type(key) is str and _finite_json(item, identities, depth + 1)
+            for key, item in mapping.items()
+        )
+    finally:
+        identities.remove(identity)
 
-    Cosmetic annotations and defaults are intentionally discarded. Validation constructs the
-    registry cannot enforce are rejected rather than being advertised to the model but ignored at
-    execution time.
+
+def _matches_type(value: object, declared_type: str) -> bool:
+    if not _finite_json(value):
+        return False
+    if declared_type == "string":
+        return type(value) is str
+    if declared_type == "integer":
+        return type(value) is int
+    if declared_type == "number":
+        return type(value) in (int, float) and math.isfinite(value)  # type: ignore[arg-type]
+    if declared_type == "boolean":
+        return type(value) is bool
+    if declared_type == "object":
+        return type(value) is dict
+    if declared_type == "array":
+        return type(value) is list
+    return False
+
+
+def normalize_input_schema(schema: object) -> dict[str, Any]:
+    """Reduce untrusted JSON Schema to the registry's enforceable, closed subset.
+
+    Every operation is preceded by an exact container/type check so malformed JSON-like values
+    always produce the stable schema error rather than escaping as ``TypeError``.
     """
-    if not isinstance(schema, Mapping) or schema.get("type") != "object":
+    if type(schema) is not dict:
         raise MCPRuntimeError("unsupported_tool_schema")
-    if any(key not in _ROOT_KEYS for key in schema):
+    schema_dict = schema
+    if schema_dict.get("type") != "object":
         raise MCPRuntimeError("unsupported_tool_schema")
-    if schema.get("additionalProperties", False) not in {False, None}:
+    if any(type(key) is not str for key in schema_dict):
         raise MCPRuntimeError("unsupported_tool_schema")
-    properties = schema.get("properties", {})
-    required = schema.get("required", [])
-    if not isinstance(properties, Mapping) or not isinstance(required, list):
+    if any(key not in _ROOT_KEYS for key in schema_dict):
+        raise MCPRuntimeError("unsupported_tool_schema")
+    if "additionalProperties" in schema_dict and schema_dict["additionalProperties"] is not False:
+        raise MCPRuntimeError("unsupported_tool_schema")
+    for annotation in ("title", "description"):
+        if annotation in schema_dict and not _valid_annotation(schema_dict[annotation]):
+            raise MCPRuntimeError("unsupported_tool_schema")
+
+    properties = schema_dict.get("properties", {})
+    required = schema_dict.get("required", [])
+    if type(properties) is not dict or type(required) is not list:
         raise MCPRuntimeError("unsupported_tool_schema")
     if (
         any(type(name) is not str for name in properties)
@@ -79,21 +131,28 @@ def normalize_input_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
 
     normalized_properties: dict[str, dict[str, Any]] = {}
     for name, raw in properties.items():
-        if not isinstance(raw, Mapping) or any(key not in _PROPERTY_KEYS for key in raw):
+        if type(raw) is not dict or any(type(key) is not str for key in raw):
+            raise MCPRuntimeError("unsupported_tool_schema")
+        if any(key not in _PROPERTY_KEYS for key in raw):
             raise MCPRuntimeError("unsupported_tool_schema")
         declared_type = raw.get("type")
-        if declared_type not in _SUPPORTED_TYPES:
+        if type(declared_type) is not str or declared_type not in _SUPPORTED_TYPES:
             raise MCPRuntimeError("unsupported_tool_schema")
+        for annotation in ("title", "description"):
+            if annotation in raw and not _valid_annotation(raw[annotation]):
+                raise MCPRuntimeError("unsupported_tool_schema")
         normalized: dict[str, Any] = {"type": declared_type}
         if "enum" in raw:
             enum = raw["enum"]
             if (
-                not isinstance(enum, list)
+                type(enum) is not list
                 or not enum
-                or not all(_json_scalar(item) for item in enum)
+                or not all(_matches_type(item, declared_type) for item in enum)
             ):
                 raise MCPRuntimeError("unsupported_tool_schema")
             normalized["enum"] = copy.deepcopy(enum)
+        if "default" in raw and not _matches_type(raw["default"], declared_type):
+            raise MCPRuntimeError("unsupported_tool_schema")
         normalized_properties[name] = normalized
     return {
         "type": "object",

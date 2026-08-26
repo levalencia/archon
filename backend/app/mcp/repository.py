@@ -197,8 +197,7 @@ class MCPRepository:
         values: dict[str, object] = {"updated_at": _utc(now or datetime.now(tz=UTC))}
         if name is not None:
             values["name"] = _identifier(name, "name")
-        if profile_id is not None:
-            values["profile_id"] = _identifier(profile_id, "profile_id")
+        requested_profile = None if profile_id is None else _identifier(profile_id, "profile_id")
         if enabled is not None:
             values["enabled"] = bool(enabled)
             values["health"] = MCPHealth.UNKNOWN.value if enabled else MCPHealth.DISABLED.value
@@ -206,15 +205,37 @@ class MCPRepository:
         scope = self._scope(owner_id, project_id, server_id)
         async with self._sessions() as session:
             try:
-                await session.execute(update(MCPServerRow).where(*scope).values(**values))
+                locked = await session.execute(
+                    update(MCPServerRow).where(*scope).values(updated_at=MCPServerRow.updated_at)
+                )
+                if locked.rowcount != 1:
+                    await session.rollback()
+                    return None
                 row = (
-                    await session.execute(select(MCPServerRow).where(*scope))
-                ).scalar_one_or_none()
+                    await session.execute(select(MCPServerRow).where(*scope).with_for_update())
+                ).scalar_one()
+                profile_changed = (
+                    requested_profile is not None and requested_profile != row.profile_id
+                )
+                if requested_profile is not None:
+                    values["profile_id"] = requested_profile
+                if profile_changed:
+                    final_enabled = bool(values.get("enabled", row.enabled))
+                    values["health"] = (
+                        MCPHealth.UNKNOWN.value if final_enabled else MCPHealth.DISABLED.value
+                    )
+                    values["last_error_code"] = None
+                    values["last_seen"] = None
+                    await session.execute(
+                        delete(MCPToolRow).where(MCPToolRow.server_id == server_id)
+                    )
+                for key, value in values.items():
+                    setattr(row, key, value)
                 await session.commit()
             except IntegrityError as error:
                 await session.rollback()
                 raise ValueError("duplicate MCP server name in owner/project scope") from error
-            return None if row is None else self._server(row)
+            return self._server(row)
 
     async def delete(self, *, owner_id: str, project_id: str, server_id: str) -> bool:
         scope = self._scope(owner_id, project_id, server_id)
@@ -250,18 +271,35 @@ class MCPRepository:
         project_id: str,
         server_id: str,
         tools: tuple[ToolDescriptor, ...],
+        expected_profile_id: str | None = None,
     ) -> tuple[MCPToolRecord, ...]:
         scope = self._scope(owner_id, project_id, server_id)
         prepared = [_prepare_tool(tool) for tool in tools]
         names = [tool.name for tool, _schema in prepared]
         if len(set(names)) != len(names):
             raise ValueError("duplicate tool name")
+        expected_profile = (
+            None
+            if expected_profile_id is None
+            else _identifier(expected_profile_id, "expected_profile_id")
+        )
         async with self._sessions() as session:
+            if expected_profile is not None:
+                locked = await session.execute(
+                    update(MCPServerRow)
+                    .where(*scope, MCPServerRow.profile_id == expected_profile)
+                    .values(updated_at=MCPServerRow.updated_at)
+                )
+                if locked.rowcount != 1:
+                    await session.rollback()
+                    raise LookupError("MCP server profile changed")
             server = (
-                await session.execute(select(MCPServerRow.id).where(*scope))
+                await session.execute(select(MCPServerRow).where(*scope).with_for_update())
             ).scalar_one_or_none()
             if server is None:
                 raise LookupError("MCP server not found")
+            if expected_profile is not None and server.profile_id != expected_profile:
+                raise LookupError("MCP server profile changed")
             old_rows = (
                 await session.execute(select(MCPToolRow).where(MCPToolRow.server_id == server_id))
             ).scalars()
@@ -301,6 +339,7 @@ class MCPRepository:
         error_code: str | None = None,
         last_seen: datetime | None | object = _UNSET,
         now: datetime | None = None,
+        expected_profile_id: str | None = None,
     ) -> bool:
         state = MCPHealth(health)
         if error_code is not None and not _ERROR_CODE.fullmatch(error_code):
@@ -317,6 +356,11 @@ class MCPRepository:
         if last_seen is not _UNSET:
             values["last_seen"] = None if last_seen is None else _utc(last_seen)  # type: ignore[arg-type]
         scope = self._scope(owner_id, project_id, server_id)
+        if expected_profile_id is not None:
+            scope = (
+                *scope,
+                MCPServerRow.profile_id == _identifier(expected_profile_id, "expected_profile_id"),
+            )
         async with self._sessions() as session:
             result = await session.execute(update(MCPServerRow).where(*scope).values(**values))
             await session.commit()

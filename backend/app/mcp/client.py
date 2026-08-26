@@ -11,7 +11,7 @@ from typing import Any, TypeVar, cast
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mcp.types import Tool
+from mcp.types import PaginatedRequestParams, Tool
 
 from app.mcp.models import MCPCallResult, ServerProfile, ToolDescriptor
 
@@ -19,6 +19,8 @@ _T = TypeVar("_T")
 _BASE_ENV_KEYS = ("PATH", "HOME", "LANG", "TMPDIR")
 _MAX_SCHEMA_BYTES = 64_000
 _MAX_TOOL_NAME_BYTES = 128
+_MAX_DISCOVERY_PAGES = 100
+_MAX_DISCOVERY_TOOLS = 10_000
 _TOOL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]*$")
 
 
@@ -148,11 +150,38 @@ class StdioMCPClient:
 
     async def list_tools(self) -> tuple[ToolDescriptor, ...]:
         async def operation(session: ClientSession) -> tuple[ToolDescriptor, ...]:
-            response = await session.list_tools()
-            tools = tuple(self._normalize_tool(tool) for tool in response.tools)
-            if len({tool.name for tool in tools}) != len(tools):
-                raise MCPClientError("duplicate_tool_name")
-            return tools
+            tools: list[ToolDescriptor] = []
+            names: set[str] = set()
+            seen_cursors: set[str] = set()
+            cursor: str | None = None
+            total_bytes = 0
+            for _page in range(_MAX_DISCOVERY_PAGES):
+                response = await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
+                total_bytes += len(
+                    _json_bytes(
+                        response.model_dump(mode="json", by_alias=True), "invalid_tool_schema"
+                    )
+                )
+                if total_bytes > self._profile.max_result_bytes:
+                    raise MCPClientError("result_too_large")
+                for raw_tool in response.tools:
+                    tool = self._normalize_tool(raw_tool)
+                    if tool.name in names:
+                        raise MCPClientError("duplicate_tool_name")
+                    names.add(tool.name)
+                    tools.append(tool)
+                    if len(tools) > _MAX_DISCOVERY_TOOLS:
+                        raise MCPClientError("result_too_large")
+                # MCP 2.1's runtime model exposes snake_case while its bundled typing metadata
+                # still declares the wire alias. Keep the SDK boundary localized here.
+                next_cursor = cast(Any, response).next_cursor
+                if next_cursor is None:
+                    return tuple(tools)
+                if type(next_cursor) is not str or not next_cursor or next_cursor in seen_cursors:
+                    raise MCPClientError("invalid_pagination")
+                seen_cursors.add(next_cursor)
+                cursor = next_cursor
+            raise MCPClientError("result_too_large")
 
         return await self._with_session(operation, self._profile.call_timeout_seconds)
 

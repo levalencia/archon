@@ -20,6 +20,8 @@ _STABLE_CLIENT_ERRORS = frozenset(
         "invalid_tool_version",
         "invalid_tool_metadata",
         "duplicate_tool_name",
+        "invalid_pagination",
+        "result_too_large",
     }
 )
 
@@ -118,7 +120,7 @@ class MCPInventoryService:
             raise MCPInventoryError("server_disabled")
         profile = self._profiles.get(server.profile_id)
         if profile is None:
-            await self._fail(owner_id, project_id, server_id, "unknown_profile")
+            await self._fail(owner_id, project_id, server_id, "unknown_profile", server.profile_id)
             raise MCPInventoryError("unknown_profile")
         try:
             client = self._client_factory(profile)
@@ -128,30 +130,42 @@ class MCPInventoryService:
                 project_id=project_id,
                 server_id=server_id,
                 tools=descriptors,
+                expected_profile_id=server.profile_id,
             )
         except MCPClientError as error:
             code = error.code if error.code in _STABLE_CLIENT_ERRORS else "discovery_failed"
-            await self._fail(owner_id, project_id, server_id, code)
+            await self._fail(owner_id, project_id, server_id, code, server.profile_id)
             raise MCPInventoryError(code) from None
         except (Exception, BaseExceptionGroup):
-            await self._fail(owner_id, project_id, server_id, "discovery_failed")
+            await self._fail(owner_id, project_id, server_id, "discovery_failed", server.profile_id)
             raise MCPInventoryError("discovery_failed") from None
         seen = datetime.now(tz=UTC)
-        await self._repository.update_health(
+        health_updated = await self._repository.update_health(
             owner_id=owner_id,
             project_id=project_id,
             server_id=server_id,
             health=MCPHealth.HEALTHY,
             last_seen=seen,
             now=seen,
+            expected_profile_id=server.profile_id,
         )
+        if not health_updated:
+            raise MCPInventoryError("discovery_failed")
         return tools
 
-    async def _fail(self, owner_id: str, project_id: str, server_id: str, error_code: str) -> None:
+    async def _fail(
+        self,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        error_code: str,
+        expected_profile_id: str,
+    ) -> None:
         await self._repository.update_health(
             owner_id=owner_id,
             project_id=project_id,
             server_id=server_id,
             health=MCPHealth.ERROR,
             error_code=error_code,
+            expected_profile_id=expected_profile_id,
         )
