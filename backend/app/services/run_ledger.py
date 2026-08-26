@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -19,6 +19,7 @@ from app.services.db_store import RunRow, RuntimeEventRow
 
 SCHEMA_VERSION = 1
 _MAX_PAGE = 200
+_TERMINAL_RUN_STATUSES = ("completed", "failed", "cancelled")
 _SAFE_FIELDS: dict[str, frozenset[str]] = {
     AgentEventKind.RUN_STARTED.value: frozenset({"safe"}),
     AgentEventKind.ITERATION_STARTED.value: frozenset(),
@@ -48,6 +49,37 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
 
 class LedgerDataError(RuntimeError):
     """Stored ledger data is malformed or uses an unsupported schema."""
+
+
+def _terminal_run_filters() -> tuple[Any, Any]:
+    """Return the canonical definition of a safely pruneable run."""
+    return (
+        RunRow.status.in_(_TERMINAL_RUN_STATUSES),
+        RunRow.completed_at.is_not(None),
+    )
+
+
+async def _delete_terminal_runs(
+    session: AsyncSession, run_ids: list[str], *, user_id: str | None = None
+) -> int:
+    """Delete complete trajectories only, with events removed before their parent runs."""
+    if not run_ids:
+        return 0
+    run_query = select(RunRow.run_id).where(RunRow.run_id.in_(run_ids), *_terminal_run_filters())
+    if user_id is not None:
+        run_query = run_query.where(RunRow.user_id == user_id)
+    eligible_ids = run_query.scalar_subquery()
+    await session.execute(
+        delete(RuntimeEventRow)
+        .where(RuntimeEventRow.run_id.in_(eligible_ids))
+        .execution_options(synchronize_session=False)
+    )
+    deleted = await session.execute(
+        delete(RunRow)
+        .where(RunRow.run_id.in_(eligible_ids))
+        .execution_options(synchronize_session=False)
+    )
+    return int(getattr(deleted, "rowcount", 0))
 
 
 def _bounded_page(limit: int, position: int) -> tuple[int, int]:
@@ -285,25 +317,60 @@ class RunRepository:
         async with self._sessions() as session:
             ids = (
                 await session.scalars(
-                    select(RunRow.run_id).where(
+                    select(RunRow.run_id)
+                    .where(
                         RunRow.user_id == user_id,
-                        RunRow.status != "running",
+                        *_terminal_run_filters(),
                         RunRow.completed_at < completed_before,
                     )
+                    .with_for_update()
                 )
             ).all()
             if not ids:
                 return 0
-            await session.execute(
-                delete(RuntimeEventRow).where(
-                    RuntimeEventRow.user_id == user_id, RuntimeEventRow.run_id.in_(ids)
-                )
-            )
-            await session.execute(
-                delete(RunRow).where(RunRow.user_id == user_id, RunRow.run_id.in_(ids))
-            )
+            deleted = await _delete_terminal_runs(session, list(ids), user_id=user_id)
             await session.commit()
-            return len(ids)
+            return deleted
+
+    async def prune_terminal_to_event_budget(self, max_events: int) -> int:
+        """Prune oldest whole terminal runs until the global event budget is met.
+
+        Active runs may temporarily take the ledger over budget. This compatibility
+        retention path never truncates a run or treats an inconsistent row with a
+        missing completion timestamp as safe to delete.
+        """
+        if max_events < 0:
+            raise ValueError("max_events must be non-negative")
+        async with self._sessions() as session:
+            event_total = int(await session.scalar(select(func.count(RuntimeEventRow.id))) or 0)
+            if event_total <= max_events:
+                return 0
+            event_count = (
+                select(func.count(RuntimeEventRow.id))
+                .where(RuntimeEventRow.run_id == RunRow.run_id)
+                .correlate(RunRow)
+                .scalar_subquery()
+            )
+            candidates = (
+                await session.execute(
+                    select(RunRow.run_id, event_count)
+                    .where(*_terminal_run_filters())
+                    .order_by(RunRow.completed_at, RunRow.run_id)
+                    .with_for_update()
+                )
+            ).all()
+            stale: list[str] = []
+            removed_events = 0
+            for run_id, count in candidates:
+                stale.append(str(run_id))
+                removed_events += int(count)
+                if event_total - removed_events <= max_events:
+                    break
+            if not stale:
+                return 0
+            deleted = await _delete_terminal_runs(session, stale)
+            await session.commit()
+            return deleted
 
     @staticmethod
     def _run_record(row: Any) -> RunRecord:

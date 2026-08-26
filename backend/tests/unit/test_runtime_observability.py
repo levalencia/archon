@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
+from sqlalchemy import select, update
 
 from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.logging import redact_event
@@ -12,7 +15,7 @@ from app.observability.tracing import Tracer
 from app.runtime import AgentEvent, AgentEventKind, TokenUsage
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.conversations import ConversationRepository
-from app.services.db_store import DatabaseStore
+from app.services.db_store import DatabaseStore, RunRow, RuntimeEventRow
 
 
 class Clock:
@@ -196,23 +199,102 @@ async def test_recent_runtime_events_are_persisted_and_retrieved(tmp_path) -> No
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_runtime_event_persistence_is_bounded(tmp_path) -> None:
+async def test_runtime_event_budget_retains_active_run_and_complete_history(tmp_path) -> None:
     store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path}/bounded-events.db")
     await store.initialize()
     try:
         for index in range(3):
             await store.append_runtime_event(
                 {
-                    "run_id": f"run-{index}",
+                    "run_id": "active-run",
                     "conversation_id": "conversation-1",
                     "correlation_id": "correlation-1",
-                    "kind": "run_started",
+                    "kind": "run_started" if index == 0 else "iteration_started",
                     "iteration": index,
                     "data": {},
                 },
-                max_events=2,
+                max_events=1,
             )
         events = await store.recent_runtime_events(run_id=None, limit=10)
-        assert [event["run_id"] for event in events] == ["run-1", "run-2"]
+        assert [(event["run_id"], event["iteration"]) for event in events] == [
+            ("active-run", 0),
+            ("active-run", 1),
+            ("active-run", 2),
+        ]
+        async with store.session_factory() as session:
+            run = await session.get(RunRow, "active-run")
+        assert run is not None
+        assert run.status == "running"
+    finally:
+        await store.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_event_budget_prunes_oldest_terminal_run_whole(tmp_path) -> None:
+    store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path}/whole-run-retention.db")
+    await store.initialize()
+    try:
+        for run_id in ("old-terminal", "new-terminal"):
+            await store.append_runtime_event(
+                {
+                    "run_id": run_id,
+                    "conversation_id": "conversation-1",
+                    "correlation_id": "correlation-1",
+                    "kind": "run_started",
+                    "iteration": 0,
+                    "data": {},
+                }
+            )
+            await store.append_runtime_event(
+                {
+                    "run_id": run_id,
+                    "conversation_id": "conversation-1",
+                    "correlation_id": "correlation-1",
+                    "kind": "run_stopped",
+                    "iteration": 1,
+                    "data": {"reason": "completed", "error": None},
+                }
+            )
+        async with store.session_factory() as session:
+            old = datetime.now(tz=UTC) - timedelta(days=2)
+            new = datetime.now(tz=UTC) - timedelta(days=1)
+            await session.execute(
+                update(RunRow).where(RunRow.run_id == "old-terminal").values(completed_at=old)
+            )
+            await session.execute(
+                update(RunRow).where(RunRow.run_id == "new-terminal").values(completed_at=new)
+            )
+            await session.commit()
+
+        for iteration in range(3):
+            await store.append_runtime_event(
+                {
+                    "run_id": "active-run",
+                    "conversation_id": "conversation-1",
+                    "correlation_id": "correlation-1",
+                    "kind": "run_started" if iteration == 0 else "iteration_started",
+                    "iteration": iteration,
+                    "data": {},
+                },
+                max_events=100 if iteration < 2 else 5,
+            )
+
+        async with store.session_factory() as session:
+            runs = set((await session.scalars(select(RunRow.run_id))).all())
+            histories = {
+                run_id: list(
+                    (
+                        await session.scalars(
+                            select(RuntimeEventRow.sequence)
+                            .where(RuntimeEventRow.run_id == run_id)
+                            .order_by(RuntimeEventRow.sequence)
+                        )
+                    ).all()
+                )
+                for run_id in runs
+            }
+        assert runs == {"new-terminal", "active-run"}
+        assert histories == {"new-terminal": [1, 2], "active-run": [1, 2, 3]}
     finally:
         await store.close()

@@ -300,21 +300,9 @@ class DatabaseStore:
             iteration=int(event["iteration"]),
             payload=event.get("data", {}),
         )
-        # Preserve the historical diagnostic bound by dropping entire oldest runs,
-        # never middle events. Production retention uses RunRepository.prune_completed.
-        async with self._session_factory() as session:
-            stale_run_ids = (
-                select(RuntimeEventRow.run_id)
-                .order_by(RuntimeEventRow.id.desc())
-                .offset(max_events)
-            )
-            stale = set((await session.scalars(stale_run_ids)).all())
-            if stale:
-                await session.execute(
-                    delete(RuntimeEventRow).where(RuntimeEventRow.run_id.in_(stale))
-                )
-                await session.execute(delete(RunRow).where(RunRow.run_id.in_(stale)))
-                await session.commit()
+        # Preserve the historical diagnostic bound without truncating trajectories.
+        # Active runs are retained even when they temporarily exceed the budget.
+        await repository.prune_terminal_to_event_budget(max_events)
 
     async def recent_runtime_events(
         self, *, run_id: str | None, limit: int

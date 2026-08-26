@@ -51,9 +51,13 @@ def test_run_ledger_migrates_legacy_events_and_roundtrips(tmp_path, monkeypatch)
     engine = create_engine(f"sqlite:///{database}")
     assert {"runs", "runtime_events"} <= set(inspect(engine).get_table_names())
     with engine.connect() as connection:
-        run = connection.execute(text("SELECT user_id, next_sequence FROM runs")).one()
+        run = connection.execute(
+            text("SELECT user_id, status, completed_at, next_sequence FROM runs")
+        ).one()
         event = connection.execute(text("SELECT sequence, payload FROM runtime_events")).one()
-    assert run == ("legacy", 2)
+    assert run[0:2] == ("legacy", "completed")
+    assert run[2] is not None
+    assert run[3] == 2
     assert event[0] == 1
     assert "raw secret" not in event[1]
     assert '"name": "reader"' in event[1]
