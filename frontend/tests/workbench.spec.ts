@@ -10,6 +10,9 @@ test.beforeEach(async ({ page }) => {
       : route.fulfill({ contentType: 'application/json', body: '[]' });
   });
   await page.route('**/api/admin/health', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ llm_model: 'Reliability Model', llm_provider: 'test' }) }));
+  // A newly-created conversation has no durable run until execution starts. Keep that
+  // normal empty state deterministic in tests that are focused on streaming/approval UI.
+  await page.route('**/api/runs?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ items: [] }) }));
   await page.route('**/api/chat/stream', async route => authorized(route.request().headers())
     ? route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'event: thinking\ndata: Verifying evidence\n\nevent: token\ndata: Grounded answer\n\nevent: context\ndata: {"tokens":120,"budget":8000,"utilization_pct":1.5}\n\nevent: done\ndata: {"iterations":1,"tools_used":0,"elapsed_ms":42}\n\n' })
     : route.fulfill({ status: 401 }));
@@ -203,6 +206,7 @@ test('run API 401 and 404 failures are visible', async ({ page }) => {
   await page.unroute('**/api/runs?**');
   await page.route('**/api/runs?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ items: [persistedRuns[0]] }) }));
   await page.route('**/api/runs/run-new', route => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/api/runs/run-new/events?**', route => route.fulfill({ status: 404, body: '' }));
   await page.getByRole('button', { name: 'Reload' }).click();
   await expect(page.getByRole('alert')).toContainText('Run not found');
 });
