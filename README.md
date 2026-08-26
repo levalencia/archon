@@ -104,6 +104,7 @@ The [canonical evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) evaluates each 
 - Audited quality and release gates are not all green; see the canonical evidence matrix for current results.
 - Authentication is meaningful for conversations and some resources, but memory, tasks, MCP, and approvals still have ownership gaps.
 - Python and terminal tools execute host subprocesses; they are not secure sandboxes.
+- Runtime deadlines detach and ignore late in-process tool/provider outcomes, but coroutine cancellation cannot revoke external side effects already performed (or independently continuing); hard revocation requires future process isolation.
 - Tool approval can be bypassed on the synchronous chat path and is not represented by durable owner-scoped receipts.
 - RAG quality cannot be claimed until real embeddings, durable vector storage, and retrieval evaluations replace the demo defaults.
 - The legacy ReAct implementation remains in the codebase for compatibility but is not the preferred live runtime.

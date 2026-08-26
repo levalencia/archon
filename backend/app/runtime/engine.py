@@ -126,6 +126,10 @@ class _ProviderToolCallSnapshotError(Exception):
         self.tool_name = tool_name
 
 
+class _RuntimeDeadlineExceededError(Exception):
+    """Internal control-flow signal for a terminal wall-clock budget expiry."""
+
+
 class AgentRuntime:
     def __init__(
         self,
@@ -170,16 +174,13 @@ class AgentRuntime:
                 iterations += 1
                 await self._emit(AgentEventKind.ITERATION_STARTED, iterations)
                 remaining_tokens = max(1, self._budget.max_tokens - usage.total_tokens)
-                remaining_seconds = self._budget.max_seconds - (self._clock() - started_at)
-                if remaining_seconds <= 0:
-                    raise TimeoutError
-                response = await asyncio.wait_for(
+                response = await self._within_deadline(
                     self._model.complete(
                         self._snapshot_history(history),
                         self._tools.definitions(),
                         max_tokens=min(4096, remaining_tokens),
                     ),
-                    timeout=remaining_seconds,
+                    started_at,
                 )
                 # This must be the first work after the provider returns: no clock, event sink,
                 # history append, or other collaborator may observe provider-owned calls before
@@ -389,6 +390,8 @@ class AgentRuntime:
                         output = await self._within_deadline(
                             self._tools.execute(execution_call), started_at
                         )
+                    except _RuntimeDeadlineExceededError:
+                        raise
                     except Exception as tool_err:
                         # Reflexion: feed error back to the LLM so it can self-correct
                         error_output = {
@@ -519,7 +522,7 @@ class AgentRuntime:
                 usage,
                 started_at,
             )
-        except TimeoutError:
+        except (TimeoutError, _RuntimeDeadlineExceededError):
             return await self._stop(
                 StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
             )
@@ -1157,7 +1160,11 @@ class AgentRuntime:
             if response.content:
                 content = response.content
                 await self._emit(AgentEventKind.TEXT_DELTA, iterations, {"text": content})
-        except (TimeoutError, Exception):
+        except _RuntimeDeadlineExceededError:
+            return await self._stop(
+                StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
+            )
+        except Exception:
             # Preserve the best content already produced; stop reason remains explicit.
             pass
         return await self._stop(reason, content, iterations, calls, usage)
@@ -1166,14 +1173,31 @@ class AgentRuntime:
         return self._clock() - started_at >= self._budget.max_seconds
 
     async def _within_deadline(self, awaitable: Coroutine[Any, Any, T], started_at: float) -> T:
-        remaining = self._budget.max_seconds - (self._clock() - started_at)
+        deadline = started_at + self._budget.max_seconds
+        remaining = deadline - self._clock()
         if remaining <= 0:
             awaitable.close()
-            raise TimeoutError
-        result = await asyncio.wait_for(awaitable, timeout=remaining)
-        if self._expired(started_at):
-            raise TimeoutError
-        return result
+            raise _RuntimeDeadlineExceededError
+
+        task = asyncio.create_task(awaitable)
+        try:
+            done, _ = await asyncio.wait(
+                {task},
+                timeout=max(0.0, deadline - self._clock()),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if task not in done or self._clock() >= deadline:
+                # Cancellation is advisory for in-process coroutines. Detach immediately so a
+                # tool/provider that suppresses CancelledError cannot extend the runtime budget;
+                # its eventual outcome is consumed and can never enter runtime bookkeeping.
+                task.cancel()
+                task.add_done_callback(self._consume_background_task)
+                raise _RuntimeDeadlineExceededError
+            return task.result()
+        except asyncio.CancelledError:
+            task.cancel()
+            task.add_done_callback(self._consume_background_task)
+            raise
 
     async def _emit(
         self,

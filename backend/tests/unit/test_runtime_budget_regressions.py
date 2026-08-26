@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 import pytest
 
 from app.agents.mock_llm import MockLLM
 from app.runtime import (
+    AgentEventKind,
     AgentRuntime,
     Message,
     ModelResponse,
+    RecordingEventSink,
     Role,
     RuntimeBudget,
     StopReason,
     TokenUsage,
     ToolCall,
+    ToolDefinition,
 )
 from app.tools.registry import SecureToolRegistry
 
@@ -102,3 +109,120 @@ async def test_tool_results_are_bounded_before_returning_to_model() -> None:
     assert result.stop_reason is StopReason.COMPLETED
     assert len(tool_message.content) <= 215
     assert tool_message.content.endswith("...[truncated]")
+
+
+@pytest.mark.asyncio
+async def test_runtime_deadline_detaches_cancellation_resistant_tool_and_stops_batch() -> None:
+    """A timed-out in-process tool may finish later, but cannot re-enter runtime bookkeeping."""
+
+    class CancellationResistantTools:
+        def __init__(self) -> None:
+            self.started: list[str] = []
+            self.late_finished = asyncio.Event()
+
+        def definitions(self) -> Sequence[ToolDefinition]:
+            return (ToolDefinition("slow"), ToolDefinition("later"))
+
+        async def execute(self, call: ToolCall) -> Mapping[str, Any]:
+            self.started.append(call.name)
+            if call.name == "later":
+                return {"unexpected": True}
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                # Deliberately refuse cancellation. The runtime must not await this cleanup.
+                await asyncio.sleep(0.2)
+            self.late_finished.set()
+            return {"late": "result that the runtime must ignore"}
+
+    tools = CancellationResistantTools()
+    sink = RecordingEventSink()
+    model = MockLLM(
+        [
+            ModelResponse(
+                tool_calls=(
+                    ToolCall("slow-1", "slow"),
+                    ToolCall("later-1", "later"),
+                )
+            ),
+            ModelResponse("must not be reached"),
+        ]
+    )
+    loop = asyncio.get_running_loop()
+    unhandled: list[dict[str, Any]] = []
+    previous_handler = loop.get_exception_handler()
+    loop.set_exception_handler(lambda _loop, context: unhandled.append(context))
+    started_at = loop.time()
+    try:
+        result = await AgentRuntime(
+            model,
+            tools,
+            events=sink,
+            budget=RuntimeBudget(max_seconds=0.03),
+        ).run([Message(Role.USER, "run both")])
+        elapsed = loop.time() - started_at
+
+        assert result.stop_reason is StopReason.TIME_BUDGET_EXHAUSTED
+        assert elapsed < 0.15
+        assert result.tool_calls == ()
+        assert tools.started == ["slow"]
+        assert len(model.call_history) == 1
+        assert AgentEventKind.TOOL_CALL_COMPLETED not in [event.kind for event in sink.events]
+        assert AgentEventKind.TOOL_PROGRESS not in [event.kind for event in sink.events]
+        assert sink.events[-1].kind is AgentEventKind.RUN_STOPPED
+        assert sink.events[-1].data["reason"] == StopReason.TIME_BUDGET_EXHAUSTED.value
+
+        await asyncio.wait_for(tools.late_finished.wait(), timeout=0.5)
+        await asyncio.sleep(0)
+        assert result.tool_calls == ()
+        assert tools.started == ["slow"]
+        assert AgentEventKind.TOOL_CALL_COMPLETED not in [event.kind for event in sink.events]
+        assert unhandled == []
+    finally:
+        loop.set_exception_handler(previous_handler)
+
+
+@pytest.mark.asyncio
+async def test_runtime_deadline_detaches_cancellation_resistant_provider_exception() -> None:
+    """A provider's late exception is consumed instead of becoming an event-loop warning."""
+
+    class CancellationResistantProvider:
+        def __init__(self) -> None:
+            self.late_finished = asyncio.Event()
+
+        async def complete(self, messages, tools=(), *, max_tokens=4096):
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.1)
+            self.late_finished.set()
+            raise RuntimeError("late provider failure")
+
+    provider = CancellationResistantProvider()
+    sink = RecordingEventSink()
+    loop = asyncio.get_running_loop()
+    unhandled: list[dict[str, Any]] = []
+    previous_handler = loop.get_exception_handler()
+    loop.set_exception_handler(lambda _loop, context: unhandled.append(context))
+    started_at = loop.time()
+    try:
+        result = await AgentRuntime(
+            provider,
+            _registry({}),
+            events=sink,
+            budget=RuntimeBudget(max_seconds=0.02),
+        ).run([Message(Role.USER, "answer")])
+        elapsed = loop.time() - started_at
+
+        assert result.stop_reason is StopReason.TIME_BUDGET_EXHAUSTED
+        assert elapsed < 0.08
+        assert [event.kind for event in sink.events] == [
+            AgentEventKind.RUN_STARTED,
+            AgentEventKind.ITERATION_STARTED,
+            AgentEventKind.RUN_STOPPED,
+        ]
+        await asyncio.wait_for(provider.late_finished.wait(), timeout=0.3)
+        await asyncio.sleep(0)
+        assert unhandled == []
+    finally:
+        loop.set_exception_handler(previous_handler)
