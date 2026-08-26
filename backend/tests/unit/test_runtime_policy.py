@@ -878,6 +878,85 @@ async def test_policy_events_never_serialize_raw_arguments_or_output() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("raises", [False, True], ids=["success", "error"])
+async def test_policy_executor_mutation_cannot_spoof_results_events_or_history(
+    raises: bool,
+) -> None:
+    argument_secret = "ORIGINAL_ARGUMENT_SECRET_15f6"
+    output_secret = "EXECUTOR_OUTPUT_SECRET_27a8"
+    original_arguments = {"nested": {"token": argument_secret, "items": ["public"]}}
+
+    class MutatingTools(PolicyTools):
+        async def execute(self, call: ToolCall) -> Mapping[str, Any]:
+            self.executed.append(call)
+            object.__setattr__(call, "id", "executor-spoofed-id")
+            object.__setattr__(call, "name", "executor_spoofed_tool")
+            call.arguments["nested"]["token"] = "executor-mutated-secret"
+            call.arguments["nested"]["items"].append("executor-added-secret")
+            if raises:
+                raise RuntimeError(output_secret)
+            return {"payload": output_secret * 80}
+
+    class CapturingProvider:
+        def __init__(self) -> None:
+            self.inputs: list[Sequence[Message]] = []
+            self.responses = [
+                ModelResponse(
+                    tool_calls=(ToolCall("native-before-executor", "reader", original_arguments),)
+                ),
+                ModelResponse("done"),
+            ]
+
+        async def complete(self, messages, tools=(), *, max_tokens=4096):
+            self.inputs.append(messages)
+            return self.responses.pop(0)
+
+    tools = MutatingTools()
+    model = CapturingProvider()
+    sink = RecordingEventSink()
+    result = await AgentRuntime(
+        model,
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        events=sink,
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert len(result.tool_calls) == 1
+    record = result.tool_calls[0]
+    assert record["tool"] == "reader"
+    assert record["parameters"] == {"nested": {"token": argument_secret, "items": ["public"]}}
+    assert record["status"] == ("error" if raises else "success")
+
+    completed = next(e for e in sink.events if e.kind is AgentEventKind.TOOL_CALL_COMPLETED)
+    assert completed.data["id"] == "native-before-executor"
+    assert completed.data["name"] == "reader"
+    assert completed.data["arguments_hash"] == canonical_arguments_hash(original_arguments)
+    assert completed.data["status"] == ("error" if raises else "success")
+    progress = [e for e in sink.events if e.kind is AgentEventKind.TOOL_PROGRESS]
+    if raises:
+        assert progress == []
+    else:
+        assert progress
+        assert all(
+            event.data["id"] == "native-before-executor"
+            and event.data["name"] == "reader"
+            and event.data["arguments_hash"] == canonical_arguments_hash(original_arguments)
+            for event in progress
+        )
+
+    assert len(model.inputs) == 2
+    assert model.inputs[1][-1].role is Role.TOOL
+    assert model.inputs[1][-1].tool_call_id == "native-before-executor"
+    serialized_events = json.dumps([event.data for event in sink.events], default=str)
+    assert argument_secret not in serialized_events
+    assert output_secret not in serialized_events
+    assert "executor-mutated-secret" not in serialized_events
+    assert "executor-added-secret" not in serialized_events
+    assert "executor-spoofed" not in serialized_events
+
+
+@pytest.mark.asyncio
 async def test_policy_denial_event_never_serializes_argument_secret() -> None:
     secret = "DENIED_ARGUMENT_SECRET_c1d2"
     sink = RecordingEventSink()

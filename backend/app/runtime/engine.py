@@ -335,9 +335,12 @@ class AgentRuntime:
                                 )
                             )
                             continue
+                    execution_call = call
                     if policy_binding is not None:
                         try:
-                            call = self._prepare_policy_execution_call(call, policy_binding)
+                            execution_call = self._prepare_policy_execution_call(
+                                call, policy_binding
+                            )
                         except Exception:
                             bound_call = ToolCall(
                                 policy_binding.tool_call_id, policy_binding.tool_name
@@ -368,7 +371,9 @@ class AgentRuntime:
                             )
                             return await self._stop(stop_reason, content, iterations, calls, usage)
                     try:
-                        output = await self._within_deadline(self._tools.execute(call), started_at)
+                        output = await self._within_deadline(
+                            self._tools.execute(execution_call), started_at
+                        )
                     except Exception as tool_err:
                         # Reflexion: feed error back to the LLM so it can self-correct
                         error_output = {
@@ -377,14 +382,13 @@ class AgentRuntime:
                             "adjust your approach, and try again with corrected parameters "
                             "or a different tool.",
                         }
-                        record = {
-                            "tool": call.name,
-                            "parameters": dict(call.arguments),
-                            "result": error_output,
-                            "status": "error",
-                        }
-                        calls.append(record)
                         if policy_binding is None:
+                            record = {
+                                "tool": call.name,
+                                "parameters": dict(call.arguments),
+                                "result": error_output,
+                                "status": "error",
+                            }
                             completed_data = {
                                 "id": call.id,
                                 "name": call.name,
@@ -395,12 +399,18 @@ class AgentRuntime:
                             error_serialized = json.dumps(
                                 error_output, sort_keys=True, separators=(",", ":")
                             )
+                            record = {
+                                "tool": policy_binding.tool_name,
+                                "parameters": self._policy_binding_arguments(policy_binding),
+                                "result": error_output,
+                                "status": "error",
+                            }
                             completed_data = self._policy_tool_result_data(
-                                call,
-                                policy_binding.arguments_hash,
+                                policy_binding,
                                 error_serialized,
                                 "error",
                             )
+                        calls.append(record)
                         await self._emit(
                             AgentEventKind.TOOL_CALL_COMPLETED,
                             iterations,
@@ -410,21 +420,24 @@ class AgentRuntime:
                             Message(
                                 Role.TOOL,
                                 json.dumps(error_output, separators=(",", ":")),
-                                tool_call_id=call.id,
+                                tool_call_id=(
+                                    call.id
+                                    if policy_binding is None
+                                    else policy_binding.tool_call_id
+                                ),
                             )
                         )
                         continue
-                    record = {
-                        "tool": call.name,
-                        "parameters": dict(call.arguments),
-                        "result": dict(output),
-                        "status": "success",
-                    }
-                    calls.append(record)
                     serialized = json.dumps(
                         output, sort_keys=True, separators=(",", ":"), default=str
                     )
                     if policy_binding is None:
+                        record = {
+                            "tool": call.name,
+                            "parameters": dict(call.arguments),
+                            "result": dict(output),
+                            "status": "success",
+                        }
                         completed_data = {
                             "id": call.id,
                             "name": call.name,
@@ -432,12 +445,18 @@ class AgentRuntime:
                             "output": dict(output),
                         }
                     else:
+                        record = {
+                            "tool": policy_binding.tool_name,
+                            "parameters": self._policy_binding_arguments(policy_binding),
+                            "result": dict(output),
+                            "status": "success",
+                        }
                         completed_data = self._policy_tool_result_data(
-                            call,
-                            policy_binding.arguments_hash,
+                            policy_binding,
                             serialized,
                             "success",
                         )
+                    calls.append(record)
                     await self._emit(
                         AgentEventKind.TOOL_CALL_COMPLETED,
                         iterations,
@@ -467,7 +486,15 @@ class AgentRuntime:
                         serialized = (
                             serialized[: self._budget.max_tool_result_chars] + "...[truncated]"
                         )
-                    history.append(Message(Role.TOOL, serialized, tool_call_id=call.id))
+                    history.append(
+                        Message(
+                            Role.TOOL,
+                            serialized,
+                            tool_call_id=(
+                                call.id if policy_binding is None else policy_binding.tool_call_id
+                            ),
+                        )
+                    )
             return await self._finalize(
                 StopReason.ITERATION_BUDGET_EXHAUSTED,
                 history,
@@ -854,14 +881,19 @@ class AgentRuntime:
         return execution_call
 
     @staticmethod
+    def _policy_binding_arguments(binding: _PolicyExecutionBinding) -> dict[str, Any]:
+        """Return a fresh canonical argument snapshot from the pre-dispatch binding."""
+        return canonical_arguments_snapshot(json.loads(binding.arguments_json))
+
+    @staticmethod
     def _policy_tool_result_data(
-        call: ToolCall, arguments_hash: str, serialized_output: str, status: str
+        binding: _PolicyExecutionBinding, serialized_output: str, status: str
     ) -> dict[str, Any]:
         encoded = serialized_output.encode("utf-8")
         return {
-            "id": call.id,
-            "name": call.name,
-            "arguments_hash": arguments_hash,
+            "id": binding.tool_call_id,
+            "name": binding.tool_name,
+            "arguments_hash": binding.arguments_hash,
             "output_hash": hashlib.sha256(encoded).hexdigest(),
             "output_size": len(encoded),
             "status": status,
