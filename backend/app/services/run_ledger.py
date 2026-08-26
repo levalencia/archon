@@ -442,6 +442,31 @@ class RunRepository:
             )
         return self._run_record(row) if row is not None else None
 
+    async def list_children(
+        self,
+        user_id: str,
+        parent_run_id: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> RunPage:
+        """List direct children of an owner-scoped parent run."""
+        limit, offset = _bounded_page(limit, offset)
+        async with self._sessions() as session:
+            rows = (
+                await session.scalars(
+                    select(RunRow)
+                    .where(
+                        RunRow.user_id == user_id,
+                        RunRow.parent_run_id == parent_run_id,
+                    )
+                    .order_by(RunRow.started_at.desc(), RunRow.run_id.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).all()
+        return RunPage(tuple(self._run_record(row) for row in rows), limit, offset)
+
     async def finalize_metadata(
         self,
         user_id: str,

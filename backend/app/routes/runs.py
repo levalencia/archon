@@ -181,6 +181,26 @@ async def get_run_events(
     }
 
 
+@router.get("/{run_id}/children")
+async def get_run_children(
+    run_id: str,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    """Return only direct children of an owner-visible parent run."""
+    await _rate_limit(request, user)
+    repository = _repository(request)
+    try:
+        if await repository.get(user["user_id"], run_id) is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+        page = await repository.list_children(user["user_id"], run_id, limit=limit, offset=offset)
+    except LedgerDataError as exc:
+        raise HTTPException(status_code=500, detail="Stored run data is unavailable") from exc
+    return {"items": [asdict(item) for item in page.items], "limit": limit, "offset": offset}
+
+
 @router.post("/{run_id}/fork", status_code=201)
 async def fork_run(
     run_id: str,

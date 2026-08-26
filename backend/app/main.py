@@ -17,6 +17,7 @@ load_dotenv()
 
 from app.agents.llm_factory import create_llm_client
 from app.config import Settings, get_settings
+from app.delegation import EvidenceVerifierSpecialist
 from app.eval.persistence import EvaluationRepository
 from app.eval.service import EvaluationService
 from app.memory.keys import decode_memory_master_key
@@ -195,6 +196,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.model_provider = CircuitBreakingProvider(
         as_model_provider(app.state.model_provider_factory(settings)), breaker
     )
+    app.state.evidence_verifier = (
+        EvidenceVerifierSpecialist(app.state.model_provider, repository.runs, redactor)
+        if settings.verifier_enabled
+        else None
+    )
     exporter = None
     if settings.otel_endpoint:
         exporter = OTLPExporter(settings.otel_service_name, settings.otel_endpoint)
@@ -234,6 +240,7 @@ def create_app(
     app.state.model_provider_factory = model_provider_factory
     app.state.sandbox_executor_factory = sandbox_executor_factory
     app.state.sandbox_executor = None
+    app.state.evidence_verifier = None
 
     # --- Middleware (order matters: last added = first executed) ---
 
@@ -300,6 +307,9 @@ def create_app(
             "conversation_repository": "up",
             "model_provider_circuit": app.state.provider_breaker.state.value,
             "vector_store": app.state.vector_store.backend,
+            "evidence_verifier": (
+                "enabled" if app.state.evidence_verifier is not None else "disabled"
+            ),
             "embeddings": {
                 "provider": app.state.embedding_service.capability.provider,
                 "model": app.state.embedding_service.capability.model,

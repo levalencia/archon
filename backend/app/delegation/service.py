@@ -123,19 +123,23 @@ def _parse_response(
         raise _MalformedResponseError("verdict cites evidence not delegated to its claim")
     for verdict in verdicts:
         valid_reason = (
-            verdict.status is ClaimVerdictStatus.SUPPORTED
-            and verdict.reason_code is VerificationReasonCode.EVIDENCE_SUPPORTS
-            and bool(verdict.evidence_ids)
-        ) or (
-            verdict.status is ClaimVerdictStatus.REJECTED
-            and verdict.reason_code is VerificationReasonCode.EVIDENCE_CONTRADICTS
-        ) or (
-            verdict.status is ClaimVerdictStatus.ESCALATE
-            and verdict.reason_code
-            in {
-                VerificationReasonCode.INSUFFICIENT_EVIDENCE,
-                VerificationReasonCode.INVALID_CITATION,
-            }
+            (
+                verdict.status is ClaimVerdictStatus.SUPPORTED
+                and verdict.reason_code is VerificationReasonCode.EVIDENCE_SUPPORTS
+                and bool(verdict.evidence_ids)
+            )
+            or (
+                verdict.status is ClaimVerdictStatus.REJECTED
+                and verdict.reason_code is VerificationReasonCode.EVIDENCE_CONTRADICTS
+            )
+            or (
+                verdict.status is ClaimVerdictStatus.ESCALATE
+                and verdict.reason_code
+                in {
+                    VerificationReasonCode.INSUFFICIENT_EVIDENCE,
+                    VerificationReasonCode.INVALID_CITATION,
+                }
+            )
         )
         if not valid_reason:
             raise _MalformedResponseError("status and reason_code are inconsistent")

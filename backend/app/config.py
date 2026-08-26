@@ -25,6 +25,19 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_fallback_providers: str = ""  # comma-separated list e.g. "openai,ollama"
 
+    # Isolated evidence verifier (uses the application model provider, without tools)
+    verifier_enabled: bool = False
+    verifier_model: str = Field(
+        default="verifier-model",
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+    )
+    verifier_input_tokens: int = Field(default=8_192, ge=1, le=32_768)
+    verifier_output_tokens: int = Field(default=1_024, ge=1, le=8_192)
+    verifier_timeout_seconds: float = Field(default=10.0, ge=0.1, le=60.0)
+    verifier_retries: int = Field(default=0, ge=0, le=1)
+
     # Embeddings
     embedding_provider: str = "mock"  # mock | openai
     embedding_model: str = "text-embedding-3-small"

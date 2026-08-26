@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.main import create_app
@@ -50,6 +51,7 @@ class TestHealthEndpoints:
                 "conversation_repository": "up",
                 "model_provider_circuit": "closed",
                 "vector_store": "sql-json-cosine",
+                "evidence_verifier": "disabled",
                 "embeddings": {
                     "provider": "mock",
                     "model": "text-embedding-3-small",
@@ -74,6 +76,7 @@ class TestHealthEndpoints:
                 "conversation_repository": "down",
                 "model_provider_circuit": "closed",
                 "vector_store": "sql-json-cosine",
+                "evidence_verifier": "disabled",
                 "embeddings": {
                     "provider": "mock",
                     "model": "text-embedding-3-small",
@@ -89,3 +92,35 @@ class TestHealthEndpoints:
         """App has correct title and version from settings."""
         assert client.app.title == "Archon"
         assert client.app.version == "0.1.0"
+
+
+def test_verifier_settings_are_disabled_and_bounded_by_default() -> None:
+    assert Settings().verifier_enabled is False
+    with pytest.raises(ValidationError):
+        Settings(verifier_model="bad model")
+    with pytest.raises(ValidationError):
+        Settings(verifier_input_tokens=32_769)
+    with pytest.raises(ValidationError):
+        Settings(verifier_output_tokens=8_193)
+    with pytest.raises(ValidationError):
+        Settings(verifier_timeout_seconds=0)
+    with pytest.raises(ValidationError):
+        Settings(verifier_retries=2)
+
+
+def test_enabled_verifier_is_app_scoped_and_readiness_is_safe(tmp_path) -> None:
+    settings_a = Settings(
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'a.db'}", verifier_enabled=True
+    )
+    settings_b = Settings(
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'b.db'}", verifier_enabled=True
+    )
+    app_a = create_app(settings_a)
+    app_b = create_app(settings_b)
+    with TestClient(app_a) as client_a, TestClient(app_b) as _client_b:
+        assert app_a.state.evidence_verifier is not app_b.state.evidence_verifier
+        assert app_a.state.evidence_verifier._provider is app_a.state.model_provider
+        assert app_b.state.evidence_verifier._provider is app_b.state.model_provider
+        ready = client_a.get("/readyz").json()
+        assert ready["dependencies"]["evidence_verifier"] == "enabled"
+        assert "model" not in str(ready["dependencies"]["evidence_verifier"])

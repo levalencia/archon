@@ -8,6 +8,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.delegation import VerificationBudget
 from app.observability.logging import get_correlation_id
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
@@ -52,6 +53,11 @@ class RAGResponse(BaseModel):
     citations: list[dict[str, Any]]
     unsupported: list[str]
     metrics: dict[str, Any]
+    child_run_id: str | None = None
+    verification_status: str | None = None
+    verification_tokens: int = 0
+    verification_latency_ms: float | None = None
+    verification_rejected_count: int = 0
 
 
 def _response(row: DocumentRow) -> DocumentResponse:
@@ -110,6 +116,18 @@ async def query_documents(
         provider=settings.llm_provider,
         model=settings.llm_model,
         top_k=body.top_k,
+        verifier=request.app.state.evidence_verifier,
+        verifier_model=settings.verifier_model,
+        verifier_budget=(
+            VerificationBudget(
+                input_tokens=settings.verifier_input_tokens,
+                output_tokens=settings.verifier_output_tokens,
+                timeout_seconds=settings.verifier_timeout_seconds,
+                retries=settings.verifier_retries,
+            )
+            if request.app.state.evidence_verifier is not None
+            else None
+        ),
     )
     try:
         result = await workflow.run(

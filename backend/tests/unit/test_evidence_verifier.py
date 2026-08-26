@@ -117,9 +117,9 @@ async def test_valid_call_is_isolated_bounded_and_durable(ledger: Any) -> None:
     store, repository = ledger
     provider = Provider([response()])
     request = make_request()
-    result = await EvidenceVerifierSpecialist(
-        provider, repository, PersistenceRedactor()
-    ).verify(request)
+    result = await EvidenceVerifierSpecialist(provider, repository, PersistenceRedactor()).verify(
+        request
+    )
 
     assert result.status is ChildVerificationStatus.COMPLETED
     assert result.usage == TokenUsage(20, 5)
@@ -175,19 +175,15 @@ async def test_malformed_and_foreign_evidence_fail_closed(
 async def test_budget_prevents_call_and_retry_is_bounded(ledger: Any) -> None:
     _, repository = ledger
     blocked = Provider([response()])
-    result = await EvidenceVerifierSpecialist(
-        blocked, repository, PersistenceRedactor()
-    ).verify(make_request(child_id="budget-child", budget=VerificationBudget(1, 10, 1.0)))
+    result = await EvidenceVerifierSpecialist(blocked, repository, PersistenceRedactor()).verify(
+        make_request(child_id="budget-child", budget=VerificationBudget(1, 10, 1.0))
+    )
     assert result.verdicts[0].reason_code is VerificationReasonCode.BUDGET_EXCEEDED
     assert blocked.calls == []
 
     retrying = Provider([TransientVerifierError("temporary"), response()])
-    result = await EvidenceVerifierSpecialist(
-        retrying, repository, PersistenceRedactor()
-    ).verify(
-        make_request(
-            child_id="retry-child", budget=VerificationBudget(4_000, 123, 1.0, retries=1)
-        )
+    result = await EvidenceVerifierSpecialist(retrying, repository, PersistenceRedactor()).verify(
+        make_request(child_id="retry-child", budget=VerificationBudget(4_000, 123, 1.0, retries=1))
     )
     assert result.status is ChildVerificationStatus.COMPLETED
     assert len(retrying.calls) == 2
@@ -199,9 +195,7 @@ async def test_timeout_and_cancellation_are_terminal(ledger: Any) -> None:
     timeout_provider = BlockingProvider()
     result = await EvidenceVerifierSpecialist(
         timeout_provider, repository, PersistenceRedactor()
-    ).verify(
-        make_request(child_id="timeout-child", budget=VerificationBudget(2_000, 10, 0.1))
-    )
+    ).verify(make_request(child_id="timeout-child", budget=VerificationBudget(2_000, 10, 0.1)))
     assert result.status is ChildVerificationStatus.TIMEOUT
     timeout_run = await repository.get("user-1", "timeout-child")
     assert timeout_run is not None and timeout_run.status == "failed"

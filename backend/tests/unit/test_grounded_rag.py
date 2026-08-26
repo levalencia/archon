@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import select, update
 
+from app.delegation import EvidenceVerifierSpecialist, VerificationBudget
 from app.research.models import Claim
 from app.runtime.models import ModelResponse, TokenUsage
 from app.security.persistence_redactor import PersistenceRedactor
@@ -107,8 +108,14 @@ async def _run(
     *,
     owner: str = "alice",
     project: str = "project-a",
+    verifier_provider: FakeProvider | None = None,
 ) -> tuple[Any, FakeVectors]:
     vectors = FakeVectors(rows)
+    verifier = (
+        EvidenceVerifierSpecialist(verifier_provider, harness.runs, PersistenceRedactor())
+        if verifier_provider is not None
+        else None
+    )
     workflow = GroundedDocumentWorkflow(
         vector_store=vectors,  # type: ignore[arg-type]
         embedding_service=FakeEmbeddings(),  # type: ignore[arg-type]
@@ -116,6 +123,8 @@ async def _run(
         runs=harness.runs,
         provider="fake-provider",
         model="fake-model",
+        verifier=verifier,
+        verifier_budget=VerificationBudget(4_000, 500, 1.0) if verifier is not None else None,
     )
     result = await workflow.run(
         "What does Alpha use?",
@@ -140,6 +149,100 @@ async def test_supported_claim_is_answered_with_verified_citation(harness: Harne
     assert result.citations[0]["content_hash"]
     assert provider.calls == 1
     assert "Return JSON only" in provider.messages[0].content
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("verdict", "grounded", "rejected"),
+    [
+        (
+            {
+                "claim_id": "C1",
+                "status": "supported",
+                "reason_code": "evidence_supports",
+                "confidence": 0.95,
+                "evidence_ids": ["E1"],
+            },
+            True,
+            0,
+        ),
+        (
+            {
+                "claim_id": "C1",
+                "status": "rejected",
+                "reason_code": "evidence_contradicts",
+                "confidence": 0.8,
+                "evidence_ids": ["E1"],
+            },
+            False,
+            1,
+        ),
+    ],
+)
+async def test_enabled_verifier_filters_and_records_child_lineage(
+    harness: Harness, verdict: dict[str, Any], grounded: bool, rejected: int
+) -> None:
+    parent = FakeProvider(
+        json.dumps({"claims": [{"text": "Alpha project uses Python", "evidence_ids": ["E1"]}]})
+    )
+    child = FakeProvider(json.dumps({"verdicts": [verdict]}))
+    result, _ = await _run(harness, parent, [_row()], verifier_provider=child)
+
+    assert result.grounded is grounded
+    assert result.verification_status == "completed"
+    assert result.verification_tokens == 18
+    assert result.verification_rejected_count == rejected
+    assert result.child_run_id is not None
+    assert child.calls == 1
+    child_input = child.messages[1].content
+    assert "Alpha project uses Python" in child_input
+    assert "Alpha project uses Python for data analysis" in child_input
+    assert "What does Alpha use?" not in child_input
+
+    restarted = RunRepository(harness.store.session_factory, PersistenceRedactor())
+    child_run = await restarted.get("alice", result.child_run_id)
+    children = await restarted.list_children("alice", result.run_id)
+    parent_events = await restarted.events("alice", result.run_id)
+    assert child_run is not None and child_run.parent_run_id == result.run_id
+    assert [item.run_id for item in children.items] == [result.child_run_id]
+    assert (await restarted.list_children("mallory", result.run_id)).items == ()
+    assert parent_events is not None
+    delegation = next(item for item in parent_events.items if item.kind == "delegation_completed")
+    assert set(delegation.payload) == {"child_id", "status", "supported_count", "rejected_count"}
+
+
+@pytest.mark.asyncio
+async def test_verifier_failure_fails_closed_and_no_evidence_never_delegates(
+    harness: Harness,
+) -> None:
+    parent = FakeProvider(
+        json.dumps({"claims": [{"text": "Alpha project uses Python", "evidence_ids": ["E1"]}]})
+    )
+    malformed = FakeProvider("not-json")
+    result, _ = await _run(harness, parent, [_row()], verifier_provider=malformed)
+    assert result.claims == ()
+    assert result.unsupported == ("Alpha project uses Python",)
+    assert result.verification_status == "failed"
+    assert result.verification_rejected_count == 1
+
+    unused = FakeProvider("must not be called")
+    empty, _ = await _run(harness, FakeProvider("must not be called"), [], verifier_provider=unused)
+    assert empty.child_run_id is None
+    assert empty.verification_status is None
+    assert unused.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_disabled_verifier_preserves_prior_result_shape_defaults(harness: Harness) -> None:
+    parent = FakeProvider(
+        json.dumps({"claims": [{"text": "Alpha project uses Python", "evidence_ids": ["E1"]}]})
+    )
+    result, _ = await _run(harness, parent, [_row()])
+    assert result.grounded is True
+    assert result.child_run_id is None
+    assert result.verification_status is None
+    assert result.verification_tokens == 0
+    assert result.verification_rejected_count == 0
 
 
 @pytest.mark.asyncio

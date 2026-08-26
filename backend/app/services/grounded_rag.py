@@ -12,6 +12,17 @@ from dataclasses import asdict, dataclass, field
 from time import perf_counter
 from typing import Any
 
+from app.delegation import (
+    MAX_QUOTE_CHARS,
+    MAX_TEXT_CHARS,
+    ChildVerificationRequest,
+    ChildVerificationStatus,
+    ClaimInput,
+    ClaimVerdictStatus,
+    EvidenceSlice,
+    EvidenceVerifierSpecialist,
+    VerificationBudget,
+)
 from app.research.models import Claim
 from app.runtime.models import Message, Role, TokenUsage
 from app.runtime.ports import ModelProvider
@@ -23,7 +34,7 @@ _NO_EVIDENCE_ANSWER = "I could not find relevant information to answer your ques
 _MAX_QUOTE = 1_200
 _MAX_MODEL_OUTPUT = 65_536
 _MAX_CLAIMS = 20
-_MAX_CLAIM_LENGTH = 2_000
+_MAX_CLAIM_LENGTH = MAX_TEXT_CHARS
 _MAX_CITATIONS_PER_CLAIM = 8
 _EVIDENCE_ID = re.compile(r"^E[1-9][0-9]*$")
 _LINE_CITATIONS = re.compile(r"\[(E[1-9][0-9]*)\]")
@@ -104,6 +115,11 @@ class GroundedResult:
     citations: tuple[dict[str, Any], ...]
     unsupported: tuple[str, ...]
     metrics: Mapping[str, Any]
+    child_run_id: str | None = None
+    verification_status: str | None = None
+    verification_tokens: int = 0
+    verification_latency_ms: float | None = None
+    verification_rejected_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -117,6 +133,11 @@ class GroundedResult:
             "citations": list(self.citations),
             "unsupported": list(self.unsupported),
             "metrics": dict(self.metrics),
+            "child_run_id": self.child_run_id,
+            "verification_status": self.verification_status,
+            "verification_tokens": self.verification_tokens,
+            "verification_latency_ms": self.verification_latency_ms,
+            "verification_rejected_count": self.verification_rejected_count,
         }
 
 
@@ -207,12 +228,20 @@ class GroundedDocumentWorkflow:
         provider: str,
         model: str,
         top_k: int = 5,
+        verifier: EvidenceVerifierSpecialist | None = None,
+        verifier_budget: VerificationBudget | None = None,
+        verifier_model: str = "verifier-model",
     ) -> None:
         self._retriever = DocumentEvidenceRetriever(vector_store, embedding_service, top_k=top_k)
         self._provider = model_provider
         self._runs = runs
         self._provider_name = provider
         self._model_name = model
+        if (verifier is None) != (verifier_budget is None):
+            raise ValueError("verifier and verifier_budget must be configured together")
+        self._verifier = verifier
+        self._verifier_budget = verifier_budget
+        self._verifier_model = verifier_model
 
     async def run(
         self,
@@ -272,6 +301,22 @@ class GroundedDocumentWorkflow:
             usage = response.usage
             parsed = _parse_claims(response.content or "")
             claims, citations, unsupported = await _verify_document_claims(parsed, evidence)
+            child_id: str | None = None
+            child_status: str | None = None
+            child_tokens = 0
+            child_latency_ms: float | None = None
+            child_rejected_count = 0
+            if claims and self._verifier is not None and self._verifier_budget is not None:
+                (
+                    claims,
+                    citations,
+                    unsupported,
+                    child_id,
+                    child_status,
+                    child_tokens,
+                    child_latency_ms,
+                    child_rejected_count,
+                ) = await self._verify_with_child(identity, claims, evidence, unsupported)
             return await self._finish(
                 identity,
                 started=started,
@@ -281,6 +326,11 @@ class GroundedDocumentWorkflow:
                 unsupported=unsupported,
                 usage=usage,
                 provider_calls=1,
+                child_run_id=child_id,
+                verification_status=child_status,
+                verification_tokens=child_tokens,
+                verification_latency_ms=child_latency_ms,
+                verification_rejected_count=child_rejected_count,
             )
         except asyncio.CancelledError:
             await asyncio.shield(self._stop(identity, usage=usage, error=False, reason="cancelled"))
@@ -300,6 +350,11 @@ class GroundedDocumentWorkflow:
         unsupported: tuple[str, ...],
         usage: TokenUsage,
         provider_calls: int,
+        child_run_id: str | None = None,
+        verification_status: str | None = None,
+        verification_tokens: int = 0,
+        verification_latency_ms: float | None = None,
+        verification_rejected_count: int = 0,
     ) -> GroundedResult:
         claim_hashes = [_hash(item.text) for item in claims]
         unsupported_hashes = [_hash(item) for item in unsupported]
@@ -368,6 +423,115 @@ class GroundedDocumentWorkflow:
                 "supported_count": len(claims),
                 "unsupported_count": len(unsupported),
             },
+            child_run_id=child_run_id,
+            verification_status=verification_status,
+            verification_tokens=verification_tokens,
+            verification_latency_ms=verification_latency_ms,
+            verification_rejected_count=verification_rejected_count,
+        )
+
+    async def _verify_with_child(
+        self,
+        identity: _RunIdentity,
+        claims: tuple[Claim, ...],
+        evidence: tuple[DocumentEvidence, ...],
+        unsupported: tuple[str, ...],
+    ) -> tuple[
+        tuple[Claim, ...],
+        tuple[DocumentEvidence, ...],
+        tuple[str, ...],
+        str,
+        str,
+        int,
+        float | None,
+        int,
+    ]:
+        """Delegate only deterministic claims and fail closed on every child failure."""
+        verifier = self._verifier
+        budget = self._verifier_budget
+        if verifier is None or budget is None:
+            raise RuntimeError("verifier is not configured")
+        child_id = str(uuid.uuid4())
+        cited_ids = tuple(
+            dict.fromkeys(evidence_id for claim in claims for evidence_id in claim.evidence_ids)
+        )
+        by_evidence_id = {item.id: item for item in evidence}
+        request = ChildVerificationRequest(
+            child_id=child_id,
+            parent_run_id=identity.run_id,
+            user_id=identity.user_id,
+            project_id=identity.project_id,
+            policy_id="grounded-evidence-v1",
+            model=self._verifier_model,
+            claims=tuple(
+                ClaimInput(
+                    claim_id=f"C{index}",
+                    claim_hash=_hash(claim.text),
+                    text=claim.text,
+                    evidence_ids=claim.evidence_ids,
+                )
+                for index, claim in enumerate(claims, 1)
+            ),
+            evidence=tuple(
+                EvidenceSlice(
+                    evidence_id=item.id,
+                    document_id=item.document_id,
+                    chunk_id=item.chunk_id,
+                    content_hash=_hash(item.verification_text),
+                    quote=item.quote[:MAX_QUOTE_CHARS],
+                )
+                for evidence_id in cited_ids
+                if (item := by_evidence_id.get(evidence_id)) is not None
+            ),
+            budget=budget,
+        )
+        status = ChildVerificationStatus.FAILED.value
+        tokens = 0
+        latency_ms: float | None = None
+        retained: tuple[Claim, ...] = ()
+        try:
+            result = await verifier.verify(request)
+            status = result.status.value
+            tokens = result.usage.total_tokens
+            latency_ms = result.latency_ms
+            if result.status is ChildVerificationStatus.COMPLETED:
+                supported_ids = {
+                    verdict.claim_id
+                    for verdict in result.verdicts
+                    if verdict.status is ClaimVerdictStatus.SUPPORTED
+                }
+                retained = tuple(
+                    claim for index, claim in enumerate(claims, 1) if f"C{index}" in supported_ids
+                )
+        except Exception:
+            # The grounded answer remains available, but no unverified claim may pass.
+            retained = ()
+
+        retained_ids = {evidence_id for claim in retained for evidence_id in claim.evidence_ids}
+        retained_citations = tuple(item for item in evidence if item.id in retained_ids)
+        retained_object_ids = {id(claim) for claim in retained}
+        child_rejected = tuple(
+            claim.text for claim in claims if id(claim) not in retained_object_ids
+        )
+        await self._append(
+            identity,
+            "delegation_completed",
+            {
+                "child_id": child_id,
+                "status": status,
+                "supported_count": len(retained),
+                "rejected_count": len(child_rejected),
+            },
+        )
+        return (
+            retained,
+            retained_citations,
+            (*unsupported, *child_rejected),
+            child_id,
+            status,
+            tokens,
+            latency_ms,
+            len(child_rejected),
         )
 
     async def _append(self, identity: _RunIdentity, kind: str, payload: Mapping[str, Any]) -> None:

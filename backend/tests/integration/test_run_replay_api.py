@@ -42,6 +42,14 @@ async def test_replay_is_owner_scoped_and_never_calls_model_or_tools(tmp_path) -
     }
     await repository.append(run_id="alice-run", user_id="alice", **common)
     await repository.append(run_id="bob-run", user_id="bob", **common)
+    await repository.ensure_child_run(
+        run_id="alice-child",
+        parent_run_id="alice-run",
+        user_id="alice",
+        project_id="project",
+        provider="verifier",
+        model="model",
+    )
 
     app = FastAPI()
     app.include_router(router)
@@ -55,12 +63,20 @@ async def test_replay_is_owner_scoped_and_never_calls_model_or_tools(tmp_path) -
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         listing = await client.get("/api/runs")
         assert listing.status_code == 200
-        assert [item["run_id"] for item in listing.json()["items"]] == ["alice-run"]
+        assert {item["run_id"] for item in listing.json()["items"]} == {
+            "alice-run",
+            "alice-child",
+        }
         assert (await client.get("/api/runs/alice-run")).status_code == 200
         replay = await client.get("/api/runs/alice-run/events")
         assert [item["sequence"] for item in replay.json()["items"]] == [1]
+        children = await client.get("/api/runs/alice-run/children")
+        assert children.status_code == 200
+        assert [item["run_id"] for item in children.json()["items"]] == ["alice-child"]
+        assert children.json()["items"][0]["parent_run_id"] == "alice-run"
         assert (await client.get("/api/runs/bob-run")).status_code == 404
         assert (await client.get("/api/runs/bob-run/events")).status_code == 404
+        assert (await client.get("/api/runs/bob-run/children")).status_code == 404
     assert app.state.model_provider.calls == 0
     assert app.state.tools.calls == 0
     await app.state.rate_limiter.close()
