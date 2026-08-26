@@ -6,7 +6,9 @@ import asyncio
 import json
 import time
 import uuid
+from collections.abc import Mapping
 from contextlib import suppress
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -194,6 +196,10 @@ async def chat_stream_real(
         for artifact in artifacts:
             yield _sse("artifact", artifact)
 
+        sources = _project_web_search_sources(result.tool_calls)
+        if sources:
+            yield _sse("sources", sources)
+
         # Estimate cost
         cost_tracker = CostTracker()
         cost_info = cost_tracker.record(
@@ -256,6 +262,30 @@ def _sse(event: str, data) -> str:
         else str(data)
     )
     return f"event: {event}\n" + "\n".join(f"data: {line}" for line in payload.split("\n")) + "\n\n"
+
+
+def _project_web_search_sources(
+    tool_calls: tuple[dict[str, Any], ...],
+) -> list[dict[str, str]]:
+    """Expose only display-safe source identity from successful web-search results."""
+    sources: list[dict[str, str]] = []
+    for call in tool_calls:
+        if call.get("tool") != "web_search" or call.get("status") != "success":
+            continue
+        result = call.get("result")
+        if not isinstance(result, Mapping):
+            continue
+        results = result.get("results")
+        if not isinstance(results, (list, tuple)):
+            continue
+        for item in results:
+            if not isinstance(item, Mapping):
+                continue
+            title = item.get("title")
+            url = item.get("url")
+            if isinstance(title, str) and isinstance(url, str):
+                sources.append({"title": title, "url": url})
+    return sources
 
 
 def _routed_event(data, context: RunContext) -> dict:

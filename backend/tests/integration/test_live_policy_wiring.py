@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
 import pytest
@@ -15,6 +17,7 @@ from app.runtime import ModelResponse, ToolCall
 from app.runtime.factory import RunContext
 from app.security.approvals import AuthorizationRequest
 from app.security.policy import RiskClass
+from app.tools.registry import SecureToolRegistry
 
 
 @pytest.fixture(autouse=True)
@@ -93,6 +96,126 @@ def test_sync_and_sse_safe_read_call_execute_under_policy() -> None:
     assert "event: policy_decided" in sse_response.text
     assert '"id": "safe-sse"' in sse_response.text
     assert "stream answer 6" in sse_response.text
+
+
+@pytest.mark.parametrize("approved", [True, False], ids=["approve", "deny"])
+def test_live_sse_approval_decision_controls_dangerous_execution(approved: bool) -> None:
+    from app.routes import chat
+
+    executions: list[str] = []
+
+    async def dangerous_tool(command: str) -> dict:
+        executions.append(command)
+        return {"ok": True, "secret": "must-not-reach-sse"}
+
+    tools = SecureToolRegistry()
+    tools.register(
+        name="dangerous_test_tool",
+        handler=dangerous_tool,
+        input_schema={
+            "required": ["command"],
+            "properties": {"command": {"type": "string"}},
+        },
+        requires_approval=True,
+        risk_classes=frozenset({RiskClass.EXECUTE}),
+    )
+    chat._tools_singleton = tools
+    responses: list[str | ModelResponse] = [
+        ModelResponse(
+            tool_calls=(ToolCall("live-danger", "dangerous_test_tool", {"command": "once"}),)
+        )
+    ]
+    if approved:
+        responses.append(ModelResponse("approved result"))
+    chat._llm_singleton = MockLLM(responses)
+
+    with client(f"live-{'approve' if approved else 'deny'}") as api:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            stream = pool.submit(api.post, "/api/chat/stream", json={"message": "run it"})
+            assert api.portal is not None
+            for _ in range(100):
+                if api.portal.call(api.app.state.approval_broker.pending_count) == 1:
+                    break
+                time.sleep(0.01)
+            else:
+                pytest.fail("live stream did not register its pending approval")
+
+            decision = api.post("/api/chat/approve/live-danger", json={"approved": approved})
+            response = stream.result(timeout=5)
+
+        assert decision.status_code == 200
+        assert response.status_code == 200
+        event_names = [
+            line.removeprefix("event: ")
+            for line in response.text.splitlines()
+            if line.startswith("event: ")
+        ]
+        expected_events = ["approval_required", "approval_decided"]
+        expected_events.append("tool_call" if approved else "tool_denied")
+        expected_events.append("done")
+        positions = [event_names.index(event) for event in expected_events]
+        assert positions == sorted(positions)
+        assert f'"approved": {str(approved).lower()}' in response.text
+        assert "must-not-reach-sse" not in response.text
+        if approved:
+            assert executions == ["once"]
+        else:
+            assert executions == []
+        assert api.portal.call(api.app.state.approval_broker.pending_count) == 0
+
+
+def test_web_search_sources_are_projected_without_result_content() -> None:
+    from app.routes import chat
+
+    async def search_tool(query: str) -> dict:
+        assert query == "safe projection"
+        return {
+            "results": [
+                {
+                    "title": "Safe title",
+                    "url": "https://example.test/safe",
+                    "snippet": "private snippet",
+                    "content": "private full content",
+                },
+                {"title": "Second title", "url": "https://example.test/second"},
+            ],
+            "query": query,
+        }
+
+    tools = SecureToolRegistry()
+    tools.register(
+        name="web_search",
+        handler=search_tool,
+        input_schema={
+            "required": ["query"],
+            "properties": {"query": {"type": "string"}},
+        },
+        risk_classes=frozenset({RiskClass.READ}),
+    )
+    chat._tools_singleton = tools
+    chat._llm_singleton = MockLLM(
+        [
+            ModelResponse(
+                tool_calls=(ToolCall("search-1", "web_search", {"query": "safe projection"}),)
+            ),
+            ModelResponse("search complete"),
+        ]
+    )
+
+    with client("source-user") as api:
+        response = api.post("/api/chat/stream", json={"message": "search"})
+
+    assert response.status_code == 200
+    source_marker = "event: sources\ndata: "
+    assert source_marker in response.text
+    sources = json.loads(response.text.split(source_marker, 1)[1].split("\n\n", 1)[0])
+    assert sources == [
+        {"title": "Safe title", "url": "https://example.test/safe"},
+        {"title": "Second title", "url": "https://example.test/second"},
+    ]
+    assert "private snippet" not in response.text
+    assert "private full content" not in response.text
+    assert response.text.index("event: sources") < response.text.index("event: done")
 
 
 def test_policy_sse_routing_preserves_ids_and_drops_raw_secrets() -> None:
