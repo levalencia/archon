@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import secrets
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -10,7 +14,7 @@ from app.main import create_app
 from app.routes.chat import get_tool_registry
 from app.runtime.factory import RunContext
 
-VALID_KEY = "configured-memory-key-at-least-32-bytes"
+VALID_KEY = base64.urlsafe_b64encode(b"1" * 32).decode().rstrip("=")
 
 
 def _settings(tmp_path, **overrides: object) -> Settings:
@@ -40,15 +44,43 @@ def test_startup_rejects_missing_encryption_key_without_leaking_configuration(tm
     assert "ARCHON_ENCRYPTION_MASTER_KEY" not in message
 
 
-def test_startup_rejects_key_shorter_than_32_utf8_bytes(tmp_path) -> None:
-    weak_key = "too-short"
+@pytest.mark.parametrize(
+    "weak_key",
+    [
+        "too-short",
+        "not!base64",
+        base64.urlsafe_b64encode(b"x" * 31).decode().rstrip("="),
+        base64.urlsafe_b64encode(b"x" * 33).decode().rstrip("="),
+        "changeme",
+        "default",
+        "<replace-with-at-least-32-byte-secret>",
+    ],
+)
+def test_startup_rejects_malformed_wrong_length_and_known_weak_keys(tmp_path, weak_key) -> None:
     error = _startup_error(_settings(tmp_path, encryption_master_key=weak_key))
     assert str(error) == "Encrypted memory startup configuration is invalid"
     assert weak_key not in str(error)
 
 
+def test_example_template_key_is_rejected(tmp_path) -> None:
+    template = Path(__file__).parents[2] / ".env.example"
+    line = next(
+        line
+        for line in template.read_text().splitlines()
+        if line.startswith("ARCHON_ENCRYPTION_MASTER_KEY=")
+    )
+    error = _startup_error(_settings(tmp_path, encryption_master_key=line.partition("=")[2]))
+    assert str(error) == "Encrypted memory startup configuration is invalid"
+
+
 def test_startup_configures_encrypted_memory_with_valid_key(tmp_path) -> None:
     app = create_app(_settings(tmp_path, encryption_master_key=VALID_KEY))
+    with TestClient(app):
+        assert app.state.scoped_memory is not None
+
+
+def test_startup_accepts_generated_256_bit_urlsafe_key(tmp_path) -> None:
+    app = create_app(_settings(tmp_path, encryption_master_key=secrets.token_urlsafe(32)))
     with TestClient(app):
         assert app.state.scoped_memory is not None
 

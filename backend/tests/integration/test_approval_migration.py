@@ -29,9 +29,13 @@ def test_migration_existing_schema_downgrade_and_upgrade(tmp_path, monkeypatch) 
     command.upgrade(alembic, "head")
     engine = create_engine(f"sqlite:///{database}")
     inspector = inspect(engine)
-    assert {"conversations", "approval_requests", "alembic_version"} <= set(
-        inspector.get_table_names()
-    )
+    assert {
+        "conversations",
+        "approval_requests",
+        "memory_scopes",
+        "memory_facts",
+        "alembic_version",
+    } <= set(inspector.get_table_names())
     columns = {column["name"] for column in inspector.get_columns("approval_requests")}
     assert columns == {
         "id",
@@ -56,9 +60,13 @@ def test_migration_existing_schema_downgrade_and_upgrade(tmp_path, monkeypatch) 
         "ix_approval_requests_run",
         "ix_approval_requests_call",
     }
+    scope_columns = {column["name"] for column in inspector.get_columns("memory_scopes")}
+    assert scope_columns == {"user_id", "project_id", "chars_used", "version"}
     command.downgrade(alembic, "base")
     inspector = inspect(engine)
     assert "approval_requests" not in inspector.get_table_names()
+    assert "memory_scopes" not in inspector.get_table_names()
+    assert "memory_facts" not in inspector.get_table_names()
     assert "conversations" in inspector.get_table_names()
     command.upgrade(alembic, "head")
     assert "approval_requests" in inspect(engine).get_table_names()
@@ -70,5 +78,7 @@ def test_migration_fresh_database(tmp_path, monkeypatch) -> None:
     database = tmp_path / "fresh.db"
     command.upgrade(config(database), "head")
     engine = create_engine(f"sqlite:///{database}")
-    assert {"approval_requests", "alembic_version"} <= set(inspect(engine).get_table_names())
+    assert {"approval_requests", "memory_scopes", "memory_facts", "alembic_version"} <= set(
+        inspect(engine).get_table_names()
+    )
     engine.dispose()

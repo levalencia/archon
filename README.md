@@ -57,7 +57,9 @@ git clone https://github.com/levalencia/archon.git
 cd archon/backend
 uv sync --extra dev --extra llm
 cp .env.example .env
-# Edit .env and set ARCHON_ENCRYPTION_MASTER_KEY to a unique secret of at least 32 UTF-8 bytes.
+# Generate a URL-safe base64 token that decodes to exactly 32 random bytes:
+python -c 'import secrets; print(secrets.token_urlsafe(32))'
+# Put that output in .env as ARCHON_ENCRYPTION_MASTER_KEY. Never log or commit the key.
 # Encrypted persistent memory is mandatory by default; startup fails safely without a valid key.
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
@@ -69,7 +71,9 @@ npm run dev -- --host 0.0.0.0
 
 Open `http://localhost:3000`.
 
-The default example configuration targets Ollama. Hosted providers require their own credentials. Encrypted persistent memory is enabled by default and requires `ARCHON_ENCRYPTION_MASTER_KEY` to contain at least 32 UTF-8 bytes. Setting `ARCHON_MEMORY_ENCRYPTION_ENABLED=false` explicitly disables the persistent-memory API and removes the live memory tool rather than falling back to plaintext. Never commit `.env` files, encryption keys, or runtime memory/database files.
+The default example configuration targets Ollama. Hosted providers require their own credentials. Encrypted persistent memory is enabled by default and requires `ARCHON_ENCRYPTION_MASTER_KEY` to be a URL-safe base64 token decoding to exactly 32 random bytes (256 bits). Generate it with `python -c 'import secrets; print(secrets.token_urlsafe(32))'`. Setting `ARCHON_MEMORY_ENCRYPTION_ENABLED=false` explicitly disables the persistent-memory API and removes the live memory tool rather than falling back to plaintext. Never commit `.env` files, encryption keys, or runtime memory/database files, and never include the key in logs or error messages.
+
+The current ciphertext format does not support online key rotation: replacing the key makes existing facts undecryptable. To rotate, export each owner/project scope while the old key is active, stop all application processes, back up and clear the encrypted memory tables, install the newly generated key in the secret manager, restart, and re-import the exported facts. Protect and securely delete the temporary plaintext export after verification.
 
 ## Architecture
 

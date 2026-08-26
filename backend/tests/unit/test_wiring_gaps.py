@@ -5,6 +5,7 @@ Covers encrypted memory, resilient coordinator, image input, and write approval.
 
 from __future__ import annotations
 
+import base64
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -32,7 +33,7 @@ class TestEncryptedMemoryWiring:
 
         class _FakeSettings:
             memory_encryption_enabled = True
-            encryption_master_key = "super-secret-test-key-1234567890ab"
+            encryption_master_key = base64.urlsafe_b64encode(b"9" * 32).decode().rstrip("=")
 
         with patch("app.config.get_settings", return_value=_FakeSettings()):
             mem = get_persistent_memory()

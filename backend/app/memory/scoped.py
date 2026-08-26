@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import uuid
@@ -16,11 +15,15 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services.db_store import MemoryFactRow
+from app.memory.keys import decode_memory_master_key
+from app.services.db_store import MemoryFactRow, MemoryScopeRow
 
 MAX_MEMORY_CHARS = 2000
 _KEY_VERSION = 1
@@ -45,28 +48,20 @@ class MemoryFact:
 
 
 class ScopedEncryptedMemoryRepository:
-    """Encrypt fact content and provenance with keys derived for one owner/project scope."""
+    """Encrypt facts and serialize scoped mutations through a database aggregate row."""
 
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
-        master_key: str,
+        master_key: str | bytes,
         *,
         max_chars: int = MAX_MEMORY_CHARS,
     ) -> None:
-        if not master_key:
-            raise ValueError("memory encryption master key is required")
         if max_chars < 1:
             raise ValueError("max_chars must be positive")
         self._sessions = session_factory
-        self._master_key = master_key.encode("utf-8")
+        self._master_key = decode_memory_master_key(master_key)
         self._max_chars = max_chars
-        self._locks: dict[tuple[str, str], asyncio.Lock] = {}
-        self._locks_guard = asyncio.Lock()
-
-    async def _scope_lock(self, user_id: str, project_id: str) -> asyncio.Lock:
-        async with self._locks_guard:
-            return self._locks.setdefault((user_id, project_id), asyncio.Lock())
 
     def _key(self, user_id: str, project_id: str, version: int) -> bytes:
         info = b"archon/memory/v1\0" + user_id.encode() + b"\0" + project_id.encode()
@@ -152,14 +147,55 @@ class ScopedEncryptedMemoryRepository:
             updated_at=row.updated_at,
         )
 
+    async def _facts(
+        self, session: AsyncSession, user_id: str, project_id: str
+    ) -> tuple[tuple[MemoryFactRow, MemoryFact], ...]:
+        result = await session.execute(
+            select(MemoryFactRow)
+            .where(MemoryFactRow.user_id == user_id, MemoryFactRow.project_id == project_id)
+            .order_by(MemoryFactRow.created_at, MemoryFactRow.id)
+        )
+        return tuple((row, self._decrypt(row)) for row in result.scalars().all())
+
+    async def _lock_scope(
+        self, session: AsyncSession, user_id: str, project_id: str
+    ) -> MemoryScopeRow:
+        """Create if needed and take the scope's transaction-duration write lock."""
+        values = {"user_id": user_id, "project_id": project_id, "chars_used": 0, "version": 0}
+        bind = session.get_bind()
+        dialect = bind.dialect.name
+        if dialect == "sqlite":
+            await session.execute(
+                sqlite_insert(MemoryScopeRow).values(**values).on_conflict_do_nothing()
+            )
+        elif dialect == "postgresql":
+            await session.execute(
+                postgresql_insert(MemoryScopeRow).values(**values).on_conflict_do_nothing()
+            )
+        else:
+            try:
+                async with session.begin_nested():
+                    session.add(MemoryScopeRow(**values))
+                    await session.flush()
+            except IntegrityError:
+                pass
+
+        # UPDATE is the portable serialization primitive: SQLite takes its database write
+        # lock and PostgreSQL takes a row lock. It remains held until this transaction ends.
+        result = await session.execute(
+            update(MemoryScopeRow)
+            .where(
+                MemoryScopeRow.user_id == user_id,
+                MemoryScopeRow.project_id == project_id,
+            )
+            .values(version=MemoryScopeRow.version + 1)
+            .returning(MemoryScopeRow)
+        )
+        return result.scalar_one()
+
     async def list(self, user_id: str, project_id: str) -> tuple[MemoryFact, ...]:
         async with self._sessions() as session:
-            result = await session.execute(
-                select(MemoryFactRow)
-                .where(MemoryFactRow.user_id == user_id, MemoryFactRow.project_id == project_id)
-                .order_by(MemoryFactRow.created_at, MemoryFactRow.id)
-            )
-            return tuple(self._decrypt(row) for row in result.scalars().all())
+            return tuple(fact for _, fact in await self._facts(session, user_id, project_id))
 
     async def add(
         self,
@@ -172,10 +208,11 @@ class ScopedEncryptedMemoryRepository:
         content = content.strip()
         if not content:
             raise ValueError("memory content is required")
-        lock = await self._scope_lock(user_id, project_id)
-        async with lock:
-            current = await self.list(user_id, project_id)
-            if sum(len(item.content) for item in current) + len(content) > self._max_chars:
+        async with self._sessions() as session, session.begin():
+            scope = await self._lock_scope(session, user_id, project_id)
+            facts = await self._facts(session, user_id, project_id)
+            total = sum(len(fact.content) for _, fact in facts) + len(content)
+            if total > self._max_chars:
                 raise MemoryLimitError("scoped memory character limit exceeded")
             now = datetime.now(tz=UTC)
             fact_id = str(uuid.uuid4())
@@ -194,9 +231,9 @@ class ScopedEncryptedMemoryRepository:
                 created_at=now,
                 updated_at=now,
             )
-            async with self._sessions() as session:
-                session.add(row)
-                await session.commit()
+            session.add(row)
+            scope.chars_used = total
+            await session.flush()
             return self._decrypt(row)
 
     async def replace(
@@ -208,70 +245,79 @@ class ScopedEncryptedMemoryRepository:
         *,
         provenance: Mapping[str, str],
     ) -> MemoryFact | None:
-        if not old_text or not content.strip():
+        content = content.strip()
+        if not old_text or not content:
             raise ValueError("old_text and content are required")
-        lock = await self._scope_lock(user_id, project_id)
-        async with lock:
-            facts = await self.list(user_id, project_id)
+        async with self._sessions() as session, session.begin():
+            scope = await self._lock_scope(session, user_id, project_id)
+            facts = await self._facts(session, user_id, project_id)
             target = next(
-                (fact for fact in facts if old_text.casefold() in fact.content.casefold()), None
+                (
+                    (row, fact)
+                    for row, fact in facts
+                    if old_text.casefold() in fact.content.casefold()
+                ),
+                None,
             )
             if target is None:
+                scope.chars_used = sum(len(fact.content) for _, fact in facts)
                 return None
-            total = (
-                sum(len(item.content) for item in facts)
-                - len(target.content)
-                + len(content.strip())
-            )
+            row, fact = target
+            total = sum(len(item.content) for _, item in facts) - len(fact.content) + len(content)
             if total > self._max_chars:
                 raise MemoryLimitError("scoped memory character limit exceeded")
-            now = datetime.now(tz=UTC)
-            async with self._sessions() as session:
-                row = await session.get(MemoryFactRow, target.id)
-                if row is None or row.user_id != user_id or row.project_id != project_id:
-                    return None
-                row.ciphertext = self._encrypt(
-                    fact_id=row.id,
-                    user_id=user_id,
-                    project_id=project_id,
-                    content=content.strip(),
-                    provenance=provenance,
-                )
-                row.updated_at = now
-                await session.commit()
-                return self._decrypt(row)
+            row.ciphertext = self._encrypt(
+                fact_id=row.id,
+                user_id=user_id,
+                project_id=project_id,
+                content=content,
+                provenance=provenance,
+            )
+            row.updated_at = datetime.now(tz=UTC)
+            scope.chars_used = total
+            await session.flush()
+            return self._decrypt(row)
 
     async def remove(self, user_id: str, project_id: str, substring: str) -> int:
         if not substring:
             return 0
-        lock = await self._scope_lock(user_id, project_id)
-        async with lock:
-            facts = await self.list(user_id, project_id)
-            ids = [fact.id for fact in facts if substring.casefold() in fact.content.casefold()]
-            if not ids:
-                return 0
-            async with self._sessions() as session:
+        async with self._sessions() as session, session.begin():
+            scope = await self._lock_scope(session, user_id, project_id)
+            facts = await self._facts(session, user_id, project_id)
+            removed = [
+                (row, fact)
+                for row, fact in facts
+                if substring.casefold() in fact.content.casefold()
+            ]
+            if removed:
                 result = await session.execute(
                     delete(MemoryFactRow).where(
-                        MemoryFactRow.id.in_(ids),
+                        MemoryFactRow.id.in_([row.id for row, _ in removed]),
                         MemoryFactRow.user_id == user_id,
                         MemoryFactRow.project_id == project_id,
                     )
                 )
-                await session.commit()
-                cursor_result = cast(CursorResult[Any], result)
-                return int(cursor_result.rowcount or 0)
+                count = int(cast(CursorResult[Any], result).rowcount or 0)
+            else:
+                count = 0
+            scope.chars_used = sum(
+                len(fact.content)
+                for row, fact in facts
+                if all(row.id != item.id for item, _ in removed)
+            )
+            return count
 
     async def delete_all(self, user_id: str, project_id: str) -> int:
-        async with self._sessions() as session:
+        async with self._sessions() as session, session.begin():
+            scope = await self._lock_scope(session, user_id, project_id)
+            await self._facts(session, user_id, project_id)
             result = await session.execute(
                 delete(MemoryFactRow).where(
                     MemoryFactRow.user_id == user_id, MemoryFactRow.project_id == project_id
                 )
             )
-            await session.commit()
-            cursor_result = cast(CursorResult[Any], result)
-            return int(cursor_result.rowcount or 0)
+            scope.chars_used = 0
+            return int(cast(CursorResult[Any], result).rowcount or 0)
 
     async def export(self, user_id: str, project_id: str) -> tuple[MemoryFact, ...]:
         return await self.list(user_id, project_id)

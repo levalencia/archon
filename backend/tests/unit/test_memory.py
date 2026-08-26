@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+
 import pytest
 
 from app.agents.protocols import MemoryStore
@@ -13,7 +15,8 @@ class TestEncryptedMemoryStore:
 
     @pytest.fixture
     def store(self) -> EncryptedMemoryStore:
-        return EncryptedMemoryStore(master_key="test-master-key-for-testing")
+        key = base64.urlsafe_b64encode(b"4" * 32).decode().rstrip("=")
+        return EncryptedMemoryStore(master_key=key)
 
     @pytest.mark.unit
     def test_satisfies_protocol(self, store: EncryptedMemoryStore) -> None:
@@ -54,8 +57,12 @@ class TestEncryptedMemoryStore:
     @pytest.mark.asyncio
     async def test_wrong_key_cannot_decrypt(self) -> None:
         """Messages encrypted with one key cannot be decrypted with another."""
-        store1 = EncryptedMemoryStore(master_key="key-one")
-        store2 = EncryptedMemoryStore(master_key="key-two")
+        store1 = EncryptedMemoryStore(
+            master_key=base64.urlsafe_b64encode(b"5" * 32).decode().rstrip("=")
+        )
+        store2 = EncryptedMemoryStore(
+            master_key=base64.urlsafe_b64encode(b"6" * 32).decode().rstrip("=")
+        )
 
         await store1.store("conv-1", "user", "Secret")
 

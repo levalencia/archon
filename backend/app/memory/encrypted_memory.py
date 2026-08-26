@@ -21,6 +21,8 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from app.memory.keys import decode_memory_master_key
+
 logger = structlog.get_logger()
 
 
@@ -34,9 +36,7 @@ class EncryptedMemoryStore:
     """
 
     def __init__(self, master_key: bytes | str) -> None:
-        if isinstance(master_key, str):
-            master_key = master_key.encode()
-        self._master_key = master_key
+        self._master_key = decode_memory_master_key(master_key)
         self._conversations: dict[str, list[bytes]] = {}  # encrypted blobs
         self._key_cache: dict[str, Fernet] = {}
 

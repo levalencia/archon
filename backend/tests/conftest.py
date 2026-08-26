@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import os
 
 import pytest
 
 from app.config import Settings
 
-TEST_MEMORY_ENCRYPTION_KEY = "test-memory-encryption-key-32-bytes-minimum"
+TEST_MEMORY_ENCRYPTION_KEY = base64.urlsafe_b64encode(b"0" * 32).decode().rstrip("=")
 os.environ["ARCHON_ENCRYPTION_MASTER_KEY"] = TEST_MEMORY_ENCRYPTION_KEY
 
 

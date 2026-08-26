@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 
 import pytest
@@ -13,8 +14,11 @@ from app.memory.scoped import (
 )
 from app.runtime.factory import RunContext
 from app.services.conversations import ConversationRepository
-from app.services.db_store import DatabaseStore, MemoryFactRow
+from app.services.db_store import DatabaseStore, MemoryFactRow, MemoryScopeRow
 from app.tools.memory_tools import create_memory_tool, create_session_search_tool
+
+MASTER_KEY = base64.urlsafe_b64encode(b"2" * 32).decode().rstrip("=")
+WRONG_KEY = base64.urlsafe_b64encode(b"3" * 32).decode().rstrip("=")
 
 
 @pytest.fixture
@@ -22,7 +26,7 @@ async def encrypted_memory(tmp_path):
     url = f"sqlite+aiosqlite:///{tmp_path / 'memory.db'}"
     store = DatabaseStore(url)
     await store.initialize()
-    repository = ScopedEncryptedMemoryRepository(store.session_factory, "test-master-key")
+    repository = ScopedEncryptedMemoryRepository(store.session_factory, MASTER_KEY)
     yield store, repository, tmp_path / "memory.db"
     await store.close()
 
@@ -57,10 +61,10 @@ async def test_two_users_and_projects_are_isolated_and_raw_db_has_no_plaintext(e
 async def test_restart_decrypts_and_wrong_key_and_tampering_fail_closed(encrypted_memory):
     store, repository, _ = encrypted_memory
     fact = await repository.add("alice", "red", "durable", provenance={"source_action": "add"})
-    restarted = ScopedEncryptedMemoryRepository(store.session_factory, "test-master-key")
+    restarted = ScopedEncryptedMemoryRepository(store.session_factory, MASTER_KEY)
     assert (await restarted.list("alice", "red"))[0].content == "durable"
 
-    wrong_key = ScopedEncryptedMemoryRepository(store.session_factory, "different-key")
+    wrong_key = ScopedEncryptedMemoryRepository(store.session_factory, WRONG_KEY)
     with pytest.raises(MemoryEncryptionError):
         await wrong_key.list("alice", "red")
 
@@ -113,9 +117,68 @@ async def test_export_replace_remove_delete_and_limit(encrypted_memory):
     assert await repository.remove("alice", "red", "new") == 1
     await repository.add("alice", "red", "x", provenance={"source_action": "add"})
     assert await repository.delete_all("alice", "red") == 1
-    limited = ScopedEncryptedMemoryRepository(repository._sessions, "test-master-key", max_chars=3)
+    limited = ScopedEncryptedMemoryRepository(repository._sessions, MASTER_KEY, max_chars=3)
     with pytest.raises(MemoryLimitError):
         await limited.add("alice", "blue", "four", provenance={"source_action": "add"})
+
+
+async def test_independent_engines_serialize_concurrent_adds_at_limit(tmp_path):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'shared.db'}"
+    first_store, second_store = DatabaseStore(url), DatabaseStore(url)
+    await first_store.initialize()
+    await second_store.initialize()
+    first = ScopedEncryptedMemoryRepository(first_store.session_factory, MASTER_KEY, max_chars=5)
+    second = ScopedEncryptedMemoryRepository(second_store.session_factory, MASTER_KEY, max_chars=5)
+
+    results = await asyncio.gather(
+        first.add("alice", "red", "aaa", provenance={}),
+        second.add("alice", "red", "bbb", provenance={}),
+        return_exceptions=True,
+    )
+    assert sum(isinstance(result, MemoryLimitError) for result in results) == 1
+    facts = await first.list("alice", "red")
+    assert sum(len(fact.content) for fact in facts) == 3
+    async with first_store.session_factory() as session:
+        scope = await session.get(MemoryScopeRow, ("alice", "red"))
+        assert scope is not None and scope.chars_used == 3 and scope.version == 1
+    await first_store.close()
+    await second_store.close()
+
+
+async def test_concurrent_replace_delete_add_preserves_aggregate_and_restart(tmp_path):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'mutations.db'}"
+    first_store, second_store = DatabaseStore(url), DatabaseStore(url)
+    await first_store.initialize()
+    await second_store.initialize()
+    first = ScopedEncryptedMemoryRepository(first_store.session_factory, MASTER_KEY, max_chars=20)
+    second = ScopedEncryptedMemoryRepository(second_store.session_factory, MASTER_KEY, max_chars=20)
+    await first.add("alice", "red", "old-one", provenance={})
+    await first.add("alice", "red", "remove-me", provenance={})
+
+    await asyncio.gather(
+        first.replace("alice", "red", "old", "new", provenance={}),
+        second.remove("alice", "red", "remove"),
+        second.add("alice", "red", "plus", provenance={}),
+    )
+    facts = await first.list("alice", "red")
+    async with second_store.session_factory() as session:
+        scope = await session.get(MemoryScopeRow, ("alice", "red"))
+        assert scope is not None
+        assert scope.chars_used == sum(len(fact.content) for fact in facts)
+        version = scope.version
+
+    restarted = ScopedEncryptedMemoryRepository(
+        second_store.session_factory, MASTER_KEY, max_chars=20
+    )
+    assert (
+        sum(len(fact.content) for fact in await restarted.list("alice", "red")) == scope.chars_used
+    )
+    assert await restarted.delete_all("alice", "red") == len(facts)
+    async with second_store.session_factory() as session:
+        emptied = await session.get(MemoryScopeRow, ("alice", "red"))
+        assert emptied is not None and emptied.chars_used == 0 and emptied.version == version + 1
+    await first_store.close()
+    await second_store.close()
 
 
 async def test_bound_tools_and_conversation_search_are_owner_scoped(encrypted_memory, tmp_path):

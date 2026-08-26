@@ -150,6 +150,21 @@ class ApprovalRequestRow(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class MemoryScopeRow(Base):
+    """Transactionally serialized character accounting for one owner/project scope."""
+
+    __tablename__ = "memory_scopes"
+    __table_args__ = (
+        CheckConstraint("chars_used >= 0", name="ck_memory_scopes_chars_nonnegative"),
+        CheckConstraint("version >= 0", name="ck_memory_scopes_version_nonnegative"),
+    )
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    chars_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class MemoryFactRow(Base):
     """Encrypted memory fact; content and provenance exist only inside ciphertext."""
 

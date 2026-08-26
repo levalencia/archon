@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -157,7 +158,7 @@ def test_encrypted_memory_store_and_retrieve():
     """EncryptedMemoryStore can store and retrieve messages."""
     from app.memory.encrypted_memory import EncryptedMemoryStore
 
-    store = EncryptedMemoryStore("my-secret-key-1234")
+    store = EncryptedMemoryStore(base64.urlsafe_b64encode(b"7" * 32).decode().rstrip("="))
     loop = asyncio.new_event_loop()
 
     loop.run_until_complete(store.store("conv-1", "user", "Hello world"))
@@ -176,7 +177,7 @@ def test_encrypted_memory_per_conversation_isolation():
     """Different conversations have isolated encrypted storage."""
     from app.memory.encrypted_memory import EncryptedMemoryStore
 
-    store = EncryptedMemoryStore("master-key-xyz")
+    store = EncryptedMemoryStore(base64.urlsafe_b64encode(b"8" * 32).decode().rstrip("="))
     loop = asyncio.new_event_loop()
 
     loop.run_until_complete(store.store("conv-a", "user", "Secret A"))

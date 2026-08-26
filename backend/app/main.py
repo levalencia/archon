@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 load_dotenv()
 
 from app.config import Settings, get_settings
+from app.memory.keys import decode_memory_master_key
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
@@ -56,9 +57,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Validate before opening databases or initializing any other application resource.
     if settings.memory_encryption_enabled:
-        key = settings.encryption_master_key
-        if not key or len(key.encode("utf-8")) < 32:
-            raise RuntimeError("Encrypted memory startup configuration is invalid")
+        try:
+            memory_master_key = decode_memory_master_key(settings.encryption_master_key)
+        except ValueError:
+            raise RuntimeError("Encrypted memory startup configuration is invalid") from None
+    else:
+        memory_master_key = None
 
     # Configure structured logging
     setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
@@ -82,8 +86,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
     if settings.memory_encryption_enabled:
+        assert memory_master_key is not None
         app.state.scoped_memory = ScopedEncryptedMemoryRepository(
-            auth_store.session_factory, settings.encryption_master_key
+            auth_store.session_factory, memory_master_key
         )
     else:
         app.state.scoped_memory = None
