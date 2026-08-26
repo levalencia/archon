@@ -98,6 +98,17 @@ class _PolicyExecutionBinding:
 
 
 @dataclass(frozen=True, slots=True)
+class _AuthorizationDecisionBinding:
+    """Validated approval scalars detached from a collaborator-owned outcome."""
+
+    approved: bool
+    tool_call_id: str
+    tool_name: str
+    arguments_hash: str
+    reason_code: str
+
+
+@dataclass(frozen=True, slots=True)
 class _ProviderToolCallCopies:
     """Independent native identity, provider-history, and execution snapshots."""
 
@@ -897,19 +908,57 @@ class AgentRuntime:
             )
             return StopReason.APPROVAL_UNAVAILABLE
 
-        request_binding_matches = (
-            authorization_request.tool_call_id == approval_tool_call_id
-            and authorization_request.tool_name == approval_tool_name
-            and authorization_request.arguments_hash == approval_arguments_hash
-            and authorization_request.risk_classes == approval_risk_classes
-            and authorization_request.matched_rule_id == approval_matched_rule_id
-        )
-        outcome_binding_matches = isinstance(outcome, AuthorizationOutcome) and (
-            outcome.tool_call_id == approval_tool_call_id
-            and outcome.tool_name == approval_tool_name
-            and outcome.arguments_hash == approval_arguments_hash
-        )
-        if not request_binding_matches or not outcome_binding_matches:
+        # The authorizer owns both references while authorize() runs and may retain the
+        # outcome after returning it. Validate and copy every decision scalar before the
+        # next await; neither audit emission nor dispatch may consult that object again.
+        try:
+            request_binding_matches = (
+                authorization_request.tool_call_id == approval_tool_call_id
+                and authorization_request.tool_name == approval_tool_name
+                and authorization_request.arguments_hash == approval_arguments_hash
+                and authorization_request.risk_classes == approval_risk_classes
+                and authorization_request.matched_rule_id == approval_matched_rule_id
+            )
+            if not isinstance(outcome, AuthorizationOutcome):
+                raise TypeError("authorizer returned an invalid outcome")
+            outcome_approved = outcome.approved
+            outcome_tool_call_id = outcome.tool_call_id
+            outcome_tool_name = outcome.tool_name
+            outcome_arguments_hash = outcome.arguments_hash
+            outcome_reason_code = outcome.reason_code
+            if type(outcome_approved) is not bool:
+                raise TypeError("authorization approved value is invalid")
+            if not isinstance(outcome_tool_call_id, str):
+                raise TypeError("authorization tool call id is invalid")
+            if not isinstance(outcome_tool_name, str):
+                raise TypeError("authorization tool name is invalid")
+            if not isinstance(outcome_arguments_hash, str):
+                raise TypeError("authorization arguments hash is invalid")
+            if not isinstance(outcome_reason_code, str) or not re.fullmatch(
+                r"[a-z][a-z0-9_]{0,63}", outcome_reason_code
+            ):
+                raise ValueError("authorization reason code is invalid")
+            outcome_binding_matches = (
+                outcome_tool_call_id == approval_tool_call_id
+                and outcome_tool_name == approval_tool_name
+                and outcome_arguments_hash == approval_arguments_hash
+            )
+            authorization_decision = _AuthorizationDecisionBinding(
+                outcome_approved,
+                outcome_tool_call_id,
+                outcome_tool_name,
+                outcome_arguments_hash,
+                outcome_reason_code,
+            )
+        except Exception:
+            request_binding_matches = False
+            outcome_binding_matches = False
+            authorization_decision = None
+        if (
+            not request_binding_matches
+            or not outcome_binding_matches
+            or authorization_decision is None
+        ):
             await self._emit_approval_failure(
                 event_call, iteration, arguments_hash, "approval_binding_mismatch"
             )
@@ -926,16 +975,22 @@ class AgentRuntime:
             AgentEventKind.APPROVAL_DECIDED,
             iteration,
             {
-                "id": native_binding.tool_call_id,
-                "name": tool_name,
-                "arguments_hash": arguments_hash,
-                "approved": outcome.approved,
-                "reason_code": outcome.reason_code,
+                "id": authorization_decision.tool_call_id,
+                "name": authorization_decision.tool_name,
+                "arguments_hash": authorization_decision.arguments_hash,
+                "approved": authorization_decision.approved,
+                "reason_code": authorization_decision.reason_code,
             },
         )
-        if outcome.approved:
+        if authorization_decision.approved:
             return binding
-        await self._record_denial(event_call, iteration, calls, outcome.reason_code, arguments_hash)
+        await self._record_denial(
+            event_call,
+            iteration,
+            calls,
+            authorization_decision.reason_code,
+            authorization_decision.arguments_hash,
+        )
         return StopReason.POLICY_DENIED
 
     def _prepare_policy_execution_call(

@@ -816,6 +816,57 @@ async def test_authorizer_denial_is_policy_denied_and_never_executes() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("approved", "reason_code", "mutated_field", "mutated_value"),
+    [
+        pytest.param(False, "user_denied", "approved", True, id="denied-to-approved"),
+        pytest.param(True, "user_approved", "approved", False, id="approved-to-denied"),
+        pytest.param(
+            False,
+            "user_denied",
+            "reason_code",
+            "attacker_reason",
+            id="denial-reason",
+        ),
+    ],
+)
+async def test_authorization_outcome_is_bound_before_decision_event_mutation(
+    approved: bool, reason_code: str, mutated_field: str, mutated_value: object
+) -> None:
+    call = ToolCall("native-1", "reader", {"token": "***"})
+    outcome = AuthorizationOutcome(
+        approved, call.id, call.name, canonical_arguments_hash(call.arguments), reason_code
+    )
+
+    class MutatingDecisionSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            await super().emit(event)
+            if event.kind is AgentEventKind.APPROVAL_DECIDED:
+                object.__setattr__(outcome, mutated_field, mutated_value)
+                await asyncio.sleep(0)
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    sink = MutatingDecisionSink()
+    result = await AgentRuntime(
+        provider(call),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=Authorizer(outcome),
+        events=sink,
+    ).run([Message(Role.USER, "write")])
+
+    assert result.stop_reason is (StopReason.COMPLETED if approved else StopReason.POLICY_DENIED)
+    assert len(tools.executed) == int(approved)
+    approval = next(event for event in sink.events if event.kind is AgentEventKind.APPROVAL_DECIDED)
+    assert approval.data["approved"] is approved
+    assert approval.data["reason_code"] == reason_code
+    denied = [event for event in sink.events if event.kind is AgentEventKind.TOOL_DENIED]
+    assert len(denied) == int(not approved)
+    if denied:
+        assert denied[0].data["reason_code"] == reason_code
+
+
+@pytest.mark.asyncio
 async def test_authorizer_exception_is_unavailable() -> None:
     tools = PolicyTools(frozenset({RiskClass.WRITE}))
     result = await AgentRuntime(
