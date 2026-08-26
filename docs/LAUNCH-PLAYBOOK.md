@@ -308,7 +308,7 @@ Built with [Svelte/FastAPI/Ollama] — fully open source."
 
 ## Good First Issues
 We maintain a curated list of beginner-friendly issues:
-→ [Good First Issues](link)
+→ [Good First Issues](https://github.com/levalencia/archon/issues?q=is%3Aissue%20label%3A%22good%20first%20issue%22)
 
 ## Development Setup
 [Step-by-step, no assumptions]
