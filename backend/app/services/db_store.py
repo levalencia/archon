@@ -248,9 +248,7 @@ class EvalCaseResultRow(Base):
     )
 
     id = Column(String(36), primary_key=True)
-    eval_run_id = Column(
-        String(36), ForeignKey("eval_runs.id", ondelete="CASCADE"), nullable=False
-    )
+    eval_run_id = Column(String(36), ForeignKey("eval_runs.id", ondelete="CASCADE"), nullable=False)
     source_run_id = Column(String(36), nullable=False)
     case_key = Column(String(255), nullable=False)
     passed = Column(Integer, nullable=False)
