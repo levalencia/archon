@@ -40,6 +40,7 @@ from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
 from app.security.auth import AuthRepository
+from app.security.live_approvals import ApprovalBroker
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 
@@ -97,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.approval_broker = ApprovalBroker()
 
     # --- Middleware (order matters: last added = first executed) ---
 

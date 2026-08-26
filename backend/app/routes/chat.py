@@ -16,11 +16,10 @@ from pydantic import BaseModel, Field
 
 from app.agents.llm_factory import create_llm_client
 from app.observability.logging import get_correlation_id
-from app.observability.runtime_events import CompositeEventSink
 from app.routes.admin import get_skills_top_k
 from app.routes.artifacts import get_artifact_store
 from app.routes.skills import get_skill_registry
-from app.runtime import AgentRuntime, RuntimeBudget
+from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.support import as_model_provider, prepare_messages
 from app.security.auth import get_current_user
 from app.security.policy import RiskClass
@@ -355,22 +354,16 @@ async def chat(
     messages = await prepare_messages(
         body.message, conv_id, memory, tools, skills_context, images, user["user_id"]
     )
-    runtime = AgentRuntime(
-        as_model_provider(llm),
-        tools,
-        events=CompositeEventSink(
-            conversation_id=conv_id,
-            correlation_id=cid,
-            model=settings.llm_model,
-            repository=memory,
-            exporter=request.app.state.otel_exporter,
-        ),
-        budget=RuntimeBudget(
-            max_iterations=settings.agent_max_iterations,
-            max_tool_calls=8,
-            max_tokens=settings.agent_token_budget,
-            max_seconds=90,
-        ),
+    run_context = RunContext.create(
+        user_id=user["user_id"], conversation_id=conv_id, correlation_id=cid
+    )
+    runtime = create_chat_runtime(
+        context=run_context,
+        provider=as_model_provider(llm),
+        tools=tools,
+        settings=settings,
+        repository=memory,
+        exporter=request.app.state.otel_exporter,
     )
     result = await runtime.run(messages)
     await memory.store(conv_id, "user", body.message, user["user_id"])

@@ -6,6 +6,7 @@ import asyncio
 import json
 import time
 import uuid
+from contextlib import suppress
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -13,7 +14,6 @@ from starlette.responses import StreamingResponse
 
 from app.observability.cost_tracker import CostTracker
 from app.observability.logging import get_correlation_id
-from app.observability.runtime_events import CompositeEventSink
 from app.routes.chat import (
     get_conversation_repository,
     get_llm_client,
@@ -21,18 +21,14 @@ from app.routes.chat import (
     get_skills_top_k,
     get_tool_registry,
 )
-from app.runtime import AgentEvent, AgentEventKind, AgentRuntime, RuntimeBudget
+from app.runtime import AgentEvent, AgentEventKind
+from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.support import as_model_provider, prepare_messages
 from app.security.auth import get_current_user
+from app.security.live_approvals import ApprovalBroker
 from app.services.artifacts import detect_artifact_in_response
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-
-# Module-level pending approval state (keyed by tool_call_id)
-_pending: dict[str, asyncio.Event] = {}
-_decisions: dict[str, bool] = {}
-
-APPROVAL_TIMEOUT_SECONDS = 60
 
 
 class StreamRequest(BaseModel):
@@ -69,6 +65,12 @@ async def chat_stream_real(
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
         await memory.create(conv_id, "New Conversation", user["user_id"])
+    run_context = RunContext.create(
+        user_id=user["user_id"],
+        conversation_id=conv_id,
+        correlation_id=get_correlation_id(),
+    )
+    approval_broker: ApprovalBroker = request.app.state.approval_broker
 
     async def event_stream():
         started = time.monotonic()
@@ -117,98 +119,73 @@ async def chat_stream_real(
 
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
 
-        async def _approval_hook(tool_name: str, tool_call_id: str, arguments: dict) -> bool:
-            """Approval hook: emits event via queue, waits for POST decision."""
-            evt = asyncio.Event()
-            _pending[tool_call_id] = evt
-            try:
-                await asyncio.wait_for(evt.wait(), timeout=APPROVAL_TIMEOUT_SECONDS)
-                return _decisions.pop(tool_call_id, False)
-            except TimeoutError:
-                return False
-            finally:
-                _pending.pop(tool_call_id, None)
-                _decisions.pop(tool_call_id, None)
-
         provider = as_model_provider(get_llm_client(settings))
         if json_mode:
             from app.runtime.support import JsonModeProvider
 
             provider = JsonModeProvider(provider)
 
-        runtime = AgentRuntime(
-            provider,
-            tools,
-            events=CompositeEventSink(
-                conversation_id=conv_id,
-                correlation_id=get_correlation_id(),
-                model=settings.llm_model,
-                repository=memory,
-                exporter=request.app.state.otel_exporter,
-                downstream=QueueEventSink(queue),
-            ),
-            budget=RuntimeBudget(
-                max_iterations=settings.agent_max_iterations,
-                max_tool_calls=8,
-                max_tokens=settings.agent_token_budget,
-                max_seconds=90,
-            ),
-            approval_hook=_approval_hook,
+        runtime = create_chat_runtime(
+            context=run_context,
+            provider=provider,
+            tools=tools,
+            settings=settings,
+            repository=memory,
+            exporter=request.app.state.otel_exporter,
+            downstream=QueueEventSink(queue),
+            authorizer=approval_broker.authorizer(run_context),
         )
         task = asyncio.create_task(runtime.run(messages))
-        while not task.done() or not queue.empty():
-            try:
-                event = await asyncio.wait_for(queue.get(), 0.25)
-            except TimeoutError:
-                yield ": heartbeat\n\n"
-                continue
-            if event.kind is AgentEventKind.ITERATION_STARTED:
-                yield _sse("thinking", f"Iteration {event.iteration}: calling LLM...")
-            elif event.kind is AgentEventKind.MODEL_PROGRESS:
-                yield _sse("thinking", event.data["text"])
-            elif event.kind is AgentEventKind.TOOL_CALL_REQUESTED:
-                yield _sse("thinking", f"Calling {event.data['name']}...")
-            elif event.kind is AgentEventKind.TOOL_CALL_COMPLETED:
-                output = event.data.get("output", {})
-                yield _sse(
-                    "tool_call",
-                    {
-                        "tool": event.data["name"],
-                        "parameters": event.data.get("arguments", {}),
-                        "result": json.dumps(output, ensure_ascii=False, default=str)[:300],
-                        "status": "success",
-                    },
-                )
-                # Emit source citations for web search results
-                if event.data["name"] == "web_search" and isinstance(output, dict):
-                    sources = [
-                        {"title": r.get("title", ""), "url": r.get("url", "")}
-                        for r in output.get("results", [])
-                        if r.get("url")
-                    ]
-                    if sources:
-                        yield _sse("sources", sources)
-            elif event.kind is AgentEventKind.TEXT_DELTA:
-                yield _sse("token", event.data["text"])
-            elif event.kind is AgentEventKind.APPROVAL_REQUIRED:
-                yield _sse(
-                    "approval_required",
-                    {
-                        "tool": event.data["name"],
-                        "tool_call_id": event.data["id"],
-                        "parameters": event.data.get("arguments", {}),
-                    },
-                )
-            elif event.kind is AgentEventKind.TOOL_DENIED:
-                yield _sse(
-                    "tool_denied",
-                    {
-                        "tool": event.data["name"],
-                        "tool_call_id": event.data["id"],
-                    },
-                )
-            elif event.kind is AgentEventKind.TOOL_PROGRESS:
-                yield _sse("thinking", f"[{event.data['name']}] {event.data['chunk']}")
+        try:
+            while not task.done() or not queue.empty():
+                try:
+                    event = await asyncio.wait_for(queue.get(), 0.25)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
+                if event.kind is AgentEventKind.ITERATION_STARTED:
+                    yield _sse("thinking", f"Iteration {event.iteration}: calling LLM...")
+                elif event.kind is AgentEventKind.MODEL_PROGRESS:
+                    yield _sse("thinking", event.data["text"])
+                elif event.kind is AgentEventKind.TOOL_CALL_REQUESTED:
+                    yield _sse("thinking", f"Calling {event.data['name']}...")
+                elif event.kind is AgentEventKind.TOOL_CALL_COMPLETED:
+                    yield _sse(
+                        "tool_call",
+                        {
+                            "tool": event.data["name"],
+                            "tool_call_id": event.data["id"],
+                            "arguments_hash": event.data.get("arguments_hash"),
+                            "output_hash": event.data.get("output_hash"),
+                            "output_size": event.data.get("output_size"),
+                            "status": event.data.get("status", "success"),
+                        },
+                    )
+                elif event.kind is AgentEventKind.TEXT_DELTA:
+                    yield _sse("token", event.data["text"])
+                elif event.kind is AgentEventKind.POLICY_DECIDED:
+                    yield _sse("policy_decided", _routed_event(event.data, run_context))
+                elif event.kind is AgentEventKind.APPROVAL_REQUIRED:
+                    yield _sse("approval_required", _routed_event(event.data, run_context))
+                elif event.kind is AgentEventKind.APPROVAL_DECIDED:
+                    yield _sse("approval_decided", _routed_event(event.data, run_context))
+                elif event.kind is AgentEventKind.TOOL_DENIED:
+                    yield _sse("tool_denied", _routed_event(event.data, run_context))
+                elif event.kind is AgentEventKind.TOOL_PROGRESS:
+                    yield _sse(
+                        "thinking",
+                        {
+                            "tool": event.data["name"],
+                            "tool_call_id": event.data.get("id"),
+                            "status": event.data.get("status", "in_progress"),
+                        },
+                    )
+        finally:
+            if not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+            await approval_broker.cancel_run(run_context)
 
         result = await task
         await memory.store(conv_id, "user", body.message, user["user_id"])
@@ -281,16 +258,43 @@ def _sse(event: str, data) -> str:
     return f"event: {event}\n" + "\n".join(f"data: {line}" for line in payload.split("\n")) + "\n\n"
 
 
+def _routed_event(data, context: RunContext) -> dict:
+    """Add non-secret routing while preserving runtime policy identity fields."""
+    safe_fields = {
+        key: data[key]
+        for key in (
+            "id",
+            "name",
+            "arguments_hash",
+            "risk_classes",
+            "matched_rule_id",
+            "action",
+            "reason_code",
+            "approved",
+        )
+        if key in data
+    }
+    return {
+        **safe_fields,
+        "tool": data.get("name"),
+        "tool_call_id": data.get("id"),
+        "run_id": context.run_id,
+        "conversation_id": context.conversation_id,
+    }
+
+
 @router.post("/approve/{tool_call_id}")
 async def approve_tool_call(
     tool_call_id: str,
     body: ApprovalBody,
+    request: Request,
     user: dict = Depends(get_current_user),  # noqa: B008
 ) -> dict:
-    """Approve or deny a pending tool call."""
-    evt = _pending.get(tool_call_id)
-    if evt is None:
+    """Approve or deny the authenticated owner's unique pending tool call."""
+    broker: ApprovalBroker = request.app.state.approval_broker
+    decided = await broker.decide_for_owner(
+        user_id=user["user_id"], tool_call_id=tool_call_id, approved=body.approved
+    )
+    if not decided:
         raise HTTPException(status_code=404, detail="No pending approval for this tool call")
-    _decisions[tool_call_id] = body.approved
-    evt.set()
     return {"tool_call_id": tool_call_id, "approved": body.approved}

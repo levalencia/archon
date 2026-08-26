@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -259,32 +258,6 @@ def test_approve_endpoint_404_when_no_pending() -> None:
             json={"approved": True},
         )
         assert resp.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_approve_endpoint_sets_decision() -> None:
-    """POST /api/chat/approve/{id} wakes up a pending approval."""
-    from app.routes.stream import _decisions, _pending
-
-    tool_call_id = "test-approval-123"
-    evt = asyncio.Event()
-    _pending[tool_call_id] = evt
-
-    try:
-        with _test_client() as api:
-            resp = api.post(
-                f"/api/chat/approve/{tool_call_id}",
-                json={"approved": True},
-            )
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["tool_call_id"] == tool_call_id
-            assert data["approved"] is True
-            assert evt.is_set()
-            assert _decisions.get(tool_call_id) is True
-    finally:
-        _pending.pop(tool_call_id, None)
-        _decisions.pop(tool_call_id, None)
 
 
 # ---------------------------------------------------------------------------
