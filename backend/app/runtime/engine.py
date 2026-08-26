@@ -8,7 +8,7 @@ import hashlib
 import json
 import re
 import time
-from collections.abc import Callable, Coroutine, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
@@ -37,6 +37,7 @@ from app.security.policy import (
 
 T = TypeVar("T")
 Clock = Callable[[], float]
+ResultRecorder = Callable[[str], Awaitable[None]]
 
 # Approval hook: (tool_name, tool_call_id, arguments) -> approved?
 ApprovalHook = Callable[[str, str, dict[str, Any]], Coroutine[Any, Any, bool]]
@@ -149,6 +150,7 @@ class AgentRuntime:
         policy_engine: PolicyEngine | None = None,
         authorizer: ToolAuthorizer | None = None,
         approval_timeout_seconds: float = 30.0,
+        result_recorder: ResultRecorder | None = None,
     ) -> None:
         if approval_timeout_seconds <= 0:
             raise ValueError("approval_timeout_seconds must be positive")
@@ -161,6 +163,7 @@ class AgentRuntime:
         self._policy_engine = policy_engine
         self._authorizer = authorizer
         self._approval_timeout_seconds = approval_timeout_seconds
+        self._result_recorder = result_recorder
 
     async def run(self, messages: Sequence[Message]) -> AgentResult:
         history = list(self._snapshot_history(messages))
@@ -1272,6 +1275,9 @@ class AgentRuntime:
         usage: TokenUsage,
         error: str | None = None,
     ) -> AgentResult:
+        # The terminal event finalizes completed_at, so persist the final answer first.
+        if self._result_recorder is not None:
+            await self._result_recorder(content)
         await self._emit(
             AgentEventKind.RUN_STOPPED,
             iterations,

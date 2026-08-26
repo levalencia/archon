@@ -3,12 +3,14 @@
 # ruff: noqa: E501, E702
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Never
 
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy import func, select
 
 from app.config import Settings
 from app.routes.runs import router
@@ -16,6 +18,7 @@ from app.security.auth import get_current_user
 from app.security.persistence_redactor import PersistenceRedactor
 from app.security.rate_limiter import RateLimiter
 from app.services.conversations import ConversationRepository
+from app.services.db_store import ForkDraftRow, RunCheckpointRow
 
 
 class ForbiddenSpy:
@@ -139,4 +142,102 @@ async def test_compare_and_filters_are_read_only_and_owner_scoped(tmp_path: Path
         ).status_code == 404
     assert app.state.model_provider.calls == app.state.tools.calls == 0
     await app.state.rate_limiter.close()
+    await repo.close()
+
+
+@pytest.mark.asyncio
+async def test_fork_snapshot_uses_selected_event_cutoff_and_terminal_completion(
+    tmp_path: Path,
+) -> None:
+    repo = ConversationRepository(
+        f"sqlite+aiosqlite:///{tmp_path / 'snapshot.db'}", PersistenceRedactor()
+    )
+    await repo.initialize()
+    await repo.create("source", "Source", "alice")
+    await repo.store("source", "user", "included before run", "alice")
+    await _event(repo, "source-run", "alice", "source", "run_started")
+    await repo.store("source", "assistant", "excluded after selected event", "alice")
+
+    nonterminal = await repo.runs.fork("alice", "source-run", 1)
+    assert nonterminal is not None
+    assert await repo.retrieve(nonterminal["target_conversation_id"], user_id="alice") == [
+        {"role": "user", "content": "included before run"}
+    ]
+
+    await repo.store("source", "user", "included current user", "alice")
+    await repo.store("source", "assistant", "included final assistant", "alice")
+    await _event(repo, "source-run", "alice", "source", "run_stopped", 1)
+    await repo.store("source", "user", "excluded later message", "alice")
+
+    terminal = await repo.runs.fork("alice", "source-run", 2)
+    assert terminal is not None
+    copied = await repo.retrieve(terminal["target_conversation_id"], user_id="alice")
+    assert [item["content"] for item in copied] == [
+        "included before run",
+        "excluded after selected event",
+        "included current user",
+        "included final assistant",
+    ]
+    await repo.close()
+
+
+@pytest.mark.asyncio
+async def test_repeated_and_concurrent_forks_reuse_checkpoint_but_create_distinct_drafts(
+    tmp_path: Path,
+) -> None:
+    repo = ConversationRepository(
+        f"sqlite+aiosqlite:///{tmp_path / 'checkpoint-race.db'}", PersistenceRedactor()
+    )
+    await repo.initialize()
+    await repo.create("source", "Source", "alice")
+    await repo.store("source", "user", "question", "alice")
+    await _event(repo, "source-run", "alice", "source", "run_started")
+
+    forks = await asyncio.gather(*(repo.runs.fork("alice", "source-run", 1) for _ in range(4)))
+    assert all(item is not None for item in forks)
+    checkpoint_ids = {item["checkpoint_id"] for item in forks if item is not None}
+    target_ids = {item["target_conversation_id"] for item in forks if item is not None}
+    assert len(checkpoint_ids) == 1
+    assert len(target_ids) == 4
+    async with repo._store.session_factory() as session:
+        assert await session.scalar(select(func.count(RunCheckpointRow.checkpoint_id))) == 1
+    await repo.close()
+
+
+@pytest.mark.asyncio
+async def test_fork_draft_is_consumed_once_by_concurrent_distinct_child_runs(
+    tmp_path: Path,
+) -> None:
+    repo = ConversationRepository(
+        f"sqlite+aiosqlite:///{tmp_path / 'lineage-race.db'}", PersistenceRedactor()
+    )
+    await repo.initialize()
+    await repo.create("source", "Source", "alice")
+    await _event(repo, "source-run", "alice", "source", "run_started")
+    fork = await repo.runs.fork("alice", "source-run", 1)
+    assert fork is not None
+    target = fork["target_conversation_id"]
+
+    async def ensure(run_id: str) -> None:
+        await repo.runs.ensure_run(
+            run_id=run_id,
+            user_id="alice",
+            project_id="project",
+            conversation_id=target,
+            correlation_id=f"corr-{run_id}",
+            provider="mock",
+            model="model",
+        )
+
+    await asyncio.gather(ensure("child-a"), ensure("child-b"))
+    children = [
+        await repo.runs.get("alice", "child-a"),
+        await repo.runs.get("alice", "child-b"),
+    ]
+    assert sum(child is not None and child.parent_run_id == "source-run" for child in children) == 1
+    await ensure("child-a")
+    repeated = await repo.runs.get("alice", "child-a")
+    assert repeated is not None
+    async with repo._store.session_factory() as session:
+        assert await session.scalar(select(func.count(ForkDraftRow.id))) == 0
     await repo.close()

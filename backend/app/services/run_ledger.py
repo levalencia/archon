@@ -151,15 +151,6 @@ class RunRepository:
             "next_sequence": 1,
         }
         async with self._sessions() as session:
-            lineage = await session.scalar(
-                select(ForkDraftRow).where(
-                    ForkDraftRow.user_id == user_id,
-                    ForkDraftRow.target_conversation_id == conversation_id,
-                )
-            )
-            if lineage is not None:
-                values["parent_run_id"] = lineage.source_run_id
-                values["fork_source_sequence"] = lineage.source_sequence
             dialect = session.get_bind().dialect.name
             statement: Any
             if dialect == "postgresql":
@@ -167,19 +158,48 @@ class RunRepository:
                     pg_insert(RunRow)
                     .values(**values)
                     .on_conflict_do_nothing(index_elements=[RunRow.run_id])
+                    .returning(RunRow.run_id)
                 )
             elif dialect == "sqlite":
                 statement = (
                     sqlite_insert(RunRow)
                     .values(**values)
                     .on_conflict_do_nothing(index_elements=[RunRow.run_id])
+                    .returning(RunRow.run_id)
                 )
             else:
-                if await session.get(RunRow, run_id) is None:
-                    session.add(RunRow(**values))
+                existing = await session.get(RunRow, run_id)
+                if existing is not None:
+                    return
+                session.add(RunRow(**values))
+                await session.flush()
+                inserted_run_id: str | None = run_id
+            if dialect in {"postgresql", "sqlite"}:
+                inserted_run_id = (await session.execute(statement)).scalar_one_or_none()
+            if inserted_run_id is None:
                 await session.commit()
                 return
-            await session.execute(statement)
+
+            # Only the transaction that creates the first run for this draft may consume it.
+            # DELETE ... RETURNING makes distinct child runs race for exactly one lineage record,
+            # while repeated ensure calls for an existing run leave any unrelated draft untouched.
+            consumed = (
+                await session.execute(
+                    delete(ForkDraftRow)
+                    .where(
+                        ForkDraftRow.user_id == user_id,
+                        ForkDraftRow.project_id == project_id,
+                        ForkDraftRow.target_conversation_id == conversation_id,
+                    )
+                    .returning(ForkDraftRow.source_run_id, ForkDraftRow.source_sequence)
+                )
+            ).one_or_none()
+            if consumed is not None:
+                await session.execute(
+                    update(RunRow)
+                    .where(RunRow.run_id == run_id, RunRow.user_id == user_id)
+                    .values(parent_run_id=consumed[0], fork_source_sequence=consumed[1])
+                )
             await session.commit()
 
     async def append(
@@ -376,11 +396,23 @@ class RunRepository:
             )
             if conversation is None:
                 raise ValueError("source conversation not found")
+            cutoff = (
+                run.completed_at
+                if event.kind == AgentEventKind.RUN_STOPPED.value
+                else event.event_at
+            )
+            if cutoff is None:
+                raise ValueError("terminal run has no completion timestamp")
             messages = (
                 await session.scalars(
                     select(MessageRow)
-                    .where(MessageRow.conversation_id == run.conversation_id)
-                    .order_by(MessageRow.id)
+                    .join(ConversationRow, ConversationRow.id == MessageRow.conversation_id)
+                    .where(
+                        MessageRow.conversation_id == run.conversation_id,
+                        ConversationRow.user_id == user_id,
+                        MessageRow.created_at <= cutoff,
+                    )
+                    .order_by(MessageRow.created_at, MessageRow.id)
                 )
             ).all()
             snapshot_items = [
@@ -391,22 +423,76 @@ class RunRepository:
                 for item in messages
             ]
             snapshot = json.dumps(snapshot_items, ensure_ascii=False, separators=(",", ":"))
-            checkpoint_id = str(uuid.uuid4())
-            target_id = str(uuid.uuid4())
-            session.add(
-                RunCheckpointRow(
-                    checkpoint_id=checkpoint_id,
-                    user_id=user_id,
-                    project_id=run.project_id,
-                    source_run_id=run_id,
-                    source_sequence=source_sequence,
-                    conversation_snapshot=snapshot,
-                    policy_profile=policy_profile[:100],
-                    selected_memory_ids=json.dumps(list(selected_memory_ids)),
-                    workspace_restoration="none",
-                    created_at=now,
+            checkpoint_id = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"archon:checkpoint:{user_id}:{run_id}:{source_sequence}",
                 )
             )
+            checkpoint_values = {
+                "checkpoint_id": checkpoint_id,
+                "user_id": user_id,
+                "project_id": run.project_id,
+                "source_run_id": run_id,
+                "source_sequence": source_sequence,
+                "conversation_snapshot": snapshot,
+                "policy_profile": policy_profile[:100],
+                "selected_memory_ids": json.dumps(list(selected_memory_ids)),
+                "workspace_restoration": "none",
+                "created_at": now,
+            }
+            dialect = session.get_bind().dialect.name
+            if dialect == "postgresql":
+                checkpoint_insert: Any = (
+                    pg_insert(RunCheckpointRow)
+                    .values(**checkpoint_values)
+                    .on_conflict_do_nothing(
+                        index_elements=[
+                            RunCheckpointRow.user_id,
+                            RunCheckpointRow.source_run_id,
+                            RunCheckpointRow.source_sequence,
+                        ]
+                    )
+                )
+            elif dialect == "sqlite":
+                checkpoint_insert = (
+                    sqlite_insert(RunCheckpointRow)
+                    .values(**checkpoint_values)
+                    .on_conflict_do_nothing(
+                        index_elements=[
+                            RunCheckpointRow.user_id,
+                            RunCheckpointRow.source_run_id,
+                            RunCheckpointRow.source_sequence,
+                        ]
+                    )
+                )
+            else:
+                existing_checkpoint = await session.scalar(
+                    select(RunCheckpointRow).where(
+                        RunCheckpointRow.user_id == user_id,
+                        RunCheckpointRow.source_run_id == run_id,
+                        RunCheckpointRow.source_sequence == source_sequence,
+                    )
+                )
+                if existing_checkpoint is None:
+                    session.add(RunCheckpointRow(**checkpoint_values))
+            if dialect in {"postgresql", "sqlite"}:
+                await session.execute(checkpoint_insert)
+            checkpoint = await session.scalar(
+                select(RunCheckpointRow).where(
+                    RunCheckpointRow.user_id == user_id,
+                    RunCheckpointRow.source_run_id == run_id,
+                    RunCheckpointRow.source_sequence == source_sequence,
+                )
+            )
+            if checkpoint is None:
+                raise RuntimeError("checkpoint insert failed")
+            checkpoint_id = str(checkpoint.checkpoint_id)
+            snapshot_items = json.loads(str(checkpoint.conversation_snapshot))
+            checkpoint_policy_profile = str(checkpoint.policy_profile)
+            checkpoint_memory_ids = json.loads(str(checkpoint.selected_memory_ids))
+            checkpoint_created_at = checkpoint.created_at
+            target_id = str(uuid.uuid4())
             session.add(
                 ConversationRow(
                     id=target_id,
@@ -445,9 +531,9 @@ class RunRepository:
             "source_sequence": source_sequence,
             "target_conversation_id": target_id,
             "workspace_restoration": "none",
-            "policy_profile": policy_profile[:100],
-            "selected_memory_ids": list(selected_memory_ids),
-            "created_at": now,
+            "policy_profile": checkpoint_policy_profile,
+            "selected_memory_ids": checkpoint_memory_ids,
+            "created_at": checkpoint_created_at,
         }
 
     async def events(

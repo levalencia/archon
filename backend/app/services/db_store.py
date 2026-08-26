@@ -469,6 +469,31 @@ class DatabaseStore:
             rows = result.scalars().all()
             return [{"role": r.role, "content": r.content} for r in rows]
 
+    async def retrieve_through(
+        self,
+        conversation_id: str,
+        through: datetime,
+        *,
+        user_id: str,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Retrieve an owner's messages at or before a timestamp in stable order."""
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(MessageRow)
+                    .join(ConversationRow, ConversationRow.id == MessageRow.conversation_id)
+                    .where(
+                        MessageRow.conversation_id == conversation_id,
+                        ConversationRow.user_id == user_id,
+                        MessageRow.created_at <= through,
+                    )
+                    .order_by(MessageRow.created_at, MessageRow.id)
+                    .limit(limit)
+                )
+            ).all()
+            return [{"role": row.role, "content": row.content} for row in rows]
+
     async def get_message_count(self, conversation_id: str) -> int:
         async with self._session_factory() as session:
             result = await session.execute(

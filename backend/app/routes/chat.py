@@ -415,6 +415,7 @@ async def chat(
         user["user_id"],
         persistent_memory_text,
     )
+    await memory.store(conv_id, "user", body.message, user["user_id"])
     runtime = create_chat_runtime(
         context=run_context,
         provider=provider,
@@ -424,10 +425,9 @@ async def chat(
         exporter=request.app.state.otel_exporter,
         redactor=request.app.state.persistence_redactor,
         log_buffer=request.app.state.log_buffer,
+        result_recorder=lambda answer: memory.store(conv_id, "assistant", answer, user["user_id"]),
     )
     result = await runtime.run(messages)
-    await memory.store(conv_id, "user", body.message, user["user_id"])
-    await memory.store(conv_id, "assistant", result.content, user["user_id"])
 
     elapsed_ms = (time.monotonic() - start_time) * 1000
     await memory.runs.finalize_metadata(

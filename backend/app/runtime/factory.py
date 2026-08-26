@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -45,6 +46,7 @@ def create_chat_runtime(
     log_buffer: OwnerLogBuffer,
     downstream: EventSink | None = None,
     authorizer: ToolAuthorizer | None = None,
+    result_recorder: Callable[[str], Awaitable[None]] | None = None,
 ) -> AgentRuntime:
     """Build the single supported live runtime configuration.
 
@@ -78,4 +80,5 @@ def create_chat_runtime(
         policy_engine=default_policy_engine(),
         authorizer=authorizer,
         approval_timeout_seconds=settings.approval_timeout_seconds,
+        result_recorder=result_recorder,
     )

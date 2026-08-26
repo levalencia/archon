@@ -150,6 +150,7 @@ async def chat_stream_real(
 
             provider = JsonModeProvider(provider)
 
+        await memory.store(conv_id, "user", body.message, user["user_id"])
         runtime = create_chat_runtime(
             context=run_context,
             provider=provider,
@@ -161,6 +162,9 @@ async def chat_stream_real(
             log_buffer=request.app.state.log_buffer,
             downstream=QueueEventSink(queue),
             authorizer=approval_broker.authorizer(run_context),
+            result_recorder=lambda answer: memory.store(
+                conv_id, "assistant", answer, user["user_id"]
+            ),
         )
         task = asyncio.create_task(runtime.run(messages))
         try:
@@ -215,8 +219,6 @@ async def chat_stream_real(
             await approval_broker.cancel_run(run_context)
 
         result = await task
-        await memory.store(conv_id, "user", body.message, user["user_id"])
-        await memory.store(conv_id, "assistant", result.content, user["user_id"])
         artifacts = detect_artifact_in_response(result.content)
         artifact_store = request.app.state.artifacts
         for artifact_data in artifacts:

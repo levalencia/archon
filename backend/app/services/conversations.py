@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+from datetime import datetime
 from typing import Any
 
 from app.security.persistence_redactor import PersistenceRedactor
@@ -101,6 +102,18 @@ class ConversationRepository:
         self, conversation_id: str, limit: int = 50, user_id: str = "default"
     ) -> builtins.list[dict[str, Any]]:
         return await self._store.retrieve(conversation_id, limit, user_id)
+
+    async def retrieve_through(
+        self,
+        conversation_id: str,
+        through: datetime,
+        *,
+        user_id: str,
+        limit: int = 50,
+    ) -> builtins.list[dict[str, Any]]:
+        return await self._store.retrieve_through(
+            conversation_id, through, user_id=user_id, limit=limit
+        )
 
     async def search(
         self, user_id: str, query: str, *, limit: int = 3
