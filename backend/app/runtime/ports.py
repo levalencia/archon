@@ -38,3 +38,12 @@ class ToolAuthorizer(Protocol):
     """Asynchronous human/host authorization boundary; implementations own no runtime policy."""
 
     async def authorize(self, request: AuthorizationRequest) -> AuthorizationOutcome: ...
+
+
+@runtime_checkable
+class PreparatoryToolAuthorizer(ToolAuthorizer, Protocol):
+    """Optional authorizer extension that reserves a request before it is published."""
+
+    async def prepare(self, request: AuthorizationRequest) -> None: ...
+
+    async def cancel(self, request: AuthorizationRequest) -> None: ...

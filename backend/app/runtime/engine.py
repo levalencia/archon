@@ -16,7 +16,13 @@ from typing import Any, TypeVar
 
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
 from app.runtime.models import Message, Role, TokenUsage, ToolCall
-from app.runtime.ports import ModelProvider, PolicyAwareToolExecutor, ToolAuthorizer, ToolExecutor
+from app.runtime.ports import (
+    ModelProvider,
+    PolicyAwareToolExecutor,
+    PreparatoryToolAuthorizer,
+    ToolAuthorizer,
+    ToolExecutor,
+)
 from app.security.approvals import AuthorizationOutcome, AuthorizationRequest
 from app.security.policy import (
     PolicyAction,
@@ -859,17 +865,62 @@ class AgentRuntime:
             risk_classes=approval_risk_classes,
             matched_rule_id=approval_matched_rule_id,
         )
+        cleanup_request = AuthorizationRequest(
+            tool_call_id=approval_tool_call_id,
+            tool_name=approval_tool_name,
+            arguments_hash=approval_arguments_hash,
+            risk_classes=approval_risk_classes,
+            matched_rule_id=approval_matched_rule_id,
+        )
         approval_data = {
             "id": native_binding.tool_call_id,
             "name": tool_name,
             "arguments_hash": arguments_hash,
             "risk_classes": sorted(risk.value for risk in decision_risks),
         }
-        await self._emit(AgentEventKind.APPROVAL_REQUIRED, iteration, approval_data)
+        preparatory_authorizer = (
+            self._authorizer if isinstance(self._authorizer, PreparatoryToolAuthorizer) else None
+        )
+        if preparatory_authorizer is not None:
+            try:
+                await preparatory_authorizer.prepare(authorization_request)
+            except asyncio.CancelledError:
+                await preparatory_authorizer.cancel(cleanup_request)
+                raise
+            except Exception:
+                await preparatory_authorizer.cancel(cleanup_request)
+                await self._emit_approval_failure(
+                    event_call, iteration, arguments_hash, "approval_unavailable"
+                )
+                await self._record_denial(
+                    event_call, iteration, calls, "approval_unavailable", arguments_hash
+                )
+                return StopReason.APPROVAL_UNAVAILABLE
+            if authorization_request != cleanup_request:
+                await preparatory_authorizer.cancel(cleanup_request)
+                await self._emit_approval_failure(
+                    event_call, iteration, arguments_hash, "approval_binding_mismatch"
+                )
+                await self._record_denial(
+                    event_call,
+                    iteration,
+                    calls,
+                    "approval_binding_mismatch",
+                    arguments_hash,
+                )
+                return StopReason.APPROVAL_UNAVAILABLE
+        try:
+            await self._emit(AgentEventKind.APPROVAL_REQUIRED, iteration, approval_data)
+        except BaseException:
+            if preparatory_authorizer is not None:
+                await preparatory_authorizer.cancel(cleanup_request)
+            raise
 
         runtime_remaining = self._budget.max_seconds - (self._clock() - started_at)
         timeout = min(runtime_remaining, self._approval_timeout_seconds)
         if timeout <= 0:
+            if preparatory_authorizer is not None:
+                await preparatory_authorizer.cancel(cleanup_request)
             await self._emit_approval_failure(
                 event_call, iteration, arguments_hash, "approval_timeout"
             )
@@ -910,6 +961,10 @@ class AgentRuntime:
                 event_call, iteration, calls, "approval_unavailable", arguments_hash
             )
             return StopReason.APPROVAL_UNAVAILABLE
+        finally:
+            if preparatory_authorizer is not None:
+                with suppress(Exception):
+                    await preparatory_authorizer.cancel(cleanup_request)
 
         # The authorizer owns both references while authorize() runs and may retain the
         # outcome after returning it. Validate and copy every decision scalar before the

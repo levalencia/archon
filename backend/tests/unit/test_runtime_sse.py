@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.routes.stream import _project_web_search_sources
 from app.runtime import ModelResponse, ToolCall
 
 
@@ -93,3 +94,42 @@ def test_concurrent_sse_streams_do_not_cross_talk() -> None:
     assert "beta-response" in second.text and "alpha-response" not in second.text
     assert done_payload(first.text)["conversation_id"] == alpha
     assert done_payload(second.text)["conversation_id"] == beta
+
+
+def projected_source(url: str, title: str = "Example") -> list[dict[str, str]]:
+    return _project_web_search_sources(
+        (
+            {
+                "tool": "web_search",
+                "status": "success",
+                "result": {"results": [{"title": title, "url": url, "snippet": "private"}]},
+            },
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "javascript:alert(1)",
+        "data:text/html,payload",
+        "file:///etc/passwd",
+        "custom://example.com/path",
+        "https:///missing-host",
+        "https://user:password@example.com/private",
+        "https://example.com:invalid/path",
+        "https://example.com:70000/path",
+        "https://example.com/line\nbreak",
+        "https://example.com/" + "x" * 2048,
+    ],
+)
+def test_source_projection_rejects_unsafe_or_malformed_urls(url: str) -> None:
+    assert projected_source(url) == []
+
+
+@pytest.mark.parametrize("url", ["http://example.com/path", "https://example.com:8443/path?q=1"])
+def test_source_projection_allows_http_urls_and_bounds_output(url: str) -> None:
+    sources = projected_source(url, "T" * 400)
+
+    assert sources == [{"title": "T" * 300, "url": url}]
+    assert set(sources[0]) == {"title", "url"}

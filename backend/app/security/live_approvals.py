@@ -35,23 +35,39 @@ class ApprovalBroker:
     def authorizer(self, context: RunContext) -> BrokerToolAuthorizer:
         return BrokerToolAuthorizer(self, context)
 
-    async def wait_for_decision(
-        self, context: RunContext, request: AuthorizationRequest
-    ) -> AuthorizationOutcome:
-        key = ApprovalKey(
+    @staticmethod
+    def _key(context: RunContext, request: AuthorizationRequest) -> ApprovalKey:
+        return ApprovalKey(
             context.user_id,
             context.conversation_id,
             context.run_id,
             request.tool_call_id,
         )
+
+    async def reserve(self, context: RunContext, request: AuthorizationRequest) -> None:
+        """Publish an exact owner/request binding before its actionable event is emitted."""
+        key = self._key(context, request)
         future = asyncio.get_running_loop().create_future()
         item = _PendingApproval(key, request.tool_name, request.arguments_hash, future)
         async with self._lock:
             if key in self._pending:
                 raise RuntimeError("duplicate pending approval identity")
             self._pending[key] = item
+
+    async def wait_for_decision(
+        self, context: RunContext, request: AuthorizationRequest
+    ) -> AuthorizationOutcome:
+        key = self._key(context, request)
+        async with self._lock:
+            item = self._pending.get(key)
+            if (
+                item is None
+                or item.tool_name != request.tool_name
+                or item.arguments_hash != request.arguments_hash
+            ):
+                raise RuntimeError("approval reservation is missing or does not match")
         try:
-            approved = await future
+            approved = await item.future
             return AuthorizationOutcome(
                 approved,
                 request.tool_call_id,
@@ -63,6 +79,21 @@ class ApprovalBroker:
             async with self._lock:
                 if self._pending.get(key) is item:
                     self._pending.pop(key, None)
+
+    async def cancel(self, context: RunContext, request: AuthorizationRequest) -> None:
+        """Remove one exact reservation without affecting a reused or foreign identity."""
+        key = self._key(context, request)
+        async with self._lock:
+            item = self._pending.get(key)
+            if (
+                item is None
+                or item.tool_name != request.tool_name
+                or item.arguments_hash != request.arguments_hash
+            ):
+                return
+            self._pending.pop(key, None)
+            if not item.future.done():
+                item.future.cancel()
 
     async def decide_for_owner(self, *, user_id: str, tool_call_id: str, approved: bool) -> bool:
         """Atomically consume an owner's unique pending tool-call decision.
@@ -81,7 +112,6 @@ class ApprovalBroker:
             if len(matches) != 1:
                 return False
             item = matches[0]
-            self._pending.pop(item.key, None)
             item.future.set_result(approved)
             return True
 
@@ -110,5 +140,11 @@ class BrokerToolAuthorizer:
     broker: ApprovalBroker
     context: RunContext
 
+    async def prepare(self, request: AuthorizationRequest) -> None:
+        await self.broker.reserve(self.context, request)
+
     async def authorize(self, request: AuthorizationRequest) -> AuthorizationOutcome:
         return await self.broker.wait_for_decision(self.context, request)
+
+    async def cancel(self, request: AuthorizationRequest) -> None:
+        await self.broker.cancel(self.context, request)

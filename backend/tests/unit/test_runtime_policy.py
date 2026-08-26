@@ -24,7 +24,9 @@ from app.runtime import (
     ToolCall,
     ToolDefinition,
 )
+from app.runtime.factory import RunContext
 from app.security.default_policy import default_policy_engine
+from app.security.live_approvals import ApprovalBroker
 from app.security.policy import (
     PolicyAction,
     PolicyDecision,
@@ -720,6 +722,105 @@ async def test_ask_approved_binding_executes_with_explicit_events() -> None:
     assert request.risk_classes == frozenset({RiskClass.WRITE})
     assert request.matched_rule_id == "rule-1"
     assert "secret" not in repr(sink.events[5].data)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("approved", [True, False], ids=["approved", "denied"])
+async def test_approval_is_reserved_before_required_event_is_published(approved: bool) -> None:
+    broker = ApprovalBroker()
+    run_context = RunContext("alice", "conversation", "run", "correlation")
+
+    class ImmediateDecisionSink(RecordingEventSink):
+        accepted = False
+
+        async def emit(self, event) -> None:
+            await super().emit(event)
+            if event.kind is AgentEventKind.APPROVAL_REQUIRED:
+                self.accepted = await broker.decide_for_owner(
+                    user_id="alice", tool_call_id=event.data["id"], approved=approved
+                )
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    sink = ImmediateDecisionSink()
+    result = await AgentRuntime(
+        provider(),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=broker.authorizer(run_context),
+        events=sink,
+    ).run([Message(Role.USER, "write")])
+
+    assert sink.accepted is True
+    assert result.stop_reason is (StopReason.COMPLETED if approved else StopReason.POLICY_DENIED)
+    assert len(tools.executed) == int(approved)
+    assert await broker.pending_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_approval_publication_failure_cleans_prepared_reservation() -> None:
+    broker = ApprovalBroker()
+    run_context = RunContext("alice", "conversation", "run", "correlation")
+
+    class FailingApprovalSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            if event.kind is AgentEventKind.APPROVAL_REQUIRED:
+                raise RuntimeError("client disconnected")
+            await super().emit(event)
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    result = await AgentRuntime(
+        provider(),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=broker.authorizer(run_context),
+        events=FailingApprovalSink(),
+    ).run([Message(Role.USER, "write")])
+
+    assert result.stop_reason is StopReason.ERROR
+    assert tools.executed == []
+    assert await broker.pending_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_approval_timeout_cleans_prepared_reservation() -> None:
+    broker = ApprovalBroker()
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    result = await AgentRuntime(
+        provider(),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=broker.authorizer(RunContext("alice", "conversation", "run", "correlation")),
+        approval_timeout_seconds=0.001,
+    ).run([Message(Role.USER, "write")])
+
+    assert result.stop_reason is StopReason.APPROVAL_TIMEOUT
+    assert tools.executed == []
+    assert await broker.pending_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_runtime_cancellation_cleans_prepared_reservation() -> None:
+    broker = ApprovalBroker()
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    run = asyncio.create_task(
+        AgentRuntime(
+            provider(),
+            tools,
+            policy_engine=FixedPolicy(PolicyAction.ASK),
+            authorizer=broker.authorizer(RunContext("alice", "conversation", "run", "correlation")),
+        ).run([Message(Role.USER, "write")])
+    )
+    for _ in range(100):
+        if await broker.pending_count() == 1:
+            break
+        await asyncio.sleep(0)
+    assert await broker.pending_count() == 1
+
+    run.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await run
+    assert tools.executed == []
+    assert await broker.pending_count() == 0
 
 
 @pytest.mark.asyncio

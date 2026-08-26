@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
+import re
 import time
+import unicodedata
 import uuid
 from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -283,9 +287,42 @@ def _project_web_search_sources(
                 continue
             title = item.get("title")
             url = item.get("url")
-            if isinstance(title, str) and isinstance(url, str):
-                sources.append({"title": title, "url": url})
+            if isinstance(title, str) and isinstance(url, str) and _is_safe_source_url(url):
+                sources.append({"title": title[:300], "url": url})
     return sources
+
+
+def _is_safe_source_url(url: str) -> bool:
+    if not url or len(url) > 2048 or any(unicodedata.category(char) == "Cc" for char in url):
+        return False
+    try:
+        parsed = urlsplit(url)
+        hostname = parsed.hostname
+        # Accessing port performs urllib's integer and range validation.
+        _ = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.scheme.lower() not in {"http", "https"}
+        or not parsed.netloc
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return False
+    try:
+        ipaddress.ip_address(hostname)
+        return True
+    except ValueError:
+        pass
+    try:
+        ascii_hostname = hostname.encode("idna").decode("ascii").removesuffix(".")
+    except UnicodeError:
+        return False
+    return len(ascii_hostname) <= 253 and all(
+        re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+        for label in ascii_hostname.split(".")
+    )
 
 
 def _routed_event(data, context: RunContext) -> dict:

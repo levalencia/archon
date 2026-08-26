@@ -259,9 +259,9 @@ def test_approval_endpoint_enforces_owner_and_consumes_decision_once() -> None:
             "side_effects_require_approval",
         )
         assert api.portal is not None
-        outcome = api.portal.start_task_soon(
-            app.state.approval_broker.authorizer(owner_context).authorize, approval
-        )
+        authorizer = app.state.approval_broker.authorizer(owner_context)
+        api.portal.call(authorizer.prepare, approval)
+        outcome = api.portal.start_task_soon(authorizer.authorize, approval)
         for _ in range(20):
             if api.portal.call(app.state.approval_broker.pending_count) == 1:
                 break

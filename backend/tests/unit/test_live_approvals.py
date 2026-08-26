@@ -30,12 +30,52 @@ async def start_wait(
     call_id: str = "same-id",
     expected_count: int = 1,
 ) -> asyncio.Task:
-    task = asyncio.create_task(broker.authorizer(owner).authorize(request(call_id)))
+    authorizer = broker.authorizer(owner)
+    approval_request = request(call_id)
+    await authorizer.prepare(approval_request)
+    task = asyncio.create_task(authorizer.authorize(approval_request))
+    await asyncio.sleep(0)
     for _ in range(20):
         if await broker.pending_count() >= expected_count:
             break
         await asyncio.sleep(0)
     return task
+
+
+@pytest.mark.asyncio
+async def test_decision_may_arrive_after_reserve_but_before_waiter_starts() -> None:
+    broker = ApprovalBroker()
+    owner = context("alice", "run-a")
+    approval_request = request("instant")
+    authorizer = broker.authorizer(owner)
+
+    await authorizer.prepare(approval_request)
+    assert await broker.decide_for_owner(user_id="alice", tool_call_id="instant", approved=True)
+    assert not await broker.decide_for_owner(
+        user_id="alice", tool_call_id="instant", approved=False
+    )
+
+    outcome = await authorizer.authorize(approval_request)
+    assert outcome.approved is True
+    assert await broker.pending_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_wait_requires_exact_prepared_binding_and_cancel_cleans_it() -> None:
+    broker = ApprovalBroker()
+    owner = context("alice", "run-a")
+    authorizer = broker.authorizer(owner)
+    reserved = request("bound")
+    await authorizer.prepare(reserved)
+    mismatched = AuthorizationRequest(
+        "bound", "terminal", "b" * 64, reserved.risk_classes, reserved.matched_rule_id
+    )
+
+    with pytest.raises(RuntimeError, match="does not match"):
+        await authorizer.authorize(mismatched)
+    assert await broker.pending_count() == 1
+    await authorizer.cancel(reserved)
+    assert await broker.pending_count() == 0
 
 
 @pytest.mark.asyncio
