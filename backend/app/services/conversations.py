@@ -6,6 +6,8 @@ import builtins
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.db_store import DatabaseStore
 from app.services.run_ledger import RunRepository
@@ -18,6 +20,11 @@ class ConversationRepository:
         self._store = DatabaseStore(database_url)
         self._redactor = redactor
         self.runs = RunRepository(self._store.session_factory, redactor)
+
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        """Shared application database session factory for app-scoped repositories."""
+        return self._store.session_factory
 
     async def initialize(self) -> None:
         await self._store.initialize()

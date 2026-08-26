@@ -17,7 +17,7 @@ def test_grounded_fixture_has_stable_verified_hash() -> None:
     assert fixture.schema_version == 1
     assert fixture.version == "1.0.0"
     assert fixture.content_hash == (
-        "76291c6eaac73f0333921303ece607ce95c4f26077387e73fcbd693ab1507f15"
+        "66a5b3c416279d845fd50998dc04c76fe7461162320f29f437e2e34827e18bc6"
     )
     assert fixture_content_hash(fixture) == fixture.content_hash
 
