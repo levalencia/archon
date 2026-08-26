@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -19,7 +20,7 @@ _RENDER_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src d
 
 def get_artifact_store(request: Request) -> ArtifactStore:
     """Resolve the application-scoped store."""
-    return request.app.state.artifacts
+    return cast(ArtifactStore, request.app.state.artifacts)
 
 
 class ArtifactUpdate(BaseModel):
