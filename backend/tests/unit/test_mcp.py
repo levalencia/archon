@@ -6,9 +6,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.config import Settings
 from app.mcp.protocol import MCPServer
 from app.mcp.transport import SSETransport, StdioTransport
 from app.routes.mcp import router
+from app.security.auth import get_current_user
+from app.security.rate_limiter import RateLimiter
 
 # ---- MCPServer unit tests ----
 
@@ -107,6 +110,13 @@ def test_sse_transport_format() -> None:
 
 def _build_app() -> FastAPI:
     app = FastAPI()
+    app.state.settings = Settings(memory_encryption_enabled=False)
+    app.state.rate_limiter = RateLimiter()
+    app.state.auth = object()
+    app.dependency_overrides[get_current_user] = lambda: {
+        "user_id": "mcp-test-user",
+        "username": "mcp-test-user",
+    }
     app.include_router(router)
     return app
 

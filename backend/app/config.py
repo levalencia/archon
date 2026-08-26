@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     rate_limit_requests: int = Field(default=60, gt=0)
     rate_limit_window: int = Field(default=60, gt=0)
     rate_limit_backend: Literal["memory", "redis"] = "memory"
+    rate_limit_auth_requests: int | None = Field(default=None, gt=0)
+    rate_limit_chat_requests: int | None = Field(default=None, gt=0)
+    rate_limit_task_requests: int | None = Field(default=None, gt=0)
+    rate_limit_mcp_requests: int | None = Field(default=None, gt=0)
 
     # Model provider circuit breaker
     circuit_breaker_failure_threshold: int = Field(default=5, gt=0)

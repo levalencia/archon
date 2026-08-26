@@ -158,7 +158,12 @@ def test_redis_configuration_fails_startup_when_backend_is_unavailable(
 
 @pytest.mark.integration
 def test_rate_limit_users_are_isolated(tmp_path) -> None:
-    with authenticated_client(tmp_path, ["one", "two"], rate_limit_requests=1) as client:
+    with authenticated_client(
+        tmp_path,
+        ["one", "two"],
+        rate_limit_requests=1,
+        rate_limit_auth_requests=10,
+    ) as client:
         first_headers = dict(client.headers)
         assert client.post("/api/chat", json={"message": "one"}).status_code == 200
         assert client.post("/api/chat", json={"message": "blocked"}).status_code == 429
@@ -171,6 +176,8 @@ def test_rate_limit_users_are_isolated(tmp_path) -> None:
             },
         )
         second_headers = {"Authorization": f"Bearer {second.json()['access_token']}"}
+        # A different direct peer isolates the IP bucket as well as the user bucket.
+        client._transport.client = ("192.0.2.55", 50000)  # type: ignore[attr-defined]
         assert (
             client.post("/api/chat", json={"message": "two"}, headers=second_headers).status_code
             == 200

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
 from app.security.auth import AuthRepository, get_auth_repository, get_current_user
+from app.security.dependencies import enforce_ip_rate_limit, enforce_rate_limit
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -43,6 +44,7 @@ class ApiKeyRequest(BaseModel):
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(body: RegisterRequest, request: Request) -> TokenResponse | dict:
     """Register a new user and return JWT token."""
+    await enforce_ip_rate_limit(request, "auth_register")
     repository = get_auth_repository(request)
     try:
         user = await repository.register_user(body.username, body.password, body.email)
@@ -60,6 +62,7 @@ async def register(body: RegisterRequest, request: Request) -> TokenResponse | d
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, request: Request) -> TokenResponse | dict:
     """Login and get JWT token."""
+    await enforce_ip_rate_limit(request, "auth_login")
     repository = get_auth_repository(request)
     user = await repository.authenticate_user(body.username, body.password)
     if not user:
@@ -78,15 +81,21 @@ async def login(body: LoginRequest, request: Request) -> TokenResponse | dict:
 @router.post("/api-keys")
 async def create_api_key(
     body: ApiKeyRequest,
+    request: Request,
     repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
     user: dict = Depends(get_current_user),  # noqa: B008
 ) -> dict:
     """Create a new API key (requires auth)."""
+    await enforce_rate_limit(request, user, "auth_api_key")
     key = await repository.register_api_key(body.name, user["user_id"])
     return {"api_key": key, "name": body.name}
 
 
 @router.get("/me")
-async def get_me(user: dict = Depends(get_current_user)) -> dict:  # noqa: B008
+async def get_me(
+    request: Request,
+    user: dict = Depends(get_current_user),  # noqa: B008
+) -> dict:
     """Get current user info."""
+    await enforce_rate_limit(request, user, "auth_me")
     return user

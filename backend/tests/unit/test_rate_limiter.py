@@ -60,6 +60,19 @@ class TestRateLimiterLocal:
         result = await limiter.check("user-1")
         assert result["retry_after"] is None
 
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_per_action_override_and_hashed_identifier(self) -> None:
+        limiter = RateLimiter(max_requests=10, window_seconds=60)
+        identifier = "chat:ip:ip:192.0.2.44"
+
+        assert (await limiter.check(identifier, max_requests=1)).allowed is True
+        blocked = await limiter.check(identifier, max_requests=1)
+
+        assert blocked.allowed is False
+        assert blocked.limit == 1
+        assert all("192.0.2.44" not in key for key in limiter._local_store)
+
 
 class TestRateLimiterRedis:
     """Redis-backed rate limiter tests using fakeredis."""

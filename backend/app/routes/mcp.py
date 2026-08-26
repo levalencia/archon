@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 
 from app.mcp.protocol import MCPServer
+from app.security.auth import get_current_user
+from app.security.dependencies import enforce_rate_limit
 
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
@@ -48,12 +50,21 @@ def get_mcp_server() -> MCPServer:
 
 
 @router.post("/request")
-async def mcp_request(body: dict[str, Any]) -> dict[str, Any]:
+async def mcp_request(
+    body: dict[str, Any],
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
     """Handle a JSON-RPC 2.0 request routed to the MCP server."""
+    await enforce_rate_limit(request, user, "mcp_request")
     return await _mcp_server.handle_request(body)
 
 
 @router.get("/tools")
-async def mcp_tools() -> list[dict[str, str]]:
+async def mcp_tools(
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> list[dict[str, str]]:
     """List all registered MCP tools."""
+    await enforce_rate_limit(request, user, "mcp_tools")
     return _mcp_server.list_tools()
