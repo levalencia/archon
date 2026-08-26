@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "dataset_id": "verifier-benefit-v1",
+  "version": "1.0.0",
+  "content_hash": "cddf2eb127330e64f96b3e27d6e7e1dabfb9f35b864799a4dd5cac3365350257",
+  "cases": [
+    {
+      "key": "lexical-plausible-overclaim",
+      "question": "What does Alpha use and what does that guarantee?",
+      "expected_outcome": "unsupported",
+      "evidence": [
+        {
+          "evidence_id": "E1",
+          "document_id": "doc-alpha",
+          "chunk_id": "chunk-alpha",
+          "quote": "Alpha project uses Python for data analysis and scheduled batch reporting."
+        }
+      ],
+      "claims": [
+        {
+          "claim_id": "C1",
+          "text": "Alpha project uses Python for data analysis and scheduled batch reporting exclusively.",
+          "evidence_ids": ["E1"],
+          "expected_label": "unsupported"
+        }
+      ]
+    },
+    {
+      "key": "directly-supported",
+      "question": "What does Alpha use?",
+      "expected_outcome": "supported",
+      "evidence": [
+        {
+          "evidence_id": "E1",
+          "document_id": "doc-alpha",
+          "chunk_id": "chunk-alpha",
+          "quote": "Alpha project uses Python for data analysis and scheduled batch reporting."
+        }
+      ],
+      "claims": [
+        {
+          "claim_id": "C1",
+          "text": "Alpha project uses Python for data analysis.",
+          "evidence_ids": ["E1"],
+          "expected_label": "supported"
+        }
+      ]
+    },
+    {
+      "key": "no-evidence",
+      "question": "What does the missing document say?",
+      "expected_outcome": "no_evidence",
+      "evidence": [],
+      "claims": []
+    }
+  ]
+}
