@@ -420,6 +420,19 @@ def _canonical_json_value(value: object, active: set[int]) -> object:
     raise TypeError(f"unsupported argument value: {type(value).__name__}")
 
 
+def canonical_arguments_snapshot(arguments: object) -> dict[str, object]:
+    """Return a detached, validated JSON-compatible argument object.
+
+    The recursive normalization both rejects unsupported/non-finite/cyclic values and guarantees
+    that no mutable container in the returned snapshot is shared with the provider's input.
+    """
+
+    normalized = _canonical_json_value(arguments, set())
+    if not isinstance(normalized, dict):
+        raise TypeError("arguments must be an object")
+    return normalized
+
+
 def canonical_arguments_hash(arguments: object) -> str:
     """Hash canonical JSON structure while preserving exact string and key code points.
 

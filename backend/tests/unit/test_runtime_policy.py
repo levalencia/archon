@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -87,6 +88,126 @@ async def test_allow_orders_policy_event_before_execution_and_preserves_native_i
     assert "arguments" not in policy_event.data
     assert "secret" not in repr(policy_event.data)
     assert tools.executed[0].id == "native-1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", [PolicyAction.ALLOW, PolicyAction.ASK])
+async def test_policy_execution_uses_detached_nested_argument_snapshot(
+    action: PolicyAction,
+) -> None:
+    nested = {"operation": {"mode": "safe", "items": ["public"]}}
+    call = ToolCall("native-snapshot", "reader", nested)
+
+    class MutatingSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            await super().emit(event)
+            if event.kind is AgentEventKind.TOOL_CALL_REQUESTED:
+                nested["operation"]["mode"] = "dangerous"
+                nested["operation"]["items"].append("secret")
+                await asyncio.sleep(0)
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    authorizer = Authorizer() if action is PolicyAction.ASK else None
+    result = await AgentRuntime(
+        provider(call),
+        tools,
+        policy_engine=FixedPolicy(action),
+        authorizer=authorizer,
+        events=MutatingSink(),
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert len(tools.executed) == 1
+    assert tools.executed[0].arguments["operation"] == {"mode": "safe", "items": ["public"]}
+    expected_hash = canonical_arguments_hash({"operation": {"mode": "safe", "items": ["public"]}})
+    if authorizer is not None:
+        assert authorizer.requests[0].arguments_hash == expected_hash
+
+
+@pytest.mark.asyncio
+async def test_allow_revalidates_snapshot_mutated_via_retained_policy_reference() -> None:
+    class RetainingTools(PolicyTools):
+        retained_call: ToolCall | None = None
+
+        def policy_request(self, call: ToolCall) -> PolicyRequest:
+            self.retained_call = call
+            return super().policy_request(call)
+
+    tools = RetainingTools()
+
+    class MutatingSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            await super().emit(event)
+            if event.kind is AgentEventKind.POLICY_DECIDED:
+                assert tools.retained_call is not None
+                tools.retained_call.arguments["nested"]["mode"] = "dangerous"
+                await asyncio.sleep(0)
+
+    call = ToolCall("native-retained", "reader", {"nested": {"mode": "safe"}})
+    result = await AgentRuntime(
+        provider(call),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        events=MutatingSink(),
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+
+
+@pytest.mark.asyncio
+async def test_ask_rejects_snapshot_mutated_during_authorization() -> None:
+    class RetainingTools(PolicyTools):
+        retained_call: ToolCall | None = None
+
+        def policy_request(self, call: ToolCall) -> PolicyRequest:
+            self.retained_call = call
+            return super().policy_request(call)
+
+    tools = RetainingTools(frozenset({RiskClass.WRITE}))
+
+    class MutatingAuthorizer:
+        async def authorize(self, request):
+            assert tools.retained_call is not None
+            tools.retained_call.arguments["nested"]["mode"] = "dangerous"
+            await asyncio.sleep(0)
+            return AuthorizationOutcome(
+                True,
+                request.tool_call_id,
+                request.tool_name,
+                request.arguments_hash,
+                "user_approved",
+            )
+
+    call = ToolCall("native-retained", "reader", {"nested": {"mode": "safe"}})
+    result = await AgentRuntime(
+        provider(call),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=MutatingAuthorizer(),
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.APPROVAL_UNAVAILABLE
+    assert tools.executed == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_value", [float("inf"), object()])
+async def test_policy_rejects_non_json_arguments_before_execution(invalid_value: object) -> None:
+    tools = PolicyTools()
+    sink = RecordingEventSink()
+    call = ToolCall("native-invalid", "reader", {"value": invalid_value})
+
+    result = await AgentRuntime(
+        provider(call), tools, policy_engine=FixedPolicy(PolicyAction.ALLOW), events=sink
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+    assert (
+        next(e for e in sink.events if e.kind is AgentEventKind.POLICY_DECIDED).data["reason_code"]
+        == "policy_metadata_unavailable"
+    )
 
 
 @pytest.mark.asyncio
@@ -319,6 +440,106 @@ async def test_authorizer_timeout_is_bounded_and_explicit() -> None:
     ).run([Message(Role.USER, "write")])
     assert result.stop_reason is StopReason.APPROVAL_TIMEOUT
     assert tools.executed == []
+
+
+@pytest.mark.asyncio
+async def test_authorizer_cannot_suppress_cancellation_and_approve_after_deadline() -> None:
+    finished = asyncio.Event()
+
+    class CancellationSuppressingAuthorizer:
+        async def authorize(self, request):
+            try:
+                await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.03)
+            finally:
+                finished.set()
+            return AuthorizationOutcome(
+                True,
+                request.tool_call_id,
+                request.tool_name,
+                request.arguments_hash,
+                "user_approved",
+            )
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    result = await AgentRuntime(
+        provider(),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=CancellationSuppressingAuthorizer(),
+        approval_timeout_seconds=0.005,
+        budget=RuntimeBudget(max_seconds=1),
+    ).run([Message(Role.USER, "write")])
+    elapsed = loop.time() - started
+
+    assert result.stop_reason is StopReason.APPROVAL_TIMEOUT
+    assert elapsed < 0.025
+    assert tools.executed == []
+    await asyncio.wait_for(finished.wait(), timeout=0.2)
+    assert tools.executed == []
+
+
+@pytest.mark.asyncio
+async def test_policy_events_never_serialize_raw_arguments_or_output() -> None:
+    argument_secret = "ARGUMENT_SECRET_7e8f"
+    output_secret = "OUTPUT_SECRET_9a0b"
+
+    class SecretTools(PolicyTools):
+        async def execute(self, call: ToolCall) -> Mapping[str, Any]:
+            self.executed.append(call)
+            return {"payload": output_secret * 80}
+
+    tools = SecretTools()
+    sink = RecordingEventSink()
+    call = ToolCall("native-secret", "reader", {"nested": {"token": argument_secret}})
+    result = await AgentRuntime(
+        provider(call), tools, policy_engine=FixedPolicy(PolicyAction.ALLOW), events=sink
+    ).run([Message(Role.USER, "read")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    serialized_events = json.dumps(
+        [{"kind": event.kind.value, "data": event.data} for event in sink.events],
+        sort_keys=True,
+        default=str,
+    )
+    assert argument_secret not in serialized_events
+    assert output_secret not in serialized_events
+    completed = next(e for e in sink.events if e.kind is AgentEventKind.TOOL_CALL_COMPLETED)
+    assert set(completed.data) == {
+        "id",
+        "name",
+        "arguments_hash",
+        "output_hash",
+        "output_size",
+        "status",
+    }
+    progress = [e for e in sink.events if e.kind is AgentEventKind.TOOL_PROGRESS]
+    assert progress
+    assert all(
+        "chunk" not in event.data and event.data["status"] == "success" for event in progress
+    )
+
+
+@pytest.mark.asyncio
+async def test_policy_denial_event_never_serializes_argument_secret() -> None:
+    secret = "DENIED_ARGUMENT_SECRET_c1d2"
+    sink = RecordingEventSink()
+    result = await AgentRuntime(
+        provider(ToolCall("native-denied", "reader", {"token": secret})),
+        PolicyTools(),
+        policy_engine=FixedPolicy(PolicyAction.DENY),
+        events=sink,
+    ).run([Message(Role.USER, "read")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    serialized_events = json.dumps([event.data for event in sink.events], default=str)
+    assert secret not in serialized_events
+    denied = next(event for event in sink.events if event.kind is AgentEventKind.TOOL_DENIED)
+    assert "arguments" not in denied.data
+    assert "output" not in denied.data
 
 
 def test_default_policy_is_explicit_and_fail_closed() -> None:

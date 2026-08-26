@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 import time
@@ -20,7 +21,9 @@ from app.security.policy import (
     PolicyAction,
     PolicyDecision,
     PolicyEngine,
+    PolicyRequest,
     canonical_arguments_hash,
+    canonical_arguments_snapshot,
     canonical_tool_name,
 )
 
@@ -67,6 +70,13 @@ class AgentResult:
     tool_calls: tuple[dict[str, Any], ...]
     usage: TokenUsage
     error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _PolicyExecutionBinding:
+    arguments_hash: str
+    request: PolicyRequest
+    action: PolicyAction
 
 
 class AgentRuntime:
@@ -152,7 +162,7 @@ class AgentRuntime:
                 history.append(
                     Message(Role.ASSISTANT, response.content or "", tool_calls=response.tool_calls)
                 )
-                for call in response.tool_calls:
+                for provider_call in response.tool_calls:
                     if len(calls) >= self._budget.max_tool_calls:
                         return await self._finalize(
                             StopReason.TOOL_BUDGET_EXHAUSTED,
@@ -163,6 +173,32 @@ class AgentRuntime:
                             usage,
                             started_at,
                         )
+                    call = provider_call
+                    if self._policy_engine is not None:
+                        try:
+                            call = ToolCall(
+                                provider_call.id,
+                                provider_call.name,
+                                canonical_arguments_snapshot(provider_call.arguments),
+                            )
+                        except Exception:
+                            await self._emit(
+                                AgentEventKind.TOOL_CALL_REQUESTED,
+                                iterations,
+                                {"id": provider_call.id, "name": provider_call.name},
+                            )
+                            await self._emit_policy_failure(
+                                provider_call, iterations, "policy_metadata_unavailable"
+                            )
+                            await self._record_denial(
+                                provider_call,
+                                iterations,
+                                calls,
+                                "policy_metadata_unavailable",
+                            )
+                            return await self._stop(
+                                StopReason.POLICY_DENIED, content, iterations, calls, usage
+                            )
                     call_key = json.dumps(
                         [call.name, dict(call.arguments)],
                         sort_keys=True,
@@ -184,22 +220,20 @@ class AgentRuntime:
                     if self._policy_engine is None:
                         request_data["arguments"] = dict(call.arguments)
                     else:
-                        # Policy enforcement below emits the explicit fail-closed decision.
-                        with suppress(TypeError, ValueError):
-                            request_data["arguments_hash"] = canonical_arguments_hash(
-                                call.arguments
-                            )
+                        request_data["arguments_hash"] = canonical_arguments_hash(call.arguments)
                     await self._emit(
                         AgentEventKind.TOOL_CALL_REQUESTED,
                         iterations,
                         request_data,
                     )
+                    policy_binding: _PolicyExecutionBinding | None = None
                     if self._policy_engine is not None:
-                        policy_stop = await self._enforce_policy(
+                        enforcement = await self._enforce_policy(
                             call, iterations, calls, started_at
                         )
-                        if policy_stop is not None:
-                            return await self._stop(policy_stop, content, iterations, calls, usage)
+                        if isinstance(enforcement, StopReason):
+                            return await self._stop(enforcement, content, iterations, calls, usage)
+                        policy_binding = enforcement
                     # Deprecated compatibility path. It is deliberately unreachable in policy
                     # mode, so a legacy hook cannot bypass or replace policy authorization.
                     elif (
@@ -241,6 +275,31 @@ class AgentRuntime:
                                 )
                             )
                             continue
+                    if policy_binding is not None:
+                        try:
+                            call = self._prepare_policy_execution_call(call, policy_binding)
+                        except Exception:
+                            if policy_binding.action is PolicyAction.ASK:
+                                reason_code = "approval_binding_mismatch"
+                                await self._emit_approval_failure(
+                                    call,
+                                    iterations,
+                                    policy_binding.arguments_hash,
+                                    reason_code,
+                                )
+                                stop_reason = StopReason.APPROVAL_UNAVAILABLE
+                            else:
+                                reason_code = "policy_metadata_unavailable"
+                                await self._emit_policy_failure(call, iterations, reason_code)
+                                stop_reason = StopReason.POLICY_DENIED
+                            await self._record_denial(
+                                call,
+                                iterations,
+                                calls,
+                                reason_code,
+                                policy_binding.arguments_hash,
+                            )
+                            return await self._stop(stop_reason, content, iterations, calls, usage)
                     try:
                         output = await self._within_deadline(self._tools.execute(call), started_at)
                     except Exception as tool_err:
@@ -258,15 +317,27 @@ class AgentRuntime:
                             "status": "error",
                         }
                         calls.append(record)
-                        await self._emit(
-                            AgentEventKind.TOOL_CALL_COMPLETED,
-                            iterations,
-                            {
+                        if policy_binding is None:
+                            completed_data = {
                                 "id": call.id,
                                 "name": call.name,
                                 "arguments": dict(call.arguments),
                                 "output": error_output,
-                            },
+                            }
+                        else:
+                            error_serialized = json.dumps(
+                                error_output, sort_keys=True, separators=(",", ":")
+                            )
+                            completed_data = self._policy_tool_result_data(
+                                call,
+                                policy_binding.arguments_hash,
+                                error_serialized,
+                                "error",
+                            )
+                        await self._emit(
+                            AgentEventKind.TOOL_CALL_COMPLETED,
+                            iterations,
+                            completed_data,
                         )
                         history.append(
                             Message(
@@ -283,34 +354,47 @@ class AgentRuntime:
                         "status": "success",
                     }
                     calls.append(record)
-                    await self._emit(
-                        AgentEventKind.TOOL_CALL_COMPLETED,
-                        iterations,
-                        {
+                    serialized = json.dumps(
+                        output, sort_keys=True, separators=(",", ":"), default=str
+                    )
+                    if policy_binding is None:
+                        completed_data = {
                             "id": call.id,
                             "name": call.name,
                             "arguments": dict(call.arguments),
                             "output": dict(output),
-                        },
-                    )
-                    serialized = json.dumps(
-                        output, sort_keys=True, separators=(",", ":"), default=str
+                        }
+                    else:
+                        completed_data = self._policy_tool_result_data(
+                            call,
+                            policy_binding.arguments_hash,
+                            serialized,
+                            "success",
+                        )
+                    await self._emit(
+                        AgentEventKind.TOOL_CALL_COMPLETED,
+                        iterations,
+                        completed_data,
                     )
                     # Emit TOOL_PROGRESS chunks for large results
                     if len(serialized) > 500:
                         chunk_size = 500
                         for i in range(0, len(serialized), chunk_size):
-                            chunk = serialized[i : i + chunk_size]
+                            if policy_binding is None:
+                                progress_data = {
+                                    "id": call.id,
+                                    "name": call.name,
+                                    "chunk": serialized[i : i + chunk_size],
+                                    "offset": i,
+                                    "total": len(serialized),
+                                }
+                            else:
+                                progress_data = dict(completed_data)
+                                progress_data.update({"offset": i, "total": len(serialized)})
                             await self._emit(
                                 AgentEventKind.TOOL_PROGRESS,
                                 iterations,
-                                {
-                                    "id": call.id,
-                                    "name": call.name,
-                                    "chunk": chunk,
-                                    "offset": i,
-                                    "total": len(serialized),
-                                },
+                                progress_data,
                             )
                     if len(serialized) > self._budget.max_tool_result_chars:
                         serialized = (
@@ -346,8 +430,8 @@ class AgentRuntime:
         iteration: int,
         calls: list[dict[str, Any]],
         started_at: float,
-    ) -> StopReason | None:
-        """Evaluate policy and, when required, obtain an exact-call authorization."""
+    ) -> StopReason | _PolicyExecutionBinding:
+        """Evaluate policy and return a binding for the exact executable snapshot."""
         try:
             arguments_hash = canonical_arguments_hash(call.arguments)
             if not isinstance(self._tools, PolicyAwareToolExecutor):
@@ -392,7 +476,7 @@ class AgentRuntime:
         await self._emit(AgentEventKind.POLICY_DECIDED, iteration, policy_data)
 
         if decision.action is PolicyAction.ALLOW:
-            return None
+            return _PolicyExecutionBinding(arguments_hash, request, decision.action)
         if decision.action is PolicyAction.DENY:
             await self._record_denial(call, iteration, calls, "policy_denied", arguments_hash)
             return StopReason.POLICY_DENIED
@@ -424,14 +508,31 @@ class AgentRuntime:
             await self._emit_approval_failure(call, iteration, arguments_hash, "approval_timeout")
             await self._record_denial(call, iteration, calls, "approval_timeout", arguments_hash)
             return StopReason.APPROVAL_TIMEOUT
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        authorization_task = asyncio.create_task(self._authorizer.authorize(authorization_request))
         try:
-            outcome = await asyncio.wait_for(
-                self._authorizer.authorize(authorization_request), timeout=timeout
+            done, _ = await asyncio.wait(
+                {authorization_task},
+                timeout=max(0.0, deadline - loop.time()),
+                return_when=asyncio.FIRST_COMPLETED,
             )
-        except TimeoutError:
-            await self._emit_approval_failure(call, iteration, arguments_hash, "approval_timeout")
-            await self._record_denial(call, iteration, calls, "approval_timeout", arguments_hash)
-            return StopReason.APPROVAL_TIMEOUT
+            if authorization_task not in done or loop.time() >= deadline:
+                authorization_task.cancel()
+                authorization_task.add_done_callback(self._consume_background_task)
+                await self._emit_approval_failure(
+                    call, iteration, arguments_hash, "approval_timeout"
+                )
+                await self._record_denial(
+                    call, iteration, calls, "approval_timeout", arguments_hash
+                )
+                return StopReason.APPROVAL_TIMEOUT
+            outcome = authorization_task.result()
+        except asyncio.CancelledError:
+            if not authorization_task.done():
+                authorization_task.cancel()
+                authorization_task.add_done_callback(self._consume_background_task)
+            raise
         except Exception:
             await self._emit_approval_failure(
                 call, iteration, arguments_hash, "approval_unavailable"
@@ -477,9 +578,58 @@ class AgentRuntime:
             },
         )
         if outcome.approved:
-            return None
+            return _PolicyExecutionBinding(arguments_hash, request, decision.action)
         await self._record_denial(call, iteration, calls, outcome.reason_code, arguments_hash)
         return StopReason.POLICY_DENIED
+
+    def _prepare_policy_execution_call(
+        self, call: ToolCall, binding: _PolicyExecutionBinding
+    ) -> ToolCall:
+        """Revalidate exact policy metadata and return a fresh dispatch-only snapshot."""
+        if not isinstance(self._tools, PolicyAwareToolExecutor):
+            raise TypeError("policy-aware tool metadata is unavailable")
+        verification_call = ToolCall(
+            call.id, call.name, canonical_arguments_snapshot(call.arguments)
+        )
+        request = self._tools.policy_request(verification_call)
+        arguments_hash = canonical_arguments_hash(verification_call.arguments)
+        if (
+            verification_call.name != canonical_tool_name(verification_call.name)
+            or request.tool_name != verification_call.name
+            or request != binding.request
+            or arguments_hash != binding.arguments_hash
+        ):
+            raise ValueError("policy execution binding changed")
+        # policy_request may retain its input. Dispatch a final detached copy that has never been
+        # exposed across an await or to policy/authorization collaborators.
+        execution_call = ToolCall(
+            verification_call.id,
+            verification_call.name,
+            canonical_arguments_snapshot(verification_call.arguments),
+        )
+        if canonical_arguments_hash(execution_call.arguments) != binding.arguments_hash:
+            raise ValueError("policy execution arguments changed")
+        return execution_call
+
+    @staticmethod
+    def _policy_tool_result_data(
+        call: ToolCall, arguments_hash: str, serialized_output: str, status: str
+    ) -> dict[str, Any]:
+        encoded = serialized_output.encode("utf-8")
+        return {
+            "id": call.id,
+            "name": call.name,
+            "arguments_hash": arguments_hash,
+            "output_hash": hashlib.sha256(encoded).hexdigest(),
+            "output_size": len(encoded),
+            "status": status,
+        }
+
+    @staticmethod
+    def _consume_background_task(task: asyncio.Task[Any]) -> None:
+        """Retrieve the terminal state of a timed-out task without delaying the runtime."""
+        with suppress(BaseException):
+            task.exception()
 
     async def _emit_policy_failure(self, call: ToolCall, iteration: int, reason_code: str) -> None:
         await self._emit(
