@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="archon-backend:verify"
 CONTAINER="archon-backend-verify"
 PORT="${ARCHON_VERIFY_PORT:-18000}"
+PLATFORM="${ARCHON_VERIFY_PLATFORM:-linux/amd64}"
 
 cleanup() {
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
@@ -51,12 +52,13 @@ printf '\n== Frontend browser tests ==\n'
 
 printf '\n== Backend container smoke test ==\n'
 cleanup
-docker build -t "$IMAGE" "$ROOT"
+docker build --platform "$PLATFORM" -t "$IMAGE" "$ROOT"
 memory_master_key="$(
   cd "$ROOT/backend"
   uv run python -c 'import secrets; from app.memory.keys import decode_memory_master_key; key = secrets.token_urlsafe(32); decode_memory_master_key(key); print(key, end="")'
 )"
 ARCHON_ENCRYPTION_MASTER_KEY="$memory_master_key" docker run -d \
+  --platform "$PLATFORM" \
   --name "$CONTAINER" -p "$PORT:8000" \
   -e ARCHON_DATABASE_URL="sqlite+aiosqlite:////tmp/archon-verify.db" \
   -e ARCHON_MEMORY_ENCRYPTION_ENABLED=true \
