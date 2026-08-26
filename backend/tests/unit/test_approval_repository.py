@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -53,6 +53,49 @@ async def test_reserve_persists_without_raw_arguments_and_survives_restart(tmp_p
     assert "arguments" not in columns
     assert "arguments_json" not in columns
     await second_engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_status_read_lazily_expires_and_persists_across_restart(tmp_path) -> None:
+    database = tmp_path / "lazy-expiry.db"
+    created_at = datetime(2026, 8, 26, 12, tzinfo=UTC)
+    deadline = created_at + timedelta(minutes=5)
+    first, first_engine = await repository(database)
+    record = await reserve(first, now=created_at)
+
+    assert await first.get_status(record.id, "alice", now=deadline) is ApprovalStatus.EXPIRED
+    await first_engine.dispose()
+
+    second_engine = create_async_engine(f"sqlite+aiosqlite:///{database}")
+    factory = async_sessionmaker(second_engine, class_=AsyncSession, expire_on_commit=False)
+    second = ApprovalRepository(factory)
+    loaded = await second.get_owner(record.id, "alice", now=created_at)
+    assert loaded is not None
+    assert loaded.status is ApprovalStatus.EXPIRED
+    assert loaded.decision_reason == "approval_expired"
+    assert loaded.decided_at == deadline
+    await second_engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_pending_lookup_persists_matching_expiry_without_crossing_owners(tmp_path) -> None:
+    repo, engine = await repository(tmp_path / "lazy-pending.db")
+    created_at = datetime(2026, 8, 26, 12, tzinfo=UTC)
+    deadline = created_at + timedelta(minutes=5)
+    alice = await reserve(repo, now=created_at, tool_call_id="shared")
+    bob = await reserve(
+        repo, now=created_at, user_id="bob", run_id="bob-run", tool_call_id="shared"
+    )
+
+    assert (
+        await repo.find_pending_by_tool_call(user_id="alice", tool_call_id="shared", now=deadline)
+        is None
+    )
+    alice_loaded = await repo.get_owner(alice.id, "alice", now=created_at)
+    bob_loaded = await repo.get_owner(bob.id, "bob", now=created_at)
+    assert alice_loaded is not None and alice_loaded.status is ApprovalStatus.EXPIRED
+    assert bob_loaded is not None and bob_loaded.status is ApprovalStatus.PENDING
+    await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -112,6 +155,32 @@ async def test_concurrent_decisions_have_exactly_one_winner(tmp_path) -> None:
         ),
     )
     assert sorted(results) == [False, True]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_lazy_expiry_and_decision_race_respects_deadline(tmp_path) -> None:
+    repo, engine = await repository(tmp_path / "expiry-race.db")
+    created_at = datetime(2026, 8, 26, 12, tzinfo=UTC)
+    deadline = created_at + timedelta(minutes=5)
+    record = await reserve(repo, now=created_at)
+
+    status, approved = await asyncio.gather(
+        repo.get_status(record.id, "alice", now=deadline),
+        repo.decide_for_owner(
+            approval_id=record.id,
+            user_id="alice",
+            status=ApprovalStatus.APPROVED,
+            reason="user_approved",
+            now=deadline,
+        ),
+    )
+    assert status is ApprovalStatus.EXPIRED
+    assert not approved
+    loaded = await repo.get_owner(record.id, "alice", now=created_at)
+    assert loaded is not None
+    assert loaded.status is ApprovalStatus.EXPIRED
+    assert loaded.decision_reason == "approval_expired"
     await engine.dispose()
 
 

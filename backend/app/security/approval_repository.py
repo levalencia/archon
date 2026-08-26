@@ -206,10 +206,27 @@ class ApprovalRepository:
                 raise ValueError("duplicate approval owner/run/tool-call identity") from error
         return record
 
-    async def get_owner(self, approval_id: str, user_id: str) -> ApprovalRecord | None:
+    async def get_owner(
+        self, approval_id: str, user_id: str, *, now: datetime | None = None
+    ) -> ApprovalRecord | None:
         approval_id = _uuid(approval_id)
         user_id = _identifier(user_id, "user_id")
+        current = _datetime(now or datetime.now(tz=UTC), "now")
         async with self._sessions() as session:
+            await session.execute(
+                update(ApprovalRequestRow)
+                .where(
+                    ApprovalRequestRow.id == approval_id,
+                    ApprovalRequestRow.user_id == user_id,
+                    ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                    ApprovalRequestRow.expires_at <= current,
+                )
+                .values(
+                    status=ApprovalStatus.EXPIRED.value,
+                    decision_reason="approval_expired",
+                    decided_at=current,
+                )
+            )
             result = await session.execute(
                 select(ApprovalRequestRow).where(
                     ApprovalRequestRow.id == approval_id,
@@ -217,7 +234,9 @@ class ApprovalRepository:
                 )
             )
             row = result.scalar_one_or_none()
-            return None if row is None else self._record(row)
+            record = None if row is None else self._record(row)
+            await session.commit()
+            return record
 
     async def find_pending_by_tool_call(
         self, *, user_id: str, tool_call_id: str, now: datetime | None = None
@@ -226,6 +245,20 @@ class ApprovalRepository:
         tool_call_id = _identifier(tool_call_id, "tool_call_id")
         current = _datetime(now or datetime.now(tz=UTC), "now")
         async with self._sessions() as session:
+            await session.execute(
+                update(ApprovalRequestRow)
+                .where(
+                    ApprovalRequestRow.user_id == user_id,
+                    ApprovalRequestRow.tool_call_id == tool_call_id,
+                    ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                    ApprovalRequestRow.expires_at <= current,
+                )
+                .values(
+                    status=ApprovalStatus.EXPIRED.value,
+                    decision_reason="approval_expired",
+                    decided_at=current,
+                )
+            )
             result = await session.execute(
                 select(ApprovalRequestRow)
                 .where(
@@ -237,7 +270,9 @@ class ApprovalRepository:
                 .limit(2)
             )
             rows = result.scalars().all()
-            return self._record(rows[0]) if len(rows) == 1 else None
+            record = self._record(rows[0]) if len(rows) == 1 else None
+            await session.commit()
+            return record
 
     async def decide_for_owner(
         self,
@@ -327,8 +362,10 @@ class ApprovalRepository:
             await session.commit()
             return int(result.rowcount or 0)
 
-    async def get_status(self, approval_id: str, user_id: str) -> ApprovalStatus | None:
-        record = await self.get_owner(approval_id, user_id)
+    async def get_status(
+        self, approval_id: str, user_id: str, *, now: datetime | None = None
+    ) -> ApprovalStatus | None:
+        record = await self.get_owner(approval_id, user_id, now=now)
         return None if record is None else record.status
 
     @staticmethod
