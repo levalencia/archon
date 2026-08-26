@@ -283,9 +283,7 @@ class GroundedDocumentWorkflow:
                 provider_calls=1,
             )
         except asyncio.CancelledError:
-            await asyncio.shield(
-                self._stop(identity, usage=usage, error=False, reason="cancelled")
-            )
+            await asyncio.shield(self._stop(identity, usage=usage, error=False, reason="cancelled"))
             raise
         except Exception as exc:
             await self._stop(identity, usage=usage, error=True, reason="provider_error")
