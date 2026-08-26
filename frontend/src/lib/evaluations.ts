@@ -28,7 +28,7 @@ export type Evaluation = {
   dataset_version: string;
   dataset_hash: string;
   status: string;
-  run_ids: string[];
+  source_run_ids: string[];
   threshold: number;
   aggregate_metrics: Record<string, number>;
   passed: boolean | null;
@@ -40,7 +40,7 @@ export type Evaluation = {
 export type EvaluationComparison = {
   a: Evaluation;
   b: Evaluation;
-  delta_b_minus_a: Record<string, number>;
+  metric_delta_b_minus_a: Record<string, number>;
 };
 
 export class EvaluationApiError extends Error {
@@ -66,7 +66,7 @@ function numbers(value: unknown): Record<string, number> {
 function normalizeEvaluation(value: Evaluation): Evaluation {
   return {
     ...value,
-    run_ids: Array.isArray(value.run_ids) ? value.run_ids : [],
+    source_run_ids: Array.isArray(value.source_run_ids) ? value.source_run_ids : [],
     aggregate_metrics: numbers(value.aggregate_metrics),
     cases: Array.isArray(value.cases) ? value.cases.map((item) => ({
       ...item,
@@ -136,6 +136,6 @@ export async function compareEvaluations(a: string, b: string): Promise<Evaluati
   return {
     a: normalizeEvaluation(result.a),
     b: normalizeEvaluation(result.b),
-    delta_b_minus_a: numbers(result.delta_b_minus_a),
+    metric_delta_b_minus_a: numbers(result.metric_delta_b_minus_a),
   };
 }

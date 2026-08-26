@@ -18,8 +18,8 @@ const fetchMock = vi.mocked(authenticatedFetch);
 const runsMock = vi.mocked(listRuns);
 const base = {
   id: 'eval/a', project_id: 'project a', dataset_id: 'grounded-v1', dataset_version: '1.0.0',
-  dataset_hash: 'hash', status: 'completed', run_ids: ['one', 'two'], threshold: 0.85,
-  aggregate_metrics: { average_score: 0.9 }, passed: true, created_at: '2026-08-26T00:00:00Z',
+  dataset_hash: 'hash', status: 'completed', source_run_ids: ['one', 'two'], threshold: 0.85,
+  aggregate_metrics: { mean_score: 0.9 }, passed: true, created_at: '2026-08-26T00:00:00Z',
   completed_at: '2026-08-26T00:00:01Z', cases: [],
 };
 
@@ -53,16 +53,16 @@ describe('recorded evaluation client', () => {
   });
 
   it('encodes list, get, and compare URLs and normalizes malformed collections', async () => {
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ ...base, run_ids: null, aggregate_metrics: null, cases: null }] }), { status: 200 }));
-    expect((await listEvaluations({ projectId: 'project/a', offset: 2 }))[0]).toEqual(expect.objectContaining({ run_ids: [], aggregate_metrics: {}, cases: [] }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ ...base, source_run_ids: null, aggregate_metrics: null, cases: null }] }), { status: 200 }));
+    expect((await listEvaluations({ projectId: 'project/a', offset: 2 }))[0]).toEqual(expect.objectContaining({ source_run_ids: [], aggregate_metrics: {}, cases: [] }));
     expect(fetchMock.mock.calls[0][0]).toBe('/api/evals?project_id=project%2Fa&limit=50&offset=2');
 
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(base), { status: 200 }));
     await getEvaluation('eval/a');
     expect(fetchMock.mock.calls[1][0]).toBe('/api/evals/eval%2Fa');
 
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ a: base, b: base, delta_b_minus_a: { average_score: 0.1, bad: 'x' } }), { status: 200 }));
-    expect((await compareEvaluations('eval a', 'eval/b')).delta_b_minus_a).toEqual({ average_score: 0.1 });
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ a: base, b: base, metric_delta_b_minus_a: { mean_score: 0.1, bad: 'x' } }), { status: 200 }));
+    expect((await compareEvaluations('eval a', 'eval/b')).metric_delta_b_minus_a).toEqual({ mean_score: 0.1 });
     expect(fetchMock.mock.calls[2][0]).toBe('/api/evals/compare?a=eval+a&b=eval%2Fb');
   });
 

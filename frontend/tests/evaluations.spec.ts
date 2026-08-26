@@ -6,8 +6,8 @@ const runs = [
 ];
 
 const evaluation = (id: string, score: number, includeCases = false) => ({
-  id, project_id: 'project-a', dataset_id: 'grounded-v1', dataset_version: '1.0.0', dataset_hash: 'hash', status: 'completed', run_ids: ['run-grounded', 'run-abstain'], threshold: 0.85,
-  aggregate_metrics: { average_score: score, pass_rate: score, total_tokens: 53, total_cost_usd: 0, average_latency_ms: 95 }, passed: score >= 0.85,
+  id, project_id: 'project-a', dataset_id: 'grounded-v1', dataset_version: '1.0.0', dataset_hash: 'hash', status: 'completed', source_run_ids: ['run-grounded', 'run-abstain'], threshold: 0.85,
+  aggregate_metrics: { mean_score: score, pass_rate: score, total_tokens: 53, total_cost_usd: 0, mean_latency_ms: 95 }, passed: score >= 0.85,
   created_at: id === 'eval-new' ? '2026-08-26T12:00:00Z' : '2026-08-25T12:00:00Z', completed_at: '2026-08-26T12:00:01Z',
   cases: includeCases ? [
     { source_run_id: 'run-grounded', case_key: 'grounded-citation', metrics: { score: 1, citation_coverage: 0.9 }, checks: [{ name: 'has_citation', passed: true }], passed: true },
@@ -36,7 +36,7 @@ test('desktop creates a recorded evaluation, opens its report, and compares hist
     await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(evaluation('eval-new', 0.9, true)) });
   });
   await page.route('**/api/evals/eval-old', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(evaluation('eval-old', 0.7, true)) }));
-  await page.route('**/api/evals/compare?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ a: evaluation('eval-new', 0.9), b: evaluation('eval-old', 0.7), delta_b_minus_a: { average_score: -0.2, pass_rate: -0.2, total_tokens: 0 } }) }));
+  await page.route('**/api/evals/compare?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ a: evaluation('eval-new', 0.9), b: evaluation('eval-old', 0.7), metric_delta_b_minus_a: { mean_score: -0.2, pass_rate: -0.2, total_tokens: 0 } }) }));
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/eval');

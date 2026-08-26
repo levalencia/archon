@@ -136,7 +136,7 @@
         <button class:selected={selected?.id === item.id} class="history-card" onclick={() => showReport(item.id)} aria-label={`Open evaluation ${item.id}`}>
           <div class="history-top"><span class:pass={item.passed === true} class:fail={item.passed === false} class="status">{item.status}{item.status === 'completed' ? ` · ${item.passed ? 'passed' : 'failed'}` : ''}</span><time>{date(item.created_at)}</time></div>
           <strong>{item.project_id}</strong><code>{shortId(item.id)}</code>
-          <dl><div><dt>Pass rate</dt><dd>{percent(item.aggregate_metrics.pass_rate)}</dd></div><div><dt>Mean score</dt><dd>{number(item.aggregate_metrics.average_score)}</dd></div><div><dt>Dataset</dt><dd>{item.dataset_version}</dd></div></dl>
+          <dl><div><dt>Pass rate</dt><dd>{percent(item.aggregate_metrics.pass_rate)}</dd></div><div><dt>Mean score</dt><dd>{number(item.aggregate_metrics.mean_score)}</dd></div><div><dt>Dataset</dt><dd>{item.dataset_version}</dd></div></dl>
         </button>
       {/each}
     </div>
@@ -146,7 +146,7 @@
   {#if selected && !reportLoading}
     <section class="card report" aria-labelledby="report-heading">
       <div class="section-heading"><div><p class="eyebrow">Evaluation report</p><h2 id="report-heading">{selected.project_id} <code>{shortId(selected.id)}</code></h2></div><span class:pass={selected.passed === true} class:fail={selected.passed === false} class="gate">{selected.passed ? 'Gate passed' : 'Gate failed'}</span></div>
-      <div class="summary-grid"><div><span>Mean score</span><strong>{number(selected.aggregate_metrics.average_score)}</strong></div><div><span>Pass rate</span><strong>{percent(selected.aggregate_metrics.pass_rate)}</strong></div><div><span>Threshold</span><strong>{percent(selected.threshold)}</strong></div><div><span>Dataset</span><strong>{selected.dataset_id} · {selected.dataset_version}</strong></div></div>
+      <div class="summary-grid"><div><span>Mean score</span><strong>{number(selected.aggregate_metrics.mean_score)}</strong></div><div><span>Pass rate</span><strong>{percent(selected.aggregate_metrics.pass_rate)}</strong></div><div><span>Threshold</span><strong>{percent(selected.threshold)}</strong></div><div><span>Dataset</span><strong>{selected.dataset_id} · {selected.dataset_version}</strong></div></div>
       <div class="case-list">
         {#each selected.cases as item}
           <article class="case-row">
@@ -163,7 +163,7 @@
   <section class="card" aria-labelledby="compare-heading">
     <div class="section-heading"><div><p class="eyebrow">Regression view</p><h2 id="compare-heading"><GitCompare size={17} /> Compare evaluations</h2></div></div>
     <div class="compare-controls"><label>Baseline<select aria-label="Baseline evaluation" bind:value={compareA}><option value="">Select baseline</option>{#each evaluations as item}<option value={item.id}>{item.project_id} · {shortId(item.id)}</option>{/each}</select></label><label>Candidate<select aria-label="Candidate evaluation" bind:value={compareB}><option value="">Select candidate</option>{#each evaluations as item}<option value={item.id}>{item.project_id} · {shortId(item.id)}</option>{/each}</select></label><button class="btn-secondary" onclick={runComparison} disabled={comparing || !compareA || !compareB || compareA === compareB}>{#if comparing}<Loader size={15} class="animate-spin" />{:else}<GitCompare size={15} />{/if} Compare</button></div>
-    {#if comparison}<div class="delta-grid" aria-label="Evaluation deltas">{#each Object.entries(comparison.delta_b_minus_a) as [name, value]}<div><span>{name.replaceAll('_', ' ')}</span><strong class:positive={value > 0} class:negative={value < 0}>{value > 0 ? '+' : ''}{number(value)}</strong><small>candidate − baseline</small></div>{/each}</div>{/if}
+    {#if comparison}<div class="delta-grid" aria-label="Evaluation deltas">{#each Object.entries(comparison.metric_delta_b_minus_a) as [name, value]}<div><span>{name.replaceAll('_', ' ')}</span><strong class:positive={value > 0} class:negative={value < 0}>{value > 0 ? '+' : ''}{number(value)}</strong><small>candidate − baseline</small></div>{/each}</div>{/if}
   </section>
 
   <div class="security-divider"><span>Separate security testing</span></div>
