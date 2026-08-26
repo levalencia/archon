@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -11,8 +12,7 @@ from dataclasses import asdict, dataclass, field
 from time import perf_counter
 from typing import Any
 
-from app.research.models import Claim, Evidence
-from app.research.workflow import _verify
+from app.research.models import Claim
 from app.runtime.models import Message, Role, TokenUsage
 from app.runtime.ports import ModelProvider
 from app.services.chunker import DocumentChunk, EmbeddingService
@@ -27,10 +27,46 @@ _MAX_CLAIM_LENGTH = 2_000
 _MAX_CITATIONS_PER_CLAIM = 8
 _EVIDENCE_ID = re.compile(r"^E[1-9][0-9]*$")
 _LINE_CITATIONS = re.compile(r"\[(E[1-9][0-9]*)\]")
+_WORD_OR_NUMBER = re.compile(r"[a-z]+|\d+(?:[.,]\d+)*%?")
+_NUMBER = re.compile(r"(?<![a-z0-9])\d+(?:[.,]\d+)*%?(?![a-z0-9])")
+_NEGATIONS = frozenset({"not", "no", "never", "without"})
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "do",
+        "does",
+        "for",
+        "from",
+        "has",
+        "have",
+        "in",
+        "is",
+        "it",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "was",
+        "were",
+        "will",
+        "with",
+    }
+)
+_MIN_SUBSTANTIVE_OVERLAP = 0.9
 
 
 class GroundedProviderError(RuntimeError):
-    """The model provider failed after the durable run was safely finalized."""
+    """The grounded workflow failed after the durable run was safely finalized."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,56 +235,61 @@ class GroundedDocumentWorkflow:
             model=self._model_name,
         )
         await self._runs.ensure_run(**asdict(identity))
-        evidence = await self._retriever.retrieve(
-            question,
-            owner_id=owner_id,
-            project_id=project_id,
-            document_id=document_id,
-            document_ids=document_ids,
-        )
-        await self._append(
-            identity,
-            "evidence_retrieved",
-            {
-                "evidence_ids": [item.id for item in evidence],
-                "document_ids": [item.document_id for item in evidence],
-                "chunk_ids": [item.chunk_id for item in evidence],
-                "content_hashes": [item.content_hash for item in evidence],
-                "scores": [item.score for item in evidence],
-                "evidence_count": len(evidence),
-            },
-        )
-        if not evidence:
-            return await self._finish(
-                identity,
-                started=started,
-                evidence=(),
-                claims=(),
-                citations=(),
-                unsupported=(),
-                usage=TokenUsage(),
-                provider_calls=0,
-            )
-
+        usage = TokenUsage()
         try:
+            evidence = await self._retriever.retrieve(
+                question,
+                owner_id=owner_id,
+                project_id=project_id,
+                document_id=document_id,
+                document_ids=document_ids,
+            )
+            await self._append(
+                identity,
+                "evidence_retrieved",
+                {
+                    "evidence_ids": [item.id for item in evidence],
+                    "document_ids": [item.document_id for item in evidence],
+                    "chunk_ids": [item.chunk_id for item in evidence],
+                    "content_hashes": [item.content_hash for item in evidence],
+                    "scores": [item.score for item in evidence],
+                    "evidence_count": len(evidence),
+                },
+            )
+            if not evidence:
+                return await self._finish(
+                    identity,
+                    started=started,
+                    evidence=(),
+                    claims=(),
+                    citations=(),
+                    unsupported=(),
+                    usage=usage,
+                    provider_calls=0,
+                )
+
             response = await self._provider.complete(_prompt(question, evidence), max_tokens=2048)
             usage = response.usage
             parsed = _parse_claims(response.content or "")
             claims, citations, unsupported = await _verify_document_claims(parsed, evidence)
+            return await self._finish(
+                identity,
+                started=started,
+                evidence=evidence,
+                claims=claims,
+                citations=citations,
+                unsupported=unsupported,
+                usage=usage,
+                provider_calls=1,
+            )
+        except asyncio.CancelledError:
+            await asyncio.shield(
+                self._stop(identity, usage=usage, error=False, reason="cancelled")
+            )
+            raise
         except Exception as exc:
-            await self._stop(identity, usage=TokenUsage(), error=True, reason="provider_error")
-            raise GroundedProviderError("Grounded answer provider unavailable") from exc
-
-        return await self._finish(
-            identity,
-            started=started,
-            evidence=evidence,
-            claims=claims,
-            citations=citations,
-            unsupported=unsupported,
-            usage=usage,
-            provider_calls=1,
-        )
+            await self._stop(identity, usage=usage, error=True, reason="provider_error")
+            raise GroundedProviderError("Grounded answer unavailable") from exc
 
     async def _finish(
         self,
@@ -415,26 +456,81 @@ def _parse_claims(raw: str) -> tuple[Claim, ...]:
 async def _verify_document_claims(
     claims: tuple[Claim, ...], evidence: tuple[DocumentEvidence, ...]
 ) -> tuple[tuple[Claim, ...], tuple[DocumentEvidence, ...], tuple[str, ...]]:
-    # Validate the content snapshot immediately before verification, then reuse the
-    # research workflow's citation-existence and lexical-overlap verifier.
+    # Recheck the immutable snapshot immediately before applying deliberately
+    # conservative deterministic support checks. This is not semantic NLI.
     current = tuple(
         item
         for item in evidence
         if item.content_hash == hashlib.sha256(item.verification_text.encode()).hexdigest()[:16]
     )
-    research_evidence = [
-        Evidence(item.id, f"document://{item.document_id}/{item.chunk_id}", item.title, item.quote)
-        for item in current
-    ]
-    supported, _, unsupported = await _verify(claims, research_evidence)
     by_id = {item.id: item for item in current}
+    supported: list[Claim] = []
+    unsupported: list[str] = []
+    for claim in claims:
+        if _supports_claim(claim, current):
+            supported.append(claim)
+        else:
+            unsupported.append(claim.text)
     cited = tuple(
         by_id[evidence_id]
         for evidence_id in dict.fromkeys(
             evidence_id for claim in supported for evidence_id in claim.evidence_ids
         )
     )
-    return supported, cited, unsupported
+    return tuple(supported), cited, tuple(unsupported)
+
+
+def _normalize_support_text(value: str) -> str:
+    normalized = value.lower().replace("’", "'")
+    normalized = re.sub(r"\bwon't\b", "will not", normalized)
+    normalized = re.sub(r"\bcan't\b", "can not", normalized)
+    normalized = re.sub(r"\bcannot\b", "can not", normalized)
+    return re.sub(r"n't\b", " not", normalized)
+
+
+def _substantive_tokens(value: str) -> set[str]:
+    return {
+        token
+        for token in _WORD_OR_NUMBER.findall(_normalize_support_text(value))
+        if token not in _STOP_WORDS and token not in _NEGATIONS
+    }
+
+
+def _numeric_literals(value: str) -> set[str]:
+    return set(_NUMBER.findall(_normalize_support_text(value)))
+
+
+def _negated(value: str) -> bool:
+    return bool(_NEGATIONS & set(_WORD_OR_NUMBER.findall(_normalize_support_text(value))))
+
+
+def _supports_claim(claim: Claim, evidence: tuple[DocumentEvidence, ...]) -> bool:
+    """Accept only known citations with conservative lexical, numeric, and polarity support."""
+    by_id = {item.id: item for item in evidence}
+    if not claim.evidence_ids or any(item not in by_id for item in claim.evidence_ids):
+        return False
+    sources = [by_id[item] for item in claim.evidence_ids]
+    claim_tokens = _substantive_tokens(claim.text)
+    if not claim_tokens:
+        return False
+    evidence_tokens: set[str] = set()
+    relevant_polarities: set[bool] = set()
+    for source in sources:
+        source_tokens = _substantive_tokens(source.verification_text)
+        evidence_tokens.update(source_tokens)
+        # Ignore unrelated cited prose when determining polarity, but reject mixed
+        # polarity among excerpts that overlap materially with the claim.
+        if len(claim_tokens & source_tokens) / len(claim_tokens) >= 0.5:
+            relevant_polarities.add(_negated(source.verification_text))
+    overlap = len(claim_tokens & evidence_tokens) / len(claim_tokens)
+    if overlap < _MIN_SUBSTANTIVE_OVERLAP:
+        return False
+    evidence_numbers = set().union(
+        *(_numeric_literals(source.verification_text) for source in sources)
+    )
+    if not _numeric_literals(claim.text).issubset(evidence_numbers):
+        return False
+    return relevant_polarities == {_negated(claim.text)}
 
 
 def _hash(value: str) -> str:

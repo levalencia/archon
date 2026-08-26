@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -10,11 +11,17 @@ from typing import Any
 import pytest
 from sqlalchemy import select
 
+from app.research.models import Claim
 from app.runtime.models import ModelResponse, TokenUsage
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.chunker import DocumentChunk
 from app.services.db_store import DatabaseStore, RuntimeEventRow
-from app.services.grounded_rag import GroundedDocumentWorkflow, GroundedProviderError
+from app.services.grounded_rag import (
+    DocumentEvidence,
+    GroundedDocumentWorkflow,
+    GroundedProviderError,
+    _verify_document_claims,
+)
 from app.services.run_ledger import RunRepository
 
 
@@ -212,6 +219,122 @@ async def test_provider_failure_finalizes_failed_run(harness: Harness) -> None:
     assert run.provider == "fake-provider"
     assert run.model == "fake-model"
     assert run.stop_reason == "provider_error"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("claim_text", "evidence_text", "supported"),
+    [
+        ("Alpha uses Python", "Alpha does not use Python", False),
+        ("Alpha does not use Python", "Alpha uses Python", False),
+        ("Alpha doesn't use Python", "Alpha does not use Python", True),
+        ("Alpha uses Python 3", "Alpha uses Python 2", False),
+        ("Alpha uses Python 3", "Alpha uses Python 3 for data analysis", True),
+        ("Alpha uses Python and Rust", "Alpha uses Python", False),
+    ],
+)
+async def test_claim_support_is_conservative_about_negation_numbers_and_partial_claims(
+    claim_text: str, evidence_text: str, supported: bool
+) -> None:
+    chunk = DocumentChunk("chunk", "doc", evidence_text, 0)
+    evidence = (
+        DocumentEvidence(
+            "E1",
+            "doc",
+            "chunk",
+            chunk.content_hash,
+            "title",
+            1.0,
+            evidence_text,
+            evidence_text,
+        ),
+    )
+    accepted, _, unsupported = await _verify_document_claims(
+        (Claim(claim_text, ("E1",)),), evidence
+    )
+    assert bool(accepted) is supported
+    assert bool(unsupported) is not supported
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", ["embedding", "vector"])
+async def test_retrieval_failure_finalizes_failed_run_after_restart(
+    harness: Harness, failure_stage: str
+) -> None:
+    class FailingEmbeddings:
+        async def embed(self, text: str) -> list[float]:
+            del text
+            if failure_stage == "embedding":
+                raise RuntimeError("secret embedding failure")
+            return [1.0, 0.0]
+
+    class FailingVectors(FakeVectors):
+        async def search(self, query_embedding: list[float], **kwargs: Any) -> list[dict[str, Any]]:
+            del query_embedding, kwargs
+            raise RuntimeError("secret vector failure")
+
+    workflow = GroundedDocumentWorkflow(
+        vector_store=FailingVectors([]),  # type: ignore[arg-type]
+        embedding_service=FailingEmbeddings(),  # type: ignore[arg-type]
+        model_provider=FakeProvider("unused"),
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+    )
+    with pytest.raises(GroundedProviderError, match="Grounded answer unavailable"):
+        await workflow.run(
+            "private question",
+            owner_id="alice",
+            project_id="project-a",
+            correlation_id="correlation",
+            document_id=None,
+            document_ids={"doc-1"},
+        )
+    restarted = RunRepository(harness.store.session_factory, PersistenceRedactor())
+    run = (await restarted.list("alice")).items[0]
+    events = await restarted.events("alice", run.run_id)
+    assert run.status == "failed"
+    assert run.stop_reason == "provider_error"
+    assert events is not None and events.items[-1].kind == "run_stopped"
+    assert "secret" not in json.dumps(events.items[-1].payload)
+
+
+@pytest.mark.asyncio
+async def test_cancellation_finalizes_cancelled_run_and_reraises(harness: Harness) -> None:
+    started = asyncio.Event()
+
+    class BlockingEmbeddings:
+        async def embed(self, text: str) -> list[float]:
+            del text
+            started.set()
+            await asyncio.Event().wait()
+            return [1.0, 0.0]
+
+    workflow = GroundedDocumentWorkflow(
+        vector_store=FakeVectors([]),  # type: ignore[arg-type]
+        embedding_service=BlockingEmbeddings(),  # type: ignore[arg-type]
+        model_provider=FakeProvider("unused"),
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+    )
+    task = asyncio.create_task(
+        workflow.run(
+            "question",
+            owner_id="alice",
+            project_id="project-a",
+            correlation_id="correlation",
+            document_id=None,
+            document_ids=set(),
+        )
+    )
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    run = (await harness.runs.list("alice")).items[0]
+    assert run.status == "cancelled"
+    assert run.stop_reason == "cancelled"
 
 
 @pytest.mark.asyncio

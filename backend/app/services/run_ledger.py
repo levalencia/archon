@@ -303,7 +303,13 @@ class RunRepository:
                         RunRow.completed_at.is_(None),
                     )
                     .values(
-                        status="failed" if error else "completed",
+                        status=(
+                            "cancelled"
+                            if reason == "cancelled"
+                            else "failed"
+                            if error
+                            else "completed"
+                        ),
                         completed_at=now,
                         stop_reason=str(reason)[:100] if reason is not None else None,
                         input_tokens=input_tokens,
