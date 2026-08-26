@@ -27,6 +27,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     delete,
+    event,
     func,
     select,
 )
@@ -190,7 +191,9 @@ class RunRow(Base):
     project_id = Column(String(255), nullable=False, default="default")
     conversation_id = Column(String(255), nullable=False)
     correlation_id = Column(String(100), nullable=False)
-    parent_run_id = Column(String(36), nullable=True)
+    parent_run_id = Column(
+        String(36), ForeignKey("runs.run_id", ondelete="RESTRICT"), nullable=True
+    )
     fork_source_sequence = Column(Integer, nullable=True)
     provider = Column(String(100), nullable=False, default="unknown")
     model = Column(String(255), nullable=False, default="unknown")
@@ -390,6 +393,14 @@ class DatabaseStore:
             connect_args["check_same_thread"] = False
 
         self._engine = create_async_engine(database_url, echo=False, connect_args=connect_args)
+        if "sqlite" in database_url:
+
+            @event.listens_for(self._engine.sync_engine, "connect")
+            def _enable_sqlite_foreign_keys(dbapi_connection: Any, _: Any) -> None:
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
+
         self._session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self._engine,
             class_=AsyncSession,

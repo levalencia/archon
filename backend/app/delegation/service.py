@@ -206,14 +206,30 @@ class EvidenceVerifierSpecialist:
         async def execute() -> tuple[ClaimVerdict, ...]:
             nonlocal usage, attempts
             while True:
-                if estimate * (attempts + 1) > request.budget.input_tokens:
+                remaining_input = request.budget.input_tokens - usage.input_tokens
+                remaining_output = request.budget.output_tokens - usage.output_tokens
+                # The estimate is only a pre-call guard. Provider-reported usage is the
+                # authority after a call and is accumulated across every response.
+                if (
+                    remaining_input < estimate
+                    or remaining_output <= 0
+                    or usage.total_tokens + estimate
+                    > request.budget.input_tokens + request.budget.output_tokens
+                ):
                     raise _BudgetExhaustedError
                 attempts += 1
                 try:
                     response = await self._provider.complete(
-                        messages, tools=(), max_tokens=request.budget.output_tokens
+                        messages, tools=(), max_tokens=remaining_output
                     )
                     usage = usage + response.usage
+                    if (
+                        usage.input_tokens > request.budget.input_tokens
+                        or usage.output_tokens > request.budget.output_tokens
+                        or usage.total_tokens
+                        > request.budget.input_tokens + request.budget.output_tokens
+                    ):
+                        raise _BudgetExhaustedError
                     return _parse_response(response, request)
                 except (TransientVerifierError, ConnectionError, OSError):
                     if attempts > request.budget.retries:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
@@ -17,7 +18,7 @@ from app.research.models import Claim
 from app.runtime.models import ModelResponse, TokenUsage
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.chunker import DocumentChunk
-from app.services.db_store import DatabaseStore, RuntimeEventRow, VectorChunkRow
+from app.services.db_store import DatabaseStore, DocumentRow, RuntimeEventRow, VectorChunkRow
 from app.services.grounded_rag import (
     DocumentEvidence,
     GroundedDocumentWorkflow,
@@ -315,6 +316,26 @@ async def test_tampered_persisted_evidence_is_skipped_before_provider_call(
     harness: Harness, column: str, raw_value: str
 ) -> None:
     vectors = SqlJsonVectorStore(harness.store.session_factory, dimensions=2)
+    now = datetime.now(UTC)
+    async with harness.store.session_factory.begin() as session:
+        session.add(
+            DocumentRow(
+                id="doc-1",
+                owner_id="alice",
+                project_id="project-a",
+                title="Trusted",
+                source="test",
+                content_hash="0" * 64,
+                characters=15,
+                chunks=1,
+                status="ready",
+                embedding_provider="fake",
+                embedding_model="fake",
+                embedding_dimensions=2,
+                created_at=now,
+                updated_at=now,
+            )
+        )
     await vectors.add_chunks(
         [DocumentChunk("chunk-1", "doc-1", "trusted content", 0, embedding=[1.0, 0.0])],
         owner_id="alice",

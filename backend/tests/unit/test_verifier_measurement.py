@@ -25,7 +25,7 @@ from app.delegation.models import (
 from app.runtime.models import TokenUsage
 
 _FIXTURE = Path("tests/fixtures/evals/verifier-benefit-v1.json")
-_HASH = "cddf2eb127330e64f96b3e27d6e7e1dabfb9f35b864799a4dd5cac3365350257"
+_HASH = "8b1c7e420932d4640c275d0a1bab5c680f5b4ee9d320d15274a5346e72d169ea"
 
 
 def _result(claim_id: str, status: ClaimVerdictStatus) -> ChildVerificationResult:
@@ -47,7 +47,7 @@ def _result(claim_id: str, status: ClaimVerdictStatus) -> ChildVerificationResul
 def test_verifier_benefit_fixture_has_stable_verified_hash_and_required_cases() -> None:
     fixture = load_verifier_benchmark_fixture(_FIXTURE)
     assert fixture.schema_version == 1
-    assert fixture.version == "1.0.0"
+    assert fixture.version == "1.1.0"
     assert fixture.content_hash == _HASH
     assert verifier_fixture_content_hash(fixture) == _HASH
     assert {case.expected_outcome for case in fixture.cases} == set(ExpectedLabel)

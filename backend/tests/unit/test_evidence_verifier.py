@@ -108,6 +108,15 @@ async def ledger(tmp_path: Any):
     store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'verifier.db'}")
     await store.initialize()
     repository = RunRepository(store.session_factory, PersistenceRedactor())
+    await repository.ensure_run(
+        run_id="parent-1",
+        user_id="user-1",
+        project_id="project-1",
+        conversation_id="conversation",
+        correlation_id="correlation",
+        provider="mock",
+        model="model",
+    )
     yield store, repository
     await store.close()
 
@@ -187,6 +196,37 @@ async def test_budget_prevents_call_and_retry_is_bounded(ledger: Any) -> None:
     )
     assert result.status is ChildVerificationStatus.COMPLETED
     assert len(retrying.calls) == 2
+    assert [call[2] for call in retrying.calls] == [123, 123]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("usage", "budget"),
+    [
+        (TokenUsage(2_001, 1), VerificationBudget(2_000, 123, 1.0)),
+        (TokenUsage(20, 124), VerificationBudget(2_000, 123, 1.0)),
+        # Providers can report usage aggregated across internal retries.
+        (TokenUsage(2_001, 124), VerificationBudget(2_000, 123, 1.0, retries=1)),
+    ],
+)
+async def test_actual_provider_usage_over_budget_discards_verdict(
+    ledger: Any, usage: TokenUsage, budget: VerificationBudget
+) -> None:
+    _, repository = ledger
+    normal = response()
+    provider = Provider([ModelResponse(normal.content, usage=usage)])
+
+    result = await EvidenceVerifierSpecialist(provider, repository, PersistenceRedactor()).verify(
+        make_request(
+            child_id=f"oversized-{usage.input_tokens}-{usage.output_tokens}", budget=budget
+        )
+    )
+
+    assert result.status is ChildVerificationStatus.FAILED
+    assert result.usage == usage
+    assert result.verdicts[0].status.value == "escalate"
+    assert result.verdicts[0].reason_code is VerificationReasonCode.BUDGET_EXCEEDED
+    assert len(provider.calls) == 1
 
 
 @pytest.mark.asyncio
@@ -218,7 +258,7 @@ async def test_timeout_and_cancellation_are_terminal(ledger: Any) -> None:
 async def test_foreign_parent_is_rejected(ledger: Any) -> None:
     store, repository = ledger
     await repository.ensure_run(
-        run_id="parent-1",
+        run_id="foreign-parent",
         user_id="other-user",
         project_id="project-1",
         conversation_id="conversation",
@@ -229,7 +269,24 @@ async def test_foreign_parent_is_rejected(ledger: Any) -> None:
     with pytest.raises(ValueError, match="parent run owner mismatch"):
         await EvidenceVerifierSpecialist(
             Provider([response()]), repository, PersistenceRedactor()
-        ).verify(make_request())
+        ).verify(make_request(parent_run_id="foreign-parent"))
     async with store.session_factory() as session:
         child = await session.scalar(select(RunRow).where(RunRow.run_id == "child-1"))
     assert child is None
+
+
+@pytest.mark.asyncio
+async def test_missing_parent_is_rejected_before_child_or_event(ledger: Any) -> None:
+    store, repository = ledger
+    with pytest.raises(ValueError, match="parent run does not exist"):
+        await EvidenceVerifierSpecialist(
+            Provider([response()]), repository, PersistenceRedactor()
+        ).verify(make_request(parent_run_id="missing-parent"))
+    async with store.session_factory() as session:
+        child = await session.scalar(select(RunRow).where(RunRow.run_id == "child-1"))
+        events = tuple(
+            await session.scalars(
+                select(RuntimeEventRow).where(RuntimeEventRow.run_id == "child-1")
+            )
+        )
+    assert child is None and events == ()

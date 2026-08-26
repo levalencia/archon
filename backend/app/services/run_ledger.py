@@ -270,10 +270,12 @@ class RunRepository:
         """Create a child with explicit, immutable owner-scoped lineage."""
         now = datetime.now(tz=UTC)
         async with self._sessions() as session:
-            parent = await session.scalar(select(RunRow).where(RunRow.run_id == parent_run_id))
-            if parent is not None and (
-                str(parent.user_id) != user_id or str(parent.project_id) != project_id
-            ):
+            parent = await session.scalar(
+                select(RunRow).where(RunRow.run_id == parent_run_id).with_for_update()
+            )
+            if parent is None:
+                raise ValueError("parent run does not exist")
+            if str(parent.user_id) != user_id or str(parent.project_id) != project_id:
                 raise ValueError("parent run owner mismatch")
             existing = await session.scalar(select(RunRow).where(RunRow.run_id == run_id))
             if existing is not None:
@@ -284,22 +286,44 @@ class RunRepository:
                 ):
                     raise ValueError("child run identity mismatch")
                 return
-            session.add(
-                RunRow(
-                    run_id=run_id,
-                    parent_run_id=parent_run_id,
-                    user_id=user_id,
-                    project_id=project_id,
-                    conversation_id=parent_run_id,
-                    correlation_id=run_id,
-                    provider=provider,
-                    model=model,
-                    schema_version=SCHEMA_VERSION,
-                    status="running",
-                    started_at=now,
-                    next_sequence=1,
+            values = {
+                "run_id": run_id,
+                "parent_run_id": parent_run_id,
+                "user_id": user_id,
+                "project_id": project_id,
+                "conversation_id": parent_run_id,
+                "correlation_id": run_id,
+                "provider": provider,
+                "model": model,
+                "schema_version": SCHEMA_VERSION,
+                "status": "running",
+                "started_at": now,
+                "next_sequence": 1,
+            }
+            dialect = session.bind.dialect.name
+            if dialect == "postgresql":
+                await session.execute(
+                    pg_insert(RunRow)
+                    .values(**values)
+                    .on_conflict_do_nothing(index_elements=[RunRow.run_id])
                 )
-            )
+            elif dialect == "sqlite":
+                await session.execute(
+                    sqlite_insert(RunRow)
+                    .values(**values)
+                    .on_conflict_do_nothing(index_elements=[RunRow.run_id])
+                )
+            else:
+                session.add(RunRow(**values))
+                await session.flush()
+            persisted = await session.scalar(select(RunRow).where(RunRow.run_id == run_id))
+            if persisted is None or (
+                str(persisted.user_id) != user_id
+                or str(persisted.project_id) != project_id
+                or str(persisted.parent_run_id) != parent_run_id
+            ):
+                await session.rollback()
+                raise ValueError("child run identity mismatch")
             await session.commit()
 
     async def append(

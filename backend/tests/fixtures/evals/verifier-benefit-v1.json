@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "dataset_id": "verifier-benefit-v1",
-  "version": "1.0.0",
-  "content_hash": "cddf2eb127330e64f96b3e27d6e7e1dabfb9f35b864799a4dd5cac3365350257",
+  "version": "1.1.0",
+  "content_hash": "8b1c7e420932d4640c275d0a1bab5c680f5b4ee9d320d15274a5346e72d169ea",
   "cases": [
     {
       "key": "lexical-plausible-overclaim",
@@ -20,6 +20,12 @@
         {
           "claim_id": "C1",
           "text": "Alpha project uses Python for data analysis and scheduled batch reporting exclusively.",
+          "evidence_ids": ["E1"],
+          "expected_label": "unsupported"
+        },
+        {
+          "claim_id": "C2",
+          "text": "Alpha uses Python for data analysis and scheduled batch reporting with guaranteed accuracy.",
           "evidence_ids": ["E1"],
           "expected_label": "unsupported"
         }
@@ -41,6 +47,12 @@
         {
           "claim_id": "C1",
           "text": "Alpha project uses Python for data analysis.",
+          "evidence_ids": ["E1"],
+          "expected_label": "supported"
+        },
+        {
+          "claim_id": "C2",
+          "text": "Alpha project uses Python for data analysis and scheduled batch reporting.",
           "evidence_ids": ["E1"],
           "expected_label": "supported"
         }

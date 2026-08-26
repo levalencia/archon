@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "dataset_id": "verifier-benefit-provider-outputs-v1",
+  "content_hash": "574828fe8ef6a9db4b1b8d476684567a272972375b507e72a180fae6b6e8acb0",
+  "outputs": {
+    "lexical-plausible-overclaim": {
+      "verdicts": [
+        {
+          "claim_id": "C1",
+          "status": "rejected",
+          "reason_code": "evidence_contradicts",
+          "confidence": 0.91,
+          "evidence_ids": ["E1"]
+        },
+        {
+          "claim_id": "C2",
+          "status": "escalate",
+          "reason_code": "insufficient_evidence",
+          "confidence": 0.86,
+          "evidence_ids": ["E1"]
+        }
+      ]
+    },
+    "directly-supported": {
+      "verdicts": [
+        {
+          "claim_id": "C1",
+          "status": "supported",
+          "reason_code": "evidence_supports",
+          "confidence": 0.95,
+          "evidence_ids": ["E1"]
+        },
+        {
+          "claim_id": "C2",
+          "status": "supported",
+          "reason_code": "evidence_supports",
+          "confidence": 0.93,
+          "evidence_ids": ["E1"]
+        }
+      ]
+    }
+  }
+}

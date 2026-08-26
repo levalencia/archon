@@ -307,8 +307,10 @@ def measure_verifier_benefit(
 
     if not 0.0 <= max_acceptable_false_reject_rate <= 1.0:
         raise ValueError("max_acceptable_false_reject_rate must be between zero and one")
-    if not observations or len({item.case_key for item in observations}) != len(observations):
-        raise ValueError("observations must have unique, non-empty cases")
+    if not observations or len({(item.case_key, item.claim_id) for item in observations}) != len(
+        observations
+    ):
+        raise ValueError("observations must have unique case and claim identities")
 
     claims = tuple(
         item for item in observations if item.expected_label is not ExpectedLabel.NO_EVIDENCE
@@ -320,6 +322,11 @@ def measure_verifier_benefit(
         item for item in claims if item.expected_label is ExpectedLabel.UNSUPPORTED
     )
     delegated = tuple(item for item in claims if item.child_result is not None)
+    delegated_results = {
+        item.child_result.child_id: item.child_result
+        for item in delegated
+        if item.child_result is not None
+    }
 
     def child_supported(item: VerificationObservation) -> bool:
         result = item.child_result
@@ -347,9 +354,9 @@ def measure_verifier_benefit(
     costs = tuple(item.child_cost_usd for item in delegated)
 
     return VerifierBenefitReport(
-        cases=len(observations),
+        cases=len({item.case_key for item in observations}),
         evaluated_claims=len(claims),
-        delegations=len(delegated),
+        delegations=len(delegated_results),
         baseline_supported_count=sum(item.baseline_supported for item in claims),
         child_supported_count=sum(child_supported(item) for item in claims),
         baseline_false_support_rate=baseline_false_support_rate,
@@ -360,25 +367,19 @@ def measure_verifier_benefit(
             item.baseline_supported and not child_supported(item) for item in unsupported_truth
         ),
         failures=sum(
-            item.child_result is not None
-            and item.child_result.status is not ChildVerificationStatus.COMPLETED
-            for item in delegated
+            result.status is not ChildVerificationStatus.COMPLETED
+            for result in delegated_results.values()
         ),
         escalations=sum(
             verdict.status is ClaimVerdictStatus.ESCALATE
-            for item in delegated
-            if item.child_result is not None
-            for verdict in item.child_result.verdicts
+            for result in delegated_results.values()
+            for verdict in result.verdicts
         ),
-        input_tokens=sum(
-            item.child_result.usage.input_tokens for item in delegated if item.child_result
-        ),
-        output_tokens=sum(
-            item.child_result.usage.output_tokens for item in delegated if item.child_result
-        ),
+        input_tokens=sum(result.usage.input_tokens for result in delegated_results.values()),
+        output_tokens=sum(result.usage.output_tokens for result in delegated_results.values()),
         child_latency_ms=(
-            sum(item.child_result.latency_ms for item in delegated if item.child_result)
-            if delegated
+            sum(result.latency_ms for result in delegated_results.values())
+            if delegated_results
             else None
         ),
         child_cost_usd=(
