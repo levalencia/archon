@@ -128,7 +128,7 @@ def test_task_and_mcp_require_auth_and_are_limited_per_action(tmp_path) -> None:
         assert "Retry-After" in task_limited.headers
         assert client.get("/api/tasks").status_code == 200
 
-        assert client.get("/api/mcp/tools").status_code == 200
+        assert client.get("/api/mcp/tools").status_code == 410
         mcp_limited = client.get("/api/mcp/tools")
         assert mcp_limited.status_code == 429
         assert "Retry-After" in mcp_limited.headers
@@ -137,7 +137,7 @@ def test_task_and_mcp_require_auth_and_are_limited_per_action(tmp_path) -> None:
                 "/api/mcp/request",
                 json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
             ).status_code
-            == 200
+            == 410
         )
 
         # Health probes are deliberately outside all rate-limit buckets.

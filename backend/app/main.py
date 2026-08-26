@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Mapping
 from contextlib import asynccontextmanager
 
 import structlog
@@ -20,6 +20,9 @@ from app.config import Settings, get_settings
 from app.delegation import EvidenceVerifierSpecialist
 from app.eval.persistence import EvaluationRepository
 from app.eval.service import EvaluationService
+from app.mcp.inventory import MCPInventoryService
+from app.mcp.models import ServerProfile
+from app.mcp.repository import MCPRepository
 from app.memory.keys import decode_memory_master_key
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
@@ -128,6 +131,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     repository = ConversationRepository(settings.database_url, redactor)
     await repository.initialize()
     app.state.conversations = repository
+    app.state.mcp_repository = MCPRepository(repository.session_factory)
+    app.state.mcp_inventory = MCPInventoryService(
+        app.state.mcp_repository, profiles=app.state.mcp_profiles
+    )
     app.state.evaluation_repository = EvaluationRepository(repository.session_factory)
     app.state.evaluation_service = EvaluationService(
         repository.runs, app.state.evaluation_repository
@@ -220,6 +227,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app(
     settings: Settings | None = None,
     *,
+    mcp_profiles: Mapping[str, ServerProfile] | None = None,
     persistence_redactor_factory: Callable[[], PersistenceRedactor] = PersistenceRedactor,
     model_provider_factory: Callable[[Settings], object] = create_llm_client,
     sandbox_executor_factory: Callable[
@@ -236,6 +244,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.mcp_profiles = dict(mcp_profiles or {})
     app.state.persistence_redactor_factory = persistence_redactor_factory
     app.state.model_provider_factory = model_provider_factory
     app.state.sandbox_executor_factory = sandbox_executor_factory

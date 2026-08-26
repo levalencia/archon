@@ -105,7 +105,7 @@ def test_sse_transport_format() -> None:
     assert "data:" in frame
 
 
-# ---- Route integration tests ----
+# ---- Legacy route retirement tests ----
 
 
 def _build_app() -> FastAPI:
@@ -121,37 +121,13 @@ def _build_app() -> FastAPI:
     return app
 
 
-def test_mcp_tools_list_route() -> None:
-    client = TestClient(_build_app())
-    resp = client.get("/api/mcp/tools")
-    assert resp.status_code == 200
-    tools = resp.json()
-    names = {t["name"] for t in tools}
-    assert {"web_search", "code_sandbox", "image_gen"} == names
-
-
-def test_mcp_request_tools_list() -> None:
-    client = TestClient(_build_app())
-    resp = client.post(
-        "/api/mcp/request",
-        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "result" in data
-
-
-def test_mcp_request_tools_call() -> None:
-    client = TestClient(_build_app())
-    resp = client.post(
-        "/api/mcp/request",
-        json={
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
-            "params": {"name": "web_search", "arguments": {"query": "test"}},
-        },
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["result"]["content"]["query"] == "test"
+def test_stub_routes_are_gone() -> None:
+    with TestClient(_build_app()) as client:
+        tools = client.get("/api/mcp/tools")
+        request = client.post(
+            "/api/mcp/request",
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        )
+    assert tools.status_code == 410
+    assert request.status_code == 410
+    assert "governed server inventory" in tools.json()["detail"]
