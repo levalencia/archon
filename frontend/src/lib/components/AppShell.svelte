@@ -25,7 +25,7 @@
     { href: '/documents', label: 'Documents',  icon: FileText },
     { href: '/eval',      label: 'Eval',       icon: Shield },
     { href: '/memory',    label: 'Memory',     icon: Brain },
-    { href: '/settings',  label: 'Settings',   icon: Settings },
+    { href: '/settings',  label: 'Skills & Integrations', icon: Settings },
   ];
 
   function isActive(href: string, pathname: string): boolean {

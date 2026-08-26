@@ -1,6 +1,7 @@
 <script lang="ts">
   import { authenticatedFetch } from '$lib/auth';
-    import { Settings, Package, GitBranch, Trash2, Plus, Save, Check } from 'lucide-svelte';
+  import MCPIntegrations from '$lib/components/MCPIntegrations.svelte';
+  import { Settings, Package, GitBranch, Trash2, Plus, Save, Check } from 'lucide-svelte';
 
   let skillsTopK = $state(3);
   let loading = $state(false);
@@ -60,20 +61,27 @@
   $effect(() => { loadSettings(); });
 </script>
 
-<div class="max-w-4xl mx-auto p-6 space-y-6">
+<div class="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
   <!-- Page header -->
   <div class="flex items-center gap-3">
     <div class="p-2 rounded-lg bg-[var(--bg-tertiary)]">
       <Settings size={20} class="text-[var(--accent)]" />
     </div>
     <div>
-      <h1 class="text-xl font-semibold text-[var(--text-primary)]">Settings</h1>
-      <p class="text-xs text-[var(--text-muted)]">Skills configuration & management</p>
+      <h1 class="text-xl font-semibold text-[var(--text-primary)]">Skills &amp; Integrations</h1>
+      <p class="text-xs text-[var(--text-muted)]">Skills configuration and governed MCP administration</p>
     </div>
   </div>
 
+  <nav aria-label="Settings sections" class="flex gap-4 border-b border-[var(--border)] text-sm">
+    <a class="pb-2 text-[var(--text-secondary)] hover:text-[var(--accent)]" href="#skills">Skills</a>
+    <a class="pb-2 text-[var(--text-secondary)] hover:text-[var(--accent)]" href="#mcp">MCP integrations</a>
+  </nav>
+
+  <MCPIntegrations />
+
   <!-- Skills Configuration -->
-  <section class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
+  <section id="skills" class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
     <div class="flex items-center gap-2 mb-5">
       <Package size={16} class="text-[var(--accent)]" />
       <h2 class="text-base font-semibold text-[var(--text-primary)]">Skills Configuration</h2>
@@ -125,7 +133,7 @@
       <h2 class="text-base font-semibold text-[var(--text-primary)]">Import from GitHub</h2>
     </div>
 
-    <div class="flex gap-2">
+    <div class="flex flex-col sm:flex-row gap-2">
       <input
         type="text"
         bind:value={importRepo}
@@ -137,7 +145,7 @@
         type="text"
         bind:value={importPath}
         placeholder="path/to/SKILL.md"
-        class="w-48 px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg
+        class="w-full sm:w-48 px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg
           text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)] transition-colors"
       />
       <button
