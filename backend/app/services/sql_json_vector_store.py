@@ -6,8 +6,10 @@ backend intentionally never describes itself as pgvector.
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, cast
@@ -16,11 +18,12 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services.chunker import DocumentChunk, validate_embedding
+from app.services.chunker import DocumentChunk, canonical_content_hash, validate_embedding
 from app.services.db_store import VectorChunkRow
 from app.services.vector_store import cosine_similarity
 
 logger = logging.getLogger(__name__)
+_CONTENT_HASH = re.compile(r"^[0-9a-f]{16}$")
 
 
 class SqlJsonVectorStore:
@@ -78,7 +81,7 @@ class SqlJsonVectorStore:
                         document_id=chunk.document_id,
                         content=chunk.content,
                         chunk_index=chunk.chunk_index,
-                        content_hash=chunk.content_hash,
+                        content_hash=canonical_content_hash(chunk.content),
                         metadata_json=json.dumps(chunk.metadata, sort_keys=True),
                         embedding_json=json.dumps(embedding, allow_nan=False),
                     )
@@ -116,6 +119,17 @@ class SqlJsonVectorStore:
         scored: list[dict[str, Any]] = []
         for row in rows:
             try:
+                content = row.content
+                persisted_hash = row.content_hash
+                if not isinstance(content, str):
+                    raise ValueError("content is not text")
+                if not isinstance(persisted_hash, str) or not _CONTENT_HASH.fullmatch(
+                    persisted_hash
+                ):
+                    raise ValueError("content hash has an invalid format")
+                computed_hash = canonical_content_hash(content)
+                if not hmac.compare_digest(persisted_hash, computed_hash):
+                    raise ValueError("content hash does not match content")
                 embedding = validate_embedding(
                     json.loads(str(row.embedding_json)), dimensions, source="stored embedding"
                 )
@@ -123,20 +137,22 @@ class SqlJsonVectorStore:
                 if not isinstance(metadata, dict):
                     raise ValueError("metadata is not an object")
                 score = cosine_similarity(query_embedding, embedding)
+                chunk = DocumentChunk(
+                    id=str(row.id),
+                    document_id=str(row.document_id),
+                    content=content,
+                    chunk_index=int(row.chunk_index),
+                    metadata=metadata,
+                    embedding=embedding,
+                    persisted_content_hash=persisted_hash,
+                )
             except (ValueError, TypeError, json.JSONDecodeError):
-                logger.warning("corrupt_vector_row_skipped", extra={"chunk_id": str(row.id)})
+                logger.warning("corrupt_vector_row_skipped")
                 continue
             if score >= min_score:
                 scored.append(
                     {
-                        "chunk": DocumentChunk(
-                            id=str(row.id),
-                            document_id=str(row.document_id),
-                            content=str(row.content),
-                            chunk_index=int(row.chunk_index),
-                            metadata=metadata,
-                            embedding=embedding,
-                        ),
+                        "chunk": chunk,
                         "score": round(score, 4),
                         "method": "sql-json-cosine",
                     }

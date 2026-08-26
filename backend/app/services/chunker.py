@@ -26,6 +26,11 @@ from app.observability.logging import safe_value_metadata
 logger = structlog.get_logger()
 
 
+def canonical_content_hash(content: str) -> str:
+    """Return the canonical truncated SHA-256 used for persisted chunks."""
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+
 def validate_embedding(
     vector: object, dimensions: int, *, source: str = "embedding"
 ) -> list[float]:
@@ -86,10 +91,12 @@ class DocumentChunk:
     chunk_index: int
     metadata: dict = field(default_factory=dict)
     embedding: list[float] | None = None
+    persisted_content_hash: str | None = field(default=None, repr=False)
 
     @property
     def content_hash(self) -> str:
-        return hashlib.sha256(self.content.encode()).hexdigest()[:16]
+        """Use a store-verified persisted hash when retrieval supplied one."""
+        return self.persisted_content_hash or canonical_content_hash(self.content)
 
 
 @dataclass

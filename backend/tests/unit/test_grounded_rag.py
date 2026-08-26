@@ -7,15 +7,16 @@ import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.research.models import Claim
 from app.runtime.models import ModelResponse, TokenUsage
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.chunker import DocumentChunk
-from app.services.db_store import DatabaseStore, RuntimeEventRow
+from app.services.db_store import DatabaseStore, RuntimeEventRow, VectorChunkRow
 from app.services.grounded_rag import (
     DocumentEvidence,
     GroundedDocumentWorkflow,
@@ -23,6 +24,7 @@ from app.services.grounded_rag import (
     _verify_document_claims,
 )
 from app.services.run_ledger import RunRepository
+from app.services.sql_json_vector_store import SqlJsonVectorStore
 
 
 class FakeEmbeddings:
@@ -196,6 +198,56 @@ async def test_no_evidence_has_standard_response_and_no_provider_call(harness: H
     assert provider.calls == 0
     assert vectors.searches[0]["owner_id"] == "alice"
     assert vectors.searches[0]["project_id"] == "project-a"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("column", "raw_value"),
+    [
+        ("content", "RAW_STALE_EVIDENCE_SECRET"),
+        ("content_hash", "RAW_INVALID_HASH_SECRET"),
+    ],
+)
+async def test_tampered_persisted_evidence_is_skipped_before_provider_call(
+    harness: Harness, column: str, raw_value: str
+) -> None:
+    vectors = SqlJsonVectorStore(harness.store.session_factory, dimensions=2)
+    await vectors.add_chunks(
+        [DocumentChunk("chunk-1", "doc-1", "trusted content", 0, embedding=[1.0, 0.0])],
+        owner_id="alice",
+        project_id="project-a",
+    )
+    async with harness.store.session_factory.begin() as session:
+        await session.execute(
+            update(VectorChunkRow)
+            .where(VectorChunkRow.id == "chunk-1")
+            .values(**{column: raw_value})
+        )
+    provider = FakeProvider("must not be used")
+    workflow = GroundedDocumentWorkflow(
+        vector_store=vectors,
+        embedding_service=FakeEmbeddings(),  # type: ignore[arg-type]
+        model_provider=provider,
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+    )
+
+    with patch("app.services.sql_json_vector_store.logger.warning") as warning:
+        result = await workflow.run(
+            "What does Alpha use?",
+            owner_id="alice",
+            project_id="project-a",
+            correlation_id="correlation",
+            document_id=None,
+            document_ids={"doc-1"},
+        )
+
+    assert result.chunks_retrieved == 0
+    assert result.metrics["provider_calls"] == 0
+    assert provider.calls == 0
+    warning.assert_called_once_with("corrupt_vector_row_skipped")
+    assert raw_value not in repr(warning.call_args_list)
 
 
 @pytest.mark.asyncio

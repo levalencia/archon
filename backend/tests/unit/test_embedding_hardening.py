@@ -197,6 +197,60 @@ async def test_sql_store_bounds_candidates_and_skips_corrupt_rows() -> None:
 
 
 @pytest.mark.asyncio
+async def test_sql_store_rejects_tampered_hashes_without_logging_raw_values() -> None:
+    from sqlalchemy import update
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.services.chunker import DocumentChunk
+    from app.services.db_store import Base, VectorChunkRow
+    from app.services.sql_json_vector_store import SqlJsonVectorStore
+
+    engine = create_async_engine("sqlite+aiosqlite://")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    store = SqlJsonVectorStore(sessions, dimensions=2, candidate_limit=10)
+    chunks = [
+        DocumentChunk("stale", "doc", "original", 0, embedding=[1.0, 0.0]),
+        DocumentChunk("bad-hash", "doc", "second", 1, embedding=[1.0, 0.0]),
+        DocumentChunk("bad-metadata", "doc", "third", 2, embedding=[1.0, 0.0]),
+        DocumentChunk("valid", "doc", "unrelated valid", 3, embedding=[1.0, 0.0]),
+    ]
+    await store.add_chunks(chunks, owner_id="owner", project_id="project")
+    async with sessions.begin() as session:
+        await session.execute(
+            update(VectorChunkRow)
+            .where(VectorChunkRow.id == "stale")
+            .values(content="RAW_STALE_CONTENT_SECRET")
+        )
+        await session.execute(
+            update(VectorChunkRow)
+            .where(VectorChunkRow.id == "bad-hash")
+            .values(content_hash="RAW_MALFORMED_HASH_SECRET")
+        )
+        await session.execute(
+            update(VectorChunkRow)
+            .where(VectorChunkRow.id == "bad-metadata")
+            .values(metadata_json='["RAW_METADATA_SECRET"]')
+        )
+
+    with patch("app.services.sql_json_vector_store.logger.warning") as warning:
+        results = await store.search([1.0, 0.0], owner_id="owner", project_id="project", top_k=10)
+
+    assert [result["chunk"].id for result in results] == ["valid"]
+    valid = results[0]["chunk"]
+    assert valid.persisted_content_hash == chunks[-1].content_hash
+    assert valid.content_hash == chunks[-1].content_hash
+    assert warning.call_count == 3
+    logged = repr(warning.call_args_list)
+    assert "corrupt_vector_row_skipped" in logged
+    assert "RAW_STALE_CONTENT_SECRET" not in logged
+    assert "RAW_MALFORMED_HASH_SECRET" not in logged
+    assert "RAW_METADATA_SECRET" not in logged
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_memory_candidate_bound_is_deterministic_and_scope_local() -> None:
     from app.services.chunker import DocumentChunk
 
