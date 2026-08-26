@@ -464,7 +464,6 @@ class TestLiveClassifications:
             ("image_gen", {"prompt": "a blue square", "provider": "mock", "size": "8x8"}),
             ("session_search", {"query": "policy", "limit": 2}),
             ("memory", {"action": "replace", "old_text": "old", "content": "new"}),
-            ("terminal", {"command": "printf ok", "timeout": 1}),
             ("background_task", {"action": "status", "task_id": "task-1"}),
         ],
     )
@@ -619,8 +618,6 @@ class TestLiveClassifications:
             "image_gen": {"network", "external_side_effect"},
             "memory": {"read", "write"},
             "session_search": {"read"},
-            "code_execute": {"execute"},
-            "terminal": {"execute"},
             "background_task": {"read"},
         }
 

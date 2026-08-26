@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:${PATH:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="archon-backend:verify"
@@ -48,6 +49,13 @@ printf '\n== Frontend browser tests ==\n'
 (
   cd "$ROOT/frontend"
   npx playwright test
+)
+
+printf '\n== Docker sandbox containment smoke ==\n'
+"$ROOT/scripts/build-sandbox.sh"
+(
+  cd "$ROOT/backend"
+  uv run python ../scripts/sandbox_smoke.py
 )
 
 printf '\n== Backend container smoke test ==\n'

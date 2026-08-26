@@ -87,7 +87,10 @@ async def chat_stream_real(
     run_context = replace(run_context, project_id=body.project_id)
     scoped_memory = request.app.state.scoped_memory
     tools = get_tool_registry(
-        context=run_context, scoped_memory=scoped_memory, conversations=memory
+        context=run_context,
+        scoped_memory=scoped_memory,
+        conversations=memory,
+        sandbox_executor=request.app.state.sandbox_executor,
     )
     approval_broker: ApprovalBroker = request.app.state.approval_broker
 

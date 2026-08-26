@@ -53,6 +53,7 @@ from app.security.rate_limiter import RateLimiter
 from app.services.artifacts import ArtifactStore
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
+from app.tools.sandbox import DockerSandboxConfig, DockerSandboxExecutor, SandboxExecutor
 
 logger = structlog.get_logger()
 
@@ -70,6 +71,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             raise RuntimeError("Encrypted memory startup configuration is invalid") from None
     else:
         memory_master_key = None
+
+    app.state.sandbox_executor = None
+    if settings.execution_enabled:
+        sandbox_config = DockerSandboxConfig(
+            binary=settings.execution_docker_binary,
+            image=settings.execution_docker_image,
+            platform=settings.execution_docker_platform,
+            timeout_seconds=settings.execution_timeout_seconds,
+            cpus=settings.execution_cpus,
+            memory_mb=settings.execution_memory_mb,
+            pids_limit=settings.execution_pids_limit,
+            output_bytes=settings.execution_output_bytes,
+        )
+        executor = app.state.sandbox_executor_factory(sandbox_config)
+        await executor.preflight()
+        app.state.sandbox_executor = executor
 
     # Configure structured logging
     setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
@@ -159,6 +176,9 @@ def create_app(
     *,
     persistence_redactor_factory: Callable[[], PersistenceRedactor] = PersistenceRedactor,
     model_provider_factory: Callable[[Settings], object] = create_llm_client,
+    sandbox_executor_factory: Callable[
+        [DockerSandboxConfig], SandboxExecutor
+    ] = DockerSandboxExecutor,
 ) -> FastAPI:
     """Application factory. Accepts optional settings for testing."""
     if settings is None:
@@ -172,6 +192,8 @@ def create_app(
     app.state.settings = settings
     app.state.persistence_redactor_factory = persistence_redactor_factory
     app.state.model_provider_factory = model_provider_factory
+    app.state.sandbox_executor_factory = sandbox_executor_factory
+    app.state.sandbox_executor = None
 
     # --- Middleware (order matters: last added = first executed) ---
 

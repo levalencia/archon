@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -64,6 +64,33 @@ class Settings(BaseSettings):
     # Model provider circuit breaker
     circuit_breaker_failure_threshold: int = Field(default=5, gt=0)
     circuit_breaker_recovery_timeout: float = Field(default=30.0, gt=0)
+
+    # Isolated execution (disabled and absent from the live registry by default)
+    execution_enabled: bool = False
+    execution_docker_binary: str = Field(default="docker", pattern=r"^[A-Za-z0-9_./-]+$")
+    execution_docker_image: str = Field(
+        default="archon-sandbox:local", pattern=r"^[A-Za-z0-9][A-Za-z0-9._/@:-]+$"
+    )
+    execution_docker_platform: str = Field(default="linux/amd64", pattern=r"^linux/(amd64|arm64)$")
+    execution_require_image_digest: bool = False
+    execution_timeout_seconds: float = Field(default=10.0, ge=0.1, le=120.0)
+    execution_cpus: float = Field(default=0.5, ge=0.1, le=8.0)
+    execution_memory_mb: int = Field(default=128, ge=32, le=4096)
+    execution_pids_limit: int = Field(default=64, ge=16, le=512)
+    execution_output_bytes: int = Field(default=65536, ge=1024, le=1048576)
+
+    @model_validator(mode="after")
+    def validate_execution_image(self) -> Settings:
+        if self.execution_enabled and self.execution_require_image_digest:
+            image, marker, digest = self.execution_docker_image.partition("@sha256:")
+            if (
+                not marker
+                or not image
+                or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+            ):
+                raise ValueError("execution_docker_image must use a sha256 digest")
+        return self
 
     # Agent
     agent_max_iterations: int = 5

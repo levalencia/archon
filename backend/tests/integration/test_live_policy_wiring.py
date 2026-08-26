@@ -77,7 +77,7 @@ def test_sync_dangerous_call_fails_closed_without_execution() -> None:
     assert response.status_code == 200
     call = response.json()["tool_calls"][0]
     assert call["status"] == "denied"
-    assert call["result"]["reason_code"] == "approval_unavailable"
+    assert call["result"]["reason_code"] == "policy_metadata_unavailable"
 
 
 def test_sync_and_sse_safe_read_call_execute_under_policy() -> None:

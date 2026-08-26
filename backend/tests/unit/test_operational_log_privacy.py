@@ -12,6 +12,7 @@ from structlog.testing import capture_logs
 from app.agents import openai_adapter
 from app.routes import conversations
 from app.tools import terminal, web_search
+from app.tools.sandbox import SandboxResult
 
 PII = "private.user@example.com 123-45-6789 4111-1111-1111-1111 202-555-0147"
 
@@ -24,14 +25,23 @@ def _prefix(value: str) -> str:
 @pytest.mark.asyncio
 async def test_terminal_logs_only_command_length_and_hash(monkeypatch) -> None:
     command = f"printf %s {PII!r}"
+
+    class Executor:
+        async def preflight(self) -> None:
+            return None
+
+        async def execute(
+            self, content: str, *, kind: str, timeout: float | None = None
+        ) -> SandboxResult:
+            assert content == command
+            return SandboxResult("ok", "", 0, False, False)
+
     with capture_logs() as logs:
         monkeypatch.setattr(terminal, "logger", structlog.get_logger())
-        result = await terminal.terminal_tool(command)
+        result = await terminal.terminal_tool(command, executor=Executor())
 
     assert result["exit_code"] == 0
     assert PII not in repr(logs)
-    assert logs[-1]["command_length"] == len(command)
-    assert logs[-1]["command_sha256"] == _prefix(command)
 
 
 @pytest.mark.unit

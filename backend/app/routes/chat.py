@@ -37,7 +37,7 @@ from app.tools.memory_tools import (
     session_search_tool,
 )
 from app.tools.registry import SecureToolRegistry, resolve_workspace_path
-from app.tools.sandbox import execute_sandboxed
+from app.tools.sandbox import SandboxExecutor
 from app.tools.terminal import terminal_tool
 from app.tools.web_search import web_search_tool
 
@@ -59,12 +59,16 @@ def get_tool_registry(
     context: RunContext | None = None,
     scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
+    sandbox_executor: SandboxExecutor | None = None,
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
     if _tools_singleton is not None:
         return _tools_singleton
     return _create_tool_registry(
-        context=context, scoped_memory=scoped_memory, conversations=conversations
+        context=context,
+        scoped_memory=scoped_memory,
+        conversations=conversations,
+        sandbox_executor=sandbox_executor,
     )
 
 
@@ -97,6 +101,7 @@ def _create_tool_registry(
     context: RunContext | None = None,
     scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
+    sandbox_executor: SandboxExecutor | None = None,
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
     registry = SecureToolRegistry()
@@ -229,42 +234,44 @@ def _create_tool_registry(
         risk_classes=frozenset({RiskClass.READ}),
     )
 
-    async def _code_execute_handler(code: str) -> dict[str, Any]:
-        return await execute_sandboxed(code)
+    if sandbox_executor is not None:
 
-    registry.register(
-        name="code_execute",
-        handler=_code_execute_handler,
-        description=(
-            "Execute Python code safely. Returns stdout, stderr, and exit_code. "
-            "Use for calculations, data processing, or testing code snippets."
-        ),
-        input_schema={
-            "required": ["code"],
-            "properties": {
-                "code": {"type": "string", "description": "Python code to execute"},
-            },
-        },
-        timeout=15,
-        requires_approval=True,
-        risk_classes=frozenset({RiskClass.EXECUTE}),
-    )
+        async def _code_execute_handler(code: str) -> dict[str, object]:
+            return (await sandbox_executor.execute(code, kind="python")).to_dict()
 
-    registry.register(
-        name="terminal",
-        handler=terminal_tool,
-        description="Execute a shell command safely. Returns stdout, stderr, exit_code.",
-        input_schema={
-            "required": ["command"],
-            "properties": {
-                "command": {"type": "string", "description": "Shell command to execute"},
-                "timeout": {"type": "integer", "description": "Max seconds (default 30, max 120)"},
+        async def _terminal_handler(command: str, timeout: int = 30) -> dict[str, object]:
+            return await terminal_tool(command, timeout, executor=sandbox_executor)
+
+        registry.register(
+            name="code_execute",
+            handler=_code_execute_handler,
+            description=(
+                "Execute Python code in an isolated Docker container. "
+                "Returns stdout, stderr, and exit_code."
+            ),
+            input_schema={
+                "required": ["code"],
+                "properties": {"code": {"type": "string", "description": "Python code to execute"}},
             },
-        },
-        timeout=30,
-        requires_approval=True,
-        risk_classes=frozenset({RiskClass.EXECUTE}),
-    )
+            timeout=125,
+            requires_approval=True,
+            risk_classes=frozenset({RiskClass.EXECUTE}),
+        )
+        registry.register(
+            name="terminal",
+            handler=_terminal_handler,
+            description="Execute shell input in an isolated Docker container.",
+            input_schema={
+                "required": ["command"],
+                "properties": {
+                    "command": {"type": "string", "description": "Shell input to execute"},
+                    "timeout": {"type": "integer", "description": "Max seconds"},
+                },
+            },
+            timeout=125,
+            requires_approval=True,
+            risk_classes=frozenset({RiskClass.EXECUTE}),
+        )
 
     async def _background_task_handler(action: str, task_id: str = "") -> dict[str, Any]:
         """Manage background tasks: submit, status, list."""
@@ -363,7 +370,10 @@ async def chat(
     run_context = replace(run_context, project_id=body.project_id)
     scoped_memory = request.app.state.scoped_memory
     tools = get_tool_registry(
-        context=run_context, scoped_memory=scoped_memory, conversations=memory
+        context=run_context,
+        scoped_memory=scoped_memory,
+        conversations=memory,
+        sandbox_executor=request.app.state.sandbox_executor,
     )
 
     logger.info(

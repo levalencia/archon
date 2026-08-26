@@ -180,3 +180,16 @@ MIT — see [LICENSE](LICENSE).
 ---
 
 Built by [Luis Valencia](https://github.com/levalencia).
+
+
+## Isolated code execution
+
+Code and terminal tools are disabled by default (`ARCHON_EXECUTION_ENABLED=false`) and are
+absent from the live tool registry. To enable them, first run `scripts/build-sandbox.sh`, then
+configure the validated `ARCHON_EXECUTION_*` limits. Startup fails closed if Docker, its daemon,
+or the configured image is unavailable. Every request runs in an ephemeral, non-root Docker
+container with no network, no host mounts, a read-only root, dropped capabilities, no-new-privileges,
+and CPU/memory/PID/output/wall-time limits. There is no host-process fallback. For production,
+set `ARCHON_EXECUTION_REQUIRE_IMAGE_DIGEST=true` and use an immutable
+`name@sha256:<digest>` image reference. `scripts/verify.sh` performs a real containment smoke test
+outside the backend application container; backend-container health runs with execution disabled.

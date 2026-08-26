@@ -1,0 +1,8 @@
+# Update deliberately: production deployments should reference this image by its built digest.
+FROM python:3.11-alpine@sha256:6857d2dae63e052057f2db389a7061188ac9a92a3fa8d402bde68f36df6fada1
+
+RUN addgroup -g 65532 sandbox && adduser -D -H -u 65532 -G sandbox sandbox
+USER 65532:65532
+WORKDIR /work
+ENV HOME=/tmp PATH=/usr/local/bin:/usr/bin:/bin
+ENTRYPOINT []
