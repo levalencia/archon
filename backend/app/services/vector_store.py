@@ -5,7 +5,11 @@ from __future__ import annotations
 import math
 from typing import Protocol, runtime_checkable
 
-from app.services.chunker import DocumentChunk
+import structlog
+
+from app.services.chunker import DocumentChunk, validate_embedding
+
+logger = structlog.get_logger()
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -45,18 +49,33 @@ class MemoryVectorStore:
 
     backend = "memory"
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        dimensions: int | None = None,
+        candidate_limit: int = 10_000,
+        max_chunks_per_document: int = 4_096,
+    ) -> None:
         self._chunks: dict[tuple[str, str, str], DocumentChunk] = {}
+        self.dimensions = dimensions
+        self.candidate_limit = candidate_limit
+        self.max_chunks_per_document = max_chunks_per_document
 
     async def add_chunks(
         self, chunks: list[DocumentChunk], *, owner_id: str = "default", project_id: str = "default"
     ) -> int:
-        count = 0
+        if len(chunks) > self.max_chunks_per_document:
+            raise ValueError("Chunk batch exceeds configured per-document limit")
         for chunk in chunks:
-            if chunk.embedding is not None:
-                self._chunks[(owner_id, project_id, chunk.id)] = chunk
-                count += 1
-        return count
+            if chunk.embedding is None:
+                raise ValueError(f"Chunk {chunk.id} has no embedding")
+            dimensions = self.dimensions or len(chunk.embedding)
+            chunk.embedding = validate_embedding(
+                chunk.embedding, dimensions, source="stored embedding"
+            )
+        for chunk in chunks:
+            self._chunks[(owner_id, project_id, chunk.id)] = chunk
+        return len(chunks)
 
     async def add_chunk(
         self, chunk: DocumentChunk, *, owner_id: str = "default", project_id: str = "default"
@@ -76,17 +95,28 @@ class MemoryVectorStore:
         owner_id: str = "default",
         project_id: str = "default",
     ) -> list[dict]:
+        dimensions = self.dimensions or len(query_embedding)
+        query_embedding = validate_embedding(query_embedding, dimensions, source="query embedding")
         results: list[dict] = []
-        for (owner, project, _), chunk in self._chunks.items():
-            if owner != owner_id or project != project_id:
-                continue
+        candidates = sorted(
+            (item for item in self._chunks.items() if item[0][:2] == (owner_id, project_id)),
+            key=lambda item: item[0],
+        )[: self.candidate_limit]
+        for (_, _, _), chunk in candidates:
             if document_id is not None and chunk.document_id != document_id:
                 continue
             if document_ids is not None and chunk.document_id not in document_ids:
                 continue
             if chunk.embedding is None:
                 continue
-            score = cosine_similarity(query_embedding, chunk.embedding)
+            try:
+                embedding = validate_embedding(
+                    chunk.embedding, dimensions, source="stored embedding"
+                )
+                score = cosine_similarity(query_embedding, embedding)
+            except ValueError:
+                logger.warning("corrupt_vector_row_skipped", chunk_id=chunk.id)
+                continue
             if score >= min_score:
                 results.append({"chunk": chunk, "score": round(score, 4), "method": "cosine"})
         results.sort(key=lambda item: item["score"], reverse=True)

@@ -11,14 +11,68 @@ Course reference: Advanced Architectures L19-L21
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import math
+import socket
 import uuid
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 import structlog
 
 from app.observability.logging import safe_value_metadata
 
 logger = structlog.get_logger()
+
+
+def validate_embedding(
+    vector: object, dimensions: int, *, source: str = "embedding"
+) -> list[float]:
+    """Return a normalized vector only when every value is finite, numeric and exact-size."""
+    if not isinstance(vector, list) or len(vector) != dimensions:
+        raise ValueError(f"{source} must contain exactly {dimensions} values")
+    normalized: list[float] = []
+    for value in vector:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{source} contains a non-numeric value")
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError(f"{source} contains a non-finite value")
+        normalized.append(number)
+    return normalized
+
+
+def validate_embedding_endpoint(
+    base_url: str, *, allowed_hosts: set[str], allow_private: bool
+) -> str:
+    """Validate an embedding endpoint before credentials can be sent to it."""
+    parsed = urlsplit(base_url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("Embedding base URL must use HTTPS and include a host")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("Embedding base URL must not contain credentials, query, or fragment")
+    host = parsed.hostname.rstrip(".").lower()
+    normalized_allowed = {item.rstrip(".").lower() for item in allowed_hosts if item}
+    if host not in normalized_allowed:
+        raise ValueError("Embedding endpoint host is not explicitly allowed")
+    if (host == "localhost" or host.endswith(".localhost")) and not allow_private:
+        raise ValueError("Private embedding endpoints require explicit opt-in")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        if not allow_private:
+            raise ValueError("IP-literal embedding endpoints require explicit opt-in")
+    try:
+        addresses = {info[4][0] for info in socket.getaddrinfo(host, parsed.port or 443)}
+    except socket.gaierror as exc:
+        raise ValueError("Embedding endpoint host could not be resolved") from exc
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if not ip.is_global and not allow_private:
+            raise ValueError("Private embedding endpoints require explicit opt-in")
+    return base_url.rstrip("/")
 
 
 @dataclass
@@ -192,16 +246,22 @@ class EmbeddingService:
         api_key: str = "",
         dimensions: int = 256,
         base_url: str = "https://api.openai.com/v1",
+        allowed_hosts: str = "api.openai.com",
+        allow_private_endpoint: bool = False,
     ) -> None:
         if provider not in {"mock", "openai"}:
             raise ValueError(f"Unsupported embedding provider: {provider}")
-        if dimensions <= 0:
-            raise ValueError("Embedding dimensions must be positive")
+        if not 1 <= dimensions <= 4096:
+            raise ValueError("Embedding dimensions must be between 1 and 4096")
         self.provider = provider
         self.model = model
         self.api_key = api_key
         self.dimensions = dimensions
-        self.base_url = base_url.rstrip("/")
+        self.base_url = validate_embedding_endpoint(
+            base_url,
+            allowed_hosts={host.strip() for host in allowed_hosts.split(",")},
+            allow_private=allow_private_endpoint,
+        )
 
     def validate_configuration(self) -> None:
         """Fail startup for a configured real provider without credentials."""
@@ -250,7 +310,7 @@ class EmbeddingService:
             )
             raise ValueError(msg)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             resp = await client.post(
                 f"{self.base_url}/embeddings",
                 headers={
@@ -266,12 +326,26 @@ class EmbeddingService:
             resp.raise_for_status()
             data = resp.json()
 
-        items = sorted(data["data"], key=lambda item: item.get("index", 0))
-        embeddings = [item["embedding"] for item in items]
+        if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+            raise ValueError("Embedding provider returned an invalid payload")
+        raw_items = data["data"]
+        indexed_items: list[tuple[int, dict[str, object]]] = []
+        for position, item in enumerate(raw_items):
+            if not isinstance(item, dict):
+                raise ValueError("Embedding provider returned invalid items")
+            index = item.get("index", position)
+            if isinstance(index, bool) or not isinstance(index, int):
+                raise ValueError("Embedding provider returned invalid indexes")
+            indexed_items.append((index, item))
+        indexed_items.sort(key=lambda pair: pair[0])
+        if [index for index, _ in indexed_items] != list(range(len(texts))):
+            raise ValueError("Embedding provider returned invalid indexes")
+        embeddings = [
+            validate_embedding(item.get("embedding"), self.dimensions, source="provider embedding")
+            for _, item in indexed_items
+        ]
         if len(embeddings) != len(texts):
             raise ValueError("Embedding provider returned an unexpected response count")
-        if any(len(embedding) != self.dimensions for embedding in embeddings):
-            raise ValueError("Embedding provider returned unexpected dimensions")
         return embeddings
 
     def _mock_embed(self, text: str) -> list[float]:

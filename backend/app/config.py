@@ -29,8 +29,16 @@ class Settings(BaseSettings):
     embedding_provider: str = "mock"  # mock | openai
     embedding_model: str = "text-embedding-3-small"
     embedding_api_key: str = ""  # falls back to llm_api_key if empty
-    embedding_dimensions: int = 256
+    embedding_dimensions: int = Field(default=256, ge=1, le=4096)
     embedding_base_url: str = "https://api.openai.com/v1"
+    embedding_allowed_hosts: str = "api.openai.com"
+    embedding_allow_private_endpoint: bool = False
+
+    # Bounded document/vector resources
+    document_max_characters: int = Field(default=1_000_000, ge=1, le=20_000_000)
+    documents_max_per_owner_project: int = Field(default=1_000, ge=1, le=100_000)
+    document_max_chunks: int = Field(default=4_096, ge=1, le=100_000)
+    vector_search_candidate_limit: int = Field(default=10_000, ge=1, le=100_000)
 
     # Skills
     skills_top_k: int = 3

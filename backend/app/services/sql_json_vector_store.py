@@ -7,6 +7,7 @@ backend intentionally never describes itself as pgvector.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, cast
@@ -15,9 +16,11 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services.chunker import DocumentChunk
+from app.services.chunker import DocumentChunk, validate_embedding
 from app.services.db_store import VectorChunkRow
 from app.services.vector_store import cosine_similarity
+
+logger = logging.getLogger(__name__)
 
 
 class SqlJsonVectorStore:
@@ -25,8 +28,18 @@ class SqlJsonVectorStore:
 
     backend = "sql-json-cosine"
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        dimensions: int | None = None,
+        candidate_limit: int = 10_000,
+        max_chunks_per_document: int = 4_096,
+    ) -> None:
         self._sf = session_factory
+        self.dimensions = dimensions
+        self.candidate_limit = candidate_limit
+        self.max_chunks_per_document = max_chunks_per_document
 
     @asynccontextmanager
     async def _session(self, supplied: AsyncSession | None = None) -> AsyncIterator[AsyncSession]:
@@ -45,10 +58,18 @@ class SqlJsonVectorStore:
         session: AsyncSession | None = None,
     ) -> int:
         async with self._session(session) as db:
-            count = 0
+            if len(chunks) > self.max_chunks_per_document:
+                raise ValueError("Chunk batch exceeds configured per-document limit")
+            validated: list[tuple[DocumentChunk, list[float]]] = []
             for chunk in chunks:
                 if chunk.embedding is None:
-                    continue
+                    raise ValueError(f"Chunk {chunk.id} has no embedding")
+                dimensions = self.dimensions or len(chunk.embedding)
+                embedding = validate_embedding(
+                    chunk.embedding, dimensions, source="stored embedding"
+                )
+                validated.append((chunk, embedding))
+            for chunk, embedding in validated:
                 db.add(
                     VectorChunkRow(
                         id=chunk.id,
@@ -59,13 +80,12 @@ class SqlJsonVectorStore:
                         chunk_index=chunk.chunk_index,
                         content_hash=chunk.content_hash,
                         metadata_json=json.dumps(chunk.metadata, sort_keys=True),
-                        embedding_json=json.dumps(chunk.embedding),
+                        embedding_json=json.dumps(embedding, allow_nan=False),
                     )
                 )
-                count += 1
             if session is None:
                 await db.commit()
-            return count
+            return len(validated)
 
     async def search(
         self,
@@ -78,6 +98,8 @@ class SqlJsonVectorStore:
         document_id: str | None = None,
         document_ids: set[str] | None = None,
     ) -> list[dict[str, Any]]:
+        dimensions = self.dimensions or len(query_embedding)
+        query_embedding = validate_embedding(query_embedding, dimensions, source="query embedding")
         async with self._sf() as session:
             query = select(VectorChunkRow).where(
                 VectorChunkRow.owner_id == owner_id,
@@ -89,11 +111,21 @@ class SqlJsonVectorStore:
                 if not document_ids:
                     return []
                 query = query.where(VectorChunkRow.document_id.in_(document_ids))
+            query = query.order_by(VectorChunkRow.id).limit(self.candidate_limit)
             rows = (await session.scalars(query)).all()
         scored: list[dict[str, Any]] = []
         for row in rows:
-            embedding = json.loads(str(row.embedding_json))
-            score = cosine_similarity(query_embedding, embedding)
+            try:
+                embedding = validate_embedding(
+                    json.loads(str(row.embedding_json)), dimensions, source="stored embedding"
+                )
+                metadata = json.loads(str(row.metadata_json))
+                if not isinstance(metadata, dict):
+                    raise ValueError("metadata is not an object")
+                score = cosine_similarity(query_embedding, embedding)
+            except (ValueError, TypeError, json.JSONDecodeError):
+                logger.warning("corrupt_vector_row_skipped", extra={"chunk_id": str(row.id)})
+                continue
             if score >= min_score:
                 scored.append(
                     {
@@ -102,7 +134,7 @@ class SqlJsonVectorStore:
                             document_id=str(row.document_id),
                             content=str(row.content),
                             chunk_index=int(row.chunk_index),
-                            metadata=json.loads(str(row.metadata_json)),
+                            metadata=metadata,
                             embedding=embedding,
                         ),
                         "score": round(score, 4),

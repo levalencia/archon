@@ -74,6 +74,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         api_key=settings.embedding_api_key or settings.llm_api_key,
         dimensions=settings.embedding_dimensions,
         base_url=settings.embedding_base_url,
+        allowed_hosts=settings.embedding_allowed_hosts,
+        allow_private_endpoint=settings.embedding_allow_private_endpoint,
     )
     app.state.embedding_service.validate_configuration()
 
@@ -125,12 +127,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
-    app.state.vector_store = SqlJsonVectorStore(auth_store.session_factory)
+    app.state.vector_store = SqlJsonVectorStore(
+        auth_store.session_factory,
+        dimensions=settings.embedding_dimensions,
+        candidate_limit=settings.vector_search_candidate_limit,
+        max_chunks_per_document=settings.document_max_chunks,
+    )
     app.state.documents = DocumentRepository(
         auth_store.session_factory,
         app.state.vector_store,
         app.state.embedding_service,
         redactor,
+        max_characters=settings.document_max_characters,
+        max_documents_per_scope=settings.documents_max_per_owner_project,
+        max_chunks_per_document=settings.document_max_chunks,
     )
     logger.info("vector_store_initialized", backend="sql-json-cosine")
     if settings.memory_encryption_enabled:

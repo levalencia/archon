@@ -10,6 +10,7 @@ from app.agents.llm_factory import create_llm_client
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
 from app.services.db_store import DocumentRow
+from app.services.documents import DocumentResourceLimitError
 from app.services.rag_pipeline import RAGPipeline
 
 logger = structlog.get_logger()
@@ -62,13 +63,16 @@ async def upload_document(
     user: dict = Depends(get_current_user),  # noqa: B008
 ) -> DocumentResponse:
     await enforce_rate_limit(request, user, "documents_upload")
-    row = await request.app.state.documents.ingest(
-        owner_id=user["user_id"],
-        project_id=body.project_id,
-        title=body.title,
-        source=body.source,
-        content=body.content,
-    )
+    try:
+        row = await request.app.state.documents.ingest(
+            owner_id=user["user_id"],
+            project_id=body.project_id,
+            title=body.title,
+            source=body.source,
+            content=body.content,
+        )
+    except DocumentResourceLimitError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     return _response(row)
 
 
