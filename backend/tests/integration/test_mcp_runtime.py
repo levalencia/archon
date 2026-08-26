@@ -57,8 +57,10 @@ async def _real_provider(
         tool_id=echo.id,
         enabled=True,
     )
-    return store, repository, MCPRuntimeToolProvider(
-        repository, profiles={"official-test": profile}
+    return (
+        store,
+        repository,
+        MCPRuntimeToolProvider(repository, profiles={"official-test": profile}),
     )
 
 
@@ -179,16 +181,12 @@ async def test_scope_filter_risks_disable_toctou_and_schema_rejection(tmp_path: 
     assert specs[0].risk_classes == frozenset(
         {RiskClass.NETWORK, RiskClass.WRITE, RiskClass.EXTERNAL_SIDE_EFFECT}
     )
-    persisted = await repository.list_tools(
-        owner_id="alice", project_id="one", server_id=server.id
-    )
+    persisted = await repository.list_tools(owner_id="alice", project_id="one", server_id=server.id)
     assert not next(tool for tool in persisted if tool.name == "bad-schema").enabled
     assert await provider.for_scope("mallory", "one") == ()
     assert await provider.for_scope("alice", "other") == ()
 
-    await repository.update(
-        owner_id="alice", project_id="one", server_id=server.id, enabled=False
-    )
+    await repository.update(owner_id="alice", project_id="one", server_id=server.id, enabled=False)
     registry = get_tool_registry(bound_tools=specs)
     with pytest.raises(MCPRuntimeError, match="mcp_binding_changed"):
         await registry.execute(specs[0].name, {"note": "blocked"})

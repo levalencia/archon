@@ -31,9 +31,7 @@ def test_profiles_are_authenticated_and_never_expose_process_configuration(tmp_p
             "/api/auth/register", json={"username": "profile-user", "password": "secret1"}
         )
         token = registered.json()["access_token"]
-        response = client.get(
-            "/api/mcp/profiles", headers={"Authorization": f"Bearer {token}"}
-        )
+        response = client.get("/api/mcp/profiles", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
     assert response.json() == [{"id": "official-docs", "display_name": "Official Docs"}]
