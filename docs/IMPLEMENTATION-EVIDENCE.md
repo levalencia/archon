@@ -2,12 +2,12 @@
 
 **Canonical status source**
 
-- **Current verified local baseline:** `004f8d8` on local `main` (2026-08-26)
-- **Baseline repository state:** clean after acceptance; local `main` was 88 commits ahead of `origin/main`
+- **Current verified local baseline:** `e0cafec` on local `main` (2026-08-26)
+- **Baseline repository state:** clean after acceptance; local `main` was 92 commits ahead of `origin/main`
 - **Historical capability audit snapshot:** `27952f4` on local `main` (2026-08-25)
 - **Remote status:** the current baseline has not been pushed or rerun in remote CI; the last known remote runs failed
 
-This is the sole canonical mutable source for implementation status and release-gate metrics. Other summaries must link here rather than maintain competing scorecards. The capability matrix and detailed findings come primarily from the historical audit snapshot; the policy-domain, tool-policy/filesystem, and runtime-policy-enforcement rows are refreshed for the integrated Sprint 1.3 baseline. See [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md) and the [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md).
+This is the sole canonical mutable source for implementation status and release-gate metrics. Other summaries must link here rather than maintain competing scorecards. The capability matrix and detailed findings come primarily from the historical audit snapshot; the policy-domain, tool-policy/filesystem, runtime-policy-enforcement, approval-policy, and web-search rows are refreshed for the integrated Sprint 1.4 baseline. See [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md) and the [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md).
 
 ## How to read the matrix
 
@@ -24,15 +24,15 @@ Legend: **Yes** = supported by evidence; **Partial** = limited or qualified evid
 
 ## Current verified local quality-gate evidence
 
-These results were freshly observed on local `main` at `004f8d8`. They establish a green **local Sprint 1.3 runtime-policy acceptance baseline**, not remote CI success, deployment, production readiness, or proof that a live chat/API route invokes runtime policy or approval enforcement. Live route wiring and observation remain Sprint 1.4 work.
+These results were freshly observed on local `main` at `e0cafec`. They establish a green **local Sprint 1.4 live-policy integration baseline**, not remote CI success, deployment, production readiness, durable approval storage, or evidence from a real-provider deployment. Local integration tests exercised the sync and SSE chat routes: both use the policy-aware runtime, sync requests fail closed when approval is unavailable, and the SSE path carries owner-scoped approval decisions through an in-memory broker.
 
 | Gate | Fresh result | Status |
 |---|---|---|
 | Ruff check | No violations | Pass |
-| Ruff format check | 169 files already formatted | Pass |
+| Ruff format check | 173 files already formatted | Pass |
 | Bandit scan | 20 low, 0 medium, 0 high; `-ll` gate passed | Pass; static scan only |
-| Backend tests | 720 passed, 0 skipped | Pass |
-| Backend coverage | 83.43% | Measured; aggregate coverage is not integration proof |
+| Backend tests | 751 passed, 0 skipped | Pass |
+| Backend coverage | 84.00% | Measured; aggregate coverage is not integration proof |
 | Svelte check | 0 errors, 0 warnings | Pass |
 | Frontend unit tests | 4 Vitest tests across 2 files | Pass; shallow coverage |
 | Frontend production build | Build completed | Pass |
@@ -41,11 +41,11 @@ These results were freshly observed on local `main` at `004f8d8`. They establish
 | Repository diff check | Clean | Pass |
 | Remote CI | Not rerun; last known remote runs failed | **No green remote evidence** |
 
-**Local release-gate verdict:** Sprint 1.3 runtime-policy acceptance passed at `004f8d8`. The branch was clean after the run. No push or remote CI rerun occurred.
+**Local release-gate verdict:** Sprint 1.4 live-policy integration acceptance passed at `e0cafec`. The branch was clean after the run. No push or remote CI rerun occurred.
 
 ## Historical audit snapshot
 
-Except for the explicitly refreshed policy-domain, tool-policy/filesystem, and runtime-policy-enforcement rows, the capability matrix below remains the audit judgment recorded at `27952f4`, when Ruff reported 50 lint errors, Ruff format reported 16 files requiring formatting, strict Mypy reported 395 errors, and Svelte check reported one warning. Later local gate improvements do not by themselves prove that a product capability became more complete, better wired, deployed, or production-ready.
+Except for the explicitly refreshed policy-domain, tool-policy/filesystem, runtime-policy-enforcement, approval-policy, and web-search rows, the capability matrix below remains the audit judgment recorded at `27952f4`, when Ruff reported 50 lint errors, Ruff format reported 16 files requiring formatting, strict Mypy reported 395 errors, and Svelte check reported one warning. Later local gate improvements do not by themselves prove that a product capability became more complete, better wired, deployed, or production-ready.
 
 ## Capability evidence matrix
 
@@ -63,17 +63,17 @@ Except for the explicitly refreshed policy-domain, tool-policy/filesystem, and r
 | Context compaction and inspection | Yes | Partial | Partial | Partial | Partial | No | Useful plumbing exists; effective-context provenance and some displayed metrics are incomplete or hardcoded. |
 | Persistent memory | Yes | Yes | Yes | Yes | Partial | No | Live memory is global plaintext and cross-user; the encrypted store is not the actual live persistence path. |
 | API authorization and ownership | Yes | Partial | Yes | Yes | Partial | No | Conversations/artifacts are stronger; memory, tasks, MCP, and approvals have ownership gaps. |
-| Policy domain and deterministic matching | Yes | No | Yes | No | No | No | Policy models and deterministic matching are integrated and covered by automated tests; no evidence yet shows a live chat/API route invokes them. |
-| Tool policy metadata and classification | Yes | Yes | Yes | No | No | No | The live tool registry carries validated risk/resource metadata and builds fail-closed policy requests for registered calls. This classification bridge is tested, but no acceptance observation shows a runtime policy decision trace or enforcement. |
-| Runtime policy enforcement | Yes | No | Yes | No | No | No | A fail-closed engine path handles allow/ask/deny decisions, exact approval binding, atomic batch authorization, event redaction, and terminal deadline failures under automated tests. No evidence yet shows a live chat/API route instantiates the policy engine and authorizer; live wiring and observation remain Sprint 1.4 work. |
+| Policy domain and deterministic matching | Yes | Yes | Yes | Yes | No | No | The shared runtime factory applies deterministic policy matching on both sync and SSE chat routes. `Observed` means those local integration event paths were exercised with a mock model; it is not real-provider or deployment evidence. |
+| Tool policy metadata and classification | Yes | Yes | Yes | Yes | No | No | The live tool registry carries validated risk/resource metadata and builds fail-closed policy requests for registered calls. Local sync/SSE integration exercised this bridge through the shared runtime; `Observed` remains local mock-model evidence, not deployed proof. |
+| Runtime policy enforcement | Yes | Yes | Yes | Yes | No | No | Sync and SSE routes instantiate the shared policy-aware runtime. Local integration tests observed safe execution, sync fail-closed behavior, and SSE policy/approval/denial events; this `Observed` rating is local mock-model integration evidence, not a real-provider deployment or durable enforcement record. |
 | Filesystem workspace containment | Yes | Yes | Yes | No | No | No | Live read, write, and list tools enforce workspace-relative descriptor-based traversal and reject traversal, symlink, hard-link, and unsafe target cases. Acceptance established automated coverage, not a user-visible decision trace or deployment. |
-| Approval policy and human approval | Yes | Partial | Yes | Yes | Partial | No | SSE has a transient modal, but sync chat can bypass approval and decisions are not owner-scoped receipts. |
+| Approval policy and human approval | Yes | Yes | Yes | Yes | Partial | No | The live SSE route uses an owner-scoped in-memory broker with exact decision binding, single consumption, cleanup, and tested approve/deny execution control; sync fails closed when no authorizer is available. Approval state and decisions are transient, not durable receipts or deployed persistence. |
 | File read/write tools | Yes | Yes | Yes | Partial | Yes | No | Useful workspace checks exist, but host execution paths can bypass the intended boundary. |
 | Python/code execution | Yes | Yes | Yes | Partial | Yes | No | Approval-gated host subprocess prototype, **not a secure sandbox**. |
 | Terminal/shell execution | Yes | Yes | Yes | Partial | Yes | No | Host shell with a blocklist, **not isolated execution**. |
 | PII controls before persistence | Partial | No | Partial | No | No | No | A detector exists, but sync and SSE routes persist raw messages first. |
 | Rate limiting and provider circuit breaking | Yes | No | Yes | No | Partial | No | Classes/tests and admin display exist; they do not protect the live provider path. |
-| Web search and source display | Yes | Yes | Yes | Yes | Yes | No | Brave-backed search and source rendering were observed; claim-level verification is not consistent. |
+| Web search and source display | Yes | Yes | Yes | Yes | Yes | No | Brave-backed search and source rendering were observed. The refreshed SSE path projects only validated title/URL fields from successful search results and excludes snippets/full content; claim-level verification is still not consistent. |
 | Document ingestion and RAG | Yes | Partial | Yes | Yes | Partial | No | Educational path defaults to mock embeddings/in-memory vectors; metadata is volatile. |
 | Durable vector storage / pgvector | Partial | Partial | Partial | No | No | No | PostgreSQL path stores JSON vectors and computes similarity in Python; route compatibility is broken. |
 | Multimodal input | Yes | Partial | Partial | No | Partial | No | Plumbing exists, but persuasive real-provider end-to-end evidence is absent. |
