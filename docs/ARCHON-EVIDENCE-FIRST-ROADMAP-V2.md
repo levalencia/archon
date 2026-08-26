@@ -546,6 +546,8 @@ Vitest reducers/API contracts and Playwright golden paths for login, permissions
 
 # Sprint 7 — Deployment, benchmark and interview artifact
 
+> **2026-08-27 status:** the authorized local scope is implemented and evidenced. The original public-deployment completion criterion remains intentionally unmet because Luis selected local-only and prohibited cloud deployment. `Deployed` therefore remains No.
+
 **Course concepts:** Day 23 Kubernetes, Day 27 QA, Day 28 DR, Day 30 Production Deployment  
 **Advanced concepts:** CI/CD, observability, governance, serving
 

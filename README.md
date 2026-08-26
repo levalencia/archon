@@ -4,194 +4,188 @@
 
 ### Agent Reliability Workbench
 
-**A local-first, inspectable AI-agent runtime for studying tool execution, context, evidence, and failure modes.**
+**A local-first, inspectable agent runtime built around policy, approvals, durable evidence, evaluation, and failure recovery.**
 
-[![CI](https://github.com/levalencia/archon/actions/workflows/ci.yml/badge.svg)](https://github.com/levalencia/archon/actions)
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-[Quick Start](#quick-start) · [Evidence Matrix](docs/IMPLEMENTATION-EVIDENCE.md) · [Architecture](#architecture) · [Limitations](#current-limitations)
+[Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md) · [Architecture](docs/ARCHITECTURE-DIAGRAMS.md) · [DR Runbook](docs/DR-RUNBOOK.md) · [Demo](docs/DEMO-SCRIPT.md)
 
 </div>
 
 ---
 
-## Why this project exists
+## Status
 
-Archon is a portfolio and learning project for production-oriented agent engineering. Its differentiator is not the number of agent features. It is the ability to inspect and test:
+Archon is a serious **local portfolio system**, not a public production service.
 
-- native structured tool calls;
-- iteration, tool, token, and time budgets;
-- typed runtime events and explicit stop reasons;
-- conversation history and context composition;
-- web evidence, citations, and evaluation;
-- visual run inspection on desktop, with mobile behavior still being hardened;
-- provider adapters without an orchestration framework dependency.
+| Evidence | Current result |
+|---|---|
+| Verified target | Production-like local Docker Compose on macOS |
+| Backend acceptance | 1,022 tests and 86.24% coverage at the S7.1 acceptance point; final S7.5 rerun pending |
+| Frontend acceptance | Svelte 0/0, 17 Vitest, 21 Playwright |
+| Local dependency smoke | PostgreSQL 16, Redis 7, OTEL collector, backend, frontend, and loopback gateway passed |
+| DR | Backup 0.702 s; clean restore 21.597 s; 0 records lost at snapshot boundary |
+| Portfolio benchmark | 30/30 deterministic control-plane iterations passed; external cost $0 |
+| Public/cloud deployment | **No — explicitly deferred** |
+| Remote CI | Not rerun; no push performed |
 
-## Verification status
+Exact definitions and limits live in the [canonical evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md).
 
-The repository includes a local acceptance command:
+## Product thesis
+
+Archon demonstrates one auditable path:
+
+```text
+Policy → Run → Approval → Tool → Evidence → Evaluation
+```
+
+The project emphasizes control-plane reliability rather than feature count:
+
+- typed provider/tool/event contracts and explicit stop reasons;
+- deterministic policy matching and fail-closed approvals;
+- durable owner-scoped Run Ledger with replay, fork, and compare;
+- encrypted owner/project memory and PII redaction before persistence;
+- durable document ingestion, SQL JSON cosine retrieval, grounded claims, and citations;
+- recorded-run evaluation and one bounded verifier child;
+- official MCP 2.1.1 stdio discovery and governed execution;
+- responsive evidence-first Workbench;
+- reproducible local deployment, backup/restore, and benchmark evidence.
+
+## Verified local target
+
+The sole verified deployment target is `docker-compose.local.yml`:
+
+```mermaid
+flowchart LR
+    Browser -->|127.0.0.1 only| Gateway[Unprivileged Nginx]
+    Gateway --> Frontend[SvelteKit adapter-node]
+    Gateway --> Backend[FastAPI + Alembic]
+    Backend --> Postgres[(PostgreSQL 16)]
+    Backend --> Redis[(Redis 7)]
+    Backend --> OTEL[OTEL Collector]
+```
+
+PostgreSQL, Redis, and OTEL expose no host ports. Images are digest-pinned. Backend and frontend run non-root; the backend root filesystem is read-only. The verified target uses explicit mock model and embedding providers, keeps optional code execution disabled, and proves an exported `agent.run` span.
+
+## Quick verification
+
+### Prerequisites
+
+- Docker Desktop
+- Python 3.11
+- [`uv`](https://docs.astral.sh/uv/)
+- Node.js 22+
+
+### Full repository acceptance
 
 ```bash
 ./scripts/verify.sh
 ```
 
-The audited repository has meaningful automated coverage and local runtime evidence, but the full quality and release gates are not green. Local build or container smoke results do not establish deployment.
-
-See the [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) for exact definitions, capability depth, and limitations. Do not infer production readiness from test count, source-file presence, or a local smoke test.
-
-## Quick start
-
-### Prerequisites
-
-- Python 3.11
-- [`uv`](https://docs.astral.sh/uv/)
-- Node.js 22+
-- Docker
-- Optional: Ollama for a local model, or credentials for a configured hosted provider
+### Production-like local deployment smoke
 
 ```bash
-git clone https://github.com/levalencia/archon.git
-
-# Terminal 1, from the directory containing the clone
-cd archon/backend
-uv sync --extra dev --extra llm
-cp .env.example .env
-# Generate the canonical, unpadded 43-character URL-safe Base64 encoding of 32 random bytes:
-python -c 'import secrets; print(secrets.token_urlsafe(32))'
-# Put that output in .env as ARCHON_ENCRYPTION_MASTER_KEY. Never log or commit the key.
-# Encrypted persistent memory is mandatory by default; startup fails safely without a valid key.
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Terminal 2, from the directory containing the clone
-cd archon/frontend
-npm ci
-npm run dev -- --host 0.0.0.0
+./scripts/local-deploy-smoke.sh
 ```
 
-Open `http://localhost:3000`.
+The script generates ephemeral credentials in a mode-`0600` temporary env file, builds the stack, verifies readiness/auth/migrations/metrics/OTEL export, and removes containers, volumes, and credentials by default.
 
-The default example configuration targets Ollama. Hosted providers require their own credentials. Encrypted persistent memory is enabled by default and requires `ARCHON_ENCRYPTION_MASTER_KEY` to be the canonical, unpadded 43-character URL-safe Base64 encoding of exactly 32 random bytes (256 bits). Whitespace, `=` padding, and standard Base64 `+` or `/` characters are rejected. Generate it with `python -c 'import secrets; print(secrets.token_urlsafe(32))'`. Setting `ARCHON_MEMORY_ENCRYPTION_ENABLED=false` explicitly disables the persistent-memory API and removes the live memory tool rather than falling back to plaintext. Never commit `.env` files, encryption keys, or runtime memory/database files, and never include the key in logs or error messages.
+### Disaster recovery proof
 
-The current ciphertext format does not support online key rotation: replacing the key makes existing facts undecryptable. To rotate, export each owner/project scope while the old key is active, stop all application processes, back up and clear the encrypted memory tables, install the newly generated key in the secret manager, restart, and re-import the exported facts. Protect and securely delete the temporary plaintext export after verification.
+```bash
+./scripts/local-dr-smoke.sh /tmp/archon-dr-report.json
+```
+
+This creates durable user/conversation/run/document/approval evidence, backs up PostgreSQL, destroys the source volume, restores into a fresh project, verifies exact records and hashes, records RTO/RPO, and cleans up.
+
+### Deterministic portfolio benchmark
+
+```bash
+cd backend
+uv run python scripts/portfolio_benchmark.py \
+  --output /tmp/archon-portfolio-benchmark.json \
+  --iterations 10
+```
+
+The benchmark uses actual production control-plane classes with scripted local adapters. It does **not** measure external model quality, load capacity, or production SLOs.
 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    UI[SvelteKit workbench] -->|REST and SSE| API[FastAPI routes]
-    API --> RT[Typed agent runtime]
-    RT --> MODEL[Provider adapters]
-    RT --> TOOLS[Secure tool registry]
-    RT --> EVENTS[Typed event sink]
-    RT --> MEMORY[Conversation and context services]
-    EVENTS --> UI
-    EVENTS --> OBS[Logs traces and evaluations]
+flowchart TD
+    UI[Evidence-first Workbench] --> API[Authenticated FastAPI routes]
+    API --> Runtime[Typed AgentRuntime]
+    Runtime --> Policy[Rule policy engine]
+    Policy -->|ASK| Approval[Durable exact-bound approval]
+    Approval --> Tools[Secure registry / MCP / Docker sandbox]
+    Runtime --> Ledger[(Owner-scoped Run Ledger)]
+    Runtime --> Evidence[Documents + SQL JSON cosine]
+    Evidence --> Grounding[Claim and citation verification]
+    Ledger --> Eval[Recorded-run evaluations]
+    Grounding --> Eval
+    Eval --> UI
 ```
 
-### Live request path
+See [Architecture Diagrams](docs/ARCHITECTURE-DIAGRAMS.md) for boundaries and sequences.
 
-1. The frontend creates or opens a conversation.
-2. FastAPI builds system, skill, memory, history, and user messages.
-3. The typed runtime invokes a provider with native tool schemas.
-4. Tool calls are decoded into typed contracts rather than parsed from model prose.
-5. Runtime events are sent to the SSE route without monkey-patching shared objects.
-6. The UI renders the answer first and exposes Run, Evidence, Context, and Logs through an inspector.
+## Evidence-backed capabilities
 
-## Evidence-based capability summary
+| Capability | What is demonstrated locally | Important limit |
+|---|---|---|
+| Policy and approvals | Sync/SSE parity, exact tool-call binding, durable owner-scoped decisions | No public production traffic evidence |
+| Memory and privacy | AES-GCM owner/project memory, fail-closed key requirement, PII-before-storage | No online key rotation |
+| Execution isolation | Optional Docker-only tools, no host fallback, network/mount/capability denial | Docker daemon remains trusted infrastructure |
+| Run Ledger | Ordered durable events, replay, fork, compare, parent-child lineage | Replay is read-only, not executable resume |
+| RAG and evaluation | Durable docs/chunks, SQL JSON cosine, grounded claims, recorded-run evals | No pgvector and no verified external embedding provider |
+| Verifier child | Isolated evidence-only context, no tools, real budgets, benchmarked benefit | One bounded specialist, not a dynamic swarm |
+| MCP | Official SDK stdio client, allowlisted profiles, inventory, policy/approval, UI | No Streamable HTTP/OAuth production deployment |
+| Operations | Local Compose, OTEL span export, backup/restore, deterministic benchmark | Local-only; `Deployed` remains No |
 
-The strongest demonstrated core is the typed budgeted runtime, native Anthropic/Foundry tool handling, live SSE evidence, authenticated conversations, and tool contracts. The desktop Workbench works for live run inspection, but the current global mobile shell has a known compressed-layout defect. Provider parity is partial. RAG durability, user-scoped memory, execution isolation, approvals, MCP, multi-agent security, evaluations, durable run replay, and cloud deployment are incomplete or unverified.
+## Key API surfaces
 
-The [canonical evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) evaluates each capability independently as **Exists**, **Wired**, **Tested**, **Observed**, **UI**, and **Deployed**. It supersedes older feature-count and completion scorecards.
+| Path | Purpose |
+|---|---|
+| `POST /api/chat`, `POST /api/chat/stream` | Typed agent run and SSE events |
+| `/api/conversations` | Owner-scoped conversation lifecycle |
+| `/api/runs`, `/api/runs/{id}/events` | Durable run evidence, replay, fork, compare |
+| `/api/approvals` | Exact-bound durable approval decisions |
+| `/api/documents` | Durable ingestion and grounded retrieval |
+| `/api/evals/runs` | Evaluate recorded runs |
+| `/api/mcp/servers` | Governed MCP server inventory and discovery |
+| `/healthz`, `/readyz`, `/metrics` | Liveness, dependency readiness, metrics |
+
+OpenAPI is available at `/docs` while the backend is running.
+
+## Security and operations notes
+
+- Secrets are required through environment substitution; no default database/JWT/encryption credentials exist in Compose.
+- Persistent memory fails closed without one canonical 32-byte URL-safe key.
+- Redis is required by the verified target; readiness fails when rate-limit storage is unavailable.
+- Code/shell execution is absent unless explicitly enabled with an immutable sandbox image.
+- The local gateway is published on loopback only.
+- Production npm dependencies currently report 0 vulnerabilities; tooling/dev dependencies report 7 low findings and no moderate/high/critical findings.
 
 ## Current limitations
 
-- This is not yet a multi-tenant production service.
-- Audited quality and release gates are not all green; see the canonical evidence matrix for current results.
-- Authentication is meaningful for conversations and some resources, but memory, tasks, MCP, and approvals still have ownership gaps.
-- Python and terminal tools execute host subprocesses; they are not secure sandboxes.
-- Runtime deadlines detach and ignore late in-process tool/provider outcomes, but coroutine cancellation cannot revoke external side effects already performed (or independently continuing); hard revocation requires future process isolation.
-- Tool approval can be bypassed on the synchronous chat path and is not represented by durable owner-scoped receipts.
-- RAG quality cannot be claimed until real embeddings, durable vector storage, and retrieval evaluations replace the demo defaults.
-- The legacy ReAct implementation remains in the codebase for compatibility but is not the preferred live runtime.
-- Provider token streaming is not equally capable across every adapter.
-- Kubernetes, Helm, and cloud manifests are examples until a deployment is performed and verified.
+- No public/cloud deployment, remote CI rerun, or production SLO evidence.
+- External model, search, and embedding behavior was not part of final local acceptance.
+- Retrieval is `sql-json-cosine`, not pgvector or an indexed vector service.
+- Broad repository Mypy debt remains; new/touched modules use scoped strict ratchets.
+- Legacy experimental multi-agent and compatibility code is not a production claim.
+- Local deterministic benchmark timings are development-machine observations, not capacity results.
 
-## API
+## Documentation
 
-OpenAPI is available at `http://localhost:8000/docs` while the backend is running. Important routes include:
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/chat` | Execute a typed agent run |
-| POST | `/api/chat/stream` | Stream runtime events over SSE |
-| GET/POST | `/api/conversations` | Conversation lifecycle |
-| GET | `/api/chat/history/{id}` | Conversation messages |
-| GET | `/api/logs/stream` | Live logs; access control is being hardened |
-| POST | `/api/documents/upload` | Demo document ingestion |
-| POST | `/api/documents/query` | Demo RAG query |
-| GET/POST | `/api/skills` | Skill registry operations |
-| POST | `/api/auth/register` | Register a user |
-| POST | `/api/auth/login` | Obtain a token |
-
-## Testing
-
-```bash
-# Full local acceptance gate
-./scripts/verify.sh
-
-# Backend only
-cd backend
-uv run ruff check app tests
-uv run ruff format --check app tests
-uv run pytest
-
-# Frontend only
-cd ../frontend
-npm run check
-npm test -- --run
-npx playwright test
-npm run build
-```
-
-## Design principles
-
-- Pure Python protocols and dependency injection; no LangChain, AutoGen, or CrewAI runtime dependency.
-- Local-first development with optional hosted providers.
-- Typed contracts at provider, tool, event, persistence, and evaluation boundaries.
-- Deterministic tests for control flow; real-provider smoke tests are separate and credential-dependent.
-- Progressive disclosure: answer first, execution details on demand.
-- Claims in documentation must use the six dimensions in the [canonical evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md).
-
-## Roadmap
-
-1. Unified user-scoped persistence and route ownership.
-2. Permission policy and approval UI for sensitive tools.
-3. Grounded research workflow with citation and unsupported-claim evaluations.
-4. Durable run-event replay and reconnectable SSE.
-5. One governed MCP integration.
-6. One bounded specialist delegation workflow.
-7. Verified deployment and published benchmark results.
+- [Canonical implementation evidence](docs/IMPLEMENTATION-EVIDENCE.md)
+- [Architecture diagrams](docs/ARCHITECTURE-DIAGRAMS.md)
+- [Local deployment ADR](docs/adr/0001-local-production-like-deployment.md)
+- [DR runbook](docs/DR-RUNBOOK.md)
+- [Local deployment postmortem](docs/POSTMORTEM-LOCAL-DEPLOYMENT.md)
+- [3–5 minute demo](docs/DEMO-SCRIPT.md)
+- [Interview answer bank](docs/INTERVIEW-ANSWER-BANK.md)
+- [DR report](docs/evidence/local-dr-report.json)
+- [Benchmark report](docs/evidence/local-portfolio-benchmark.json)
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
 
----
-
 Built by [Luis Valencia](https://github.com/levalencia).
-
-
-## Isolated code execution
-
-Code and terminal tools are disabled by default (`ARCHON_EXECUTION_ENABLED=false`) and are
-absent from the live tool registry. To enable them, run `scripts/build-sandbox.sh` and configure
-`ARCHON_EXECUTION_DOCKER_IMAGE` with the printed local `sha256:<64 lowercase hex>` image ID (or an
-immutable registry `name@sha256:<64 lowercase hex>` digest), then configure the other validated
-`ARCHON_EXECUTION_*` limits. Mutable tags and image names are always rejected when execution is
-enabled. Startup fails closed if Docker, its daemon, or the configured image is unavailable. Every
-request runs in an ephemeral, non-root Docker container with no network, no host mounts, a read-only
-root, dropped capabilities, no-new-privileges, and CPU/memory/PID/output/absolute wall-time limits.
-There is no host-process fallback. `scripts/verify.sh` builds the pinned sandbox, resolves its image
-ID, and performs a real containment smoke test outside the backend application container;
-backend-container health runs with execution disabled.
