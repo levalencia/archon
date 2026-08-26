@@ -140,15 +140,18 @@ async def _limit(request: Request, user: dict[str, Any], action: str) -> None:
     await enforce_rate_limit(request, user, f"mcp_{action}")
 
 
-@router.get(/profiles, response_model=list[dict[str, str]])
+@router.get("/profiles", response_model=list[dict[str, str]])
 async def list_profiles(
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> list[dict[str, str]]:
     """Expose safe labels only, never command, arguments, environment, or secrets."""
-    await enforce_rate_limit(request, user, mcp_read)
+    await enforce_rate_limit(request, user, "mcp_read")
     return [
-        {id: profile_id, display_name: profile_id.replace(_,  ).replace(-,  ).title()}
+        {
+            "id": profile_id,
+            "display_name": profile_id.replace("_", " ").replace("-", " ").title(),
+        }
         for profile_id in sorted(request.app.state.mcp_profiles)
     ]
 
