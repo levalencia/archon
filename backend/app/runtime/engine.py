@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import re
@@ -74,11 +75,12 @@ class AgentResult:
 
 @dataclass(frozen=True, slots=True)
 class _NativeToolBinding:
-    """Immutable native identity captured before any policy collaborator is invoked."""
+    """Scalar native identity captured before any runtime collaborator is invoked."""
 
     tool_call_id: str
     tool_name: str
     arguments_hash: str
+    arguments_json: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,8 +88,18 @@ class _PolicyExecutionBinding:
     tool_call_id: str
     tool_name: str
     arguments_hash: str
+    arguments_json: str
     request: PolicyRequest
     action: PolicyAction
+
+
+@dataclass(frozen=True, slots=True)
+class _ProviderToolCallCopies:
+    """Independent native identity, provider-history, and execution snapshots."""
+
+    binding: _NativeToolBinding
+    history_call: ToolCall
+    execution_call: ToolCall
 
 
 class _ProviderToolCallSnapshotError(Exception):
@@ -126,7 +138,7 @@ class AgentRuntime:
         self._approval_timeout_seconds = approval_timeout_seconds
 
     async def run(self, messages: Sequence[Message]) -> AgentResult:
-        history = list(messages)
+        history = list(self._snapshot_history(messages))
         started_at = self._clock()
         iterations = 0
         calls: list[dict[str, Any]] = []
@@ -148,20 +160,26 @@ class AgentRuntime:
                     raise TimeoutError
                 response = await asyncio.wait_for(
                     self._model.complete(
-                        history, self._tools.definitions(), max_tokens=min(4096, remaining_tokens)
+                        self._snapshot_history(history),
+                        self._tools.definitions(),
+                        max_tokens=min(4096, remaining_tokens),
                     ),
                     timeout=remaining_seconds,
                 )
                 # This must be the first work after the provider returns: no clock, event sink,
-                # or other collaborator may observe a mutable provider call before it is copied.
+                # history append, or other collaborator may observe provider-owned calls before
+                # scalar bindings and independent history/execution copies have been captured.
                 snapshot_error: _ProviderToolCallSnapshotError | None = None
-                tool_calls = response.tool_calls
-                if self._policy_engine is not None:
-                    try:
-                        tool_calls = self._snapshot_provider_tool_calls(response.tool_calls)
-                    except _ProviderToolCallSnapshotError as error:
-                        snapshot_error = error
-                        tool_calls = ()
+                try:
+                    call_copies = self._snapshot_provider_tool_calls(
+                        response.tool_calls, policy_mode=self._policy_engine is not None
+                    )
+                except _ProviderToolCallSnapshotError as error:
+                    snapshot_error = error
+                    call_copies = ()
+                tool_calls = tuple(item.execution_call for item in call_copies)
+                history_tool_calls = tuple(item.history_call for item in call_copies)
+                native_bindings = tuple(item.binding for item in call_copies)
                 if self._expired(started_at):
                     raise TimeoutError
 
@@ -221,9 +239,9 @@ class AgentRuntime:
                     return await self._stop(StopReason.COMPLETED, content, iterations, calls, usage)
 
                 history.append(
-                    Message(Role.ASSISTANT, response_content or "", tool_calls=tool_calls)
+                    Message(Role.ASSISTANT, response_content or "", tool_calls=history_tool_calls)
                 )
-                for call in tool_calls:
+                for call_index, call in enumerate(tool_calls):
                     if len(calls) >= self._budget.max_tool_calls:
                         return await self._finalize(
                             StopReason.TOOL_BUDGET_EXHAUSTED,
@@ -252,10 +270,16 @@ class AgentRuntime:
                         continue
                     seen_calls.add(call_key)
                     request_data: dict[str, Any] = {"id": call.id, "name": call.name}
+                    native_binding = native_bindings[call_index]
                     if self._policy_engine is None:
-                        request_data["arguments"] = dict(call.arguments)
+                        request_data["arguments"] = copy.deepcopy(dict(call.arguments))
                     else:
-                        request_data["arguments_hash"] = canonical_arguments_hash(call.arguments)
+                        assert native_binding is not None
+                        request_data = {
+                            "id": native_binding.tool_call_id,
+                            "name": native_binding.tool_name,
+                            "arguments_hash": native_binding.arguments_hash,
+                        }
                     await self._emit(
                         AgentEventKind.TOOL_CALL_REQUESTED,
                         iterations,
@@ -263,8 +287,9 @@ class AgentRuntime:
                     )
                     policy_binding: _PolicyExecutionBinding | None = None
                     if self._policy_engine is not None:
+                        assert native_binding is not None
                         enforcement = await self._enforce_policy(
-                            call, iterations, calls, started_at
+                            call, native_binding, iterations, calls, started_at
                         )
                         if isinstance(enforcement, StopReason):
                             return await self._stop(enforcement, content, iterations, calls, usage)
@@ -467,11 +492,31 @@ class AgentRuntime:
             )
 
     @staticmethod
+    def _snapshot_history(messages: Sequence[Message]) -> tuple[Message, ...]:
+        """Build a detached provider view that cannot mutate or observe runtime history."""
+        snapshots: list[Message] = []
+        for message in messages:
+            tool_calls = tuple(
+                ToolCall(call.id, call.name, copy.deepcopy(dict(call.arguments)))
+                for call in message.tool_calls
+            )
+            snapshots.append(
+                Message(
+                    message.role,
+                    message.content,
+                    tool_call_id=message.tool_call_id,
+                    tool_calls=tool_calls,
+                    images=tuple(message.images),
+                )
+            )
+        return tuple(snapshots)
+
+    @staticmethod
     def _snapshot_provider_tool_calls(
-        provider_calls: Sequence[ToolCall],
-    ) -> tuple[ToolCall, ...]:
-        """Detach and validate every provider call before the runtime next yields control."""
-        snapshots: list[ToolCall] = []
+        provider_calls: Sequence[ToolCall], *, policy_mode: bool
+    ) -> tuple[_ProviderToolCallCopies, ...]:
+        """Bind identity and make unrelated history/execution copies before yielding control."""
+        snapshots: list[_ProviderToolCallCopies] = []
         for provider_call in provider_calls:
             try:
                 raw_id = provider_call.id
@@ -486,11 +531,47 @@ class AgentRuntime:
             try:
                 if raw_id != safe_id or raw_name != safe_name:
                     raise ValueError("provider tool identity is invalid")
-                canonical_name = canonical_tool_name(safe_name)
-                if safe_name != canonical_name:
-                    raise ValueError("provider tool name is not canonical")
-                arguments = canonical_arguments_snapshot(provider_call.arguments)
-                snapshots.append(ToolCall(safe_id, canonical_name, arguments))
+                if policy_mode:
+                    canonical_name = canonical_tool_name(safe_name)
+                    if safe_name != canonical_name:
+                        raise ValueError("provider tool name is not canonical")
+                    arguments = canonical_arguments_snapshot(provider_call.arguments)
+                    arguments_json = json.dumps(
+                        arguments,
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    binding = _NativeToolBinding(
+                        safe_id,
+                        canonical_name,
+                        canonical_arguments_hash(arguments),
+                        arguments_json,
+                    )
+                else:
+                    canonical_name = safe_name
+                    arguments = copy.deepcopy(dict(provider_call.arguments))
+                    arguments_json = json.dumps(
+                        arguments,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        default=str,
+                    )
+                    binding = _NativeToolBinding(
+                        safe_id,
+                        canonical_name,
+                        hashlib.sha256(arguments_json.encode("utf-8")).hexdigest(),
+                        arguments_json,
+                    )
+                snapshots.append(
+                    _ProviderToolCallCopies(
+                        binding,
+                        ToolCall(safe_id, canonical_name, copy.deepcopy(arguments)),
+                        ToolCall(safe_id, canonical_name, copy.deepcopy(arguments)),
+                    )
+                )
             except Exception:
                 raise _ProviderToolCallSnapshotError(safe_id, safe_name) from None
         return tuple(snapshots)
@@ -498,25 +579,32 @@ class AgentRuntime:
     async def _enforce_policy(
         self,
         call: ToolCall,
+        native_binding: _NativeToolBinding,
         iteration: int,
         calls: list[dict[str, Any]],
         started_at: float,
     ) -> StopReason | _PolicyExecutionBinding:
-        """Evaluate policy and return a binding for the exact executable snapshot."""
-        try:
-            native_tool_call_id = call.id
-            native_tool_name = call.name
-            tool_name = canonical_tool_name(native_tool_name)
-            arguments_hash = canonical_arguments_hash(call.arguments)
-            if native_tool_name != tool_name:
-                raise ValueError("policy metadata tool identity mismatch")
-        except Exception:
-            await self._emit_policy_failure(call, iteration, "policy_metadata_unavailable")
-            await self._record_denial(call, iteration, calls, "policy_metadata_unavailable")
-            return StopReason.POLICY_DENIED
-
-        native_binding = _NativeToolBinding(native_tool_call_id, tool_name, arguments_hash)
+        """Evaluate policy against the scalar identity bound at provider return."""
+        arguments_hash = native_binding.arguments_hash
+        tool_name = native_binding.tool_name
         event_call = ToolCall(native_binding.tool_call_id, native_binding.tool_name)
+        try:
+            binding_matches = (
+                call.id == native_binding.tool_call_id
+                and call.name == native_binding.tool_name
+                and canonical_tool_name(call.name) == native_binding.tool_name
+                and canonical_arguments_hash(call.arguments) == native_binding.arguments_hash
+            )
+        except Exception:
+            binding_matches = False
+        if not binding_matches:
+            await self._emit_policy_failure(
+                event_call, iteration, "binding_mismatch", arguments_hash
+            )
+            await self._record_denial(
+                event_call, iteration, calls, "binding_mismatch", arguments_hash
+            )
+            return StopReason.POLICY_DENIED
         if not isinstance(self._tools, PolicyAwareToolExecutor):
             await self._emit_policy_failure(
                 event_call, iteration, "policy_metadata_unavailable", arguments_hash
@@ -608,7 +696,12 @@ class AgentRuntime:
         await self._emit(AgentEventKind.POLICY_DECIDED, iteration, policy_data)
 
         binding = _PolicyExecutionBinding(
-            native_binding.tool_call_id, tool_name, arguments_hash, request, decision.action
+            native_binding.tool_call_id,
+            tool_name,
+            arguments_hash,
+            native_binding.arguments_json,
+            request,
+            decision.action,
         )
         if decision.action is PolicyAction.ALLOW:
             return binding
@@ -729,10 +822,13 @@ class AgentRuntime:
         ):
             raise ValueError("policy execution binding changed")
 
+        bound_arguments = canonical_arguments_snapshot(json.loads(binding.arguments_json))
+        if canonical_arguments_hash(bound_arguments) != binding.arguments_hash:
+            raise ValueError("policy execution binding changed")
         verification_call = ToolCall(
             binding.tool_call_id,
             binding.tool_name,
-            canonical_arguments_snapshot(execution_arguments),
+            canonical_arguments_snapshot(bound_arguments),
         )
         request = self._tools.policy_request(verification_call)
         verification_hash = canonical_arguments_hash(verification_call.arguments)
@@ -751,7 +847,7 @@ class AgentRuntime:
         execution_call = ToolCall(
             binding.tool_call_id,
             binding.tool_name,
-            canonical_arguments_snapshot(execution_arguments),
+            canonical_arguments_snapshot(bound_arguments),
         )
         if canonical_arguments_hash(execution_call.arguments) != binding.arguments_hash:
             raise ValueError("policy execution arguments changed")
@@ -858,7 +954,7 @@ class AgentRuntime:
         try:
             response = await self._within_deadline(
                 self._model.complete(
-                    history,
+                    self._snapshot_history(history),
                     (),
                     max_tokens=self._budget.final_synthesis_tokens,
                 ),

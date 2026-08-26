@@ -187,6 +187,107 @@ async def test_provider_multi_call_snapshots_have_independent_nested_arguments()
 
 
 @pytest.mark.asyncio
+async def test_provider_retained_history_cannot_observe_append_or_mutate_execution() -> None:
+    original = {"operation": {"mode": "safe", "items": ["public"]}}
+    provider_call = ToolCall("native-retained-history", "reader", original)
+
+    class RetainingProvider:
+        def __init__(self) -> None:
+            self.inputs: list[Sequence[Message]] = []
+            self.responses = [
+                ModelResponse(tool_calls=(provider_call,)),
+                ModelResponse("done"),
+            ]
+
+        async def complete(self, messages, tools=(), *, max_tokens=4096):
+            self.inputs.append(messages)
+            return self.responses.pop(0)
+
+    model = RetainingProvider()
+
+    class MutatingSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            await super().emit(event)
+            if event.kind is AgentEventKind.TOOL_CALL_REQUESTED:
+                # The provider's first input must remain its original immutable one-message view;
+                # it must never become the runtime's subsequently appended assistant history.
+                assert isinstance(model.inputs[0], tuple)
+                assert len(model.inputs[0]) == 1
+                object.__setattr__(provider_call, "id", "attacker-id")
+                object.__setattr__(provider_call, "name", "attacker_tool")
+                original["operation"]["mode"] = "dangerous"
+                original["operation"]["items"].append("secret")
+
+    tools = PolicyTools()
+    result = await AgentRuntime(
+        model,
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        events=MutatingSink(),
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert len(tools.executed) == 1
+    executed = tools.executed[0]
+    assert (executed.id, executed.name) == ("native-retained-history", "reader")
+    assert executed.arguments["operation"] == {"mode": "safe", "items": ["public"]}
+
+
+@pytest.mark.asyncio
+async def test_subsequent_provider_history_mutation_isolated_across_multiple_calls() -> None:
+    first = ToolCall("native-first-history", "reader", {"nested": {"value": "first"}})
+    second = ToolCall("native-second-history", "reader", {"nested": {"value": "second"}})
+
+    class AdversarialProvider:
+        def __init__(self) -> None:
+            self.inputs: list[Sequence[Message]] = []
+            self.iteration = 0
+
+        async def complete(self, messages, tools=(), *, max_tokens=4096):
+            self.inputs.append(messages)
+            self.iteration += 1
+            if self.iteration == 1:
+                return ModelResponse(tool_calls=(first,))
+            if self.iteration == 2:
+                retained_first = messages[1].tool_calls[0]
+                object.__setattr__(retained_first, "id", "mutated-history-id")
+                retained_first.arguments["nested"]["value"] = "mutated-history"
+                return ModelResponse(tool_calls=(second,))
+            # Every provider invocation gets a fresh detached view. Mutation of iteration two's
+            # retained view must not corrupt the runtime's authoritative history.
+            assert messages[1].tool_calls[0].id == "native-first-history"
+            assert messages[1].tool_calls[0].arguments["nested"] == {"value": "first"}
+            assert messages[3].tool_calls[0].id == "native-second-history"
+            assert messages[3].tool_calls[0].arguments["nested"] == {"value": "second"}
+            return ModelResponse("done")
+
+    class MutatingModelEventSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            await super().emit(event)
+            if event.kind is AgentEventKind.MODEL_RESPONSE and event.iteration == 2:
+                retained_first = model.inputs[-1][1].tool_calls[0]
+                object.__setattr__(retained_first, "name", "event_mutated_history")
+                retained_first.arguments["nested"]["value"] = "event-mutated-history"
+
+    tools = PolicyTools()
+    model = AdversarialProvider()
+    result = await AgentRuntime(
+        model,
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        events=MutatingModelEventSink(),
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert [(call.id, call.arguments["nested"]["value"]) for call in tools.executed] == [
+        ("native-first-history", "first"),
+        ("native-second-history", "second"),
+    ]
+    assert model.inputs[0] is not model.inputs[1]
+    assert model.inputs[1] is not model.inputs[2]
+
+
+@pytest.mark.asyncio
 async def test_invalid_later_provider_call_fails_closed_before_any_call_executes() -> None:
     cyclic: dict[str, Any] = {}
     cyclic["self"] = cyclic
