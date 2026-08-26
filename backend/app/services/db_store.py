@@ -11,10 +11,22 @@ import uuid
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import Column, DateTime, Integer, String, Text, delete, func, select
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    delete,
+    func,
+    select,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 logger = structlog.get_logger()
 
@@ -101,6 +113,40 @@ class RuntimeEventRow(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(tz=UTC))
 
 
+class ApprovalRequestRow(Base):
+    """Durable exact-binding approval state; raw tool arguments are never persisted."""
+
+    __tablename__ = "approval_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','approved','denied','expired','cancelled')",
+            name="ck_approval_requests_status",
+        ),
+        UniqueConstraint(
+            "user_id", "run_id", "tool_call_id", name="uq_approval_requests_owner_run_call"
+        ),
+        Index("ix_approval_requests_owner", "user_id"),
+        Index("ix_approval_requests_status", "status"),
+        Index("ix_approval_requests_run", "run_id"),
+        Index("ix_approval_requests_call", "tool_call_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    conversation_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    tool_call_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    arguments_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    risk_classes: Mapped[str] = mapped_column(Text, nullable=False)
+    matched_rule_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    decision_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DatabaseStore:
     """PostgreSQL-backed store for conversations, messages, audit, artifacts.
 
@@ -127,6 +173,11 @@ class DatabaseStore:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("database_initialized", tables=len(Base.metadata.tables))
+
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        """Return the supported session-factory integration point for repositories."""
+        return self._session_factory
 
     async def close(self) -> None:
         await self._engine.dispose()
