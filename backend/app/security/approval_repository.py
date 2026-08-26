@@ -314,6 +314,65 @@ class ApprovalRepository:
             await session.commit()
             return None if row is None else self._record(row)
 
+    async def decide_exact_for_owner(
+        self,
+        *,
+        user_id: str,
+        run_id: str,
+        tool_call_id: str,
+        status: ApprovalStatus,
+        reason: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """Atomically decide one exact owner/run/tool-call binding."""
+        user_id = _identifier(user_id, "user_id")
+        run_id = _identifier(run_id, "run_id")
+        tool_call_id = _identifier(tool_call_id, "tool_call_id")
+        decision = ApprovalStatus(status)
+        if decision not in {ApprovalStatus.APPROVED, ApprovalStatus.DENIED}:
+            raise ValueError("decision status must be approved or denied")
+        decision_reason = _reason(reason)
+        if decision_reason is None:
+            raise ValueError("decision reason is required")
+        current = _datetime(now or datetime.now(tz=UTC), "now")
+        exact_binding = (
+            ApprovalRequestRow.user_id == user_id,
+            ApprovalRequestRow.run_id == run_id,
+            ApprovalRequestRow.tool_call_id == tool_call_id,
+        )
+        async with self._sessions() as session:
+            await session.execute(
+                update(ApprovalRequestRow)
+                .where(
+                    *exact_binding,
+                    ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                    ApprovalRequestRow.expires_at <= current,
+                )
+                .values(
+                    status=ApprovalStatus.EXPIRED.value,
+                    decision_reason="approval_expired",
+                    decided_at=current,
+                )
+            )
+            result = cast(
+                CursorResult[Any],
+                await session.execute(
+                    update(ApprovalRequestRow)
+                    .where(
+                        *exact_binding,
+                        ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
+                        ApprovalRequestRow.expires_at > current,
+                    )
+                    .values(
+                        status=decision.value,
+                        decision_reason=decision_reason,
+                        decided_at=current,
+                    )
+                ),
+            )
+            await session.commit()
+            return bool(result.rowcount == 1)
+
     async def decide_unique_for_owner(
         self,
         *,

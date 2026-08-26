@@ -45,6 +45,7 @@ class StreamRequest(BaseModel):
 
 class ApprovalBody(BaseModel):
     approved: bool
+    run_id: uuid.UUID
 
 
 class QueueEventSink:
@@ -357,11 +358,15 @@ async def approve_tool_call(
     request: Request,
     user: dict = Depends(get_current_user),  # noqa: B008
 ) -> dict:
-    """Approve or deny the authenticated owner's unique pending tool call."""
+    """Approve or deny the authenticated owner's exact run-bound pending tool call."""
     broker: ApprovalBroker = request.app.state.approval_broker
+    run_id = str(body.run_id)
     decided = await broker.decide_for_owner(
-        user_id=user["user_id"], tool_call_id=tool_call_id, approved=body.approved
+        user_id=user["user_id"],
+        run_id=run_id,
+        tool_call_id=tool_call_id,
+        approved=body.approved,
     )
     if not decided:
         raise HTTPException(status_code=404, detail="No pending approval for this tool call")
-    return {"tool_call_id": tool_call_id, "approved": body.approved}
+    return {"run_id": run_id, "tool_call_id": tool_call_id, "approved": body.approved}

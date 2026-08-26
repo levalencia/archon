@@ -737,7 +737,10 @@ async def test_approval_is_reserved_before_required_event_is_published(approved:
             await super().emit(event)
             if event.kind is AgentEventKind.APPROVAL_REQUIRED:
                 self.accepted = await broker.decide_for_owner(
-                    user_id="alice", tool_call_id=event.data["id"], approved=approved
+                    user_id="alice",
+                    run_id="run",
+                    tool_call_id=event.data["id"],
+                    approved=approved,
                 )
 
     tools = PolicyTools(frozenset({RiskClass.WRITE}))

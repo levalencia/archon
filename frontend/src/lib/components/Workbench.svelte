@@ -36,7 +36,7 @@
   let hydrated = $state(false);
   let activeTab: InspectorTab = $state('run');
   let stats: RunStats = $state({ latency: '—', tokens: '—', tools: 0, iterations: 0 });
-  let pendingApproval: { tool: string; tool_call_id: string; parameters: Record<string, any> } | null = $state(null);
+  let pendingApproval: { tool: string; run_id: string; tool_call_id: string; parameters: Record<string, any> } | null = $state(null);
 
   let controller: AbortController | null = null;
   let logController: AbortController | null = null;
@@ -227,6 +227,15 @@
     if (event.event === 'approval_required') {
       try {
         const approval = JSON.parse(payload);
+        if (
+          typeof approval.tool !== 'string' ||
+          typeof approval.run_id !== 'string' || !approval.run_id ||
+          typeof approval.tool_call_id !== 'string' || !approval.tool_call_id
+        ) {
+          pendingApproval = null;
+          error = 'Invalid approval request: missing run binding';
+          return;
+        }
         pendingApproval = approval;
         am.thinking_steps = [...(am.thinking_steps || []), {
           type: 'thinking',
@@ -249,12 +258,12 @@
   // ── Human-in-the-loop approval ─────────────────────────────────────
   async function approve() {
     if (!pendingApproval) return;
-    const { tool, tool_call_id } = pendingApproval;
+    const { tool, run_id, tool_call_id } = pendingApproval;
     try {
       await authenticatedFetch(`/api/chat/approve/${tool_call_id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved: true }),
+        body: JSON.stringify({ approved: true, run_id }),
       });
       // Add thinking step to the current assistant message
       const am = messages[messages.length - 1];
@@ -275,12 +284,12 @@
 
   async function deny() {
     if (!pendingApproval) return;
-    const { tool, tool_call_id } = pendingApproval;
+    const { tool, run_id, tool_call_id } = pendingApproval;
     try {
       await authenticatedFetch(`/api/chat/approve/${tool_call_id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved: false }),
+        body: JSON.stringify({ approved: false, run_id }),
       });
       const am = messages[messages.length - 1];
       if (am && am.role === 'assistant') {

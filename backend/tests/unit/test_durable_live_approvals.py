@@ -53,7 +53,9 @@ async def test_cross_process_prepare_decide_and_poll(tmp_path) -> None:
     await authorizer.prepare(approval)
     waiter = asyncio.create_task(authorizer.authorize(approval))
 
-    assert await second.decide_for_owner(user_id="alice", tool_call_id="call-1", approved=True)
+    assert await second.decide_for_owner(
+        user_id="alice", run_id="run-1", tool_call_id="call-1", approved=True
+    )
     outcome = await asyncio.wait_for(waiter, timeout=1)
 
     assert outcome.approved is True
@@ -69,7 +71,9 @@ async def test_immediate_decision_and_restart_authorize(tmp_path) -> None:
     approval = request("instant")
     await first.authorizer(owner).prepare(approval)
 
-    assert await second.decide_for_owner(user_id="alice", tool_call_id="instant", approved=False)
+    assert await second.decide_for_owner(
+        user_id="alice", run_id="run-1", tool_call_id="instant", approved=False
+    )
     outcome = await second.authorizer(owner).authorize(approval)
 
     assert outcome.approved is False
@@ -136,21 +140,28 @@ async def test_expiry_is_persisted_and_returns_sanitized_denial(tmp_path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_ambiguous_owner_call_fails_closed_and_concurrent_decision_has_one_winner(
+async def test_exact_run_binding_and_concurrent_decision_has_one_winner(
     tmp_path,
 ) -> None:
-    broker, second, _, engine = await brokers(tmp_path / "owner.db")
+    broker, second, repository, engine = await brokers(tmp_path / "owner.db")
     approval = request("shared")
     await broker.authorizer(context(run="run-a", conversation="a")).prepare(approval)
     await broker.authorizer(context(run="run-b", conversation="b")).prepare(approval)
 
-    assert not await broker.decide_for_owner(user_id="alice", tool_call_id="shared", approved=True)
-    await broker.cancel_run(context(run="run-b", conversation="b"))
+    assert not await broker.decide_for_owner(
+        user_id="alice", run_id="wrong-run", tool_call_id="shared", approved=True
+    )
     results = await asyncio.gather(
-        broker.decide_for_owner(user_id="alice", tool_call_id="shared", approved=True),
-        second.decide_for_owner(user_id="alice", tool_call_id="shared", approved=False),
+        broker.decide_for_owner(
+            user_id="alice", run_id="run-a", tool_call_id="shared", approved=True
+        ),
+        second.decide_for_owner(
+            user_id="alice", run_id="run-a", tool_call_id="shared", approved=False
+        ),
     )
     assert sorted(results) == [False, True]
+    other = await repository.find_pending_by_tool_call(user_id="alice", tool_call_id="shared")
+    assert other is not None and other.run_id == "run-b"
     await engine.dispose()
 
 

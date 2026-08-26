@@ -159,6 +159,44 @@ async def test_concurrent_decisions_have_exactly_one_winner(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_exact_decision_cannot_cross_runs_and_has_one_winner(tmp_path) -> None:
+    repo, engine = await repository(tmp_path / "exact-concurrent.db")
+    first = await reserve(repo, run_id="run-a", tool_call_id="shared")
+    second = await reserve(repo, run_id="run-b", tool_call_id="shared")
+
+    assert not await repo.decide_exact_for_owner(
+        user_id="alice",
+        run_id="wrong-run",
+        tool_call_id="shared",
+        status=ApprovalStatus.APPROVED,
+        reason="user_approved",
+    )
+    results = await asyncio.gather(
+        repo.decide_exact_for_owner(
+            user_id="alice",
+            run_id="run-a",
+            tool_call_id="shared",
+            status=ApprovalStatus.APPROVED,
+            reason="user_approved",
+        ),
+        repo.decide_exact_for_owner(
+            user_id="alice",
+            run_id="run-a",
+            tool_call_id="shared",
+            status=ApprovalStatus.DENIED,
+            reason="user_denied",
+        ),
+    )
+    assert sorted(results) == [False, True]
+    assert await repo.get_status(first.id, "alice") in {
+        ApprovalStatus.APPROVED,
+        ApprovalStatus.DENIED,
+    }
+    assert await repo.get_status(second.id, "alice") is ApprovalStatus.PENDING
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_lazy_expiry_and_decision_race_respects_deadline(tmp_path) -> None:
     repo, engine = await repository(tmp_path / "expiry-race.db")
     created_at = datetime(2026, 8, 26, 12, tzinfo=UTC)

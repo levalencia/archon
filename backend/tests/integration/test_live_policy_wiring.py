@@ -99,8 +99,23 @@ def test_sync_and_sse_safe_read_call_execute_under_policy() -> None:
 
 
 @pytest.mark.parametrize("approved", [True, False], ids=["approve", "deny"])
-def test_live_sse_approval_decision_controls_dangerous_execution(approved: bool) -> None:
+def test_live_sse_approval_decision_controls_dangerous_execution(
+    approved: bool, monkeypatch
+) -> None:
     from app.routes import chat
+
+    monkeypatch.setattr(
+        RunContext,
+        "create",
+        classmethod(
+            lambda cls, *, user_id, conversation_id, correlation_id: cls(
+                user_id,
+                conversation_id,
+                "00000000-0000-4000-8000-000000000001",
+                correlation_id,
+            )
+        ),
+    )
 
     executions: list[str] = []
 
@@ -140,7 +155,13 @@ def test_live_sse_approval_decision_controls_dangerous_execution(approved: bool)
             else:
                 pytest.fail("live stream did not register its pending approval")
 
-            decision = api.post("/api/chat/approve/live-danger", json={"approved": approved})
+            decision = api.post(
+                "/api/chat/approve/live-danger",
+                json={
+                    "approved": approved,
+                    "run_id": "00000000-0000-4000-8000-000000000001",
+                },
+            )
             response = stream.result(timeout=5)
 
         assert decision.status_code == 200
@@ -156,6 +177,7 @@ def test_live_sse_approval_decision_controls_dangerous_execution(approved: bool)
         positions = [event_names.index(event) for event in expected_events]
         assert positions == sorted(positions)
         assert f'"approved": {str(approved).lower()}' in response.text
+        assert '"run_id": "00000000-0000-4000-8000-000000000001"' in response.text
         assert "must-not-reach-sse" not in response.text
         if approved:
             assert executions == ["once"]
@@ -250,7 +272,12 @@ def test_approval_endpoint_enforces_owner_and_consumes_decision_once() -> None:
             "/api/auth/register",
             json={"username": "approval-bob", "password": "valid-password-123"},
         ).json()
-        owner_context = RunContext(alice["user_id"], "conversation", "run", "correlation")
+        owner_context = RunContext(
+            alice["user_id"],
+            "conversation",
+            "00000000-0000-4000-8000-000000000002",
+            "correlation",
+        )
         approval = AuthorizationRequest(
             "endpoint-call",
             "terminal",
@@ -269,21 +296,40 @@ def test_approval_endpoint_enforces_owner_and_consumes_decision_once() -> None:
         bob_response = api.post(
             "/api/chat/approve/endpoint-call",
             headers={"Authorization": f"Bearer {bob['access_token']}"},
-            json={"approved": True},
+            json={
+                "approved": True,
+                "run_id": "00000000-0000-4000-8000-000000000002",
+            },
         )
         assert bob_response.status_code == 404
+
+        wrong_run = api.post(
+            "/api/chat/approve/endpoint-call",
+            headers={"Authorization": f"Bearer {alice['access_token']}"},
+            json={
+                "approved": True,
+                "run_id": "00000000-0000-4000-8000-000000000003",
+            },
+        )
+        assert wrong_run.status_code == 404
 
         alice_response = api.post(
             "/api/chat/approve/endpoint-call",
             headers={"Authorization": f"Bearer {alice['access_token']}"},
-            json={"approved": True},
+            json={
+                "approved": True,
+                "run_id": "00000000-0000-4000-8000-000000000002",
+            },
         )
         assert alice_response.status_code == 200
         assert outcome.result(timeout=1).approved is True
         repeated = api.post(
             "/api/chat/approve/endpoint-call",
             headers={"Authorization": f"Bearer {alice['access_token']}"},
-            json={"approved": False},
+            json={
+                "approved": False,
+                "run_id": "00000000-0000-4000-8000-000000000002",
+            },
         )
         assert repeated.status_code == 404
 
@@ -291,7 +337,8 @@ def test_approval_endpoint_enforces_owner_and_consumes_decision_once() -> None:
 def test_pending_receipt_can_be_decided_after_app_restart(tmp_path) -> None:
     database_url = f"sqlite+aiosqlite:///{tmp_path}/restart-approval.db"
     settings = Settings(llm_provider="mock", debug=True, database_url=database_url)
-    owner = RunContext("placeholder", "conversation", "restart-run", "correlation")
+    run_id = "00000000-0000-4000-8000-000000000004"
+    owner = RunContext("placeholder", "conversation", run_id, "correlation")
     approval = AuthorizationRequest(
         "restart-call",
         "terminal",
@@ -305,7 +352,7 @@ def test_pending_receipt_can_be_decided_after_app_restart(tmp_path) -> None:
             "/api/auth/register",
             json={"username": "restart-owner", "password": "valid-...-123"},
         ).json()
-        owner = RunContext(auth["user_id"], "conversation", "restart-run", "correlation")
+        owner = RunContext(auth["user_id"], "conversation", run_id, "correlation")
         assert first.portal is not None
         first.portal.call(first.app.state.approval_broker.authorizer(owner).prepare, approval)
 
@@ -313,7 +360,7 @@ def test_pending_receipt_can_be_decided_after_app_restart(tmp_path) -> None:
         decision = restarted.post(
             "/api/chat/approve/restart-call",
             headers={"Authorization": f"Bearer {auth['access_token']}"},
-            json={"approved": True},
+            json={"approved": True, "run_id": run_id},
         )
         assert decision.status_code == 200
         assert restarted.portal is not None
@@ -332,7 +379,8 @@ def test_concurrent_approval_endpoints_have_one_winner(tmp_path) -> None:
             "/api/auth/register",
             json={"username": "race-owner", "password": "valid-...-123"},
         ).json()
-        owner = RunContext(auth["user_id"], "conversation", "race-run", "correlation")
+        run_id = "00000000-0000-4000-8000-000000000005"
+        owner = RunContext(auth["user_id"], "conversation", run_id, "correlation")
         approval = AuthorizationRequest(
             "race-call",
             "terminal",
@@ -347,7 +395,7 @@ def test_concurrent_approval_endpoints_have_one_winner(tmp_path) -> None:
             return api.post(
                 "/api/chat/approve/race-call",
                 headers={"Authorization": f"Bearer {auth['access_token']}"},
-                json={"approved": approved},
+                json={"approved": approved, "run_id": run_id},
             ).status_code
 
         with ThreadPoolExecutor(max_workers=2) as pool:

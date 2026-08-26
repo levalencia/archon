@@ -255,9 +255,23 @@ def test_approve_endpoint_404_when_no_pending() -> None:
     with _test_client() as api:
         resp = api.post(
             "/api/chat/approve/nonexistent-id",
-            json={"approved": True},
+            json={"approved": True, "run_id": "00000000-0000-4000-8000-000000000099"},
         )
         assert resp.status_code == 404
+
+
+def test_approve_endpoint_requires_valid_uuid_run_id() -> None:
+    with _test_client() as api:
+        missing = api.post(
+            "/api/chat/approve/nonexistent-id",
+            json={"approved": True},
+        )
+        malformed = api.post(
+            "/api/chat/approve/nonexistent-id",
+            json={"approved": True, "run_id": "not-a-uuid"},
+        )
+        assert missing.status_code == 422
+        assert malformed.status_code == 422
 
 
 # ---------------------------------------------------------------------------

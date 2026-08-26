@@ -97,23 +97,24 @@ class ApprovalBroker:
             if not item.future.done():
                 item.future.cancel()
 
-    async def decide_for_owner(self, *, user_id: str, tool_call_id: str, approved: bool) -> bool:
-        """Atomically consume an owner's unique pending tool-call decision.
-
-        Missing, foreign, already consumed, and ambiguous IDs deliberately produce the same False
-        result so the HTTP adapter cannot disclose another owner's pending work.
-        """
+    async def decide_for_owner(
+        self, *, user_id: str, run_id: str, tool_call_id: str, approved: bool
+    ) -> bool:
+        """Atomically consume an exact owner/run/tool-call decision."""
         async with self._lock:
-            matches = [
-                item
-                for key, item in self._pending.items()
-                if key.user_id == user_id
-                and key.tool_call_id == tool_call_id
-                and not item.future.done()
-            ]
-            if len(matches) != 1:
+            item = next(
+                (
+                    item
+                    for key, item in self._pending.items()
+                    if key.user_id == user_id
+                    and key.run_id == run_id
+                    and key.tool_call_id == tool_call_id
+                    and not item.future.done()
+                ),
+                None,
+            )
+            if item is None:
                 return False
-            item = matches[0]
             item.future.set_result(approved)
             return True
 
@@ -255,10 +256,13 @@ class DurableApprovalBroker:
             arguments_hash=request.arguments_hash,
         )
 
-    async def decide_for_owner(self, *, user_id: str, tool_call_id: str, approved: bool) -> bool:
+    async def decide_for_owner(
+        self, *, user_id: str, run_id: str, tool_call_id: str, approved: bool
+    ) -> bool:
         status = ApprovalStatus.APPROVED if approved else ApprovalStatus.DENIED
-        return await self._repository.decide_unique_for_owner(
+        return await self._repository.decide_exact_for_owner(
             user_id=user_id,
+            run_id=run_id,
             tool_call_id=tool_call_id,
             status=status,
             reason="user_approved" if approved else "user_denied",
