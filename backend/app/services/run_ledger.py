@@ -51,6 +51,21 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
     AgentEventKind.TOOL_DENIED.value: frozenset(
         {"id", "name", "arguments_hash", "action", "reason_code", "status"}
     ),
+    AgentEventKind.EVIDENCE_RETRIEVED.value: frozenset(
+        {"evidence_ids", "document_ids", "chunk_ids", "content_hashes", "scores", "evidence_count"}
+    ),
+    AgentEventKind.CLAIM_VERIFIED.value: frozenset(
+        {
+            "claim_hashes",
+            "unsupported_hashes",
+            "cited_evidence_ids",
+            "supported_count",
+            "unsupported_count",
+        }
+    ),
+    AgentEventKind.GROUNDED_ANSWER.value: frozenset(
+        {"answer_hash", "citation_ids", "supported_count", "unsupported_count"}
+    ),
     AgentEventKind.RUN_STOPPED.value: frozenset({"reason", "error"}),
 }
 

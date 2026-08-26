@@ -30,6 +30,7 @@ def _trajectory(events: tuple[RunEventRecord, ...], run: dict[str, Any]) -> dict
     policies: list[dict[str, Any]] = []
     approvals: list[dict[str, Any]] = []
     tools: list[dict[str, Any]] = []
+    evidence: list[dict[str, Any]] = []
     for event in events:
         item = {"sequence": event.sequence, "iteration": event.iteration, **event.payload}
         if event.kind == "policy_decided":
@@ -38,11 +39,13 @@ def _trajectory(events: tuple[RunEventRecord, ...], run: dict[str, Any]) -> dict
             approvals.append({"kind": event.kind, **item})
         elif event.kind in {"tool_call_requested", "tool_call_completed", "tool_denied"}:
             tools.append({"kind": event.kind, **item})
+        elif event.kind in {"evidence_retrieved", "claim_verified", "grounded_answer"}:
+            evidence.append({"kind": event.kind, **item})
     return {
         "policy": policies,
         "approvals": approvals,
         "tools": tools,
-        "evidence": [],
+        "evidence": evidence,
         "tokens": {
             "input": run["input_tokens"],
             "output": run["output_tokens"],

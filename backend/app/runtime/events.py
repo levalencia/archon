@@ -23,6 +23,9 @@ class AgentEventKind(StrEnum):
     APPROVAL_REQUIRED = "approval_required"
     APPROVAL_DECIDED = "approval_decided"
     TOOL_DENIED = "tool_denied"
+    EVIDENCE_RETRIEVED = "evidence_retrieved"
+    CLAIM_VERIFIED = "claim_verified"
+    GROUNDED_ANSWER = "grounded_answer"
     RUN_STOPPED = "run_stopped"
 
 

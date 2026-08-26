@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.agents.llm_factory import create_llm_client
+from app.observability.logging import get_correlation_id
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
 from app.services.db_store import DocumentRow
 from app.services.documents import DocumentResourceLimitError
-from app.services.rag_pipeline import RAGPipeline
+from app.services.grounded_rag import GroundedDocumentWorkflow, GroundedProviderError
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -40,10 +42,16 @@ class DocumentResponse(BaseModel):
 
 
 class RAGResponse(BaseModel):
+    run_id: str
     answer: str
-    sources: list[dict]
+    sources: list[dict[str, Any]]
     chunks_retrieved: int
     confidence: float
+    grounded: bool
+    claims: list[dict[str, Any]]
+    citations: list[dict[str, Any]]
+    unsupported: list[str]
+    metrics: dict[str, Any]
 
 
 def _response(row: DocumentRow) -> DocumentResponse:
@@ -60,7 +68,7 @@ def _response(row: DocumentRow) -> DocumentResponse:
 async def upload_document(
     body: DocumentUpload,
     request: Request,
-    user: dict = Depends(get_current_user),  # noqa: B008
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> DocumentResponse:
     await enforce_rate_limit(request, user, "documents_upload")
     try:
@@ -80,7 +88,7 @@ async def upload_document(
 async def query_documents(
     body: DocumentQuery,
     request: Request,
-    user: dict = Depends(get_current_user),  # noqa: B008
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> RAGResponse:
     await enforce_rate_limit(request, user, "documents_query")
     repository = request.app.state.documents
@@ -93,28 +101,35 @@ async def query_documents(
     ):
         raise HTTPException(status_code=404, detail="Document not found")
     owned_ids = await repository.owned_ids(owner_id=user["user_id"], project_id=body.project_id)
-    pipeline = RAGPipeline(
+    settings = request.app.state.settings
+    workflow = GroundedDocumentWorkflow(
         vector_store=request.app.state.vector_store,
         embedding_service=request.app.state.embedding_service,
-        llm=create_llm_client(request.app.state.settings),
+        model_provider=request.app.state.model_provider,
+        runs=request.app.state.conversations.runs,
+        provider=settings.llm_provider,
+        model=settings.llm_model,
         top_k=body.top_k,
-        min_score=-1.0,
     )
-    result = await pipeline.query(
-        question=body.question,
-        document_id=body.document_id,
-        document_ids=owned_ids,
-        owner_id=user["user_id"],
-        project_id=body.project_id,
-    )
-    return RAGResponse(**result)
+    try:
+        result = await workflow.run(
+            body.question,
+            document_id=body.document_id,
+            document_ids=owned_ids,
+            owner_id=user["user_id"],
+            project_id=body.project_id,
+            correlation_id=get_correlation_id(),
+        )
+    except GroundedProviderError as exc:
+        raise HTTPException(status_code=503, detail="Grounded answer provider unavailable") from exc
+    return RAGResponse(**result.to_dict())
 
 
 @router.get("", response_model=list[DocumentResponse])
 async def list_documents(
     request: Request,
     project_id: str = "default",
-    user: dict = Depends(get_current_user),  # noqa: B008
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> list[DocumentResponse]:
     await enforce_rate_limit(request, user, "documents_list")
     rows = await request.app.state.documents.list(owner_id=user["user_id"], project_id=project_id)
@@ -126,7 +141,7 @@ async def delete_document(
     document_id: str,
     request: Request,
     project_id: str = "default",
-    user: dict = Depends(get_current_user),  # noqa: B008
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> None:
     await enforce_rate_limit(request, user, "documents_delete")
     deleted = await request.app.state.documents.delete(

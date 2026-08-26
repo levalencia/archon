@@ -1,0 +1,441 @@
+"""Grounded document retrieval, synthesis, and deterministic claim verification."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import uuid
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
+from time import perf_counter
+from typing import Any
+
+from app.research.models import Claim, Evidence
+from app.research.workflow import _verify
+from app.runtime.models import Message, Role, TokenUsage
+from app.runtime.ports import ModelProvider
+from app.services.chunker import DocumentChunk, EmbeddingService
+from app.services.run_ledger import RunRepository
+from app.services.vector_store import VectorStoreProtocol
+
+_NO_EVIDENCE_ANSWER = "I could not find relevant information to answer your question."
+_MAX_QUOTE = 1_200
+_MAX_MODEL_OUTPUT = 65_536
+_MAX_CLAIMS = 20
+_MAX_CLAIM_LENGTH = 2_000
+_MAX_CITATIONS_PER_CLAIM = 8
+_EVIDENCE_ID = re.compile(r"^E[1-9][0-9]*$")
+_LINE_CITATIONS = re.compile(r"\[(E[1-9][0-9]*)\]")
+
+
+class GroundedProviderError(RuntimeError):
+    """The model provider failed after the durable run was safely finalized."""
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentEvidence:
+    id: str
+    document_id: str
+    chunk_id: str
+    content_hash: str
+    title: str
+    score: float
+    quote: str
+    verification_text: str = field(repr=False, compare=False)
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "document_id": self.document_id,
+            "chunk_id": self.chunk_id,
+            "content_hash": self.content_hash,
+            "title": self.title,
+            "score": self.score,
+            "quote": self.quote,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GroundedResult:
+    run_id: str
+    answer: str
+    sources: tuple[dict[str, Any], ...]
+    chunks_retrieved: int
+    confidence: float
+    grounded: bool
+    claims: tuple[dict[str, Any], ...]
+    citations: tuple[dict[str, Any], ...]
+    unsupported: tuple[str, ...]
+    metrics: Mapping[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "answer": self.answer,
+            "sources": list(self.sources),
+            "chunks_retrieved": self.chunks_retrieved,
+            "confidence": self.confidence,
+            "grounded": self.grounded,
+            "claims": list(self.claims),
+            "citations": list(self.citations),
+            "unsupported": list(self.unsupported),
+            "metrics": dict(self.metrics),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class _RunIdentity:
+    run_id: str
+    user_id: str
+    project_id: str
+    conversation_id: str
+    correlation_id: str
+    provider: str
+    model: str
+
+
+class DocumentEvidenceRetriever:
+    """Typed owner/project-scoped adapter over embedding and vector services."""
+
+    def __init__(
+        self,
+        vector_store: VectorStoreProtocol,
+        embeddings: EmbeddingService,
+        *,
+        top_k: int,
+    ) -> None:
+        self._vectors = vector_store
+        self._embeddings = embeddings
+        self._top_k = top_k
+
+    async def retrieve(
+        self,
+        question: str,
+        *,
+        owner_id: str,
+        project_id: str,
+        document_id: str | None,
+        document_ids: set[str],
+    ) -> tuple[DocumentEvidence, ...]:
+        query_embedding = await self._embeddings.embed(question)
+        rows = await self._vectors.search(
+            query_embedding,
+            owner_id=owner_id,
+            project_id=project_id,
+            top_k=self._top_k,
+            min_score=-1.0,
+            document_id=document_id,
+            document_ids=document_ids,
+        )
+        unique: list[tuple[DocumentChunk, float]] = []
+        seen: set[tuple[str, str]] = set()
+        for row in rows:
+            chunk = row.get("chunk")
+            if not isinstance(chunk, DocumentChunk):
+                continue
+            current_hash = chunk.content_hash
+            key = (chunk.document_id, current_hash)
+            if key in seen:
+                continue
+            seen.add(key)
+            score = row.get("score", 0.0)
+            if isinstance(score, bool) or not isinstance(score, (int, float)):
+                score = 0.0
+            unique.append((chunk, float(score)))
+        return tuple(
+            DocumentEvidence(
+                id=f"E{index}",
+                document_id=chunk.document_id,
+                chunk_id=chunk.id,
+                content_hash=chunk.content_hash,
+                title=str(chunk.metadata.get("title", "Unknown"))[:500],
+                score=round(score, 4),
+                quote=chunk.content[:_MAX_QUOTE],
+                verification_text=chunk.content,
+            )
+            for index, (chunk, score) in enumerate(unique, 1)
+        )
+
+
+class GroundedDocumentWorkflow:
+    """One-provider-call grounded RAG workflow backed by the durable run ledger."""
+
+    def __init__(
+        self,
+        *,
+        vector_store: VectorStoreProtocol,
+        embedding_service: EmbeddingService,
+        model_provider: ModelProvider,
+        runs: RunRepository,
+        provider: str,
+        model: str,
+        top_k: int = 5,
+    ) -> None:
+        self._retriever = DocumentEvidenceRetriever(vector_store, embedding_service, top_k=top_k)
+        self._provider = model_provider
+        self._runs = runs
+        self._provider_name = provider
+        self._model_name = model
+
+    async def run(
+        self,
+        question: str,
+        *,
+        owner_id: str,
+        project_id: str,
+        correlation_id: str,
+        document_id: str | None,
+        document_ids: set[str],
+    ) -> GroundedResult:
+        started = perf_counter()
+        identity = _RunIdentity(
+            run_id=str(uuid.uuid4()),
+            user_id=owner_id,
+            project_id=project_id,
+            conversation_id=f"document-query:{project_id}"[:255],
+            correlation_id=correlation_id,
+            provider=self._provider_name,
+            model=self._model_name,
+        )
+        await self._runs.ensure_run(**asdict(identity))
+        evidence = await self._retriever.retrieve(
+            question,
+            owner_id=owner_id,
+            project_id=project_id,
+            document_id=document_id,
+            document_ids=document_ids,
+        )
+        await self._append(
+            identity,
+            "evidence_retrieved",
+            {
+                "evidence_ids": [item.id for item in evidence],
+                "document_ids": [item.document_id for item in evidence],
+                "chunk_ids": [item.chunk_id for item in evidence],
+                "content_hashes": [item.content_hash for item in evidence],
+                "scores": [item.score for item in evidence],
+                "evidence_count": len(evidence),
+            },
+        )
+        if not evidence:
+            return await self._finish(
+                identity,
+                started=started,
+                evidence=(),
+                claims=(),
+                citations=(),
+                unsupported=(),
+                usage=TokenUsage(),
+                provider_calls=0,
+            )
+
+        try:
+            response = await self._provider.complete(_prompt(question, evidence), max_tokens=2048)
+            usage = response.usage
+            parsed = _parse_claims(response.content or "")
+            claims, citations, unsupported = await _verify_document_claims(parsed, evidence)
+        except Exception as exc:
+            await self._stop(identity, usage=TokenUsage(), error=True, reason="provider_error")
+            raise GroundedProviderError("Grounded answer provider unavailable") from exc
+
+        return await self._finish(
+            identity,
+            started=started,
+            evidence=evidence,
+            claims=claims,
+            citations=citations,
+            unsupported=unsupported,
+            usage=usage,
+            provider_calls=1,
+        )
+
+    async def _finish(
+        self,
+        identity: _RunIdentity,
+        *,
+        started: float,
+        evidence: tuple[DocumentEvidence, ...],
+        claims: tuple[Claim, ...],
+        citations: tuple[DocumentEvidence, ...],
+        unsupported: tuple[str, ...],
+        usage: TokenUsage,
+        provider_calls: int,
+    ) -> GroundedResult:
+        claim_hashes = [_hash(item.text) for item in claims]
+        unsupported_hashes = [_hash(item) for item in unsupported]
+        await self._append(
+            identity,
+            "claim_verified",
+            {
+                "claim_hashes": claim_hashes,
+                "unsupported_hashes": unsupported_hashes,
+                "cited_evidence_ids": [item.id for item in citations],
+                "supported_count": len(claims),
+                "unsupported_count": len(unsupported),
+            },
+        )
+        answer = "\n".join(
+            f"{claim.text} " + " ".join(f"[{item}]" for item in claim.evidence_ids)
+            for claim in claims
+        )
+        if not answer:
+            answer = _NO_EVIDENCE_ANSWER
+        grounded = bool(claims)
+        await self._append(
+            identity,
+            "grounded_answer",
+            {
+                "answer_hash": _hash(answer),
+                "citation_ids": [item.id for item in citations],
+                "supported_count": len(claims),
+                "unsupported_count": len(unsupported),
+            },
+        )
+        await self._stop(identity, usage=usage, error=False, reason="completed")
+        latency_ms = round((perf_counter() - started) * 1000, 3)
+        scores = [item.score for item in evidence]
+        sources = tuple(
+            {
+                "chunk_id": item.chunk_id,
+                "document_id": item.document_id,
+                "title": item.title,
+                "score": item.score,
+                "excerpt": item.quote[:200],
+            }
+            for item in evidence
+        )
+        return GroundedResult(
+            run_id=identity.run_id,
+            answer=answer,
+            sources=sources,
+            chunks_retrieved=len(evidence),
+            confidence=round(sum(scores) / len(scores), 4) if scores else 0.0,
+            grounded=grounded,
+            claims=tuple(
+                {"text": item.text, "evidence_ids": list(item.evidence_ids)} for item in claims
+            ),
+            citations=tuple(item.public() for item in citations),
+            unsupported=unsupported,
+            metrics={
+                "provider": identity.provider,
+                "model": identity.model,
+                "provider_calls": provider_calls,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "total_tokens": usage.total_tokens,
+                "latency_ms": latency_ms,
+                "evidence_count": len(evidence),
+                "supported_count": len(claims),
+                "unsupported_count": len(unsupported),
+            },
+        )
+
+    async def _append(self, identity: _RunIdentity, kind: str, payload: Mapping[str, Any]) -> None:
+        await self._runs.append(**asdict(identity), kind=kind, iteration=1, payload=payload)
+
+    async def _stop(
+        self, identity: _RunIdentity, *, usage: TokenUsage, error: bool, reason: str
+    ) -> None:
+        await self._runs.append(
+            **asdict(identity),
+            kind="run_stopped",
+            iteration=1,
+            payload={"reason": reason, "error": error},
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            total_tokens=usage.total_tokens,
+        )
+
+
+def _prompt(question: str, evidence: tuple[DocumentEvidence, ...]) -> tuple[Message, ...]:
+    context = "\n\n".join(
+        f"{item.id} document={item.document_id} chunk={item.chunk_id} "
+        f"hash={item.content_hash} title={json.dumps(item.title)}\n{item.quote}"
+        for item in evidence
+    )
+    system = (
+        "Use only the evidence below. Return JSON only as "
+        '{"claims":[{"text":"one factual claim","evidence_ids":["E1"]}]}. '
+        "Split the answer into atomic claim lines. Every claim must explicitly cite one or more "
+        "listed E IDs. Do not cite unknown IDs and do not add unsupported claims.\n\n"
+        f"EVIDENCE:\n{context}"
+    )
+    return (Message(Role.SYSTEM, system), Message(Role.USER, question))
+
+
+def _parse_claims(raw: str) -> tuple[Claim, ...]:
+    bounded = raw[:_MAX_MODEL_OUTPUT].strip()
+    if not bounded:
+        return ()
+    decoded: Any = None
+    decoder = json.JSONDecoder()
+    starts = [index for index, char in enumerate(bounded) if char in "[{"]
+    for start in starts[:100]:
+        try:
+            decoded, _ = decoder.raw_decode(bounded[start:])
+            break
+        except json.JSONDecodeError:
+            continue
+    items: Any
+    if isinstance(decoded, dict):
+        items = decoded.get("claims", [])
+    elif isinstance(decoded, list):
+        items = decoded
+    else:
+        items = []
+    claims: list[Claim] = []
+    if isinstance(items, list):
+        for item in items[:_MAX_CLAIMS]:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text")
+            ids = item.get("evidence_ids", item.get("citations", []))
+            if not isinstance(text, str) or not text.strip() or not isinstance(ids, list):
+                continue
+            clean_ids = tuple(
+                dict.fromkeys(
+                    value
+                    for value in ids[:_MAX_CITATIONS_PER_CLAIM]
+                    if isinstance(value, str) and _EVIDENCE_ID.fullmatch(value)
+                )
+            )
+            claims.append(Claim(text.strip()[:_MAX_CLAIM_LENGTH], clean_ids))
+    if claims or decoded is not None:
+        return tuple(claims)
+    # Conservative compatibility for providers that emit one cited claim per line.
+    for line in bounded.splitlines()[:_MAX_CLAIMS]:
+        ids = tuple(dict.fromkeys(_LINE_CITATIONS.findall(line)))[:_MAX_CITATIONS_PER_CLAIM]
+        text = _LINE_CITATIONS.sub("", line).strip(" -\t")
+        if text and ids:
+            claims.append(Claim(text[:_MAX_CLAIM_LENGTH], ids))
+    return tuple(claims)
+
+
+async def _verify_document_claims(
+    claims: tuple[Claim, ...], evidence: tuple[DocumentEvidence, ...]
+) -> tuple[tuple[Claim, ...], tuple[DocumentEvidence, ...], tuple[str, ...]]:
+    # Validate the content snapshot immediately before verification, then reuse the
+    # research workflow's citation-existence and lexical-overlap verifier.
+    current = tuple(
+        item
+        for item in evidence
+        if item.content_hash == hashlib.sha256(item.verification_text.encode()).hexdigest()[:16]
+    )
+    research_evidence = [
+        Evidence(item.id, f"document://{item.document_id}/{item.chunk_id}", item.title, item.quote)
+        for item in current
+    ]
+    supported, _, unsupported = await _verify(claims, research_evidence)
+    by_id = {item.id: item for item in current}
+    cited = tuple(
+        by_id[evidence_id]
+        for evidence_id in dict.fromkeys(
+            evidence_id for claim in supported for evidence_id in claim.evidence_ids
+        )
+    )
+    return supported, cited, unsupported
+
+
+def _hash(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
