@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.routes import documents
+from app.services.documents import _scope_advisory_lock_key
 
 
 @pytest.fixture
@@ -32,6 +33,14 @@ SAMPLE_DOC = {
     ),
     "source": "guide.pdf",
 }
+
+
+def test_postgres_scope_lock_key_is_nul_free_and_collision_safe() -> None:
+    first = _scope_advisory_lock_key("owner:project", "scope")
+    second = _scope_advisory_lock_key("owner", "project:scope")
+    assert "\0" not in first
+    assert first != second
+    assert _scope_advisory_lock_key("owner", "project") == '["owner","project"]'
 
 
 class TestDocumentUpload:

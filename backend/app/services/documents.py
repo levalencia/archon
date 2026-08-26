@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import cast
@@ -20,6 +21,11 @@ from app.services.sql_json_vector_store import SqlJsonVectorStore
 
 class DocumentResourceLimitError(ValueError):
     """A configured ingestion resource boundary was exceeded."""
+
+
+def _scope_advisory_lock_key(owner_id: str, project_id: str) -> str:
+    """Return a collision-safe PostgreSQL text key without forbidden NUL bytes."""
+    return json.dumps([owner_id, project_id], ensure_ascii=False, separators=(",", ":"))
 
 
 class DocumentRepository:
@@ -110,7 +116,7 @@ class DocumentRepository:
                     if session.bind is not None and session.bind.dialect.name == "postgresql":
                         await session.execute(
                             text("SELECT pg_advisory_xact_lock(hashtext(:scope))"),
-                            {"scope": f"{owner_id}\0{project_id}"},
+                            {"scope": _scope_advisory_lock_key(owner_id, project_id)},
                         )
                     # Row locks reinforce the quota when matching rows already exist.
                     existing_rows = (

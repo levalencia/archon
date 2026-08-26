@@ -1,0 +1,24 @@
+{
+  "backup": {
+    "duration_seconds": 0.702,
+    "sha256": "9cd88d6a8a6f39ffc476e351ac87c92b44af3209638bb0e6fc2346f5ad0c4285",
+    "snapshot_utc": "2026-08-26T22:49:54.714728Z"
+  },
+  "evidence": {
+    "approval_id": "7765989f-931e-4c53-8772-90df2a092352",
+    "conversation_id": "867ffeb6-b2ab-4e13-adcf-528a93acef2d",
+    "document_id": "1b682245-bd01-4232-adf7-e3322c95cbba",
+    "run_id": "f50d8954-fe52-4a8c-ad64-ca10ad0c899e",
+    "user_id": "5c1dfc5d-404c-4783-9f47-9a70b1229796"
+  },
+  "restored_counts": {
+    "approved_terminal_approvals": 1,
+    "documents": 1,
+    "run_events": 5,
+    "vector_chunks": 1
+  },
+  "result": "passed",
+  "rpo_records": 0,
+  "rto_seconds": 21.597,
+  "schema_revision": "20260826_08"
+}
