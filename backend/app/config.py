@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite+aiosqlite:///archon.db"
-    vector_store_backend: Literal["sql-json", "postgres", "memory"] = "sql-json"
+    vector_store_backend: Literal["sql-json"] = "sql-json"
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

@@ -75,13 +75,75 @@ async def test_provider_rejects_non_finite_vector_and_disables_redirects() -> No
     service = EmbeddingService(provider="openai", api_key="test-key", dimensions=2)
     with patch("httpx.AsyncClient") as client_class:
         client = AsyncMock()
-        client.post.return_value = response
+        client.send.return_value = response
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=False)
         client_class.return_value = client
         with pytest.raises(ValueError, match="non-finite"):
             await service.embed("hello")
     assert client_class.call_args.kwargs["follow_redirects"] is False
+    assert client_class.call_args.kwargs["trust_env"] is False
+
+
+@pytest.mark.asyncio
+async def test_provider_pins_request_dns_and_preserves_host_and_sni(monkeypatch) -> None:
+    response = MagicMock()
+    response.raise_for_status = MagicMock()
+    response.json.return_value = {"data": [{"index": 0, "embedding": [0.1, 0.2]}]}
+    resolutions = 0
+
+    def resolve(*args, **kwargs):
+        nonlocal resolutions
+        resolutions += 1
+        address = "93.184.216.10" if resolutions == 1 else "93.184.216.34"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 443))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
+    service = EmbeddingService(provider="openai", api_key="test-key", dimensions=2)
+    with patch("httpx.AsyncClient") as client_class:
+        client = AsyncMock()
+        client.send.return_value = response
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client_class.return_value = client
+        assert await service.embed("hello") == [0.1, 0.2]
+
+    assert resolutions == 2  # One startup validation and exactly one request-time lookup.
+    request = client.send.call_args.args[0]
+    assert str(request.url) == "https://93.184.216.34/v1/embeddings"
+    assert request.headers["host"] == "api.openai.com"
+    assert request.extensions["sni_hostname"] == b"api.openai.com"
+
+
+@pytest.mark.asyncio
+async def test_provider_rejects_dns_rebinding_before_sending_credentials(monkeypatch) -> None:
+    resolutions = iter(
+        [
+            [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+            [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443)),
+            ],
+        ]
+    )
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: next(resolutions),
+    )
+    service = EmbeddingService(provider="openai", api_key="test-key", dimensions=2)
+    with (
+        patch("httpx.AsyncClient") as client_class,
+        pytest.raises(ValueError, match="Private embedding endpoints"),
+    ):
+        await service.embed("hello")
+    client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("backend", ["memory", "postgres"])
+def test_vector_store_backend_only_accepts_sql_json(backend: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(vector_store_backend=backend)
 
 
 @pytest.mark.asyncio

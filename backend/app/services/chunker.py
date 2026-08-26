@@ -10,6 +10,7 @@ Course reference: Advanced Architectures L19-L21
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import ipaddress
 import math
@@ -257,6 +258,7 @@ class EmbeddingService:
         self.model = model
         self.api_key = api_key
         self.dimensions = dimensions
+        self.allow_private_endpoint = allow_private_endpoint
         self.base_url = validate_embedding_endpoint(
             base_url,
             allowed_hosts={host.strip() for host in allowed_hosts.split(",")},
@@ -310,19 +312,57 @@ class EmbeddingService:
             )
             raise ValueError(msg)
 
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
-            resp = await client.post(
-                f"{self.base_url}/embeddings",
+        parsed = urlsplit(self.base_url)
+        original_host = parsed.hostname
+        if original_host is None:  # Already enforced by validate_embedding_endpoint.
+            raise ValueError("Embedding base URL must include a host")
+        original_host = original_host.encode("idna").decode("ascii")
+        port = parsed.port or 443
+        try:
+            address_info = await asyncio.wait_for(
+                asyncio.to_thread(
+                    socket.getaddrinfo,
+                    original_host,
+                    port,
+                    type=socket.SOCK_STREAM,
+                    proto=socket.IPPROTO_TCP,
+                ),
+                timeout=5.0,
+            )
+        except (TimeoutError, socket.gaierror) as exc:
+            raise ValueError("Embedding endpoint host could not be resolved") from exc
+        addresses = {info[4][0] for info in address_info}
+        if not addresses:
+            raise ValueError("Embedding endpoint host could not be resolved")
+        parsed_addresses = [ipaddress.ip_address(address) for address in addresses]
+        if not self.allow_private_endpoint and any(not ip.is_global for ip in parsed_addresses):
+            raise ValueError("Private embedding endpoints require explicit opt-in")
+        selected_ip = min(parsed_addresses, key=lambda ip: (ip.version, int(ip)))
+        ip_host = f"[{selected_ip}]" if selected_ip.version == 6 else str(selected_ip)
+        request_port = f":{parsed.port}" if parsed.port is not None else ""
+        request_url = f"https://{ip_host}{request_port}{parsed.path.rstrip('/')}/embeddings"
+        authority_host = f"[{original_host}]" if ":" in original_host else original_host
+        authority = f"{authority_host}{request_port}"
+
+        async with httpx.AsyncClient(
+            timeout=30.0, follow_redirects=False, trust_env=False
+        ) as client:
+            request = httpx.Request(
+                "POST",
+                request_url,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
+                    "Host": authority,
                 },
                 json={
                     "input": texts,
                     "model": self.model,
                     "dimensions": self.dimensions,
                 },
+                extensions={"sni_hostname": original_host.encode("ascii")},
             )
+            resp = await client.send(request)
             resp.raise_for_status()
             data = resp.json()
 

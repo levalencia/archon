@@ -84,7 +84,7 @@ class TestEmbeddingServiceOpenAI:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
-            mock_client.post.return_value = fake_response
+            mock_client.send.return_value = fake_response
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=False)
             mock_client_cls.return_value = mock_client
@@ -92,10 +92,12 @@ class TestEmbeddingServiceOpenAI:
             result = await svc.embed("hello")
 
         assert result == [0.1, 0.2, 0.3]
-        mock_client.post.assert_called_once()
-        call_kwargs = mock_client.post.call_args
-        assert "api.openai.com" in call_kwargs.args[0]
-        assert call_kwargs.kwargs["json"]["model"] == "text-embedding-3-small"
+        mock_client.send.assert_called_once()
+        request = mock_client.send.call_args.args[0]
+        assert request.url.path == "/v1/embeddings"
+        assert request.headers["host"] == "api.openai.com"
+        assert request.extensions["sni_hostname"] == b"api.openai.com"
+        assert '"model":"text-embedding-3-small"' in request.read().decode()
 
 
 class TestVectorStoreStats:
