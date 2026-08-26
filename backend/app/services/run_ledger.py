@@ -257,6 +257,51 @@ class RunRepository:
                 )
             await session.commit()
 
+    async def ensure_child_run(
+        self,
+        *,
+        run_id: str,
+        parent_run_id: str,
+        user_id: str,
+        project_id: str,
+        provider: str,
+        model: str,
+    ) -> None:
+        """Create a child with explicit, immutable owner-scoped lineage."""
+        now = datetime.now(tz=UTC)
+        async with self._sessions() as session:
+            parent = await session.scalar(select(RunRow).where(RunRow.run_id == parent_run_id))
+            if parent is not None and (
+                str(parent.user_id) != user_id or str(parent.project_id) != project_id
+            ):
+                raise ValueError("parent run owner mismatch")
+            existing = await session.scalar(select(RunRow).where(RunRow.run_id == run_id))
+            if existing is not None:
+                if (
+                    str(existing.user_id) != user_id
+                    or str(existing.project_id) != project_id
+                    or str(existing.parent_run_id) != parent_run_id
+                ):
+                    raise ValueError("child run identity mismatch")
+                return
+            session.add(
+                RunRow(
+                    run_id=run_id,
+                    parent_run_id=parent_run_id,
+                    user_id=user_id,
+                    project_id=project_id,
+                    conversation_id=parent_run_id,
+                    correlation_id=run_id,
+                    provider=provider,
+                    model=model,
+                    schema_version=SCHEMA_VERSION,
+                    status="running",
+                    started_at=now,
+                    next_sequence=1,
+                )
+            )
+            await session.commit()
+
     async def append(
         self,
         *,

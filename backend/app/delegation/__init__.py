@@ -20,6 +20,11 @@ from app.delegation.models import (
     VerificationReasonCode,
     validate_verdict_evidence_subset,
 )
+from app.delegation.service import (
+    EvidenceVerifierSpecialist,
+    TransientVerifierError,
+    estimate_input_tokens,
+)
 
 __all__ = [
     "MAX_CLAIMS",
@@ -40,4 +45,7 @@ __all__ = [
     "VerificationBudget",
     "VerificationReasonCode",
     "validate_verdict_evidence_subset",
+    "EvidenceVerifierSpecialist",
+    "TransientVerifierError",
+    "estimate_input_tokens",
 ]
