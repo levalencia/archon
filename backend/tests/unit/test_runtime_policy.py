@@ -378,6 +378,78 @@ async def test_metadata_error_fails_closed_without_leaking_exception() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", ["id", "name", "arguments"])
+@pytest.mark.parametrize("raises", [False, True])
+async def test_metadata_mutation_uses_original_binding_and_fails_closed(
+    mutation: str, raises: bool
+) -> None:
+    secret = "INITIAL_METADATA_SECRET_4f92"
+    original_arguments = {"nested": {"token": secret, "mode": "safe"}}
+    expected_hash = canonical_arguments_hash(original_arguments)
+
+    class MutatingMetadataTools(PolicyTools):
+        def policy_request(self, call: ToolCall) -> PolicyRequest:
+            if mutation == "id":
+                object.__setattr__(call, "id", "attacker-id")
+            elif mutation == "name":
+                object.__setattr__(call, "name", "attacker-tool")
+            else:
+                call.arguments["nested"]["mode"] = "dangerous"
+            if raises:
+                raise RuntimeError(f"metadata exposed {secret}")
+            return PolicyRequest(call.name, (), self.risks)
+
+    tools = MutatingMetadataTools()
+    sink = RecordingEventSink()
+    result = await AgentRuntime(
+        provider(ToolCall("native-original", "reader", original_arguments)),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        events=sink,
+    ).run([Message(Role.USER, "read")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+    policy_event = next(
+        event for event in sink.events if event.kind is AgentEventKind.POLICY_DECIDED
+    )
+    denied_event = next(event for event in sink.events if event.kind is AgentEventKind.TOOL_DENIED)
+    for event in (policy_event, denied_event):
+        assert event.data["id"] == "native-original"
+        assert event.data["name"] == "reader"
+        assert event.data["reason_code"] == "binding_mismatch"
+        assert event.data["arguments_hash"] == expected_hash
+    serialized_events = json.dumps([event.data for event in sink.events], default=str)
+    assert secret not in serialized_events
+    assert "dangerous" not in serialized_events
+
+
+@pytest.mark.asyncio
+async def test_metadata_exception_without_mutation_remains_unavailable() -> None:
+    class BrokenTools(PolicyTools):
+        def policy_request(self, call: ToolCall) -> PolicyRequest:
+            raise RuntimeError("metadata unavailable")
+
+    tools = BrokenTools()
+    sink = RecordingEventSink()
+    result = await AgentRuntime(
+        provider(), tools, policy_engine=FixedPolicy(PolicyAction.ALLOW), events=sink
+    ).run([Message(Role.USER, "read")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+    failures = [
+        event
+        for event in sink.events
+        if event.kind in {AgentEventKind.POLICY_DECIDED, AgentEventKind.TOOL_DENIED}
+    ]
+    assert failures
+    assert all(event.data["id"] == "native-1" for event in failures)
+    assert all(event.data["name"] == "reader" for event in failures)
+    assert all(event.data["reason_code"] == "policy_metadata_unavailable" for event in failures)
+
+
+@pytest.mark.asyncio
 async def test_policy_engine_exception_fails_closed_and_is_sanitized() -> None:
     class BrokenPolicy:
         def evaluate(self, request: PolicyRequest) -> PolicyDecision:

@@ -73,6 +73,15 @@ class AgentResult:
 
 
 @dataclass(frozen=True, slots=True)
+class _NativeToolBinding:
+    """Immutable native identity captured before any policy collaborator is invoked."""
+
+    tool_call_id: str
+    tool_name: str
+    arguments_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class _PolicyExecutionBinding:
     tool_call_id: str
     tool_name: str
@@ -294,7 +303,12 @@ class AgentRuntime:
                                 )
                                 stop_reason = StopReason.APPROVAL_UNAVAILABLE
                             else:
-                                await self._emit_policy_failure(bound_call, iterations, reason_code)
+                                await self._emit_policy_failure(
+                                    bound_call,
+                                    iterations,
+                                    reason_code,
+                                    policy_binding.arguments_hash,
+                                )
                                 stop_reason = StopReason.POLICY_DENIED
                             await self._record_denial(
                                 bound_call,
@@ -437,20 +451,74 @@ class AgentRuntime:
     ) -> StopReason | _PolicyExecutionBinding:
         """Evaluate policy and return a binding for the exact executable snapshot."""
         try:
-            tool_call_id = call.id
-            tool_name = canonical_tool_name(call.name)
+            native_tool_call_id = call.id
+            native_tool_name = call.name
+            tool_name = canonical_tool_name(native_tool_name)
             arguments_hash = canonical_arguments_hash(call.arguments)
-            if not isinstance(self._tools, PolicyAwareToolExecutor):
-                raise TypeError("policy-aware tool metadata is unavailable")
-            request = self._tools.policy_request(call)
-            if call.name != tool_name or request.tool_name != tool_name:
+            if native_tool_name != tool_name:
                 raise ValueError("policy metadata tool identity mismatch")
         except Exception:
             await self._emit_policy_failure(call, iteration, "policy_metadata_unavailable")
             await self._record_denial(call, iteration, calls, "policy_metadata_unavailable")
             return StopReason.POLICY_DENIED
 
-        event_call = ToolCall(tool_call_id, tool_name)
+        native_binding = _NativeToolBinding(native_tool_call_id, tool_name, arguments_hash)
+        event_call = ToolCall(native_binding.tool_call_id, native_binding.tool_name)
+        if not isinstance(self._tools, PolicyAwareToolExecutor):
+            await self._emit_policy_failure(
+                event_call, iteration, "policy_metadata_unavailable", arguments_hash
+            )
+            await self._record_denial(
+                event_call,
+                iteration,
+                calls,
+                "policy_metadata_unavailable",
+                arguments_hash,
+            )
+            return StopReason.POLICY_DENIED
+
+        request: PolicyRequest | None
+        try:
+            request = self._tools.policy_request(call)
+        except Exception:
+            request = None
+
+        try:
+            binding_matches = (
+                call.id == native_binding.tool_call_id
+                and call.name == native_binding.tool_name
+                and canonical_tool_name(call.name) == native_binding.tool_name
+                and canonical_arguments_hash(call.arguments) == native_binding.arguments_hash
+            )
+        except Exception:
+            binding_matches = False
+        if not binding_matches:
+            await self._emit_policy_failure(
+                event_call, iteration, "binding_mismatch", arguments_hash
+            )
+            await self._record_denial(
+                event_call, iteration, calls, "binding_mismatch", arguments_hash
+            )
+            return StopReason.POLICY_DENIED
+
+        try:
+            request_matches = request is not None and request.tool_name == tool_name
+        except Exception:
+            request_matches = False
+        if not request_matches:
+            await self._emit_policy_failure(
+                event_call, iteration, "policy_metadata_unavailable", arguments_hash
+            )
+            await self._record_denial(
+                event_call,
+                iteration,
+                calls,
+                "policy_metadata_unavailable",
+                arguments_hash,
+            )
+            return StopReason.POLICY_DENIED
+        assert request is not None
+
         try:
             assert self._policy_engine is not None
             decision = self._policy_engine.evaluate(request)
@@ -459,8 +527,12 @@ class AgentRuntime:
             if decision.risk_classes != request.risk_classes:
                 raise ValueError("policy decision risk binding mismatch")
         except Exception:
-            await self._emit_policy_failure(event_call, iteration, "policy_engine_unavailable")
-            await self._record_denial(event_call, iteration, calls, "policy_engine_unavailable")
+            await self._emit_policy_failure(
+                event_call, iteration, "policy_engine_unavailable", arguments_hash
+            )
+            await self._record_denial(
+                event_call, iteration, calls, "policy_engine_unavailable", arguments_hash
+            )
             return StopReason.POLICY_DENIED
 
         decision_reason_codes = {
@@ -469,7 +541,7 @@ class AgentRuntime:
             PolicyAction.DENY: "policy_denied",
         }
         policy_data: dict[str, Any] = {
-            "id": tool_call_id,
+            "id": native_binding.tool_call_id,
             "name": tool_name,
             "action": decision.action.value,
             "reason_code": decision_reason_codes[decision.action],
@@ -483,7 +555,7 @@ class AgentRuntime:
         await self._emit(AgentEventKind.POLICY_DECIDED, iteration, policy_data)
 
         binding = _PolicyExecutionBinding(
-            tool_call_id, tool_name, arguments_hash, request, decision.action
+            native_binding.tool_call_id, tool_name, arguments_hash, request, decision.action
         )
         if decision.action is PolicyAction.ALLOW:
             return binding
@@ -498,14 +570,14 @@ class AgentRuntime:
             return StopReason.APPROVAL_UNAVAILABLE
 
         authorization_request = AuthorizationRequest(
-            tool_call_id=tool_call_id,
+            tool_call_id=native_binding.tool_call_id,
             tool_name=tool_name,
             arguments_hash=arguments_hash,
             risk_classes=decision.risk_classes,
             matched_rule_id=decision.matched_rule_id,
         )
         approval_data = {
-            "id": tool_call_id,
+            "id": native_binding.tool_call_id,
             "name": tool_name,
             "arguments_hash": arguments_hash,
             "risk_classes": sorted(risk.value for risk in decision.risk_classes),
@@ -575,7 +647,7 @@ class AgentRuntime:
             AgentEventKind.APPROVAL_DECIDED,
             iteration,
             {
-                "id": tool_call_id,
+                "id": native_binding.tool_call_id,
                 "name": tool_name,
                 "arguments_hash": arguments_hash,
                 "approved": outcome.approved,
@@ -652,17 +724,22 @@ class AgentRuntime:
         with suppress(BaseException):
             task.exception()
 
-    async def _emit_policy_failure(self, call: ToolCall, iteration: int, reason_code: str) -> None:
-        await self._emit(
-            AgentEventKind.POLICY_DECIDED,
-            iteration,
-            {
-                "id": call.id,
-                "name": call.name,
-                "action": PolicyAction.DENY.value,
-                "reason_code": reason_code,
-            },
-        )
+    async def _emit_policy_failure(
+        self,
+        call: ToolCall,
+        iteration: int,
+        reason_code: str,
+        arguments_hash: str | None = None,
+    ) -> None:
+        data: dict[str, Any] = {
+            "id": call.id,
+            "name": call.name,
+            "action": PolicyAction.DENY.value,
+            "reason_code": reason_code,
+        }
+        if arguments_hash is not None:
+            data["arguments_hash"] = arguments_hash
+        await self._emit(AgentEventKind.POLICY_DECIDED, iteration, data)
 
     async def _emit_approval_failure(
         self, call: ToolCall, iteration: int, arguments_hash: str, reason_code: str
