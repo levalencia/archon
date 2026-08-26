@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from app.security.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, CircuitState
@@ -156,3 +158,34 @@ class TestCircuitBreaker:
         cb.reset()
         assert cb.state == CircuitState.CLOSED
         assert cb._failure_count == 0
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_only_one_half_open_probe_runs_and_success_closes(self) -> None:
+        now = 0.0
+        cb = CircuitBreaker(failure_threshold=1, recovery_timeout=5, clock=lambda: now)
+
+        with pytest.raises(ConnectionError):
+            await cb.call(lambda: (_ for _ in ()).throw(ConnectionError("sensitive failure")))
+        now = 6.0
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        calls = 0
+
+        async def probe() -> str:
+            nonlocal calls
+            calls += 1
+            entered.set()
+            await release.wait()
+            return "recovered"
+
+        first = asyncio.create_task(cb.call(probe))
+        await entered.wait()
+        with pytest.raises(CircuitBreakerOpenError) as rejected:
+            await cb.call(probe)
+        assert str(rejected.value) == "Model provider temporarily unavailable"
+        release.set()
+
+        assert await first == "recovered"
+        assert calls == 1
+        assert cb.state is CircuitState.CLOSED

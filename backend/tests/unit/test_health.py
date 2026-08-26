@@ -46,7 +46,10 @@ class TestHealthEndpoints:
         assert response.status_code == 200
         assert response.json() == {
             "status": "ready",
-            "dependencies": {"conversation_repository": "up"},
+            "dependencies": {
+                "conversation_repository": "up",
+                "model_provider_circuit": "closed",
+            },
         }
 
     @pytest.mark.unit
@@ -59,7 +62,10 @@ class TestHealthEndpoints:
         assert response.status_code == 503
         assert response.json() == {
             "status": "degraded",
-            "dependencies": {"conversation_repository": "down"},
+            "dependencies": {
+                "conversation_repository": "down",
+                "model_provider_circuit": "closed",
+            },
         }
 
     @pytest.mark.unit

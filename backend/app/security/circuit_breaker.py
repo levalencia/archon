@@ -1,21 +1,21 @@
-"""Circuit breaker for protecting against dead external services.
-
-State machine: CLOSED → OPEN → HALF_OPEN → CLOSED (or back to OPEN).
-
-See: https://github.com/levalencia/production-ai-agents/
-Concept: Layer 5 - Guardrails (circuit breaker for resilience)
-Course reference: AIAMastery Day 4 - Resilient Agent
-"""
+"""Concurrency-safe circuit breaker and typed model-provider adapter."""
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
+from collections.abc import Awaitable, Callable, Sequence
 from enum import Enum
+from typing import Any, TypeVar
 
 import structlog
 
+from app.runtime.models import Message, ModelResponse, ToolDefinition
+from app.runtime.ports import ModelProvider
+
 logger = structlog.get_logger()
+_T = TypeVar("_T")
 
 
 class CircuitState(Enum):
@@ -24,115 +24,93 @@ class CircuitState(Enum):
     HALF_OPEN = "half_open"
 
 
-class CircuitBreakerOpenError(Exception):
-    """Raised when circuit is open and rejecting calls."""
+class CircuitBreakerOpenError(RuntimeError):
+    """Sanitized fail-fast signal; never includes provider errors or prompts."""
 
     def __init__(self, recovery_time: float) -> None:
-        self.recovery_time = recovery_time
-        super().__init__(f"Circuit breaker is open. Recovery in {recovery_time:.1f}s")
+        self.recovery_time = max(0.0, recovery_time)
+        super().__init__("Model provider temporarily unavailable")
+
+
+class ProviderUnavailableError(RuntimeError):
+    """Stable provider boundary error suitable for API handling."""
 
 
 class CircuitBreaker:
-    """Circuit breaker with CLOSED/OPEN/HALF_OPEN states.
-
-    - CLOSED: normal operation, failures counted
-    - OPEN: all calls rejected instantly (fail fast)
-    - HALF_OPEN: one trial call allowed; success → CLOSED, failure → OPEN
-    """
-
     def __init__(
         self,
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
         name: str = "default",
+        *,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        if failure_threshold < 1:
+            raise ValueError("failure_threshold must be positive")
+        if recovery_timeout <= 0:
+            raise ValueError("recovery_timeout must be positive")
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.name = name
-
+        self._clock = clock
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._last_failure_time = 0.0
         self._success_count = 0
         self._total_calls = 0
+        self._probe_in_flight = False
+        self._lock = asyncio.Lock()
 
     @property
     def state(self) -> CircuitState:
-        """Current state, considering recovery timeout."""
-        if self._state == CircuitState.OPEN:
-            elapsed = time.time() - self._last_failure_time
-            if elapsed >= self.recovery_timeout:
-                return CircuitState.HALF_OPEN
+        if (
+            self._state is CircuitState.OPEN
+            and self._clock() - self._last_failure_time >= self.recovery_timeout
+        ):
+            return CircuitState.HALF_OPEN
         return self._state
 
-    async def call(self, func: object, *args: object, **kwargs: object) -> object:
-        """Execute a function through the circuit breaker."""
-        self._total_calls += 1
-        current_state = self.state
-
-        if current_state == CircuitState.OPEN:
-            remaining = self.recovery_timeout - (time.time() - self._last_failure_time)
-            logger.warning(
-                "circuit_breaker_rejected",
-                name=self.name,
-                state="open",
-                recovery_in=round(remaining, 1),
-            )
-            raise CircuitBreakerOpenError(remaining)
-
-        if current_state == CircuitState.HALF_OPEN:
-            logger.info("circuit_breaker_trial", name=self.name)
-
+    async def call(
+        self, func: Callable[..., _T | Awaitable[_T]], *args: object, **kwargs: object
+    ) -> _T:
+        is_probe = False
+        async with self._lock:
+            current = self.state
+            if current is CircuitState.OPEN or (
+                current is CircuitState.HALF_OPEN and self._probe_in_flight
+            ):
+                remaining = self.recovery_timeout - (self._clock() - self._last_failure_time)
+                logger.warning("circuit_breaker_rejected", name=self.name, state=current.value)
+                raise CircuitBreakerOpenError(remaining)
+            if current is CircuitState.HALF_OPEN:
+                self._state = CircuitState.HALF_OPEN
+                self._probe_in_flight = True
+                is_probe = True
+            self._total_calls += 1
         try:
-            if asyncio.iscoroutinefunction(func):
-                result = await func(*args, **kwargs)  # type: ignore[misc]
-            else:
-                result = func(*args, **kwargs)  # type: ignore[misc]
-
-            self._on_success()
-            return result
-
-        except CircuitBreakerOpenError:
-            raise
+            value = func(*args, **kwargs)
+            result = await value if inspect.isawaitable(value) else value
         except Exception:
-            self._on_failure()
+            async with self._lock:
+                self._failure_count += 1
+                self._last_failure_time = self._clock()
+                self._probe_in_flight = False
+                if is_probe or self._failure_count >= self.failure_threshold:
+                    self._state = CircuitState.OPEN
+                    logger.warning(
+                        "circuit_breaker_opened",
+                        name=self.name,
+                        failure_count=self._failure_count,
+                    )
             raise
+        async with self._lock:
+            self._state = CircuitState.CLOSED
+            self._probe_in_flight = False
+            self._failure_count = 0
+            self._success_count += 1
+        return result
 
-    def _on_success(self) -> None:
-        """Handle successful call."""
-        if self._state in (CircuitState.HALF_OPEN, CircuitState.OPEN):
-            logger.info(
-                "circuit_breaker_closed",
-                name=self.name,
-                previous_state=self._state.value,
-            )
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._success_count += 1
-
-    def _on_failure(self) -> None:
-        """Handle failed call."""
-        self._failure_count += 1
-        self._last_failure_time = time.time()
-
-        if self._failure_count >= self.failure_threshold:
-            self._state = CircuitState.OPEN
-            logger.error(
-                "circuit_breaker_opened",
-                name=self.name,
-                failure_count=self._failure_count,
-                threshold=self.failure_threshold,
-            )
-        else:
-            logger.warning(
-                "circuit_breaker_failure",
-                name=self.name,
-                failure_count=self._failure_count,
-                threshold=self.failure_threshold,
-            )
-
-    def get_stats(self) -> dict:
-        """Get circuit breaker statistics."""
+    def get_stats(self) -> dict[str, str | int | float]:
         return {
             "name": self.name,
             "state": self.state.value,
@@ -144,8 +122,39 @@ class CircuitBreaker:
         }
 
     def reset(self) -> None:
-        """Manually reset the circuit breaker."""
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._success_count = 0
+        self._probe_in_flight = False
         logger.info("circuit_breaker_reset", name=self.name)
+
+
+class CircuitBreakingProvider:
+    """Shared app-scoped breaker around the typed provider port."""
+
+    def __init__(self, delegate: ModelProvider, breaker: CircuitBreaker) -> None:
+        self.delegate = delegate
+        self.breaker = breaker
+
+    async def complete(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[ToolDefinition] = (),
+        *,
+        max_tokens: int = 4096,
+        response_format: str | None = None,
+    ) -> ModelResponse:
+        async def invoke() -> ModelResponse:
+            kwargs: dict[str, Any] = {"max_tokens": max_tokens}
+            # Legacy typed providers predate the optional JSON-mode keyword. Avoid passing
+            # it on ordinary sync/SSE calls so existing injected providers remain valid.
+            if response_format is not None:
+                kwargs["response_format"] = response_format
+            return await self.delegate.complete(messages, tools, **kwargs)
+
+        try:
+            return await self.breaker.call(invoke)
+        except CircuitBreakerOpenError as exc:
+            raise ProviderUnavailableError("Model provider temporarily unavailable") from exc
+        except Exception as exc:
+            raise ProviderUnavailableError("Model provider temporarily unavailable") from exc

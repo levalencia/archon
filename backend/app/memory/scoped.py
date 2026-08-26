@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.memory.keys import decode_memory_master_key
+from app.security.persistence_redactor import PersistenceRedactor
 from app.services.db_store import MemoryFactRow, MemoryScopeRow
 
 MAX_MEMORY_CHARS = 2000
@@ -56,12 +57,14 @@ class ScopedEncryptedMemoryRepository:
         master_key: str | bytes,
         *,
         max_chars: int = MAX_MEMORY_CHARS,
+        redactor: PersistenceRedactor | None = None,
     ) -> None:
         if max_chars < 1:
             raise ValueError("max_chars must be positive")
         self._sessions = session_factory
         self._master_key = decode_memory_master_key(master_key)
         self._max_chars = max_chars
+        self._redactor = redactor or PersistenceRedactor()
 
     def _key(self, user_id: str, project_id: str, version: int) -> bytes:
         info = b"archon/memory/v1\0" + user_id.encode() + b"\0" + project_id.encode()
@@ -205,7 +208,10 @@ class ScopedEncryptedMemoryRepository:
         *,
         provenance: Mapping[str, str],
     ) -> MemoryFact:
-        content = content.strip()
+        content = self._redactor.redact_text(content).text.strip()
+        provenance = {
+            str(key): self._redactor.redact_text(value).text for key, value in provenance.items()
+        }
         if not content:
             raise ValueError("memory content is required")
         async with self._sessions() as session, session.begin():
@@ -245,7 +251,11 @@ class ScopedEncryptedMemoryRepository:
         *,
         provenance: Mapping[str, str],
     ) -> MemoryFact | None:
-        content = content.strip()
+        old_text = self._redactor.redact_text(old_text).text
+        content = self._redactor.redact_text(content).text.strip()
+        provenance = {
+            str(key): self._redactor.redact_text(value).text for key, value in provenance.items()
+        }
         if not old_text or not content:
             raise ValueError("old_text and content are required")
         async with self._sessions() as session, session.begin():
@@ -279,6 +289,7 @@ class ScopedEncryptedMemoryRepository:
             return self._decrypt(row)
 
     async def remove(self, user_id: str, project_id: str, substring: str) -> int:
+        substring = self._redactor.redact_text(substring).text
         if not substring:
             return 0
         async with self._sessions() as session, session.begin():

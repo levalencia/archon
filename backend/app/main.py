@@ -41,9 +41,13 @@ from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
+from app.runtime.support import as_model_provider
 from app.security.approval_repository import ApprovalRepository
 from app.security.auth import AuthRepository
+from app.security.circuit_breaker import CircuitBreaker, CircuitBreakingProvider
 from app.security.live_approvals import DurableApprovalBroker
+from app.security.persistence_redactor import PersistenceRedactor
+from app.security.rate_limiter import RateLimiter
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 
@@ -77,9 +81,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         debug=settings.debug,
     )
 
-    # Store settings and the unified conversation repository in app state.
+    # Store settings and explicitly injected application-scoped services.
     app.state.settings = settings
-    repository = ConversationRepository(settings.database_url)
+    redactor = PersistenceRedactor()
+    app.state.persistence_redactor = redactor
+    repository = ConversationRepository(settings.database_url, redactor)
     await repository.initialize()
     app.state.conversations = repository
     auth_store = DatabaseStore(settings.database_url)
@@ -88,7 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.memory_encryption_enabled:
         assert memory_master_key is not None
         app.state.scoped_memory = ScopedEncryptedMemoryRepository(
-            auth_store.session_factory, memory_master_key
+            auth_store.session_factory, memory_master_key, redactor=redactor
         )
     else:
         app.state.scoped_memory = None
@@ -96,6 +102,42 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         ApprovalRepository(auth_store.session_factory),
         timeout_seconds=settings.approval_timeout_seconds,
         poll_interval_seconds=settings.approval_poll_interval_seconds,
+    )
+    from app.routes.artifacts import get_artifact_store
+
+    app.state.artifacts = get_artifact_store()
+
+    if settings.rate_limit_backend == "redis":
+        from redis.asyncio import Redis
+
+        redis = Redis.from_url(settings.redis_url)
+        try:
+            await redis.ping()
+        except Exception as exc:
+            await redis.aclose()
+            raise RuntimeError("Redis rate limiter is unavailable") from exc
+        app.state.rate_limiter = RateLimiter(
+            redis,
+            settings.rate_limit_requests,
+            settings.rate_limit_window,
+            owns_redis=True,
+        )
+    else:
+        app.state.rate_limiter = RateLimiter(
+            max_requests=settings.rate_limit_requests,
+            window_seconds=settings.rate_limit_window,
+        )
+
+    from app.routes.chat import get_llm_client
+
+    breaker = CircuitBreaker(
+        settings.circuit_breaker_failure_threshold,
+        settings.circuit_breaker_recovery_timeout,
+        name=settings.llm_provider,
+    )
+    app.state.provider_breaker = breaker
+    app.state.model_provider = CircuitBreakingProvider(
+        as_model_provider(get_llm_client(settings)), breaker
     )
     exporter = None
     if settings.otel_endpoint:
@@ -106,6 +148,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await repository.close()
     await auth_store.close()
+    await app.state.rate_limiter.close()
     if exporter:
         exporter.shutdown()
     logger.info("archon_shutdown")
@@ -182,7 +225,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/readyz")
     async def readyz():
         """Report readiness based on a live database query."""
-        dependencies = {"conversation_repository": "up"}
+        dependencies = {
+            "conversation_repository": "up",
+            "model_provider_circuit": app.state.provider_breaker.state.value,
+        }
         try:
             await app.state.conversations.check_health()
         except Exception as error:

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from app.memory.checkpoints import CheckpointManager
 from app.memory.scoped import MemoryFact, ScopedEncryptedMemoryRepository
 from app.security.auth import get_current_user
+from app.security.dependencies import enforce_rate_limit
 
 router = APIRouter(prefix="/api/memory", tags=["memory"], dependencies=[Depends(get_current_user)])
 
@@ -77,6 +78,7 @@ async def delete_memory_facts(
     user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> dict[str, Any]:
     """Delete every fact in exactly one authenticated owner/project scope."""
+    await enforce_rate_limit(request, user, "memory_mutation")
     repository = cast(ScopedEncryptedMemoryRepository | None, request.app.state.scoped_memory)
     if repository is None:
         raise HTTPException(status_code=503, detail="Persistent memory is disabled")

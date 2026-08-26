@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -51,8 +53,13 @@ class Settings(BaseSettings):
     admin_usernames: list[str] = ["admin"]
 
     # Rate Limiting
-    rate_limit_requests: int = 60
-    rate_limit_window: int = 60
+    rate_limit_requests: int = Field(default=60, gt=0)
+    rate_limit_window: int = Field(default=60, gt=0)
+    rate_limit_backend: Literal["memory", "redis"] = "memory"
+
+    # Model provider circuit breaker
+    circuit_breaker_failure_threshold: int = Field(default=5, gt=0)
+    circuit_breaker_recovery_timeout: float = Field(default=30.0, gt=0)
 
     # Agent
     agent_max_iterations: int = 5

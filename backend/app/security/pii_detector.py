@@ -14,7 +14,7 @@ import structlog
 logger = structlog.get_logger()
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class PIIEntity:
     entity_type: str
     value: str
@@ -123,17 +123,42 @@ class PIIDetector:
                         )
                     )
 
-        return entities
+        return sorted(
+            entities,
+            key=lambda entity: (entity.start, -(entity.end - entity.start), entity.entity_type),
+        )
+
+    @staticmethod
+    def non_overlapping(entities: list[PIIEntity]) -> list[PIIEntity]:
+        """Choose deterministic, longest-first ranges without corrupting offsets."""
+        selected: list[PIIEntity] = []
+        for entity in sorted(
+            entities,
+            key=lambda item: (-(item.end - item.start), item.start, item.entity_type),
+        ):
+            if entity.start >= entity.end:
+                continue
+            if any(entity.start < kept.end and kept.start < entity.end for kept in selected):
+                continue
+            selected.append(entity)
+        return sorted(selected, key=lambda item: (item.start, item.end, item.entity_type))
+
+    def redact_entities(self, text: str, entities: list[PIIEntity]) -> str:
+        """Redact normalized ranges in one pass using deterministic type tags."""
+        ranges = self.non_overlapping(entities)
+        if not ranges:
+            return text
+        parts: list[str] = []
+        cursor = 0
+        for entity in ranges:
+            parts.extend((text[cursor : entity.start], f"[{entity.entity_type.upper()}]"))
+            cursor = entity.end
+        parts.append(text[cursor:])
+        return "".join(parts)
 
     def redact(self, text: str) -> str:
         """Redact all PII from text."""
-        entities = self.detect(text)
-        entities.sort(key=lambda e: e.start, reverse=True)
-        result = text
-        for entity in entities:
-            tag = f"[{entity.entity_type.upper()}]"
-            result = result[: entity.start] + tag + result[entity.end :]
-        return result
+        return self.redact_entities(text, self.detect(text))
 
     def assess_risk(self, text: str) -> str:
         """Assess overall PII risk level."""

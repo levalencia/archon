@@ -23,17 +23,17 @@ from app.observability.cost_tracker import CostTracker
 from app.observability.logging import get_correlation_id
 from app.routes.chat import (
     get_conversation_repository,
-    get_llm_client,
     get_skill_registry,
     get_skills_top_k,
     get_tool_registry,
 )
 from app.runtime import AgentEvent, AgentEventKind
 from app.runtime.factory import RunContext, create_chat_runtime
-from app.runtime.support import as_model_provider, prepare_messages
+from app.runtime.support import prepare_messages
 from app.security.auth import get_current_user
+from app.security.dependencies import enforce_rate_limit
 from app.security.live_approvals import ApprovalBroker
-from app.services.artifacts import detect_artifact_in_response
+from app.services.artifacts import Artifact, detect_artifact_in_response
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -68,6 +68,7 @@ async def chat_stream_real(
     request: Request,
     user: dict = Depends(get_current_user),  # noqa: B008
 ) -> StreamingResponse:
+    await enforce_rate_limit(request, user, "chat")
     settings = request.app.state.settings
     memory = get_conversation_repository(request)
     conv_id = body.conversation_id or str(uuid.uuid4())
@@ -125,9 +126,7 @@ async def chat_stream_real(
         raw_msgs = [{"role": m.role.value, "content": m.content} for m in messages]
         raw_msgs, compact_stats = await auto_compact_context(
             raw_msgs,
-            llm_chat_fn=get_llm_client(settings).chat
-            if hasattr(get_llm_client(settings), "chat")
-            else None,
+            llm_chat_fn=None,
             max_tokens=settings.context_length,
         )
         yield _sse("context", compact_stats)
@@ -140,7 +139,7 @@ async def chat_stream_real(
 
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
 
-        provider = as_model_provider(get_llm_client(settings))
+        provider = request.app.state.model_provider
         if json_mode:
             from app.runtime.support import JsonModeProvider
 
@@ -212,8 +211,18 @@ async def chat_stream_real(
         await memory.store(conv_id, "user", body.message, user["user_id"])
         await memory.store(conv_id, "assistant", result.content, user["user_id"])
         artifacts = detect_artifact_in_response(result.content)
-        for artifact in artifacts:
-            yield _sse("artifact", artifact)
+        artifact_store = request.app.state.artifacts
+        for artifact_data in artifacts:
+            artifact = Artifact(
+                conversation_id=conv_id,
+                user_id=user["user_id"],
+                title=artifact_data["title"],
+                artifact_type=artifact_data["type"],
+                language=artifact_data.get("language", ""),
+                content=artifact_data["content"],
+            )
+            await artifact_store.save(artifact)
+            yield _sse("artifact", artifact.to_summary())
 
         sources = _project_web_search_sources(result.tool_calls)
         if sources:
@@ -373,6 +382,7 @@ async def approve_tool_call(
     user: dict = Depends(get_current_user),  # noqa: B008
 ) -> dict:
     """Approve or deny the authenticated owner's exact run-bound pending tool call."""
+    await enforce_rate_limit(request, user, "approval")
     broker: ApprovalBroker = request.app.state.approval_broker
     run_id = str(body.run_id)
     decided = await broker.decide_for_owner(

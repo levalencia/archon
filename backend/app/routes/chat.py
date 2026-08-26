@@ -24,8 +24,9 @@ from app.routes.admin import get_skills_top_k
 from app.routes.artifacts import get_artifact_store
 from app.routes.skills import get_skill_registry
 from app.runtime.factory import RunContext, create_chat_runtime
-from app.runtime.support import as_model_provider, prepare_messages
+from app.runtime.support import prepare_messages
 from app.security.auth import get_current_user
+from app.security.dependencies import enforce_rate_limit
 from app.security.policy import RiskClass
 from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.conversations import ConversationRepository
@@ -333,10 +334,10 @@ async def chat(
     user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> ChatResponse:
     """Send a message. The agent reasons with tools and skills, returns thinking steps."""
+    await enforce_rate_limit(request, user, "chat")
     cid = get_correlation_id()
     start_time = time.monotonic()
     settings = request.app.state.settings
-    llm = get_llm_client(settings)
     memory = get_conversation_repository(request)
 
     # Search for relevant skills
@@ -414,7 +415,7 @@ async def chat(
     )
     runtime = create_chat_runtime(
         context=run_context,
-        provider=as_model_provider(llm),
+        provider=request.app.state.model_provider,
         tools=tools,
         settings=settings,
         repository=memory,
@@ -473,7 +474,7 @@ async def chat(
     # Detect and save artifacts from response
     detected = detect_artifact_in_response(result.content)
     saved_artifacts = []
-    artifact_store = get_artifact_store()
+    artifact_store = get_artifact_store(request)
     for art_data in detected:
         artifact = Artifact(
             conversation_id=conv_id,

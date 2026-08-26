@@ -21,6 +21,8 @@ from datetime import UTC, datetime
 
 import structlog
 
+from app.security.persistence_redactor import PersistenceRedactor
+
 logger = structlog.get_logger()
 
 
@@ -69,12 +71,15 @@ class Artifact:
 class ArtifactStore:
     """In-memory artifact storage. PostgreSQL in production."""
 
-    def __init__(self) -> None:
+    def __init__(self, redactor: PersistenceRedactor | None = None) -> None:
         self._artifacts: dict[str, Artifact] = {}
         self._by_conversation: dict[str, list[str]] = {}
+        self._redactor = redactor or PersistenceRedactor()
 
     async def save(self, artifact: Artifact) -> Artifact:
         """Save or update an artifact."""
+        artifact.title = self._redactor.redact_text(artifact.title).text
+        artifact.content = self._redactor.redact_text(artifact.content).text
         self._artifacts[artifact.id] = artifact
         conv_list = self._by_conversation.setdefault(artifact.conversation_id, [])
         if artifact.id not in conv_list:
@@ -83,7 +88,6 @@ class ArtifactStore:
         logger.info(
             "artifact_saved",
             artifact_id=artifact.id,
-            title=artifact.title,
             type=artifact.artifact_type,
             size=len(artifact.content),
         )
@@ -120,10 +124,10 @@ class ArtifactStore:
         artifact = self._artifacts.get(artifact_id)
         if not artifact:
             return None
-        artifact.content = content
+        artifact.content = self._redactor.redact_text(content).text
         artifact.version += 1
         if title:
-            artifact.title = title
+            artifact.title = self._redactor.redact_text(title).text
         return artifact
 
 

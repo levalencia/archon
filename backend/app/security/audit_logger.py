@@ -17,6 +17,8 @@ import time
 
 import structlog
 
+from app.security.persistence_redactor import PersistenceRedactor
+
 logger = structlog.get_logger()
 
 
@@ -27,8 +29,11 @@ class StructuredAuditLogger:
     Production would use PostgreSQL; SQLite is for local dev and tests.
     """
 
-    def __init__(self, db_path: str = ":memory:") -> None:
+    def __init__(
+        self, db_path: str = ":memory:", redactor: PersistenceRedactor | None = None
+    ) -> None:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._redactor = redactor or PersistenceRedactor()
         self._conn.row_factory = sqlite3.Row
         self._create_table()
 
@@ -63,6 +68,10 @@ class StructuredAuditLogger:
         security_level: str = "info",
     ) -> None:
         """Log an auditable action."""
+        safe_agent_id = self._redactor.redact_text(agent_id).text
+        safe_action = self._redactor.redact_text(action).text
+        safe_resource = self._redactor.redact_text(resource).text
+        safe_result = self._redactor.redact_text(result).text
         self._conn.execute(
             """INSERT INTO audit_log
                (timestamp, agent_id, action, resource,
@@ -70,11 +79,11 @@ class StructuredAuditLogger:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 time.time(),
-                agent_id,
-                action,
-                resource,
-                json.dumps(parameters) if parameters else None,
-                result,
+                safe_agent_id,
+                safe_action,
+                safe_resource,
+                json.dumps(self._redactor.redact_value(parameters)) if parameters else None,
+                safe_result,
                 security_level,
                 correlation_id,
             ),
@@ -83,10 +92,10 @@ class StructuredAuditLogger:
 
         logger.info(
             "audit_entry",
-            agent_id=agent_id,
-            action=action,
-            resource=resource,
-            result=result,
+            agent_id=safe_agent_id,
+            action=safe_action,
+            resource=safe_resource,
+            result=safe_result,
             security_level=security_level,
             correlation_id=correlation_id,
         )

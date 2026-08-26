@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import fakeredis.aioredis
 import pytest
+from redis.exceptions import ResponseError
 
 from app.security.rate_limiter import RateLimiter
 
@@ -90,3 +93,44 @@ class TestRateLimiterRedis:
 
         result = await redis_limiter.check("user-2")
         assert result["allowed"] is True
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_fakeredis_transaction_fallback_is_atomic_under_concurrency(self) -> None:
+        limiter = RateLimiter(
+            redis_client=fakeredis.aioredis.FakeRedis(), max_requests=7, window_seconds=60
+        )
+
+        results = await asyncio.gather(*(limiter.check("same-user") for _ in range(30)))
+
+        assert sum(result.allowed for result in results) == 7
+        assert sum(not result.allowed for result in results) == 23
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_non_eval_redis_errors_fail_closed_without_local_fallback(self) -> None:
+        class BrokenRedis:
+            async def eval(self, *_args: object) -> None:
+                raise ResponseError("connection dropped")
+
+        limiter = RateLimiter(redis_client=BrokenRedis(), max_requests=1)
+        with pytest.raises(ResponseError, match="connection dropped"):
+            await limiter.check("user")
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_lua_fast_path_uses_unique_members(self) -> None:
+        class EvalRedis:
+            def __init__(self) -> None:
+                self.members: list[str] = []
+
+            async def eval(self, _script: str, _keys: int, _key: str, *args: object) -> list[int]:
+                self.members.append(str(args[-1]))
+                count = len(self.members)
+                return [1, count, 3 - count, 0]
+
+        redis = EvalRedis()
+        limiter = RateLimiter(redis_client=redis, max_requests=3)
+        await asyncio.gather(*(limiter.check("user") for _ in range(3)))
+
+        assert len(set(redis.members)) == 3

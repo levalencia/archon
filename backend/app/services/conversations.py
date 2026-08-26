@@ -5,14 +5,16 @@ from __future__ import annotations
 import builtins
 from typing import Any
 
+from app.security.persistence_redactor import PersistenceRedactor
 from app.services.db_store import DatabaseStore
 
 
 class ConversationRepository:
     """Persist user-scoped conversations, messages, and runtime events."""
 
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, redactor: PersistenceRedactor | None = None) -> None:
         self._store = DatabaseStore(database_url)
+        self._redactor = redactor or PersistenceRedactor()
 
     async def initialize(self) -> None:
         await self._store.initialize()
@@ -24,7 +26,7 @@ class ConversationRepository:
         await self._store.ping()
 
     async def append_runtime_event(self, **event: Any) -> None:
-        await self._store.append_runtime_event(event)
+        await self._store.append_runtime_event(self._redactor.redact_value(event))
 
     async def recent_runtime_events(
         self, *, run_id: str | None = None, limit: int = 100
@@ -34,7 +36,9 @@ class ConversationRepository:
     async def create(
         self, conversation_id: str, title: str, user_id: str = "default"
     ) -> dict[str, Any]:
-        await self._store.create_conversation(conversation_id, title, user_id)
+        await self._store.create_conversation(
+            conversation_id, self._redactor.redact_text(title).text, user_id
+        )
         conversation = await self._store.get_conversation(conversation_id, user_id)
         assert conversation is not None
         return {**conversation, "message_count": 0}
@@ -55,7 +59,9 @@ class ConversationRepository:
     async def store(
         self, conversation_id: str, role: str, content: str, user_id: str = "default"
     ) -> None:
-        await self._store.store_message(conversation_id, role, content, user_id)
+        await self._store.store_message(
+            conversation_id, role, self._redactor.redact_text(content).text, user_id
+        )
 
     async def retrieve(
         self, conversation_id: str, limit: int = 50, user_id: str = "default"
