@@ -353,7 +353,7 @@ class AgentRuntime:
             if not isinstance(self._tools, PolicyAwareToolExecutor):
                 raise TypeError("policy-aware tool metadata is unavailable")
             request = self._tools.policy_request(call)
-            if request.tool_name != canonical_tool_name(call.name):
+            if call.name != canonical_tool_name(call.name) or request.tool_name != call.name:
                 raise ValueError("policy metadata tool identity mismatch")
         except Exception:
             await self._emit_policy_failure(call, iteration, "policy_metadata_unavailable")

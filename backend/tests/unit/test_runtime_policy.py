@@ -13,6 +13,7 @@ from app.runtime import (
     AgentEventKind,
     AgentRuntime,
     AuthorizationOutcome,
+    AuthorizationRequest,
     Message,
     ModelResponse,
     RecordingEventSink,
@@ -126,6 +127,23 @@ async def test_policy_mode_requires_policy_aware_executor() -> None:
         next(e for e in sink.events if e.kind is AgentEventKind.POLICY_DECIDED).data["reason_code"]
         == "policy_metadata_unavailable"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("native_name", ["Reader", "reader ", "re\u0301ader"])
+async def test_policy_mode_rejects_noncanonical_native_tool_names(native_name: str) -> None:
+    tools = PolicyTools()
+    sink = RecordingEventSink()
+    call = ToolCall("native-exact", native_name, {"token": "***"})
+    result = await AgentRuntime(
+        provider(call), tools, policy_engine=FixedPolicy(PolicyAction.ALLOW), events=sink
+    ).run([Message(Role.USER, "read")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+    assert sink.events[3].data["id"] == "native-exact"
+    assert sink.events[3].data["name"] == native_name
+    assert sink.events[4].data["reason_code"] == "policy_metadata_unavailable"
 
 
 @pytest.mark.asyncio
@@ -329,3 +347,33 @@ def test_default_policy_is_explicit_and_fail_closed() -> None:
 def test_authorization_models_validate_reason_code() -> None:
     with pytest.raises(ValueError, match="reason_code"):
         AuthorizationOutcome(True, "id", "tool", "a" * 64, "raw secret!")
+
+
+@pytest.mark.parametrize("tool_name", ["READER", " reader", "reader ", "re\u0301ader"])
+@pytest.mark.parametrize("model", [AuthorizationRequest, AuthorizationOutcome])
+def test_authorization_models_reject_noncanonical_tool_names(tool_name: str, model: type) -> None:
+    kwargs = {
+        "tool_call_id": "native-1",
+        "tool_name": tool_name,
+        "arguments_hash": "a" * 64,
+    }
+    if model is AuthorizationOutcome:
+        kwargs.update(approved=True, reason_code="user_approved")
+
+    with pytest.raises(ValueError, match="tool_name must be canonical"):
+        model(**kwargs)
+
+
+def test_authorization_binding_preserves_and_compares_exact_values() -> None:
+    request = AuthorizationRequest("native-1", "reader", "a" * 64)
+
+    assert request.tool_name == "reader"
+    assert AuthorizationOutcome(True, "native-1", "reader", "a" * 64, "user_approved").binds(
+        request
+    )
+    assert not AuthorizationOutcome(True, "native-2", "reader", "a" * 64, "user_approved").binds(
+        request
+    )
+    assert not AuthorizationOutcome(True, "native-1", "reader", "b" * 64, "user_approved").binds(
+        request
+    )

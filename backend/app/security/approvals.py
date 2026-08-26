@@ -18,7 +18,10 @@ def _validate_binding(
         raise ValueError("tool_call_id must be non-empty")
     if not isinstance(arguments_hash, str) or not _HASH.fullmatch(arguments_hash):
         raise ValueError("arguments_hash must be a lowercase SHA-256 digest")
-    return tool_call_id, canonical_tool_name(tool_name), arguments_hash
+    canonical_name = canonical_tool_name(tool_name)
+    if tool_name != canonical_name:
+        raise ValueError("tool_name must be canonical")
+    return tool_call_id, tool_name, arguments_hash
 
 
 def _validate_reason_code(reason_code: str) -> str:
