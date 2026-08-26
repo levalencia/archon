@@ -2,12 +2,12 @@
 
 **Canonical status source**
 
-- **Current verified local baseline:** `c371ebe` on local `main` (2026-08-26)
-- **Baseline repository state:** clean after acceptance; local `main` was 75 commits ahead of `origin/main`
+- **Current verified local baseline:** `004f8d8` on local `main` (2026-08-26)
+- **Baseline repository state:** clean after acceptance; local `main` was 88 commits ahead of `origin/main`
 - **Historical capability audit snapshot:** `27952f4` on local `main` (2026-08-25)
 - **Remote status:** the current baseline has not been pushed or rerun in remote CI; the last known remote runs failed
 
-This is the sole canonical mutable source for implementation status and release-gate metrics. Other summaries must link here rather than maintain competing scorecards. The capability matrix and detailed findings come primarily from the historical audit snapshot; the policy-domain row and the tool-policy/filesystem rows are refreshed for the integrated Sprint 1.2 baseline. See [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md) and the [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md).
+This is the sole canonical mutable source for implementation status and release-gate metrics. Other summaries must link here rather than maintain competing scorecards. The capability matrix and detailed findings come primarily from the historical audit snapshot; the policy-domain, tool-policy/filesystem, and runtime-policy-enforcement rows are refreshed for the integrated Sprint 1.3 baseline. See [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md) and the [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md).
 
 ## How to read the matrix
 
@@ -24,15 +24,15 @@ Legend: **Yes** = supported by evidence; **Partial** = limited or qualified evid
 
 ## Current verified local quality-gate evidence
 
-These results were freshly observed on local `main` at `c371ebe`. They establish a green **local Sprint 1.2 registry/filesystem-hardening acceptance baseline**, not remote CI success, deployment, production readiness, or proof that runtime policy or approval enforcement is wired.
+These results were freshly observed on local `main` at `004f8d8`. They establish a green **local Sprint 1.3 runtime-policy acceptance baseline**, not remote CI success, deployment, production readiness, or proof that a live chat/API route invokes runtime policy or approval enforcement. Live route wiring and observation remain Sprint 1.4 work.
 
 | Gate | Fresh result | Status |
 |---|---|---|
 | Ruff check | No violations | Pass |
-| Ruff format check | 166 files already formatted | Pass |
-| Bandit scan | 17 low, 0 medium, 0 high; `-ll` gate passed | Pass; static scan only |
-| Backend tests | 648 passed, 0 skipped | Pass |
-| Backend coverage | 83.14% | Measured; aggregate coverage is not integration proof |
+| Ruff format check | 169 files already formatted | Pass |
+| Bandit scan | 20 low, 0 medium, 0 high; `-ll` gate passed | Pass; static scan only |
+| Backend tests | 720 passed, 0 skipped | Pass |
+| Backend coverage | 83.43% | Measured; aggregate coverage is not integration proof |
 | Svelte check | 0 errors, 0 warnings | Pass |
 | Frontend unit tests | 4 Vitest tests across 2 files | Pass; shallow coverage |
 | Frontend production build | Build completed | Pass |
@@ -41,11 +41,11 @@ These results were freshly observed on local `main` at `c371ebe`. They establish
 | Repository diff check | Clean | Pass |
 | Remote CI | Not rerun; last known remote runs failed | **No green remote evidence** |
 
-**Local release-gate verdict:** Sprint 1.2 registry/filesystem-hardening acceptance passed at `c371ebe`. The branch was clean after the run. No push or remote CI rerun occurred.
+**Local release-gate verdict:** Sprint 1.3 runtime-policy acceptance passed at `004f8d8`. The branch was clean after the run. No push or remote CI rerun occurred.
 
 ## Historical audit snapshot
 
-Except for the explicitly refreshed policy-domain row and the added tool-policy/filesystem rows, the capability matrix below remains the audit judgment recorded at `27952f4`, when Ruff reported 50 lint errors, Ruff format reported 16 files requiring formatting, strict Mypy reported 395 errors, and Svelte check reported one warning. Later local gate improvements do not by themselves prove that a product capability became more complete, better wired, deployed, or production-ready.
+Except for the explicitly refreshed policy-domain, tool-policy/filesystem, and runtime-policy-enforcement rows, the capability matrix below remains the audit judgment recorded at `27952f4`, when Ruff reported 50 lint errors, Ruff format reported 16 files requiring formatting, strict Mypy reported 395 errors, and Svelte check reported one warning. Later local gate improvements do not by themselves prove that a product capability became more complete, better wired, deployed, or production-ready.
 
 ## Capability evidence matrix
 
@@ -63,8 +63,9 @@ Except for the explicitly refreshed policy-domain row and the added tool-policy/
 | Context compaction and inspection | Yes | Partial | Partial | Partial | Partial | No | Useful plumbing exists; effective-context provenance and some displayed metrics are incomplete or hardcoded. |
 | Persistent memory | Yes | Yes | Yes | Yes | Partial | No | Live memory is global plaintext and cross-user; the encrypted store is not the actual live persistence path. |
 | API authorization and ownership | Yes | Partial | Yes | Yes | Partial | No | Conversations/artifacts are stronger; memory, tasks, MCP, and approvals have ownership gaps. |
-| Policy domain and deterministic matching | Yes | No | Yes | No | No | No | Policy models and deterministic matching are integrated and covered by automated tests; no evidence yet shows the live runtime or approval path invokes them. |
+| Policy domain and deterministic matching | Yes | No | Yes | No | No | No | Policy models and deterministic matching are integrated and covered by automated tests; no evidence yet shows a live chat/API route invokes them. |
 | Tool policy metadata and classification | Yes | Yes | Yes | No | No | No | The live tool registry carries validated risk/resource metadata and builds fail-closed policy requests for registered calls. This classification bridge is tested, but no acceptance observation shows a runtime policy decision trace or enforcement. |
+| Runtime policy enforcement | Yes | No | Yes | No | No | No | A fail-closed engine path handles allow/ask/deny decisions, exact approval binding, atomic batch authorization, event redaction, and terminal deadline failures under automated tests. No evidence yet shows a live chat/API route instantiates the policy engine and authorizer; live wiring and observation remain Sprint 1.4 work. |
 | Filesystem workspace containment | Yes | Yes | Yes | No | No | No | Live read, write, and list tools enforce workspace-relative descriptor-based traversal and reject traversal, symlink, hard-link, and unsafe target cases. Acceptance established automated coverage, not a user-visible decision trace or deployment. |
 | Approval policy and human approval | Yes | Partial | Yes | Yes | Partial | No | SSE has a transient modal, but sync chat can bypass approval and decisions are not owner-scoped receipts. |
 | File read/write tools | Yes | Yes | Yes | Partial | Yes | No | Useful workspace checks exist, but host execution paths can bypass the intended boundary. |
