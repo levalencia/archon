@@ -369,6 +369,56 @@ class MemoryFactRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class MCPServerRow(Base):
+    """Safe durable MCP configuration (deployment profiles hold process details)."""
+
+    __tablename__ = "mcp_servers"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "project_id", "name", name="uq_mcp_server_scope_name"),
+        Index("ix_mcp_servers_scope", "owner_id", "project_id"),
+        CheckConstraint("transport = 'stdio'", name="ck_mcp_servers_transport"),
+        CheckConstraint(
+            "health IN ('unknown','healthy','error','disabled')", name="ck_mcp_servers_health"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    profile_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    transport: Mapped[str] = mapped_column(String(16), nullable=False, default="stdio")
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)
+    health: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class MCPToolRow(Base):
+    """Bounded discovered metadata. Invocation arguments and results never live here."""
+
+    __tablename__ = "mcp_tools"
+    __table_args__ = (
+        UniqueConstraint("server_id", "name", name="uq_mcp_tool_server_name"),
+        Index("ix_mcp_tools_server", "server_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    server_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("mcp_servers.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(10_000), nullable=True)
+    input_schema_json: Mapped[str] = mapped_column(Text, nullable=False)
+    read_only: Mapped[bool] = mapped_column(nullable=False)
+    destructive: Mapped[bool] = mapped_column(nullable=False)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=False)
+    version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
 def ensure_private_sqlite_file(database_url: str) -> None:
     """Restrict an on-disk SQLite database to its owner, where applicable."""
     url = make_url(database_url)

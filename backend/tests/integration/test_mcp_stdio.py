@@ -70,9 +70,7 @@ async def test_stdio_timeout_result_cap_and_cleanup(tmp_path: Path) -> None:
         _profile(pid_file, connect_timeout_seconds=3.0, call_timeout_seconds=0.05)
     )
     with pytest.raises(MCPClientError) as timeout_error:
-        await timeout_client.call_tool(
-            "echo_evidence", {"evidence": "late", "delay_seconds": 1.0}
-        )
+        await timeout_client.call_tool("echo_evidence", {"evidence": "late", "delay_seconds": 1.0})
     assert timeout_error.value.code == "timeout"
     _assert_process_gone(pid_file)
 
