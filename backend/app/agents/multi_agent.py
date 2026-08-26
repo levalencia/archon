@@ -24,6 +24,7 @@ import structlog
 from app.agents.agent_auth import AgentToken, check_permission
 from app.agents.protocols import LLMClient
 from app.agents.secure_channel import SecureChannel
+from app.observability.logging import safe_value_metadata
 
 logger = structlog.get_logger()
 
@@ -228,7 +229,7 @@ class AgentCoordinator:
         steps: list[dict] = []
 
         # Step 1: Plan
-        logger.info("coordinator_step", step="plan", query=query[:100])
+        logger.info("coordinator_step", step="plan", **safe_value_metadata("query", query))
         plan_result = await self.planner.execute(f"Break down this question: {query}")
         steps.append(plan_result)
 

@@ -22,7 +22,7 @@ from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
 from app.observability.log_buffer import OwnerLogBuffer
-from app.observability.logging import setup_logging
+from app.observability.logging import safe_exception_metadata, setup_logging
 from app.observability.otel_exporter import OTLPExporter
 from app.research.api import router as research_router
 from app.routes.admin import router as admin_router
@@ -241,7 +241,9 @@ def create_app(
         except Exception as error:
             dependencies["conversation_repository"] = "down"
             logger.warning(
-                "readiness_check_failed", dependency="conversation_repository", error=str(error)
+                "readiness_check_failed",
+                dependency="conversation_repository",
+                **safe_exception_metadata(error, "health_check_failed"),
             )
             return JSONResponse(
                 status_code=503,

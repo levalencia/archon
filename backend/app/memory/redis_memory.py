@@ -10,6 +10,8 @@ import json
 
 import structlog
 
+from app.observability.logging import safe_exception_metadata
+
 logger = structlog.get_logger()
 
 
@@ -40,10 +42,10 @@ class RedisMemory:
                 decode_responses=True,
             )
             await self._redis.ping()
-            logger.info("redis_connected", url=self.redis_url)
+            logger.info("redis_connected")
             return True
-        except Exception as e:
-            logger.warning("redis_unavailable", error=str(e))
+        except Exception as exc:
+            logger.warning("redis_unavailable", **safe_exception_metadata(exc, "connection_failed"))
             self._redis = None
             return False
 
@@ -62,8 +64,8 @@ class RedisMemory:
                 # Set TTL (24 hours)
                 await self._redis.expire(key, 86400)
                 return
-            except Exception as e:
-                logger.warning("redis_store_error", error=str(e))
+            except Exception as exc:
+                logger.warning("redis_store_error", **safe_exception_metadata(exc, "write_failed"))
 
         # Fallback
         msgs = self._fallback.setdefault(conversation_id, [])
@@ -78,8 +80,10 @@ class RedisMemory:
                 key = f"archon:conv:{conversation_id}:messages"
                 raw = await self._redis.lrange(key, -limit, -1)
                 return [json.loads(r) for r in raw]
-            except Exception as e:
-                logger.warning("redis_retrieve_error", error=str(e))
+            except Exception as exc:
+                logger.warning(
+                    "redis_retrieve_error", **safe_exception_metadata(exc, "read_failed")
+                )
 
         # Fallback
         msgs = self._fallback.get(conversation_id, [])

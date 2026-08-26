@@ -8,6 +8,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.observability.logging import safe_value_metadata
 from app.security.auth import get_current_user
 from app.services.conversations import ConversationRepository
 
@@ -57,7 +58,11 @@ async def create_conversation(
     conversation = await get_conversation_repository(request).create(
         conv_id, body.title, user["user_id"]
     )
-    logger.info("conversation_created", conversation_id=conv_id, title=body.title)
+    logger.info(
+        "conversation_created",
+        conversation_id=conv_id,
+        **safe_value_metadata("title", body.title),
+    )
     return ConversationResponse(**conversation)
 
 

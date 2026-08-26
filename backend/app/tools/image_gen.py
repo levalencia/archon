@@ -19,6 +19,7 @@ import uuid
 import httpx
 import structlog
 
+from app.observability.logging import safe_value_metadata
 from app.tools.image_storage import image_path
 
 logger = structlog.get_logger()
@@ -87,9 +88,9 @@ async def _mock_generate(prompt: str, size: str) -> dict:
 
     logger.info(
         "image_generated_mock",
-        prompt=prompt[:50],
+        **safe_value_metadata("prompt", prompt),
         size=size,
-        path=str(filepath),
+        file_type=filepath.suffix,
     )
 
     return {
@@ -136,7 +137,7 @@ async def _together_generate(
 
     logger.info(
         "image_generated_together",
-        prompt=prompt[:50],
+        **safe_value_metadata("prompt", prompt),
         size=size,
         bytes=len(img_bytes),
     )
@@ -183,7 +184,7 @@ async def _openai_generate(
 
     logger.info(
         "image_generated_openai",
-        prompt=prompt[:50],
+        **safe_value_metadata("prompt", prompt),
         size=size,
         bytes=len(img_bytes),
     )

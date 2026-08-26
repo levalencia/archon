@@ -16,6 +16,8 @@ from typing import Any
 
 import structlog
 
+from app.observability.logging import safe_exception_metadata
+
 logger = structlog.get_logger()
 
 
@@ -62,7 +64,11 @@ class TaskQueue:
             except Exception as exc:
                 record.status = TaskStatus.FAILED
                 record.error = f"{type(exc).__name__}: {exc}"
-                logger.error("task_failed", task_id=task_id, error=record.error)
+                logger.error(
+                    "task_failed",
+                    task_id=task_id,
+                    **safe_exception_metadata(exc, "background_task_failed"),
+                )
             finally:
                 record.completed_at = datetime.now(UTC).isoformat()
 

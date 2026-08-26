@@ -27,7 +27,7 @@ from typing import Any, cast
 import structlog
 
 from app.agents.protocols import AuditLog, PermissionChecker
-from app.observability.logging import get_correlation_id
+from app.observability.logging import get_correlation_id, safe_exception_metadata
 from app.runtime.models import ToolCall
 from app.runtime.models import ToolDefinition as RuntimeToolDefinition
 from app.security.policy import (
@@ -356,7 +356,7 @@ class SecureToolRegistry:
             logger.error(
                 "tool_error",
                 tool=tool_name,
-                error=str(e),
+                **safe_exception_metadata(e, "tool_execution_failed"),
                 correlation_id=correlation_id,
             )
             raise

@@ -15,6 +15,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.observability.logging import safe_value_metadata
+
 logger = structlog.get_logger()
 
 # XSS patterns to strip
@@ -118,7 +120,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             cookie_token and header_token and hmac.compare_digest(cookie_token, header_token)
         )
         if not token_is_valid:
-            logger.warning("csrf_validation_failed", path=request.url.path)
+            logger.warning(
+                "csrf_validation_failed", **safe_value_metadata("path", request.url.path)
+            )
             return JSONResponse(
                 {"detail": "CSRF token missing or invalid"},
                 status_code=403,

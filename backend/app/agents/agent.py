@@ -300,7 +300,7 @@ class ProductionAgent:
             logger.info(
                 "react_tool_call",
                 tool=tool_name,
-                params=tool_params,
+                parameter_count=len(tool_params),
                 iteration=iteration,
                 correlation_id=correlation_id,
             )

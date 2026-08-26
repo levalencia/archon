@@ -15,6 +15,7 @@ import time
 import structlog
 
 from app.agents.multi_agent import AgentCoordinator, SpecialistAgent
+from app.observability.logging import safe_exception_metadata
 
 logger = structlog.get_logger()
 
@@ -201,7 +202,7 @@ class ResilientCoordinator(AgentCoordinator):
                     "agent_error",
                     agent=agent.name,
                     attempt=attempt,
-                    error=str(e),
+                    **safe_exception_metadata(e, "agent_execution_failed"),
                 )
 
         # Fallback after all retries exhausted

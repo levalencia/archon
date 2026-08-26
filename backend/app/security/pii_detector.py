@@ -63,9 +63,9 @@ def _init_spacy() -> bool:
 class PIIDetector:
     """Detect PII using regex + optional spaCy NER."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, use_spacy: bool = True) -> None:
         self._compiled = PII_PATTERNS
-        self._use_spacy = _init_spacy()
+        self._use_spacy = use_spacy and _init_spacy()
 
     def detect(self, text: str) -> list[PIIEntity]:
         """Detect all PII entities in text."""

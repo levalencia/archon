@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 
 import structlog
 
+from app.observability.logging import safe_value_metadata
+
 logger = structlog.get_logger()
 
 
@@ -96,7 +98,7 @@ class RecursiveChunker:
         logger.info(
             "document_chunked",
             document_id=document.id,
-            title=document.title,
+            **safe_value_metadata("title", document.title),
             original_length=len(text),
             chunks=len(chunks),
             avg_chunk_size=sum(len(c.content) for c in chunks) // max(len(chunks), 1),

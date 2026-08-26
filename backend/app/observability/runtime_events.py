@@ -12,7 +12,11 @@ import structlog
 
 from app.observability import metrics
 from app.observability.log_buffer import OwnerLogBuffer
-from app.observability.logging import get_correlation_id, redact_sensitive
+from app.observability.logging import (
+    get_correlation_id,
+    redact_sensitive,
+    safe_exception_metadata,
+)
 from app.observability.tracing import Span, Tracer, get_tracer
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink
 from app.security.persistence_redactor import PersistenceRedactor
@@ -99,8 +103,10 @@ class CompositeEventSink:
             try:
                 self.exporter.export_span(span)
             except Exception as exc:
-                safe_error = self.redactor.redact_text(str(exc)).text
-                self.logger.warning("runtime_span_export_failed", error=safe_error)
+                self.logger.warning(
+                    "runtime_span_export_failed",
+                    **safe_exception_metadata(exc, "span_export_failed"),
+                )
 
     async def emit(self, event: AgentEvent) -> None:
         now = self.clock()
@@ -208,7 +214,9 @@ class CompositeEventSink:
                     data=safe_data,
                 )
             except Exception as error:
-                safe_error = self.redactor.redact_text(str(error)).text
-                self.logger.warning("runtime_event_persistence_failed", error=safe_error)
+                self.logger.warning(
+                    "runtime_event_persistence_failed",
+                    **safe_exception_metadata(error, "event_persistence_failed"),
+                )
         if self.downstream is not None:
             await self.downstream.emit(event)

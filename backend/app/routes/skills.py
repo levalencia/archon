@@ -13,6 +13,7 @@ import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.observability.logging import safe_value_metadata
 from app.security.auth import get_current_user, require_admin
 from app.skills.registry import Skill, SkillRegistry, create_default_skills
 
@@ -129,9 +130,9 @@ async def import_skill(body: SkillImportRequest) -> SkillResponse | dict:
 
     logger.info(
         "skill_import_started",
-        repo=body.repo,
-        path=body.path,
-        branch=body.branch,
+        **safe_value_metadata("repo", body.repo),
+        **safe_value_metadata("path", body.path),
+        **safe_value_metadata("branch", body.branch),
     )
 
     skill = await registry.load_from_github(
@@ -145,8 +146,8 @@ async def import_skill(body: SkillImportRequest) -> SkillResponse | dict:
 
     logger.info(
         "skill_imported",
-        name=skill.name,
-        repo=body.repo,
+        **safe_value_metadata("name", skill.name),
+        **safe_value_metadata("repo", body.repo),
         content_length=len(skill.content),
     )
 

@@ -14,6 +14,8 @@ from pathlib import Path
 
 import structlog
 
+from app.observability.logging import safe_value_metadata
+
 logger = structlog.get_logger()
 
 MEMORY_FILE = "archon_memory.json"
@@ -62,7 +64,9 @@ class PersistentMemory:
         }
         self._entries.append(entry)
         self._save()
-        logger.info("memory_added", content=content[:50], total=len(self._entries))
+        logger.info(
+            "memory_added", **safe_value_metadata("content", content), total=len(self._entries)
+        )
         return {"status": "added", "total_entries": len(self._entries)}
 
     def remove(self, substring: str) -> dict:

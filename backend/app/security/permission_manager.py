@@ -14,7 +14,7 @@ from pathlib import Path
 
 import structlog
 
-from app.observability.logging import get_correlation_id
+from app.observability.logging import get_correlation_id, safe_value_metadata
 
 logger = structlog.get_logger()
 
@@ -69,7 +69,7 @@ class SecurePermissionManager:
                 logger.warning(
                     "permission_denied",
                     agent_id=agent_id,
-                    resource=file_path_str,
+                    **safe_value_metadata("resource", file_path_str),
                     action=action,
                     reason="invalid_path",
                     correlation_id=correlation_id,
@@ -84,10 +84,10 @@ class SecurePermissionManager:
                 logger.warning(
                     "permission_denied",
                     agent_id=agent_id,
-                    resource=str(resolved),
+                    **safe_value_metadata("resource", str(resolved)),
                     action=action,
                     reason="outside_base_dir",
-                    base_dir=str(self._base_dir),
+                    base_dir_configured=True,
                     correlation_id=correlation_id,
                 )
                 return False

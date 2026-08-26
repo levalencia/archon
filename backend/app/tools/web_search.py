@@ -11,6 +11,8 @@ import re
 import httpx
 import structlog
 
+from app.observability.logging import safe_exception_metadata, safe_value_metadata
+
 logger = structlog.get_logger()
 
 BRAVE_API_URL = "https://api.search.brave.com/res/v1/web/search"
@@ -42,8 +44,12 @@ async def web_search_tool(
                     "total": len(enriched),
                     "source": "brave",
                 }
-        except Exception as e:
-            logger.warning("brave_search_failed", error=str(e), query=query)
+        except Exception as exc:
+            logger.warning(
+                "brave_search_failed",
+                **safe_value_metadata("query", query),
+                **safe_exception_metadata(exc, "provider_request_failed"),
+            )
 
     # Fallback: SearXNG
     try:
@@ -56,8 +62,12 @@ async def web_search_tool(
                 "total": len(enriched),
                 "source": "searxng",
             }
-    except Exception as e:
-        logger.warning("searxng_search_failed", error=str(e))
+    except Exception as exc:
+        logger.warning(
+            "searxng_search_failed",
+            **safe_value_metadata("query", query),
+            **safe_exception_metadata(exc, "provider_request_failed"),
+        )
 
     # Fallback: DuckDuckGo HTML scraping
     try:
@@ -70,10 +80,14 @@ async def web_search_tool(
                 "total": len(enriched),
                 "source": "duckduckgo",
             }
-    except Exception as e:
-        logger.warning("duckduckgo_search_failed", error=str(e))
+    except Exception as exc:
+        logger.warning(
+            "duckduckgo_search_failed",
+            **safe_value_metadata("query", query),
+            **safe_exception_metadata(exc, "provider_request_failed"),
+        )
 
-    logger.warning("web_search_no_results", query=query)
+    logger.warning("web_search_no_results", **safe_value_metadata("query", query))
     return {"query": query, "results": [], "total": 0, "source": "none"}
 
 
@@ -98,7 +112,7 @@ async def _brave_search(query: str, api_key: str, num: int) -> list[dict]:
             }
         )
 
-    logger.info("brave_search", query=query, results=len(results))
+    logger.info("brave_search", **safe_value_metadata("query", query), results=len(results))
     return results
 
 
@@ -122,7 +136,7 @@ async def _searxng_search(query: str, num: int) -> list[dict]:
             }
         )
 
-    logger.info("searxng_search", query=query, results=len(results))
+    logger.info("searxng_search", **safe_value_metadata("query", query), results=len(results))
     return results
 
 

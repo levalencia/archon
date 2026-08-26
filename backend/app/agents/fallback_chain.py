@@ -9,6 +9,7 @@ from __future__ import annotations
 import structlog
 
 from app.agents.protocols import LLMClient
+from app.observability.logging import safe_exception_metadata
 
 logger = structlog.get_logger()
 
@@ -54,20 +55,20 @@ class FallbackLLMChain:
                     )
                 return response
 
-            except Exception as e:
+            except Exception as exc:
                 self._failures[i] = self._failures.get(i, 0) + 1
-                errors.append(f"{adapter_name}: {e}")
+                errors.append(f"{adapter_name}: {exc}")
                 logger.warning(
                     "llm_adapter_failed",
                     adapter=adapter_name,
                     position=i,
-                    error=str(e),
+                    **safe_exception_metadata(exc, "provider_request_failed"),
                     total_failures=self._failures[i],
                 )
 
         # All adapters failed
         error_summary = "; ".join(errors)
-        logger.error("llm_all_adapters_failed", errors=error_summary)
+        logger.error("llm_all_adapters_failed", provider_count=len(errors))
         return f"[All LLM providers failed: {error_summary}]"
 
     def get_stats(self) -> dict:

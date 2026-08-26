@@ -12,6 +12,7 @@ from __future__ import annotations
 import structlog
 
 from app.agents.protocols import LLMClient
+from app.observability.logging import safe_value_metadata
 from app.services.chunker import EmbeddingService
 from app.services.vector_store import VectorStore
 
@@ -74,7 +75,7 @@ class RAGPipeline:
         )
 
         if not search_results:
-            logger.info("rag_no_results", question=question[:100])
+            logger.info("rag_no_results", **safe_value_metadata("question", question))
             return {
                 "answer": "I could not find relevant information to answer your question.",
                 "sources": [],
@@ -117,7 +118,7 @@ class RAGPipeline:
 
         logger.info(
             "rag_query_complete",
-            question=question[:100],
+            **safe_value_metadata("question", question),
             chunks_retrieved=len(search_results),
             avg_score=round(avg_score, 4),
         )
@@ -163,7 +164,7 @@ class RAGPipeline:
         logger.info(
             "rag_document_ingested",
             document_id=document_id,
-            title=title,
+            **safe_value_metadata("title", title),
             chunks_created=added,
             total_characters=len(content),
         )

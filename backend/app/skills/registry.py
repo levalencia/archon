@@ -14,6 +14,8 @@ import re
 import httpx
 import structlog
 
+from app.observability.logging import safe_exception_metadata, safe_value_metadata
+
 logger = structlog.get_logger()
 
 
@@ -178,8 +180,13 @@ class SkillRegistry:
                 response = await client.get(url)
                 response.raise_for_status()
                 content = response.text
-        except Exception as e:
-            logger.warning("skill_load_failed", repo=repo, path=path, error=str(e))
+        except Exception as exc:
+            logger.warning(
+                "skill_load_failed",
+                **safe_value_metadata("repo", repo),
+                **safe_value_metadata("path", path),
+                **safe_exception_metadata(exc, "remote_load_failed"),
+            )
             return None
 
         # Parse frontmatter

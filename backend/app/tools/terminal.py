@@ -12,6 +12,8 @@ import re
 
 import structlog
 
+from app.observability.logging import safe_exception_metadata, safe_value_metadata
+
 logger = structlog.get_logger()
 
 # Patterns that are blocked for safety
@@ -58,7 +60,11 @@ async def terminal_tool(command: str, timeout: int = 30) -> dict:
     # Check blocklist
     blocked = is_command_blocked(command)
     if blocked:
-        logger.warning("terminal_command_blocked", command=command, reason=blocked)
+        logger.warning(
+            "terminal_command_blocked",
+            **safe_value_metadata("command", command),
+            reason="dangerous_pattern",
+        )
         return {"stdout": "", "stderr": blocked, "exit_code": 1, "timed_out": False}
 
     env = os.environ.copy()
@@ -88,7 +94,7 @@ async def terminal_tool(command: str, timeout: int = 30) -> dict:
 
         logger.info(
             "terminal_executed",
-            command=command[:100],
+            **safe_value_metadata("command", command),
             exit_code=result["exit_code"],
             timed_out=timed_out,
             stdout_len=len(result["stdout"]),
@@ -96,7 +102,11 @@ async def terminal_tool(command: str, timeout: int = 30) -> dict:
         return result
 
     except Exception as exc:
-        logger.error("terminal_error", command=command[:100], error=str(exc))
+        logger.error(
+            "terminal_error",
+            **safe_value_metadata("command", command),
+            **safe_exception_metadata(exc, "execution_failed"),
+        )
         return {
             "stdout": "",
             "stderr": f"Error executing command: {exc}",
