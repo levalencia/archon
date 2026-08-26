@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import inspect
+import math
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -43,6 +44,70 @@ logger = structlog.get_logger()
 DEFAULT_TOOL_TIMEOUT = 30
 
 ResourceResolver = Callable[[Mapping[str, Any]], tuple[ResourcePattern, ...]]
+_SUPPORTED_PROPERTY_TYPES = frozenset({"string", "integer", "number", "boolean", "object", "array"})
+
+
+def _value_matches_type(value: Any, declared_type: str) -> bool:
+    """Match the deliberately small JSON-schema type subset used by tool definitions."""
+    if declared_type == "string":
+        return isinstance(value, str)
+    if declared_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if declared_type == "number":
+        return (
+            isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+        )
+    if declared_type == "boolean":
+        return type(value) is bool
+    if declared_type == "object":
+        return isinstance(value, Mapping)
+    if declared_type == "array":
+        return isinstance(value, (list, tuple))
+    return False  # pragma: no cover - registration rejects unsupported declarations
+
+
+def _validate_input_schema(schema: Any) -> Mapping[str, Any]:
+    """Validate trusted registration metadata for the supported schema subset."""
+    if not isinstance(schema, Mapping):
+        raise TypeError("invalid input schema: expected a mapping")
+
+    schema_type = schema.get("type")
+    if schema_type is not None and schema_type != "object":
+        raise ValueError("invalid input schema: root type must be object")
+    additional_properties = schema.get("additionalProperties")
+    if additional_properties is not None and type(additional_properties) is not bool:
+        raise TypeError("invalid input schema: additionalProperties must be boolean")
+
+    required = schema.get("required", ())
+    if not isinstance(required, (list, tuple)) or not all(
+        isinstance(field, str) for field in required
+    ):
+        raise TypeError("invalid input schema: required must be an array of field names")
+    if len(set(required)) != len(required):
+        raise ValueError("invalid input schema: required field names must be unique")
+
+    properties = schema.get("properties", {})
+    if not isinstance(properties, Mapping):
+        raise TypeError("invalid input schema: properties must be an object")
+    if not all(isinstance(field, str) for field in properties):
+        raise TypeError("invalid input schema: property names must be strings")
+    if properties and any(field not in properties for field in required):
+        raise ValueError("invalid input schema: required field is not declared")
+
+    for field, declaration in properties.items():
+        if not isinstance(declaration, Mapping):
+            raise TypeError(f"invalid input schema for field '{field}': expected an object")
+        declared_type = declaration.get("type")
+        if declared_type not in _SUPPORTED_PROPERTY_TYPES:
+            raise ValueError(f"invalid input schema for field '{field}': unsupported type")
+        if "enum" not in declaration:
+            continue
+        enum = declaration["enum"]
+        if not isinstance(enum, (list, tuple)) or not enum:
+            raise TypeError(f"invalid input schema for field '{field}': enum must be an array")
+        if any(not _value_matches_type(item, declared_type) for item in enum):
+            raise ValueError(f"invalid input schema for field '{field}': enum type mismatch")
+    return schema
 
 
 def _deep_freeze(value: Any) -> Any:
@@ -117,9 +182,10 @@ class ToolDefinition:
             raise TypeError("risk_classes must be a frozenset of RiskClass values")
         if self.resource_resolver is not None and not callable(self.resource_resolver):
             raise TypeError("resource_resolver must be callable")
+        schema = {} if self.input_schema is None else _validate_input_schema(self.input_schema)
         object.__setattr__(self, "name", canonical_tool_name(self.name))
         object.__setattr__(self, "required_permissions", tuple(self.required_permissions or ()))
-        object.__setattr__(self, "input_schema", _deep_freeze(self.input_schema or {}))
+        object.__setattr__(self, "input_schema", _deep_freeze(schema))
 
 
 class SecureToolRegistry:
@@ -191,6 +257,20 @@ class SecureToolRegistry:
             field not in allowed_fields for field in arguments
         ):
             raise ValueError("Unexpected parameter(s) supplied")
+
+        if isinstance(properties, Mapping):
+            for field, declaration in properties.items():
+                if field not in arguments:
+                    continue
+                value = arguments[field]
+                declared_type = declaration["type"]
+                if not _value_matches_type(value, declared_type):
+                    raise ValueError(f"Invalid parameter: {field}")
+                enum = declaration.get("enum")
+                if enum is not None and not any(
+                    type(value) is type(option) and value == option for option in enum
+                ):
+                    raise ValueError(f"Invalid parameter: {field}")
 
         return copy.deepcopy(dict(arguments))
 

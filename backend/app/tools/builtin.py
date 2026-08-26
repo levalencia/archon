@@ -267,6 +267,8 @@ async def read_file_tool(
         file_stat = os.fstat(file_fd)
         if not stat.S_ISREG(file_stat.st_mode):
             return {"error": f"Not a regular file: {path}"}
+        if file_stat.st_nlink != 1:
+            return {"error": f"Unable to read file safely: {path}"}
         if file_stat.st_size > max_size:
             return {"error": f"File exceeds maximum size of {max_size} bytes: {path}"}
 

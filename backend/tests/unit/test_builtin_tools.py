@@ -190,6 +190,32 @@ class TestFileTool:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_read_refuses_hard_link_without_reading_outside_inode(
+        self, workspace: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        secret = "outside hard-linked secret"
+        outside = workspace.parent / f"{workspace.name}-outside-hard-link.txt"
+        outside.write_text(secret)
+        target = workspace / "hard-link.txt"
+        os.link(outside, target)
+        reads: list[int] = []
+
+        def forbidden_read(file_descriptor: int, size: int) -> bytes:
+            reads.append(file_descriptor)
+            raise AssertionError(f"hard-linked descriptor was read with size {size}")
+
+        monkeypatch.setattr(builtin_module.os, "read", forbidden_read)
+        try:
+            result = await read_file_tool("hard-link.txt", workspace_root=workspace)
+        finally:
+            outside.unlink()
+
+        assert result == {"error": "Unable to read file safely: hard-link.txt"}
+        assert secret not in str(result)
+        assert reads == []
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     @pytest.mark.skipif(os.name == "nt", reason="Backslash is a Windows path separator")
     @pytest.mark.parametrize("operation", ["read", "list", "write"])
     async def test_file_tools_reject_backslash_identity_mismatch(

@@ -7,6 +7,8 @@ import asyncio
 import pytest
 
 from app.agents.protocols import ToolExecutor
+from app.runtime.models import ToolCall
+from app.security.policy import RiskClass
 from app.tools.registry import SecureToolRegistry
 
 
@@ -226,6 +228,140 @@ class TestToolInputValidation:
 
         result = await registry.execute("search", {"query": "test"})
         assert result["result"] == "Found: test"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("tool_name", "field", "field_schema", "invalid_value"),
+        [
+            ("read_file", "max_size", {"type": "integer"}, "classified-max-size"),
+            ("web_search", "num_results", {"type": "integer"}, "classified-count"),
+            ("web_search", "num_results", {"type": "integer"}, True),
+            (
+                "memory",
+                "action",
+                {"type": "string", "enum": ["add", "remove", "replace", "list"]},
+                "classified-invalid-action",
+            ),
+        ],
+    )
+    async def test_invalid_types_and_enums_fail_before_all_hooks(
+        self,
+        tool_name: str,
+        field: str,
+        field_schema: dict[str, object],
+        invalid_value: object,
+    ) -> None:
+        events: list[str] = []
+
+        class Permissions:
+            async def check(self, **_arguments: object) -> bool:
+                events.append("permission")
+                return True
+
+        def resolver(_arguments: object) -> tuple[object, ...]:
+            events.append("resolver")
+            return ()
+
+        async def handler(**_arguments: object) -> dict[str, bool]:
+            events.append("handler")
+            return {"ok": True}
+
+        registry = SecureToolRegistry(permissions=Permissions())  # type: ignore[arg-type]
+        registry.register(
+            tool_name,
+            handler,
+            required_permissions=["use"],
+            input_schema={"properties": {field: field_schema}},
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=resolver,  # type: ignore[arg-type]
+        )
+
+        for operation in (
+            lambda: registry.policy_request(ToolCall("call-1", tool_name, {field: invalid_value})),
+            lambda: registry.execute(tool_name, {field: invalid_value}),
+        ):
+            with pytest.raises(ValueError, match=f"Invalid parameter: {field}") as captured:
+                result = operation()
+                if asyncio.iscoroutine(result):
+                    await result
+            assert str(invalid_value) not in str(captured.value)
+
+        assert events == []
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_valid_optional_supported_types_and_enum_pass(self) -> None:
+        seen: list[dict[str, object]] = []
+
+        async def handler(**arguments: object) -> dict[str, bool]:
+            seen.append(arguments)
+            return {"ok": True}
+
+        registry = SecureToolRegistry()
+        registry.register(
+            "typed",
+            handler,
+            input_schema={
+                "properties": {
+                    "text": {"type": "string", "enum": ["safe"]},
+                    "count": {"type": "integer"},
+                    "ratio": {"type": "number"},
+                    "enabled": {"type": "boolean"},
+                    "metadata": {"type": "object"},
+                    "items": {"type": "array"},
+                }
+            },
+        )
+        arguments = {
+            "text": "safe",
+            "count": 2,
+            "ratio": 1.5,
+            "enabled": True,
+            "metadata": {"nested": "value"},
+            "items": ("one", "two"),
+        }
+
+        assert await registry.execute("typed", arguments) == {"ok": True}
+        assert seen == [arguments]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_number_must_be_finite_and_enum_equality_is_type_sensitive(self) -> None:
+        registry = SecureToolRegistry()
+        registry.register(
+            "typed",
+            lambda **_arguments: {"ok": True},
+            input_schema={
+                "properties": {
+                    "amount": {"type": "number", "enum": [1]},
+                    "ratio": {"type": "number"},
+                }
+            },
+        )
+
+        for arguments in ({"amount": 1.0}, {"ratio": float("inf")}, {"ratio": float("nan")}):
+            with pytest.raises(ValueError, match="Invalid parameter"):
+                await registry.execute("typed", arguments)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "schema",
+        [
+            {"required": "query"},
+            {"properties": []},
+            {"properties": {"query": "string"}},
+            {"properties": {"query": {"type": "null"}}},
+            {"properties": {"query": {"type": "string", "enum": "secret"}}},
+            {"properties": {"query": {"type": "integer", "enum": [True]}}},
+            {"additionalProperties": "yes"},
+        ],
+    )
+    def test_malformed_trusted_schema_fails_registration(self, schema: dict[str, object]) -> None:
+        registry = SecureToolRegistry()
+
+        with pytest.raises((TypeError, ValueError), match="input schema"):
+            registry.register("malformed", sync_tool, input_schema=schema)
 
 
 class TestToolAudit:
