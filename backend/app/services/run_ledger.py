@@ -66,6 +66,46 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
     AgentEventKind.GROUNDED_ANSWER.value: frozenset(
         {"answer_hash", "citation_ids", "supported_count", "unsupported_count"}
     ),
+    AgentEventKind.DELEGATION_REQUESTED.value: frozenset(
+        {
+            "child_id",
+            "parent_run_id",
+            "user_id",
+            "project_id",
+            "policy_id",
+            "claim_ids",
+            "claim_hashes",
+            "evidence_ids",
+            "content_hashes",
+            "claim_count",
+            "evidence_count",
+            "status",
+            "reason_code",
+            "input_tokens",
+            "output_tokens",
+        }
+    ),
+    AgentEventKind.DELEGATION_COMPLETED.value: frozenset(
+        {
+            "child_id",
+            "parent_run_id",
+            "claim_ids",
+            "claim_hashes",
+            "evidence_ids",
+            "content_hashes",
+            "claim_count",
+            "evidence_count",
+            "supported_count",
+            "rejected_count",
+            "escalated_count",
+            "status",
+            "reason_code",
+            "reason_codes",
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+        }
+    ),
     AgentEventKind.RUN_STOPPED.value: frozenset({"reason", "error"}),
 }
 
