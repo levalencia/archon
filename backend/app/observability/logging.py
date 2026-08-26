@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
 from collections import Counter
 from collections.abc import Mapping
@@ -38,14 +39,85 @@ _CREDENTIAL_URI_PATTERN = re.compile(r"(?i)(?P<scheme>\b[a-z][a-z0-9+.-]*://)[^/
 _AUTH_SCHEME_PATTERN = re.compile(
     r"(?i)\b(?P<scheme>basic|bearer)(?P<space>\s+)(?!\[REDACTED\])(?P<value>[^\s,;}\]\)]+)"
 )
-_SENSITIVE_KEYS = re.compile(
-    r"(?ix)^(?:"
-    r"authorization|auth|api[-_ ]?key|token|password|passwd|secret|"
-    r"set[-_ ]?cookie|cookie|url|uri|dsn|database[-_ ]?url|connection[-_ ]?string"
-    r")$"
-)
+_MAX_CLASSIFIED_KEY_LENGTH = 256
+_KEY_SEPARATORS = re.compile(r"[-.\s]+")
+_KEY_TOKENS = re.compile(r"[^\W_]+", re.UNICODE)
+_LOWER_TO_UPPER_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_ACRONYM_BOUNDARY = re.compile(r"(?<=[A-Z])(?=[A-Z][a-z])")
+_SAFE_KEY_TOKENIZATIONS = {
+    ("hockey", "score"),
+    ("monkey",),
+    ("source", "url"),
+    ("token", "count"),
+}
+_SENSITIVE_COMPONENTS = {
+    "auth",
+    "authorization",
+    "cookie",
+    "credential",
+    "credentials",
+    "passwd",
+    "password",
+    "secret",
+    "token",
+}
+_KEY_QUALIFIERS = {"access", "api", "client", "encryption", "master", "private", "signing"}
+_COMPACT_CREDENTIAL_KEYS = {f"{qualifier}key" for qualifier in _KEY_QUALIFIERS} | {
+    "clientsecret",
+    "refreshtoken",
+}
+_LEGACY_SENSITIVE_TOKENIZATIONS = {
+    ("database", "url"),
+    ("connection", "string"),
+    ("dsn",),
+    ("uri",),
+    ("url",),
+}
 # Logging must remain deterministic and must not initialize spaCy, which logs while loading.
 _LOG_REDACTOR = PersistenceRedactor(PIIDetector(use_spacy=False))
+
+
+def _key_tokenizations(key: str) -> tuple[tuple[str, ...], ...] | None:
+    """Return bounded, Unicode-normalized plain and camel-case key tokens."""
+    if len(key) > _MAX_CLASSIFIED_KEY_LENGTH:
+        return None
+
+    normalized = unicodedata.normalize("NFKC", key)
+    if len(normalized) > _MAX_CLASSIFIED_KEY_LENGTH:
+        return None
+
+    separated = _KEY_SEPARATORS.sub("_", normalized)
+    plain = tuple(_KEY_TOKENS.findall(separated.casefold()))
+    camel_separated = _ACRONYM_BOUNDARY.sub("_", separated)
+    camel_separated = _LOWER_TO_UPPER_BOUNDARY.sub("_", camel_separated)
+    camel = tuple(_KEY_TOKENS.findall(camel_separated.casefold()))
+    return tuple(dict.fromkeys((plain, camel)))
+
+
+def _is_sensitive_key(key: str) -> bool:
+    """Classify credential-bearing structured-log keys after normalization."""
+    tokenizations = _key_tokenizations(key)
+    # Unusually large keys are attacker-controlled and too costly to classify safely.
+    if tokenizations is None:
+        return True
+
+    for tokens in tokenizations:
+        if not tokens or tokens in _SAFE_KEY_TOKENIZATIONS:
+            continue
+        if tokens in _LEGACY_SENSITIVE_TOKENIZATIONS:
+            return True
+        if any(token in _SENSITIVE_COMPONENTS for token in tokens):
+            return True
+        if tokens[-1].endswith(("key", "secret", "token")):
+            return True
+        if any(
+            left in _KEY_QUALIFIERS and right == "key"
+            for left, right in zip(tokens, tokens[1:], strict=False)
+        ):
+            return True
+        if any(token in _COMPACT_CREDENTIAL_KEYS for token in tokens):
+            return True
+    return False
 
 
 def redact_sensitive(value: str) -> str:
@@ -99,7 +171,7 @@ def redact_event(
         return _LOG_REDACTOR.redact_text(redact_sensitive(value)).text
 
     def clean(value: Any, key: object = "") -> Any:
-        if isinstance(key, str) and _SENSITIVE_KEYS.search(key):
+        if isinstance(key, str) and _is_sensitive_key(key):
             return "[REDACTED]"
         if isinstance(value, Mapping):
             redacted: dict[Any, Any] = {}

@@ -110,6 +110,46 @@ class TestStructuredLogging:
         assert result["nested"]["api_key"] == "[REDACTED]"
 
     @pytest.mark.unit
+    def test_compound_credential_keys_are_normalized_without_false_positives(self) -> None:
+        opaque_values = {
+            "client_secret": "opaque-snake-secret",
+            "private_key": "opaque-private-key",
+            "refresh_token": "opaque-refresh-token",
+            "clientSecret": "opaque-client-secret",
+            "privateKey": "opaque-camel-private-key",
+            "refreshToken": "opaque-camel-refresh-token",
+            "apiKey": "opaque-api-key",
+            "access-token": "opaque-access-token",
+            "Signing.Key": "opaque-signing-key",
+            "ENCRYPTION KEY": "opaque-encryption-key",
+            "masterKey": "opaque-master-key",
+            "public_key": "opaque-public-key",
+            "servicekey": "opaque-key-suffix",
+            "sessiontoken": "opaque-token-suffix",
+            "sharedsecret": "opaque-secret-suffix",
+            "ａｐｉＫｅｙ": "opaque-unicode-api-key",
+            f"{'x' * 300}Token": "opaque-overlong-token",
+        }
+        result = redact_event(
+            None,  # type: ignore[arg-type]
+            "info",
+            {
+                "nested": {**opaque_values, 7: {"clientSecret": "opaque-nested-secret"}},
+                "monkey": "capuchin",
+                "hockey_score": 4,
+                "token_count": 17,
+                "source_url": "https://docs.example.test/public",
+            },
+        )
+
+        assert all(result["nested"][key] == "[REDACTED]" for key in opaque_values)
+        assert result["nested"][7]["clientSecret"] == "[REDACTED]"
+        assert result["monkey"] == "capuchin"
+        assert result["hockey_score"] == 4
+        assert result["token_count"] == 17
+        assert result["source_url"] == "https://docs.example.test/public"
+
+    @pytest.mark.unit
     @pytest.mark.parametrize(
         ("raw", "expected"),
         [
@@ -163,6 +203,33 @@ class TestStructuredLogging:
             "DSN": "[REDACTED]",
             "source_url": "https://public.example/docs",
         }
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("json_format", [True, False])
+    def test_rendered_sinks_redact_normalized_credential_keys(
+        self, capsys, json_format: bool
+    ) -> None:
+        setup_logging(json_format=json_format)
+        opaque_values = (
+            "rendered-snake-value",
+            "rendered-kebab-value",
+            "rendered-camel-value",
+            "rendered-mixed-value",
+        )
+
+        structlog.get_logger().info(
+            "credential fields",
+            nested={
+                "client_secret": opaque_values[0],
+                "access-token": opaque_values[1],
+                "privateKey": opaque_values[2],
+                "API.Key": opaque_values[3],
+            },
+        )
+
+        rendered = capsys.readouterr().out
+        assert all(value not in rendered for value in opaque_values)
+        assert rendered.count("[REDACTED]") >= len(opaque_values)
 
     @pytest.mark.unit
     @pytest.mark.parametrize("json_format", [True, False])
