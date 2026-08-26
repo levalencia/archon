@@ -1,84 +1,110 @@
-"""Memory and session search tools for the agent.
-
-memory_tool: add/remove/list persistent facts
-session_search_tool: search past conversations
-"""
+"""Factories for request-scoped encrypted memory and owner-scoped session tools."""
 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
+from typing import Any
 
-from app.memory.persistent import get_persistent_memory, get_session_store
+from app.memory.scoped import MemoryLimitError, ScopedEncryptedMemoryRepository
+from app.runtime.factory import RunContext
+from app.services.conversations import ConversationRepository
 
 
-async def memory_tool(action: str, content: str = "", old_text: str = "", **kwargs) -> str:
-    """Manage persistent memory. Actions: add, remove, replace, list.
+def _provenance(context: RunContext, action: str) -> dict[str, str]:
+    return {
+        "source_conversation_id": context.conversation_id,
+        "source_run_id": context.run_id,
+        "source_action": action,
+    }
 
-    Use to save durable facts about the user (preferences, environment, name).
-    These facts are injected into every conversation automatically.
 
-    Examples:
-    - memory(action="add", content="User lives in Brussels, Belgium")
-    - memory(action="add", content="User prefers Spanish for casual, English for technical")
-    - memory(action="remove", old_text="Brussels")
-    - memory(action="list")
-    """
-    # Handle alternative parameter names LLMs sometimes use
-    if not content and "value" in kwargs:
-        content = str(kwargs["value"])
-    if not content and "key" in kwargs and action == "add":
-        content = f"{kwargs['key']}: {kwargs.get('value', '')}"
-    if not old_text and "key" in kwargs and action in ("remove", "replace"):
-        old_text = str(kwargs["key"])
-    mem = get_persistent_memory()
+def create_memory_tool(
+    repository: ScopedEncryptedMemoryRepository | None, context: RunContext
+) -> Callable[..., Any]:
+    """Bind encrypted memory operations to an immutable request context."""
 
-    if action == "add":
-        if not content:
-            return json.dumps({"error": "content required for add"})
-        result = mem.add(content)
-    elif action == "remove":
-        result = mem.remove(old_text or content)
-    elif action == "replace":
-        if not old_text or not content:
-            return json.dumps({"error": "old_text and content required for replace"})
-        result = mem.replace(old_text, content)
-    elif action == "list":
-        entries = mem.list_all()
-        result = {"entries": [e["content"] for e in entries], "stats": mem.get_stats()}
-    else:
-        result = {"error": f"Unknown action: {action}. Use: add, remove, replace, list"}
+    async def memory_tool(action: str, content: str = "", old_text: str = "") -> str:
+        if repository is None:
+            return json.dumps({"error": "Persistent memory is disabled"})
+        try:
+            if action == "add":
+                if not content:
+                    return json.dumps({"error": "content required for add"})
+                await repository.add(
+                    context.user_id,
+                    context.project_id,
+                    content,
+                    provenance=_provenance(context, action),
+                )
+                entries = await repository.list(context.user_id, context.project_id)
+                result: dict[str, Any] = {"status": "added", "total_entries": len(entries)}
+            elif action == "remove":
+                removed = await repository.remove(
+                    context.user_id, context.project_id, old_text or content
+                )
+                result = (
+                    {"status": "removed", "removed": removed}
+                    if removed
+                    else {"error": "No matching entry"}
+                )
+            elif action == "replace":
+                if not old_text or not content:
+                    return json.dumps({"error": "old_text and content required for replace"})
+                fact = await repository.replace(
+                    context.user_id,
+                    context.project_id,
+                    old_text,
+                    content,
+                    provenance=_provenance(context, action),
+                )
+                result = {"status": "replaced"} if fact else {"error": "No matching entry"}
+            elif action == "list":
+                entries = await repository.list(context.user_id, context.project_id)
+                chars = sum(len(entry.content) for entry in entries)
+                result = {
+                    "entries": [entry.content for entry in entries],
+                    "stats": {"entries": len(entries), "chars_used": chars},
+                }
+            else:
+                result = {"error": f"Unknown action: {action}. Use: add, remove, replace, list"}
+        except MemoryLimitError:
+            result = {"error": "Scoped memory character limit exceeded"}
+        return json.dumps(result, ensure_ascii=False)
 
-    return json.dumps(result, ensure_ascii=False)
+    return memory_tool
+
+
+def create_session_search_tool(
+    repository: ConversationRepository, context: RunContext
+) -> Callable[..., Any]:
+    """Bind conversation search to the authenticated owner for this request."""
+
+    async def session_search_tool(query: str, limit: int = 3) -> str:
+        results = await repository.search(context.user_id, query, limit=min(max(limit, 1), 20))
+        payload: dict[str, Any] = {"query": query, "results": results, "total": len(results)}
+        if not results:
+            payload["message"] = "No matching past conversations found"
+        return json.dumps(payload, ensure_ascii=False)
+
+    return session_search_tool
+
+
+# Historical entry points remain outside live request wiring.
+def get_session_store():
+    """Compatibility hook for historical tests; never used by live request registries."""
+    from app.memory.persistent import get_session_store as legacy_get_session_store
+
+    return legacy_get_session_store()
+
+
+async def memory_tool(action: str, content: str = "", old_text: str = "", **kwargs: Any) -> str:
+    del action, content, old_text, kwargs
+    return json.dumps({"error": "Persistent memory requires a scoped request context"})
 
 
 async def session_search_tool(query: str, limit: int = 3) -> str:
-    """Search past conversations for information.
-
-    Use when the user asks about something discussed in a previous conversation.
-    Returns matching sessions with snippets.
-
-    Examples:
-    - session_search(query="authentication bug")
-    - session_search(query="database migration")
-    """
-    store = get_session_store()
-    results = store.search(query, limit=limit)
-
-    if not results:
-        return json.dumps(
-            {
-                "query": query,
-                "results": [],
-                "message": "No matching past conversations found",
-            },
-            ensure_ascii=False,
-        )
-
+    results = get_session_store().search(query, limit=limit)
     return json.dumps(
-        {
-            "query": query,
-            "results": results,
-            "total": len(results),
-        },
-        ensure_ascii=False,
+        {"query": query, "results": results, "total": len(results)}, ensure_ascii=False
     )

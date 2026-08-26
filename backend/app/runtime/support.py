@@ -61,7 +61,15 @@ async def prepare_messages(
     skills_context: str,
     images: list[str] | None = None,
     user_id: str = "default",
+    persistent_memory_text: str = "",
 ) -> list[Message]:
     return await build_messages(
-        user_input, conversation_id, memory, tools, skills_context, images, user_id
+        user_input,
+        conversation_id,
+        memory,
+        tools,
+        skills_context,
+        images,
+        user_id,
+        persistent_memory_text,
     )

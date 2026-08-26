@@ -144,6 +144,7 @@ class ProductionAgent:
         max_iterations: int | None = None,
         token_budget: int | None = None,
         system_prompt_extra: str = "",
+        persistent_memory_text: str = "",
     ) -> None:
         self.llm = llm
         self.memory = memory
@@ -156,6 +157,7 @@ class ProductionAgent:
         self._start_time = None
         self.token_budget = token_budget or self.TOKEN_BUDGET
         self.system_prompt_extra = system_prompt_extra
+        self.persistent_memory_text = persistent_memory_text
         self._steps: list[dict] = []
 
     async def run(
@@ -438,11 +440,8 @@ class ProductionAgent:
             if tools:
                 tool_descriptions = json.dumps(tools, indent=2)
 
-        # Inject persistent memory into system prompt
-        from app.memory.persistent import get_persistent_memory
-
-        persistent = get_persistent_memory()
-        memory_context = persistent.get_context_text()
+        # Persistent memory is supplied explicitly by the authenticated request boundary.
+        memory_context = self.persistent_memory_text
         memory_section = ""
         if memory_context:
             memory_section = f"\n\nPERSISTENT MEMORY (facts about the user):\n{memory_context}\n"

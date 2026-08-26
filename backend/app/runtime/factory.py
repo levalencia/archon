@@ -22,10 +22,13 @@ class RunContext:
     conversation_id: str
     run_id: str
     correlation_id: str
+    project_id: str = "default"
 
     @classmethod
-    def create(cls, *, user_id: str, conversation_id: str, correlation_id: str) -> RunContext:
-        return cls(user_id, conversation_id, str(uuid.uuid4()), correlation_id)
+    def create(
+        cls, *, user_id: str, conversation_id: str, correlation_id: str, project_id: str = "default"
+    ) -> RunContext:
+        return cls(user_id, conversation_id, str(uuid.uuid4()), correlation_id, project_id)
 
 
 def create_chat_runtime(

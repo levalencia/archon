@@ -56,3 +56,7 @@ class ConversationRepository:
         self, conversation_id: str, limit: int = 50, user_id: str = "default"
     ) -> list[dict]:
         return await self._store.retrieve(conversation_id, limit, user_id)
+
+    async def search(self, user_id: str, query: str, *, limit: int = 3) -> list[dict]:
+        """Search persisted conversations without crossing the authenticated owner boundary."""
+        return await self._store.search_conversations(user_id, query, limit=limit)

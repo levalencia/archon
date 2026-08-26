@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 load_dotenv()
 
 from app.config import Settings, get_settings
+from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
 from app.observability.logging import setup_logging
@@ -74,6 +75,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
+    if settings.memory_encryption_enabled:
+        if not settings.encryption_master_key:
+            raise RuntimeError(
+                "ARCHON_ENCRYPTION_MASTER_KEY is required when encrypted memory is enabled"
+            )
+        app.state.scoped_memory = ScopedEncryptedMemoryRepository(
+            auth_store.session_factory, settings.encryption_master_key
+        )
+    else:
+        app.state.scoped_memory = None
     app.state.approval_broker = DurableApprovalBroker(
         ApprovalRepository(auth_store.session_factory),
         timeout_seconds=settings.approval_timeout_seconds,

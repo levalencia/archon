@@ -18,6 +18,7 @@ async def build_messages(
     system_prompt_extra: str = "",
     images: list[str] | None = None,
     user_id: str = "default",
+    persistent_memory_text: str = "",
 ) -> list[Message]:
     descriptions = (
         json.dumps(tools.list_tools(), indent=2) if tools.list_tools() else "None configured"
@@ -38,11 +39,11 @@ async def build_messages(
         '{"tool_call": {"name": "tool_name", "parameters": {"key": "value"}}}\n',
         "Use the provider's native tool calling mechanism whenever a tool is needed.\n",
     )
-    from app.memory.persistent import get_persistent_memory
-
-    persistent = get_persistent_memory().get_context_text()
-    if persistent:
-        prompt += f"\n\nPERSISTENT MEMORY (facts about the user):\n{persistent}\n"
+    if persistent_memory_text:
+        prompt += (
+            "\n\nPERSISTENT MEMORY (facts about the user in this project):\n"
+            f"{persistent_memory_text}\n"
+        )
     if system_prompt_extra:
         prompt += system_prompt_extra
     result = [Message(Role.SYSTEM, prompt)]

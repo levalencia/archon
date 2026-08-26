@@ -11,6 +11,7 @@ import unicodedata
 import uuid
 from collections.abc import Mapping
 from contextlib import suppress
+from dataclasses import replace
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -40,6 +41,9 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 class StreamRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
     conversation_id: str = ""
+    project_id: str = Field(
+        default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
+    )
     image: str = ""
 
 
@@ -77,6 +81,11 @@ async def chat_stream_real(
         conversation_id=conv_id,
         correlation_id=get_correlation_id(),
     )
+    run_context = replace(run_context, project_id=body.project_id)
+    scoped_memory = request.app.state.scoped_memory
+    tools = get_tool_registry(
+        context=run_context, scoped_memory=scoped_memory, conversations=memory
+    )
     approval_broker: ApprovalBroker = request.app.state.approval_broker
 
     async def event_stream():
@@ -93,7 +102,11 @@ async def chat_stream_real(
         for skill in skills_used:
             yield _sse("skill", skill)
 
-        tools = get_tool_registry()
+        persistent_memory_text = (
+            await scoped_memory.context_text(user["user_id"], body.project_id)
+            if scoped_memory is not None
+            else ""
+        )
         messages = await prepare_messages(
             user_message,
             conv_id,
@@ -102,6 +115,7 @@ async def chat_stream_real(
             skills_context,
             [body.image] if body.image else None,
             user["user_id"],
+            persistent_memory_text,
         )
 
         # Auto-compact context if approaching token limit

@@ -7,6 +7,7 @@ asyncpg driver. Falls back to aiosqlite for testing.
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import UTC, datetime
 
@@ -17,6 +18,7 @@ from sqlalchemy import (
     DateTime,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -24,6 +26,7 @@ from sqlalchemy import (
     func,
     select,
 )
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -147,6 +150,33 @@ class ApprovalRequestRow(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class MemoryFactRow(Base):
+    """Encrypted memory fact; content and provenance exist only inside ciphertext."""
+
+    __tablename__ = "memory_facts"
+    __table_args__ = (
+        Index("ix_memory_facts_owner_project", "user_id", "project_id"),
+        Index("ix_memory_facts_owner", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    key_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+def ensure_private_sqlite_file(database_url: str) -> None:
+    """Restrict an on-disk SQLite database to its owner, where applicable."""
+    url = make_url(database_url)
+    if not url.drivername.startswith("sqlite") or not url.database or url.database == ":memory:":
+        return
+    if os.path.exists(url.database):
+        os.chmod(url.database, 0o600)
+
+
 class DatabaseStore:
     """PostgreSQL-backed store for conversations, messages, audit, artifacts.
 
@@ -172,6 +202,7 @@ class DatabaseStore:
         """Create all tables."""
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        ensure_private_sqlite_file(str(self._engine.url))
         logger.info("database_initialized", tables=len(Base.metadata.tables))
 
     @property
@@ -326,6 +357,50 @@ class DatabaseStore:
                 )
             )
             return result.scalar_one()
+
+    async def search_conversations(self, user_id: str, query: str, *, limit: int = 3) -> list[dict]:
+        """Search only conversations owned by ``user_id`` using persisted DB messages."""
+        terms = tuple(dict.fromkeys(word.casefold() for word in query.split() if len(word) > 2))
+        if not terms:
+            return []
+        predicates = [
+            func.lower(ConversationRow.title).contains(term)
+            | func.lower(MessageRow.content).contains(term)
+            for term in terms
+        ]
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(ConversationRow, MessageRow)
+                .join(MessageRow, MessageRow.conversation_id == ConversationRow.id)
+                .where(ConversationRow.user_id == user_id)
+                .where(*predicates)
+                .order_by(ConversationRow.updated_at.desc(), MessageRow.id)
+                .limit(min(max(limit, 1), 20) * 20)
+            )
+            grouped: dict[str, dict] = {}
+            for conversation, message in result.all():
+                item = grouped.setdefault(
+                    conversation.id,
+                    {
+                        "conversation_id": conversation.id,
+                        "title": conversation.title,
+                        "saved_at": conversation.updated_at.isoformat(),
+                        "message_count": 0,
+                        "snippets": [],
+                    },
+                )
+                item["message_count"] += 1
+                item["snippets"].append(f"[{message.role}] {message.content}")
+            return [
+                {
+                    "conversation_id": item["conversation_id"],
+                    "title": item["title"],
+                    "saved_at": item["saved_at"],
+                    "message_count": item["message_count"],
+                    "snippet": "\n".join(item["snippets"])[:300],
+                }
+                for item in list(grouped.values())[:limit]
+            ]
 
     # --- Conversation CRUD ---
 

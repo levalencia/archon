@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from dataclasses import replace
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -26,15 +27,14 @@ from app.security.policy import RiskClass
 from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.conversations import ConversationRepository
 from app.services.task_queue import get_task_queue
-from app.tools.builtin import (
-    calculator_tool,
-    datetime_tool,
-    memory_tool,
-    read_file_tool,
-    session_search_tool,
-    write_file_tool,
-)
+from app.tools.builtin import calculator_tool, datetime_tool, read_file_tool, write_file_tool
 from app.tools.image_gen import image_gen_tool
+from app.tools.memory_tools import (
+    create_memory_tool,
+    create_session_search_tool,
+    memory_tool,
+    session_search_tool,
+)
 from app.tools.registry import SecureToolRegistry, resolve_workspace_path
 from app.tools.sandbox import execute_sandboxed
 from app.tools.terminal import terminal_tool
@@ -44,7 +44,7 @@ logger = structlog.get_logger()
 
 # Singletons — created once, reused across requests
 _llm_singleton = None
-_tools_singleton = None  # Reset on import
+_tools_singleton = None  # Historical test override; production never populates this.
 
 
 def get_llm_client(settings):
@@ -57,12 +57,18 @@ def get_llm_client(settings):
     return _llm_singleton
 
 
-def get_tool_registry():
-    global _tools_singleton
-    if _tools_singleton is None:
-        _tools_singleton = _create_tool_registry()
-        logger.info("tools_singleton_created", count=len(_tools_singleton.list_tools()))
-    return _tools_singleton
+def get_tool_registry(
+    *,
+    context: RunContext | None = None,
+    scoped_memory=None,
+    conversations: ConversationRepository | None = None,
+) -> SecureToolRegistry:
+    """Create a fresh registry; scoped tools are closures owned by this request."""
+    if _tools_singleton is not None:
+        return _tools_singleton
+    return _create_tool_registry(
+        context=context, scoped_memory=scoped_memory, conversations=conversations
+    )
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -89,7 +95,12 @@ def get_conversation_repository(request: Request) -> ConversationRepository:
     return request.app.state.conversations
 
 
-def _create_tool_registry() -> SecureToolRegistry:
+def _create_tool_registry(
+    *,
+    context: RunContext | None = None,
+    scoped_memory=None,
+    conversations: ConversationRepository | None = None,
+) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
     registry = SecureToolRegistry()
 
@@ -166,9 +177,12 @@ def _create_tool_registry() -> SecureToolRegistry:
         risk_classes=frozenset({RiskClass.NETWORK, RiskClass.EXTERNAL_SIDE_EFFECT}),
     )
 
+    memory_handler = (
+        create_memory_tool(scoped_memory, context) if context is not None else memory_tool
+    )
     registry.register(
         name="memory",
-        handler=memory_tool,
+        handler=memory_handler,
         description=(
             "Save/recall persistent facts about the user. "
             "Actions: add (content=fact), remove (old_text=substring), "
@@ -187,9 +201,14 @@ def _create_tool_registry() -> SecureToolRegistry:
         risk_classes=frozenset({RiskClass.READ, RiskClass.WRITE}),
     )
 
+    session_handler = (
+        create_session_search_tool(conversations, context)
+        if context is not None and conversations is not None
+        else session_search_tool
+    )
     registry.register(
         name="session_search",
-        handler=session_search_tool,
+        handler=session_handler,
         description="Search past conversations. Use when user asks about previous discussions.",
         input_schema={
             "required": ["query"],
@@ -271,6 +290,9 @@ def _create_tool_registry() -> SecureToolRegistry:
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
     conversation_id: str = ""
+    project_id: str = Field(
+        default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
+    )
     image: str = ""  # Base64 encoded image (optional)
 
 
@@ -300,9 +322,6 @@ async def chat(
     llm = get_llm_client(settings)
     memory = get_conversation_repository(request)
 
-    # Create tool registry
-    tools = get_tool_registry()
-
     # Search for relevant skills
     skill_registry = get_skill_registry()
     top_k = get_skills_top_k()
@@ -326,6 +345,16 @@ async def chat(
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
         await memory.create(conv_id, "New Conversation", user["user_id"])
+    run_context = RunContext.create(
+        user_id=user["user_id"],
+        conversation_id=conv_id,
+        correlation_id=cid,
+    )
+    run_context = replace(run_context, project_id=body.project_id)
+    scoped_memory = request.app.state.scoped_memory
+    tools = get_tool_registry(
+        context=run_context, scoped_memory=scoped_memory, conversations=memory
+    )
 
     logger.info(
         "chat_request",
@@ -351,11 +380,20 @@ async def chat(
             utilization_pct=stats["utilization_pct"],
         )
 
-    messages = await prepare_messages(
-        body.message, conv_id, memory, tools, skills_context, images, user["user_id"]
+    persistent_memory_text = (
+        await scoped_memory.context_text(user["user_id"], body.project_id)
+        if scoped_memory is not None
+        else ""
     )
-    run_context = RunContext.create(
-        user_id=user["user_id"], conversation_id=conv_id, correlation_id=cid
+    messages = await prepare_messages(
+        body.message,
+        conv_id,
+        memory,
+        tools,
+        skills_context,
+        images,
+        user["user_id"],
+        persistent_memory_text,
     )
     runtime = create_chat_runtime(
         context=run_context,
