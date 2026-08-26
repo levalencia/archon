@@ -52,11 +52,12 @@ printf '\n== Frontend browser tests ==\n'
 )
 
 printf '\n== Docker sandbox containment smoke ==\n'
-"$ROOT/scripts/build-sandbox.sh"
+SANDBOX_IMAGE_ID="$("$ROOT/scripts/build-sandbox.sh")"
 (
   cd "$ROOT/backend"
-  uv run python ../scripts/sandbox_smoke.py
+  ARCHON_SANDBOX_IMAGE="$SANDBOX_IMAGE_ID" uv run python ../scripts/sandbox_smoke.py
 )
+unset SANDBOX_IMAGE_ID
 
 printf '\n== Backend container smoke test ==\n'
 cleanup

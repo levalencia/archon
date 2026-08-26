@@ -7,6 +7,8 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
+from app.tools.sandbox import is_immutable_image_reference
+
 
 class Settings(BaseSettings):
     """Archon configuration. All values can be overridden via environment variables."""
@@ -72,7 +74,6 @@ class Settings(BaseSettings):
         default="archon-sandbox:local", pattern=r"^[A-Za-z0-9][A-Za-z0-9._/@:-]+$"
     )
     execution_docker_platform: str = Field(default="linux/amd64", pattern=r"^linux/(amd64|arm64)$")
-    execution_require_image_digest: bool = False
     execution_timeout_seconds: float = Field(default=10.0, ge=0.1, le=120.0)
     execution_cpus: float = Field(default=0.5, ge=0.1, le=8.0)
     execution_memory_mb: int = Field(default=128, ge=32, le=4096)
@@ -81,15 +82,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_execution_image(self) -> Settings:
-        if self.execution_enabled and self.execution_require_image_digest:
-            image, marker, digest = self.execution_docker_image.partition("@sha256:")
-            if (
-                not marker
-                or not image
-                or len(digest) != 64
-                or any(character not in "0123456789abcdef" for character in digest)
-            ):
-                raise ValueError("execution_docker_image must use a sha256 digest")
+        if self.execution_enabled and not is_immutable_image_reference(self.execution_docker_image):
+            raise ValueError(
+                "execution_docker_image must be an immutable sha256 registry digest "
+                "or local image ID"
+            )
         return self
 
     # Agent

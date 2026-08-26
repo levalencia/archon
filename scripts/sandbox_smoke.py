@@ -54,7 +54,7 @@ async def main() -> None:
     executor = DockerSandboxExecutor(
         DockerSandboxConfig(
             binary=DOCKER,
-            image=os.environ.get("ARCHON_SANDBOX_IMAGE", "archon-sandbox:local"),
+            image=os.environ["ARCHON_SANDBOX_IMAGE"],
             platform=os.environ.get("ARCHON_VERIFY_PLATFORM", "linux/amd64"),
             timeout_seconds=2,
             cpus=0.5,
