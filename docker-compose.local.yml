@@ -1,0 +1,129 @@
+name: archon-local
+
+services:
+  gateway:
+    image: nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
+    ports:
+      - "127.0.0.1:${ARCHON_LOCAL_PORT:-8080}:8080"
+    volumes:
+      - ./deploy/nginx.local.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  backend:
+    platform: ${ARCHON_LOCAL_PLATFORM:-linux/amd64}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ARCHON_DATABASE_URL: postgresql+asyncpg://archon:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/archon
+      ARCHON_REDIS_URL: redis://redis:6379/0
+      ARCHON_SECRET_KEY: ${ARCHON_SECRET_KEY:?ARCHON_SECRET_KEY is required}
+      ARCHON_ENCRYPTION_MASTER_KEY: ${ARCHON_ENCRYPTION_MASTER_KEY:?ARCHON_ENCRYPTION_MASTER_KEY is required}
+      ARCHON_MEMORY_ENCRYPTION_ENABLED: "true"
+      ARCHON_LLM_PROVIDER: mock
+      ARCHON_LLM_MODEL: mock-model
+      ARCHON_EMBEDDING_PROVIDER: mock
+      ARCHON_EMBEDDING_MODEL: mock-embedding
+      ARCHON_EXECUTION_ENABLED: "false"
+      ARCHON_RATE_LIMIT_BACKEND: redis
+      ARCHON_OTEL_ENDPOINT: http://otel-collector:4317
+      ARCHON_OTEL_SERVICE_NAME: archon-local
+      OTEL_BSP_SCHEDULE_DELAY: "200"
+      ARCHON_DEBUG: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      ORIGIN: http://localhost:${ARCHON_LOCAL_PORT:-8080}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  postgres:
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    environment:
+      POSTGRES_USER: archon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: archon
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archon -d archon"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.118.0@sha256:3f6274fe609da4f9964fbc2ef36b83d08d47964fbb11629251393590d3924072
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./deploy/otel-collector.local.yml:/etc/otelcol-contrib/config.yaml:ro
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres-data:
+  redis-data:

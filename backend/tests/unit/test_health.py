@@ -49,6 +49,8 @@ class TestHealthEndpoints:
             "status": "ready",
             "dependencies": {
                 "conversation_repository": "up",
+                "rate_limiter": {"backend": "memory", "status": "up"},
+                "telemetry": {"backend": "disabled", "status": "disabled"},
                 "model_provider_circuit": "closed",
                 "vector_store": "sql-json-cosine",
                 "evidence_verifier": "disabled",
@@ -74,6 +76,8 @@ class TestHealthEndpoints:
             "status": "degraded",
             "dependencies": {
                 "conversation_repository": "down",
+                "rate_limiter": {"backend": "memory", "status": "up"},
+                "telemetry": {"backend": "disabled", "status": "disabled"},
                 "model_provider_circuit": "closed",
                 "vector_store": "sql-json-cosine",
                 "evidence_verifier": "disabled",
@@ -85,6 +89,47 @@ class TestHealthEndpoints:
                     "readiness": "non-production",
                 },
             },
+        }
+
+    @pytest.mark.unit
+    def test_readiness_probe_reports_rate_limiter_failure(self, client: TestClient) -> None:
+        async def unavailable() -> None:
+            raise RuntimeError("redis unavailable")
+
+        client.app.state.rate_limiter.check_health = unavailable
+        response = client.get("/readyz")
+        assert response.status_code == 503
+        assert response.json()["dependencies"]["rate_limiter"] == {
+            "backend": "memory",
+            "status": "down",
+        }
+
+    @pytest.mark.unit
+    def test_readiness_reports_only_active_otel_as_up(self, client: TestClient) -> None:
+        class Exporter:
+            is_active = True
+
+        client.app.state.otel_exporter = Exporter()
+        response = client.get("/readyz")
+        assert response.status_code == 200
+        assert response.json()["dependencies"]["telemetry"] == {
+            "backend": "otlp-grpc",
+            "status": "up",
+        }
+
+    @pytest.mark.unit
+    def test_readiness_reports_configured_but_inactive_otel_as_down(
+        self, client: TestClient
+    ) -> None:
+        class Exporter:
+            is_active = False
+
+        client.app.state.otel_exporter = Exporter()
+        response = client.get("/readyz")
+        assert response.status_code == 503
+        assert response.json()["dependencies"]["telemetry"] == {
+            "backend": "otlp-grpc",
+            "status": "down",
         }
 
     @pytest.mark.unit

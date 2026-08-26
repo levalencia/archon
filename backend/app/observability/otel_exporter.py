@@ -30,6 +30,7 @@ class OTLPExporter:
         self.service_name = service_name
         self.endpoint = endpoint
         self._real_tracer = None
+        self._provider = None
         self._setup_otel()
 
     def _setup_otel(self) -> None:
@@ -48,6 +49,7 @@ class OTLPExporter:
             exporter = OTLPSpanExporter(endpoint=self.endpoint, insecure=True)
             provider.add_span_processor(BatchSpanProcessor(exporter))
             trace.set_tracer_provider(provider)
+            self._provider = provider
             self._real_tracer = trace.get_tracer(self.service_name)
             logger.info(
                 "otel_initialized",
@@ -56,7 +58,19 @@ class OTLPExporter:
             )
         except ImportError:
             logger.info("otel_sdk_not_installed", fallback="in-memory tracer")
+            self._provider = None
             self._real_tracer = None
+
+    @property
+    def is_active(self) -> bool:
+        """Whether spans are backed by the real OTLP SDK/exporter."""
+        return self._provider is not None and self._real_tracer is not None
+
+    def force_flush(self, timeout_millis: int = 5000) -> bool:
+        """Flush pending spans when the SDK is active."""
+        if self._provider is None:
+            return False
+        return bool(self._provider.force_flush(timeout_millis=timeout_millis))
 
     @contextmanager
     def start_span(
@@ -140,11 +154,9 @@ class OTLPExporter:
                 exported.set_status(Status(StatusCode.ERROR, message))
 
     def shutdown(self) -> None:
-        """Flush the configured provider if it supports shutdown."""
-        if self._real_tracer:
-            shutdown = getattr(self._real_tracer.provider, "shutdown", None)
-            if shutdown:
-                shutdown()
+        """Flush and shut down the configured provider."""
+        if self._provider is not None:
+            self._provider.shutdown()
 
 
 # Global instance

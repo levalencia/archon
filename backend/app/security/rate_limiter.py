@@ -188,3 +188,8 @@ class RateLimiter:
     async def close(self) -> None:
         if self._redis is not None and self._owns_redis:
             await self._redis.aclose()
+
+    async def check_health(self) -> None:
+        """Verify the configured shared backend without consuming a rate-limit slot."""
+        if self._redis is not None:
+            await self._redis.ping()

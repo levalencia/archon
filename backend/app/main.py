@@ -318,6 +318,17 @@ def create_app(
         """Report readiness based on a live database query."""
         dependencies = {
             "conversation_repository": "up",
+            "rate_limiter": {
+                "backend": app.state.settings.rate_limit_backend,
+                "status": "up",
+            },
+            "telemetry": (
+                {"backend": "otlp-grpc", "status": "up"}
+                if app.state.otel_exporter is not None and app.state.otel_exporter.is_active
+                else {"backend": "otlp-grpc", "status": "down"}
+                if app.state.otel_exporter is not None
+                else {"backend": "disabled", "status": "disabled"}
+            ),
             "model_provider_circuit": app.state.provider_breaker.state.value,
             "vector_store": app.state.vector_store.backend,
             "evidence_verifier": (
@@ -331,18 +342,30 @@ def create_app(
                 "readiness": app.state.embedding_service.capability.readiness,
             },
         }
+        ready = app.state.otel_exporter is None or app.state.otel_exporter.is_active
         try:
             await app.state.conversations.check_health()
         except Exception as error:
+            ready = False
             dependencies["conversation_repository"] = "down"
             logger.warning(
                 "readiness_check_failed",
                 dependency="conversation_repository",
                 **safe_exception_metadata(error, "health_check_failed"),
             )
+        try:
+            await app.state.rate_limiter.check_health()
+        except Exception as error:
+            ready = False
+            dependencies["rate_limiter"]["status"] = "down"
+            logger.warning(
+                "readiness_check_failed",
+                dependency="rate_limiter",
+                **safe_exception_metadata(error, "health_check_failed"),
+            )
+        if not ready:
             return JSONResponse(
-                status_code=503,
-                content={"status": "degraded", "dependencies": dependencies},
+                status_code=503, content={"status": "degraded", "dependencies": dependencies}
             )
         return {"status": "ready", "dependencies": dependencies}
 

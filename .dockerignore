@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+backend/.venv
+backend/.pytest_cache
+backend/.mypy_cache
+backend/.ruff_cache
+backend/**/__pycache__
+frontend/node_modules
+frontend/.svelte-kit
+frontend/build
+frontend/test-results
+frontend/playwright-report
+**/*.pyc
+**/*.db
