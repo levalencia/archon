@@ -49,6 +49,14 @@ class TestHealthEndpoints:
             "dependencies": {
                 "conversation_repository": "up",
                 "model_provider_circuit": "closed",
+                "vector_store": "sql-json-cosine",
+                "embeddings": {
+                    "provider": "mock",
+                    "model": "text-embedding-3-small",
+                    "dimensions": 256,
+                    "mock": True,
+                    "readiness": "non-production",
+                },
             },
         }
 
@@ -65,6 +73,14 @@ class TestHealthEndpoints:
             "dependencies": {
                 "conversation_repository": "down",
                 "model_provider_circuit": "closed",
+                "vector_store": "sql-json-cosine",
+                "embeddings": {
+                    "provider": "mock",
+                    "model": "text-embedding-3-small",
+                    "dimensions": 256,
+                    "mock": True,
+                    "readiness": "non-production",
+                },
             },
         }
 

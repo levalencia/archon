@@ -14,7 +14,7 @@ import structlog
 from app.agents.protocols import LLMClient
 from app.observability.logging import safe_value_metadata
 from app.services.chunker import EmbeddingService
-from app.services.vector_store import VectorStore
+from app.services.vector_store import VectorStoreProtocol
 
 logger = structlog.get_logger()
 
@@ -40,7 +40,7 @@ class RAGPipeline:
 
     def __init__(
         self,
-        vector_store: VectorStore,
+        vector_store: VectorStoreProtocol,
         embedding_service: EmbeddingService,
         llm: LLMClient,
         top_k: int = 5,
@@ -57,6 +57,8 @@ class RAGPipeline:
         question: str,
         document_id: str | None = None,
         document_ids: set[str] | None = None,
+        owner_id: str = "default",
+        project_id: str = "default",
     ) -> dict:
         """Run the full RAG pipeline for a question.
 
@@ -72,6 +74,8 @@ class RAGPipeline:
             min_score=self.min_score,
             document_id=document_id,
             document_ids=document_ids,
+            owner_id=owner_id,
+            project_id=project_id,
         )
 
         if not search_results:
@@ -136,6 +140,8 @@ class RAGPipeline:
         title: str,
         content: str,
         source: str = "",
+        owner_id: str = "default",
+        project_id: str = "default",
     ) -> dict:
         """Ingest a document: chunk → embed → store in vector DB.
 
@@ -159,7 +165,7 @@ class RAGPipeline:
             chunk.embedding = await self.embedding_service.embed(chunk.content)
 
         # Store
-        added = await self.vector_store.add_chunks(chunks)
+        added = await self.vector_store.add_chunks(chunks, owner_id=owner_id, project_id=project_id)
 
         logger.info(
             "rag_document_ingested",

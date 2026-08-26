@@ -99,6 +99,49 @@ class UserRow(Base):
     is_admin = Column(Integer, nullable=False, default=0)
 
 
+class DocumentRow(Base):
+    """Durable owner/project-scoped metadata for a redacted document."""
+
+    __tablename__ = "documents"
+    __table_args__ = (
+        Index("ix_documents_owner_project_created", "owner_id", "project_id", "created_at"),
+        CheckConstraint("status IN ('processing','ready','failed')", name="ck_documents_status"),
+    )
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False, default="default")
+    title = Column(String(500), nullable=False)
+    source = Column(String(1000), nullable=False, default="")
+    content_hash = Column(String(64), nullable=False)
+    characters = Column(Integer, nullable=False)
+    chunks = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="processing")
+    embedding_provider = Column(String(100), nullable=False)
+    embedding_model = Column(String(255), nullable=False)
+    embedding_dimensions = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class VectorChunkRow(Base):
+    """Redacted chunk and JSON embedding; this is not a pgvector column."""
+
+    __tablename__ = "vector_chunks"
+    __table_args__ = (
+        Index("ix_vector_chunks_scope_document", "owner_id", "project_id", "document_id"),
+        UniqueConstraint("document_id", "chunk_index", name="uq_vector_chunk_index"),
+    )
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False, default="default")
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    metadata_json = Column(Text, nullable=False, default="{}")
+    embedding_json = Column(Text, nullable=False)
+
+
 class ApiKeyRow(Base):
     __tablename__ = "api_keys"
     id = Column(String(36), primary_key=True)

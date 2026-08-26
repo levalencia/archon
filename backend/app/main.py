@@ -52,8 +52,11 @@ from app.security.live_approvals import DurableApprovalBroker
 from app.security.persistence_redactor import PersistenceRedactor
 from app.security.rate_limiter import RateLimiter
 from app.services.artifacts import ArtifactStore
+from app.services.chunker import EmbeddingService
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
+from app.services.documents import DocumentRepository
+from app.services.sql_json_vector_store import SqlJsonVectorStore
 from app.tools.sandbox import DockerSandboxConfig, DockerSandboxExecutor, SandboxExecutor
 
 logger = structlog.get_logger()
@@ -63,6 +66,16 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: startup and shutdown."""
     settings = app.state.settings
+
+    # Validate embedding capability before opening any application resources.
+    app.state.embedding_service = EmbeddingService(
+        provider=settings.embedding_provider,
+        model=settings.embedding_model,
+        api_key=settings.embedding_api_key or settings.llm_api_key,
+        dimensions=settings.embedding_dimensions,
+        base_url=settings.embedding_base_url,
+    )
+    app.state.embedding_service.validate_configuration()
 
     # Validate before opening databases or initializing any other application resource.
     if settings.memory_encryption_enabled:
@@ -112,6 +125,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
+    app.state.vector_store = SqlJsonVectorStore(auth_store.session_factory)
+    app.state.documents = DocumentRepository(
+        auth_store.session_factory,
+        app.state.vector_store,
+        app.state.embedding_service,
+        redactor,
+    )
+    logger.info("vector_store_initialized", backend="sql-json-cosine")
     if settings.memory_encryption_enabled:
         assert memory_master_key is not None
         app.state.scoped_memory = ScopedEncryptedMemoryRepository(
@@ -167,6 +188,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await repository.close()
     await auth_store.close()
     await app.state.rate_limiter.close()
+    await app.state.embedding_service.close()
     if exporter:
         exporter.shutdown()
     logger.info("archon_shutdown")
@@ -259,6 +281,14 @@ def create_app(
         dependencies = {
             "conversation_repository": "up",
             "model_provider_circuit": app.state.provider_breaker.state.value,
+            "vector_store": app.state.vector_store.backend,
+            "embeddings": {
+                "provider": app.state.embedding_service.capability.provider,
+                "model": app.state.embedding_service.capability.model,
+                "dimensions": app.state.embedding_service.capability.dimensions,
+                "mock": app.state.embedding_service.capability.mock,
+                "readiness": app.state.embedding_service.capability.readiness,
+            },
         }
         try:
             await app.state.conversations.check_health()

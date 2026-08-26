@@ -48,6 +48,15 @@ class Document:
     metadata: dict = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class EmbeddingCapability:
+    provider: str
+    model: str
+    dimensions: int
+    mock: bool
+    readiness: str
+
+
 class RecursiveChunker:
     """Recursive character text splitter with overlap.
 
@@ -182,11 +191,36 @@ class EmbeddingService:
         model: str = "text-embedding-3-small",
         api_key: str = "",
         dimensions: int = 256,
+        base_url: str = "https://api.openai.com/v1",
     ) -> None:
+        if provider not in {"mock", "openai"}:
+            raise ValueError(f"Unsupported embedding provider: {provider}")
+        if dimensions <= 0:
+            raise ValueError("Embedding dimensions must be positive")
         self.provider = provider
         self.model = model
         self.api_key = api_key
         self.dimensions = dimensions
+        self.base_url = base_url.rstrip("/")
+
+    def validate_configuration(self) -> None:
+        """Fail startup for a configured real provider without credentials."""
+        if self.provider != "mock" and not self.api_key:
+            raise ValueError("Configured embedding provider requires an API key")
+
+    @property
+    def capability(self) -> EmbeddingCapability:
+        is_mock = self.provider == "mock"
+        return EmbeddingCapability(
+            provider=self.provider,
+            model=self.model,
+            dimensions=self.dimensions,
+            mock=is_mock,
+            readiness="non-production" if is_mock else "ready",
+        )
+
+    async def close(self) -> None:
+        """Lifecycle hook; HTTP clients are request-bounded."""
 
     async def embed(self, text: str) -> list[float]:
         """Generate embedding vector for text."""
@@ -218,7 +252,7 @@ class EmbeddingService:
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                "https://api.openai.com/v1/embeddings",
+                f"{self.base_url}/embeddings",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
@@ -232,7 +266,12 @@ class EmbeddingService:
             resp.raise_for_status()
             data = resp.json()
 
-        embeddings = [item["embedding"] for item in data["data"]]
+        items = sorted(data["data"], key=lambda item: item.get("index", 0))
+        embeddings = [item["embedding"] for item in items]
+        if len(embeddings) != len(texts):
+            raise ValueError("Embedding provider returned an unexpected response count")
+        if any(len(embedding) != self.dimensions for embedding in embeddings):
+            raise ValueError("Embedding provider returned unexpected dimensions")
         return embeddings
 
     def _mock_embed(self, text: str) -> list[float]:

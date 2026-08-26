@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.requests import Request
 
 from app.config import Settings
 from app.main import create_app
@@ -112,33 +111,10 @@ class TestDocumentDelete:
 
 
 @pytest.mark.unit
-def test_postgres_vector_store_log_uses_only_safe_database_url_metadata(monkeypatch) -> None:
-    database_url = "postgresql+asyncpg://db-user:db-pass@private-db.internal:5432/archon"
-    settings = Settings(
-        llm_provider="mock",
-        vector_store_backend="postgres",
-        database_url=database_url,
-    )
-    request = Request({"type": "http", "app": create_app(settings=settings)})
-    captured: dict[str, object] = {}
-
-    def capture(event: str, **values: object) -> None:
-        captured.update(event=event, **values)
-
-    monkeypatch.setattr(documents.logger, "info", capture)
-    monkeypatch.setattr(documents, "_vector_store", None)
-    store = documents._get_vector_store(request)
-
-    assert captured["event"] == "vector_store_initialized"
-    assert captured["backend"] == "postgres"
-    assert captured["database_url_length"] == len(database_url)
-    assert isinstance(captured["database_url_sha256"], str)
-    assert len(captured["database_url_sha256"]) == 12
-    rendered = repr(captured)
-    for sensitive in (database_url, "db-user", "db-pass", "private-db.internal"):
-        assert sensitive not in rendered
-    assert "url" not in captured
-
-    # Avoid leaking this test store through module-level state.
-    documents._vector_store = None
-    assert store is not None
+def test_document_services_are_app_scoped() -> None:
+    settings = Settings(llm_provider="mock")
+    app_a = create_app(settings=settings)
+    app_b = create_app(settings=settings)
+    assert app_a is not app_b
+    for name in ("_document_registry", "_vector_store", "_embedding_service"):
+        assert not hasattr(documents, name)

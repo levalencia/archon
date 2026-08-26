@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_api_key: str = ""  # falls back to llm_api_key if empty
     embedding_dimensions: int = 256
+    embedding_base_url: str = "https://api.openai.com/v1"
 
     # Skills
     skills_top_k: int = 3
@@ -38,7 +39,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite+aiosqlite:///archon.db"
-    vector_store_backend: str = "memory"  # memory | postgres
+    vector_store_backend: Literal["sql-json", "postgres", "memory"] = "sql-json"
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
