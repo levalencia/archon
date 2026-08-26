@@ -68,7 +68,7 @@ test('approval event without a run binding fails visibly without a decision UI',
   await page.getByRole('textbox', { name: 'Message' }).fill('run a tool');
   await page.getByRole('button', { name: 'Send' }).click();
 
-  await expect(page.getByRole('alert')).toContainText('missing run binding');
+  await expect(page.getByRole('alert').filter({ hasText: 'missing run binding' })).toContainText('missing run binding');
   await expect(page.getByRole('dialog', { name: 'Tool approval required' })).toHaveCount(0);
 });
 
