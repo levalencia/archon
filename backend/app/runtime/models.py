@@ -28,7 +28,7 @@ class Message:
         if not isinstance(self.role, Role):
             object.__setattr__(self, "role", Role(self.role))
 
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: str) -> Any:
         """Temporary read-only compatibility for legacy message assertions."""
         if key == "role":
             return self.role.value

@@ -4,21 +4,31 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from collections.abc import Callable, Coroutine, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, TypeVar
 
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
-from app.runtime.models import Message, Role, TokenUsage
-from app.runtime.ports import ModelProvider, ToolExecutor
+from app.runtime.models import Message, Role, TokenUsage, ToolCall
+from app.runtime.ports import ModelProvider, PolicyAwareToolExecutor, ToolAuthorizer, ToolExecutor
+from app.security.approvals import AuthorizationOutcome, AuthorizationRequest
+from app.security.policy import (
+    PolicyAction,
+    PolicyDecision,
+    PolicyEngine,
+    canonical_arguments_hash,
+    canonical_tool_name,
+)
 
 T = TypeVar("T")
 Clock = Callable[[], float]
 
 # Approval hook: (tool_name, tool_call_id, arguments) -> approved?
-ApprovalHook = Callable[[str, str, dict], Coroutine[Any, Any, bool]]
+ApprovalHook = Callable[[str, str, dict[str, Any]], Coroutine[Any, Any, bool]]
 
 
 class StopReason(StrEnum):
@@ -27,6 +37,9 @@ class StopReason(StrEnum):
     TOOL_BUDGET_EXHAUSTED = "tool_budget_exhausted"
     TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
     TIME_BUDGET_EXHAUSTED = "time_budget_exhausted"
+    POLICY_DENIED = "policy_denied"
+    APPROVAL_TIMEOUT = "approval_timeout"
+    APPROVAL_UNAVAILABLE = "approval_unavailable"
     ERROR = "error"
 
 
@@ -66,13 +79,21 @@ class AgentRuntime:
         budget: RuntimeBudget | None = None,
         clock: Clock = time.monotonic,
         approval_hook: ApprovalHook | None = None,
+        policy_engine: PolicyEngine | None = None,
+        authorizer: ToolAuthorizer | None = None,
+        approval_timeout_seconds: float = 30.0,
     ) -> None:
+        if approval_timeout_seconds <= 0:
+            raise ValueError("approval_timeout_seconds must be positive")
         self._model = model
         self._tools = tools
         self._events = events or NullEventSink()
         self._budget = budget or RuntimeBudget()
         self._clock = clock
         self._approval_hook = approval_hook
+        self._policy_engine = policy_engine
+        self._authorizer = authorizer
+        self._approval_timeout_seconds = approval_timeout_seconds
 
     async def run(self, messages: Sequence[Message]) -> AgentResult:
         history = list(messages)
@@ -159,13 +180,29 @@ class AgentRuntime:
                         )
                         continue
                     seen_calls.add(call_key)
+                    request_data: dict[str, Any] = {"id": call.id, "name": call.name}
+                    if self._policy_engine is None:
+                        request_data["arguments"] = dict(call.arguments)
+                    else:
+                        # Policy enforcement below emits the explicit fail-closed decision.
+                        with suppress(TypeError, ValueError):
+                            request_data["arguments_hash"] = canonical_arguments_hash(
+                                call.arguments
+                            )
                     await self._emit(
                         AgentEventKind.TOOL_CALL_REQUESTED,
                         iterations,
-                        {"id": call.id, "name": call.name, "arguments": dict(call.arguments)},
+                        request_data,
                     )
-                    # Human-in-the-loop: check if tool requires approval
-                    if (
+                    if self._policy_engine is not None:
+                        policy_stop = await self._enforce_policy(
+                            call, iterations, calls, started_at
+                        )
+                        if policy_stop is not None:
+                            return await self._stop(policy_stop, content, iterations, calls, usage)
+                    # Deprecated compatibility path. It is deliberately unreachable in policy
+                    # mode, so a legacy hook cannot bypass or replace policy authorization.
+                    elif (
                         self._approval_hook
                         and hasattr(self._tools, "tool_requires_approval")
                         and self._tools.tool_requires_approval(call.name)
@@ -302,6 +339,200 @@ class AgentRuntime:
                 usage,
                 f"{type(error).__name__}: {error}",
             )
+
+    async def _enforce_policy(
+        self,
+        call: ToolCall,
+        iteration: int,
+        calls: list[dict[str, Any]],
+        started_at: float,
+    ) -> StopReason | None:
+        """Evaluate policy and, when required, obtain an exact-call authorization."""
+        try:
+            arguments_hash = canonical_arguments_hash(call.arguments)
+            if not isinstance(self._tools, PolicyAwareToolExecutor):
+                raise TypeError("policy-aware tool metadata is unavailable")
+            request = self._tools.policy_request(call)
+            if request.tool_name != canonical_tool_name(call.name):
+                raise ValueError("policy metadata tool identity mismatch")
+        except Exception:
+            await self._emit_policy_failure(call, iteration, "policy_metadata_unavailable")
+            await self._record_denial(call, iteration, calls, "policy_metadata_unavailable")
+            return StopReason.POLICY_DENIED
+
+        try:
+            assert self._policy_engine is not None
+            decision = self._policy_engine.evaluate(request)
+            if not isinstance(decision, PolicyDecision):
+                raise TypeError("policy engine returned an invalid decision")
+            if decision.risk_classes != request.risk_classes:
+                raise ValueError("policy decision risk binding mismatch")
+        except Exception:
+            await self._emit_policy_failure(call, iteration, "policy_engine_unavailable")
+            await self._record_denial(call, iteration, calls, "policy_engine_unavailable")
+            return StopReason.POLICY_DENIED
+
+        decision_reason_codes = {
+            PolicyAction.ALLOW: "policy_allowed",
+            PolicyAction.ASK: "approval_required",
+            PolicyAction.DENY: "policy_denied",
+        }
+        policy_data: dict[str, Any] = {
+            "id": call.id,
+            "name": call.name,
+            "action": decision.action.value,
+            "reason_code": decision_reason_codes[decision.action],
+            "risk_classes": sorted(risk.value for risk in decision.risk_classes),
+            "arguments_hash": arguments_hash,
+        }
+        if decision.matched_rule_id and re.fullmatch(
+            r"[A-Za-z0-9_.:-]{1,128}", decision.matched_rule_id
+        ):
+            policy_data["matched_rule_id"] = decision.matched_rule_id
+        await self._emit(AgentEventKind.POLICY_DECIDED, iteration, policy_data)
+
+        if decision.action is PolicyAction.ALLOW:
+            return None
+        if decision.action is PolicyAction.DENY:
+            await self._record_denial(call, iteration, calls, "policy_denied", arguments_hash)
+            return StopReason.POLICY_DENIED
+
+        if self._authorizer is None:
+            await self._record_denial(
+                call, iteration, calls, "approval_unavailable", arguments_hash
+            )
+            return StopReason.APPROVAL_UNAVAILABLE
+
+        authorization_request = AuthorizationRequest(
+            tool_call_id=call.id,
+            tool_name=call.name,
+            arguments_hash=arguments_hash,
+            risk_classes=decision.risk_classes,
+            matched_rule_id=decision.matched_rule_id,
+        )
+        approval_data = {
+            "id": call.id,
+            "name": call.name,
+            "arguments_hash": arguments_hash,
+            "risk_classes": sorted(risk.value for risk in decision.risk_classes),
+        }
+        await self._emit(AgentEventKind.APPROVAL_REQUIRED, iteration, approval_data)
+
+        runtime_remaining = self._budget.max_seconds - (self._clock() - started_at)
+        timeout = min(runtime_remaining, self._approval_timeout_seconds)
+        if timeout <= 0:
+            await self._emit_approval_failure(call, iteration, arguments_hash, "approval_timeout")
+            await self._record_denial(call, iteration, calls, "approval_timeout", arguments_hash)
+            return StopReason.APPROVAL_TIMEOUT
+        try:
+            outcome = await asyncio.wait_for(
+                self._authorizer.authorize(authorization_request), timeout=timeout
+            )
+        except TimeoutError:
+            await self._emit_approval_failure(call, iteration, arguments_hash, "approval_timeout")
+            await self._record_denial(call, iteration, calls, "approval_timeout", arguments_hash)
+            return StopReason.APPROVAL_TIMEOUT
+        except Exception:
+            await self._emit_approval_failure(
+                call, iteration, arguments_hash, "approval_unavailable"
+            )
+            await self._record_denial(
+                call, iteration, calls, "approval_unavailable", arguments_hash
+            )
+            return StopReason.APPROVAL_UNAVAILABLE
+
+        if not isinstance(outcome, AuthorizationOutcome) or not outcome.binds(
+            authorization_request
+        ):
+            await self._emit_approval_failure(
+                call, iteration, arguments_hash, "approval_binding_mismatch"
+            )
+            await self._record_denial(
+                call, iteration, calls, "approval_binding_mismatch", arguments_hash
+            )
+            return StopReason.APPROVAL_UNAVAILABLE
+        if outcome.approved:
+            try:
+                arguments_unchanged = canonical_arguments_hash(call.arguments) == arguments_hash
+            except (TypeError, ValueError):
+                arguments_unchanged = False
+            if not arguments_unchanged:
+                await self._emit_approval_failure(
+                    call, iteration, arguments_hash, "approval_binding_mismatch"
+                )
+                await self._record_denial(
+                    call, iteration, calls, "approval_binding_mismatch", arguments_hash
+                )
+                return StopReason.APPROVAL_UNAVAILABLE
+
+        await self._emit(
+            AgentEventKind.APPROVAL_DECIDED,
+            iteration,
+            {
+                "id": call.id,
+                "name": call.name,
+                "arguments_hash": arguments_hash,
+                "approved": outcome.approved,
+                "reason_code": outcome.reason_code,
+            },
+        )
+        if outcome.approved:
+            return None
+        await self._record_denial(call, iteration, calls, outcome.reason_code, arguments_hash)
+        return StopReason.POLICY_DENIED
+
+    async def _emit_policy_failure(self, call: ToolCall, iteration: int, reason_code: str) -> None:
+        await self._emit(
+            AgentEventKind.POLICY_DECIDED,
+            iteration,
+            {
+                "id": call.id,
+                "name": call.name,
+                "action": PolicyAction.DENY.value,
+                "reason_code": reason_code,
+            },
+        )
+
+    async def _emit_approval_failure(
+        self, call: ToolCall, iteration: int, arguments_hash: str, reason_code: str
+    ) -> None:
+        await self._emit(
+            AgentEventKind.APPROVAL_DECIDED,
+            iteration,
+            {
+                "id": call.id,
+                "name": call.name,
+                "arguments_hash": arguments_hash,
+                "approved": False,
+                "reason_code": reason_code,
+            },
+        )
+
+    async def _record_denial(
+        self,
+        call: ToolCall,
+        iteration: int,
+        calls: list[dict[str, Any]],
+        reason_code: str,
+        arguments_hash: str | None = None,
+    ) -> None:
+        result = {"error": "Tool call denied", "reason_code": reason_code}
+        calls.append(
+            {
+                "tool": call.name,
+                "parameters": {},
+                "result": result,
+                "status": "denied",
+            }
+        )
+        data: dict[str, Any] = {
+            "id": call.id,
+            "name": call.name,
+            "reason_code": reason_code,
+        }
+        if arguments_hash is not None:
+            data["arguments_hash"] = arguments_hash
+        await self._emit(AgentEventKind.TOOL_DENIED, iteration, data)
 
     async def _finalize(
         self,
