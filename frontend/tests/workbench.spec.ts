@@ -210,3 +210,54 @@ test('run API 401 and 404 failures are visible', async ({ page }) => {
   await page.getByRole('button', { name: 'Reload' }).click();
   await expect(page.getByRole('alert')).toContainText('Run not found');
 });
+
+test('desktop workbench owns the full three-column viewport without horizontal overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  const sidebar = page.locator('aside.sidebar');
+  const center = page.locator('main.main');
+  const inspector = page.locator('aside.inspector-shell');
+  await expect(sidebar).toBeVisible();
+  const [leftBox, centerBox, rightBox] = await Promise.all([sidebar.boundingBox(), center.boundingBox(), inspector.boundingBox()]);
+  expect(leftBox?.width).toBe(264);
+  expect(rightBox?.width).toBe(344);
+  expect(centerBox?.x).toBe(264);
+  expect((centerBox?.width || 0) + 264 + 344).toBe(1440);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
+});
+
+test('mobile and tablet keep the composer visible, reasoning inline, and overlays keyboard accessible', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByRole('textbox', { name: 'Message' })).toBeInViewport();
+  await page.getByRole('textbox', { name: 'Message' }).fill('show the evidence');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText('Reasoning and actions')).toBeVisible();
+  await expect(page.getByLabel('Execution summary')).toContainText('Completed');
+  const trigger = page.getByRole('button', { name: 'Inspect run' });
+  await trigger.click();
+  await expect(page.getByRole('dialog', { name: 'Run inspector' })).toHaveAttribute('data-open', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Run inspector' })).toHaveAttribute('data-open', 'false');
+  await expect(trigger).toBeFocused();
+  await page.setViewportSize({ width: 820, height: 900 });
+  await expect(page.getByRole('textbox', { name: 'Message' })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('all top-level routes and a refreshed chat deep link render without browser errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const routes: Array<[string, RegExp]> = [
+    ['/login', /^Archon$/], ['/dashboard', /^Dashboard$/], ['/documents', /Documents & RAG/],
+    ['/eval', /Recorded Run Evaluations/], ['/memory', /Memory Inspector/], ['/settings', /Skills & Integrations/],
+  ];
+  for (const [path, heading] of routes) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  }
+  await page.goto('/chat/deep-link');
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
+  expect(errors).toEqual([]);
+});

@@ -138,7 +138,10 @@ button {
    ═══════════════════════════════════════════════════════════════════ */
 
 .workbench {
-  height: 100%;
+  width: 100%;
+  min-width: 0;
+  height: 100dvh;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 264px minmax(380px, 1fr) 344px;
   background:
@@ -487,8 +490,7 @@ button {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  max-width: 820px;
-  margin: auto;
+  width: 100%;
   padding: 8px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -553,8 +555,8 @@ button {
 /* ── Image preview ── */
 
 .preview {
-  max-width: 820px;
-  margin: 0 auto 8px;
+  width: 100%;
+  margin: 0 0 8px;
   position: relative;
 }
 
@@ -1081,7 +1083,8 @@ button {
     left: 0;
     right: 0;
     bottom: 0;
-    height: min(72vh, 620px);
+    height: min(72dvh, 620px);
+    padding-bottom: env(safe-area-inset-bottom);
     border: 1px solid var(--border);
     border-radius: 18px 18px 0 0;
     transform: translateY(105%);
@@ -1217,7 +1220,7 @@ button {
   }
 
   .composer-wrap {
-    padding: 8px 10px 10px;
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
   }
 
   .composer-hint {
@@ -1241,9 +1244,8 @@ button {
     width: 100vw;
   }
 
-  .reasoning summary span {
-    display: none;
-  }
+  .reasoning summary { gap: 8px; }
+  .reasoning summary > span:last-child { font-size: 10px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════

@@ -37,6 +37,8 @@
   let activeTab: InspectorTab = $state('run');
   let stats: RunStats = $state({ latency: '—', tokens: '—', tools: 0, iterations: 0 });
   let pendingApproval: { tool: string; run_id: string; tool_call_id: string; parameters: Record<string, any> } | null = $state(null);
+  let lastOverlayTrigger: HTMLElement | null = null;
+  let latestAssistant = $derived(messages.findLast((message) => message.role === 'assistant'));
 
   let controller: AbortController | null = null;
   let logController: AbortController | null = null;
@@ -46,6 +48,7 @@
   let sidebarScrim: HTMLButtonElement;
   let inspectorElement: HTMLElement;
   let inspectorScrim: HTMLButtonElement;
+  let denyButton = $state<HTMLButtonElement>();
 
   // ── Constants ──────────────────────────────────────────────────────
   const prompts = [
@@ -57,6 +60,10 @@
   // ── Lifecycle ──────────────────────────────────────────────────────
   onMount(() => {
     hydrated = true;
+    if (isMobile()) {
+      sidebarElement.setAttribute('inert', '');
+      inspectorElement.setAttribute('inert', '');
+    }
     loadHealth();
     connectLogs();
     if (initialId) loadConversation(initialId, false);
@@ -193,6 +200,8 @@
       try {
         const d = JSON.parse(payload);
         am.iterations = d.iterations;
+        am.elapsed_ms = d.elapsed_ms;
+        am.status = 'completed';
         const tokensUsed = d.tokens_used || 0;
         stats = {
           iterations: d.iterations || 0,
@@ -250,6 +259,9 @@
       try {
         am.evalScores = JSON.parse(payload);
       } catch { /* skip */ }
+    }
+    if (event.event === 'verifier' || event.event === 'verification') {
+      try { am.verifier = JSON.parse(payload); } catch { /* skip */ }
     }
 
     messages = [...messages.slice(0, -1), { ...am }];
@@ -344,6 +356,7 @@
         artifacts: [],
         sources: [],
         startedAt: performance.now(),
+        status: 'streaming',
       };
       messages = [...messages, am];
 
@@ -369,6 +382,11 @@
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
         error = e instanceof Error ? e.message : 'The run failed';
+        const latest = messages.at(-1);
+        if (latest?.role === 'assistant') {
+          latest.status = 'failed';
+          messages = [...messages.slice(0, -1), { ...latest }];
+        }
       }
     } finally {
       loading = false;
@@ -386,7 +404,8 @@
     return window.matchMedia('(max-width: 720px)').matches;
   }
 
-  function setOverlay(element: HTMLElement, scrim: HTMLButtonElement, open: boolean) {
+  function setOverlay(element: HTMLElement, scrim: HTMLButtonElement, open: boolean, trigger?: HTMLElement) {
+    if (open) lastOverlayTrigger = trigger || document.activeElement as HTMLElement;
     element.classList.toggle('open', open);
     element.setAttribute('data-open', String(open));
     // Only set inert on mobile — on desktop panels are always interactive
@@ -397,10 +416,32 @@
     }
     scrim.classList.toggle('open', open);
     scrim.tabIndex = open ? 0 : -1;
+    if (open) requestAnimationFrame(() => (element.querySelector('button, a, [tabindex="0"]') as HTMLElement)?.focus());
+    else requestAnimationFrame(() => lastOverlayTrigger?.focus());
   }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    if (inspectorElement?.dataset.open === 'true') setOverlay(inspectorElement, inspectorScrim, false);
+    else if (sidebarElement?.dataset.open === 'true') setOverlay(sidebarElement, sidebarScrim, false);
+  }
+
+  function safeParameters(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(safeParameters);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      /secret|token|password|authorization|api[_-]?key|cookie/i.test(key) ? '••••••••' : safeParameters(item),
+    ]));
+  }
+
+  $effect(() => {
+    if (pendingApproval) requestAnimationFrame(() => denyButton?.focus());
+  });
 </script>
 
-<div class="workbench">
+<svelte:window onkeydown={handleKeydown} />
+<div class="workbench w-full min-w-0">
   <!-- Sidebar overlay -->
   <button
     bind:this={sidebarScrim}
@@ -410,7 +451,8 @@
     onclick={() => setOverlay(sidebarElement, sidebarScrim, false)}
   ></button>
 
-  <aside bind:this={sidebarElement} data-open="false" class="sidebar">
+  <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
+  <aside bind:this={sidebarElement} data-open="false" class="sidebar" role="dialog" aria-modal="true" aria-label="Conversations">
     <Sidebar
       activeId={currentId}
       onSelect={loadConversation}
@@ -426,7 +468,7 @@
         class="icon-button nav-toggle"
         aria-label="Open conversations"
         disabled={!hydrated}
-        onclick={() => setOverlay(sidebarElement, sidebarScrim, true)}
+        onclick={(event) => setOverlay(sidebarElement, sidebarScrim, true, event.currentTarget)}
       >
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
@@ -440,7 +482,7 @@
       <button
         class="mobile-inspector"
         disabled={!hydrated}
-        onclick={() => setOverlay(inspectorElement, inspectorScrim, true)}
+        onclick={(event) => setOverlay(inspectorElement, inspectorScrim, true, event.currentTarget)}
       >
         Inspect run
       </button>
@@ -463,7 +505,8 @@
   </main>
 
   <!-- Inspector panel -->
-  <aside bind:this={inspectorElement} data-open="false" class="inspector-shell">
+  <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
+  <aside bind:this={inspectorElement} data-open="false" class="inspector-shell" role="dialog" aria-modal="true" aria-label="Run inspector">
     <button
       class="sheet-close"
       aria-label="Close inspector"
@@ -476,6 +519,7 @@
       {artifacts}
       {context}
       {logs}
+      message={latestAssistant}
       active={activeTab}
       onTab={(t) => activeTab = t}
       onOpenArtifact={() => artifactOpen = true}
@@ -505,11 +549,11 @@
         </div>
         <div class="approval-detail">
           <span class="approval-detail-label">Parameters</span>
-          <pre class="approval-params">{JSON.stringify(pendingApproval.parameters, null, 2)}</pre>
+          <pre class="approval-params">{JSON.stringify(safeParameters(pendingApproval.parameters), null, 2)}</pre>
         </div>
         <div class="approval-actions">
           <button class="approval-btn approve" onclick={approve}>Approve</button>
-          <button class="approval-btn deny" onclick={deny}>Deny</button>
+          <button bind:this={denyButton} class="approval-btn deny" onclick={deny}>Deny</button>
         </div>
       </div>
     </div>

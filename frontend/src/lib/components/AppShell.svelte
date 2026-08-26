@@ -2,14 +2,10 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { isAuthenticated, getUser, logout } from '$lib/auth';
-  import {
-    MessageSquare, LayoutDashboard, FileText, Shield,
-    Settings, Brain, LogOut, Zap, ChevronLeft
-  } from 'lucide-svelte';
+  import { MessageSquare, LayoutDashboard, FileText, Shield, Settings, Brain, LogOut, Zap } from 'lucide-svelte';
 
   let { children } = $props();
   let user = $state<{ user_id: string; username: string } | null>(null);
-  let collapsed = $state(false);
 
   onMount(() => {
     if (!isAuthenticated()) {
@@ -20,87 +16,46 @@
   });
 
   const navItems = [
-    { href: '/',          label: 'Chat',      icon: MessageSquare },
-    { href: '/dashboard', label: 'Dashboard',  icon: LayoutDashboard },
-    { href: '/documents', label: 'Documents',  icon: FileText },
-    { href: '/eval',      label: 'Eval',       icon: Shield },
-    { href: '/memory',    label: 'Memory',     icon: Brain },
-    { href: '/settings',  label: 'Skills & Integrations', icon: Settings },
+    { href: '/', label: 'Chat', icon: MessageSquare },
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/documents', label: 'Documents', icon: FileText },
+    { href: '/eval', label: 'Eval', icon: Shield },
+    { href: '/memory', label: 'Memory', icon: Brain },
+    { href: '/settings', label: 'Skills & Integrations', icon: Settings },
   ];
 
   function isActive(href: string, pathname: string): boolean {
-    if (href === '/') return pathname === '/' || pathname.startsWith('/chat');
-    return pathname.startsWith(href);
+    return href === '/' ? pathname === '/' || pathname.startsWith('/chat/') : pathname.startsWith(href);
   }
+
+  let workbenchRoute = $derived($page.url.pathname === '/' || $page.url.pathname.startsWith('/chat/'));
 </script>
 
-<div class="flex h-[100dvh] overflow-hidden bg-[var(--bg)]">
-  <!-- Sidebar -->
-  <aside
-    class="flex flex-col border-r border-[var(--border)] bg-[rgba(16,21,29,0.97)] transition-[width] duration-200 shrink-0"
-    class:w-[220px]={!collapsed}
-    class:w-[60px]={collapsed}
-  >
-    <!-- Brand -->
-    <div class="h-[60px] flex items-center gap-3 px-4 border-b border-[var(--border)] shrink-0">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--accent)] to-[var(--purple)] grid place-items-center text-sm font-bold text-white shrink-0">
-        A
-      </div>
-      {#if !collapsed}
-        <div class="overflow-hidden">
-          <span class="text-sm font-semibold text-[var(--text)]">Archon</span>
-        </div>
-      {/if}
-    </div>
-
-    <!-- Nav links -->
-    <nav class="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+{#if workbenchRoute}
+  <main class="h-[100dvh] w-full min-w-0 overflow-hidden">{@render children()}</main>
+{:else}
+  <div class="flex h-[100dvh] w-full overflow-hidden bg-[var(--bg)]">
+    <aside class="hidden w-[232px] shrink-0 flex-col border-r border-[var(--border)] bg-[rgba(16,21,29,.97)] md:flex" aria-label="Primary navigation">
+      <a href="/" class="flex h-16 min-h-16 items-center gap-3 border-b border-[var(--border)] px-5 no-underline">
+        <span class="grid size-8 place-items-center rounded-lg bg-[var(--accent)] font-extrabold text-[#07110f]"><Zap size={16}/></span>
+        <span><strong class="block text-sm text-[var(--text)]">Archon</strong><small class="text-[var(--muted)]">Reliability workbench</small></span>
+      </a>
+      <nav class="flex-1 space-y-1 overflow-y-auto p-3">
+        {#each navItems as item}
+          <a href={item.href} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm no-underline transition-colors {isActive(item.href, $page.url.pathname) ? 'bg-[rgba(85,214,190,.1)] text-[var(--accent)]' : 'text-[var(--secondary)] hover:bg-[var(--raised)] hover:text-[var(--text)]'}">
+            <item.icon size={18}/><span>{item.label}</span>
+          </a>
+        {/each}
+      </nav>
+      {#if user}<button onclick={logout} class="m-3 flex min-h-11 items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-[var(--danger)] hover:bg-[rgba(255,107,114,.1)]"><LogOut size={18}/> Log out</button>{/if}
+    </aside>
+    <main class="min-w-0 flex-1 overflow-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">{@render children()}</main>
+    <nav class="fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 border-t border-[var(--border)] bg-[rgba(16,21,29,.98)] pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Mobile navigation">
       {#each navItems as item}
-        {@const active = isActive(item.href, $page.url.pathname)}
-        <a
-          href={item.href}
-          class="flex items-center gap-3 px-3 h-9 rounded-lg text-sm no-underline transition-all
-            {active
-              ? 'bg-[rgba(85,214,190,0.1)] text-[var(--accent)]'
-              : 'text-[var(--secondary)] hover:bg-[var(--raised)] hover:text-[var(--text)]'}"
-          title={collapsed ? item.label : undefined}
-        >
-          <item.icon size={18} class="shrink-0" />
-          {#if !collapsed}
-            <span>{item.label}</span>
-          {/if}
+        <a href={item.href} aria-label={item.label} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-[9px] no-underline {isActive(item.href, $page.url.pathname) ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}">
+          <item.icon size={19}/><span class="max-w-full truncate">{item.label === 'Skills & Integrations' ? 'Settings' : item.label}</span>
         </a>
       {/each}
     </nav>
-
-    <!-- Footer -->
-    <div class="border-t border-[var(--border)] px-2 py-2 space-y-1">
-      <button
-        onclick={() => collapsed = !collapsed}
-        class="flex items-center gap-3 px-3 h-9 w-full rounded-lg text-sm text-[var(--muted)] hover:bg-[var(--raised)] hover:text-[var(--text)] transition-all cursor-pointer border-0 bg-transparent"
-      >
-        <ChevronLeft size={18} class="shrink-0 transition-transform {collapsed ? 'rotate-180' : ''}" />
-        {#if !collapsed}
-          <span>Collapse</span>
-        {/if}
-      </button>
-      {#if user}
-        <button
-          onclick={logout}
-          class="flex items-center gap-3 px-3 h-9 w-full rounded-lg text-sm text-[var(--danger)] hover:bg-[rgba(255,107,114,0.1)] transition-all cursor-pointer border-0 bg-transparent"
-          title="Log out"
-        >
-          <LogOut size={18} class="shrink-0" />
-          {#if !collapsed}
-            <span>Log out</span>
-          {/if}
-        </button>
-      {/if}
-    </div>
-  </aside>
-
-  <!-- Main content -->
-  <main class="flex-1 min-w-0 overflow-auto">
-    {@render children()}
-  </main>
-</div>
+  </div>
+{/if}

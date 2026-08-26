@@ -8,10 +8,12 @@ export interface Artifact { id: string; title: string; type: string; language?: 
 export interface Message {
   id: string | number; role: Role; content: string; timestamp: string;
   thinking_steps?: ThinkingStep[]; tool_calls?: ToolCall[]; skills_used?: Skill[];
-  sources?: Array<{ title: string; url?: string; score?: number }>; artifacts?: Artifact[];
+  sources?: Array<{ id?: string; title: string; url?: string; score?: number }>; artifacts?: Artifact[];
   iterations?: number; context_stats?: ContextStats;
   startedAt?: number; // performance.now() when the message started
   evalScores?: { name: string; score: number; reason: string }[];
+  verifier?: { status?: string; supported?: boolean; unsupported_claims?: string[]; reason?: string };
+  status?: 'streaming' | 'completed' | 'failed'; elapsed_ms?: number;
 }
 export interface RunStats { latency: string; tokens: string; tools: number; iterations: number; cost?: string }
 export interface LogEntry { ts?: string; level?: string; event?: string; data?: Record<string, unknown> }
