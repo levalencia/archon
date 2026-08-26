@@ -74,6 +74,8 @@ class AgentResult:
 
 @dataclass(frozen=True, slots=True)
 class _PolicyExecutionBinding:
+    tool_call_id: str
+    tool_name: str
     arguments_hash: str
     request: PolicyRequest
     action: PolicyAction
@@ -279,21 +281,23 @@ class AgentRuntime:
                         try:
                             call = self._prepare_policy_execution_call(call, policy_binding)
                         except Exception:
+                            bound_call = ToolCall(
+                                policy_binding.tool_call_id, policy_binding.tool_name
+                            )
+                            reason_code = "binding_mismatch"
                             if policy_binding.action is PolicyAction.ASK:
-                                reason_code = "approval_binding_mismatch"
                                 await self._emit_approval_failure(
-                                    call,
+                                    bound_call,
                                     iterations,
                                     policy_binding.arguments_hash,
                                     reason_code,
                                 )
                                 stop_reason = StopReason.APPROVAL_UNAVAILABLE
                             else:
-                                reason_code = "policy_metadata_unavailable"
-                                await self._emit_policy_failure(call, iterations, reason_code)
+                                await self._emit_policy_failure(bound_call, iterations, reason_code)
                                 stop_reason = StopReason.POLICY_DENIED
                             await self._record_denial(
-                                call,
+                                bound_call,
                                 iterations,
                                 calls,
                                 reason_code,
@@ -433,17 +437,20 @@ class AgentRuntime:
     ) -> StopReason | _PolicyExecutionBinding:
         """Evaluate policy and return a binding for the exact executable snapshot."""
         try:
+            tool_call_id = call.id
+            tool_name = canonical_tool_name(call.name)
             arguments_hash = canonical_arguments_hash(call.arguments)
             if not isinstance(self._tools, PolicyAwareToolExecutor):
                 raise TypeError("policy-aware tool metadata is unavailable")
             request = self._tools.policy_request(call)
-            if call.name != canonical_tool_name(call.name) or request.tool_name != call.name:
+            if call.name != tool_name or request.tool_name != tool_name:
                 raise ValueError("policy metadata tool identity mismatch")
         except Exception:
             await self._emit_policy_failure(call, iteration, "policy_metadata_unavailable")
             await self._record_denial(call, iteration, calls, "policy_metadata_unavailable")
             return StopReason.POLICY_DENIED
 
+        event_call = ToolCall(tool_call_id, tool_name)
         try:
             assert self._policy_engine is not None
             decision = self._policy_engine.evaluate(request)
@@ -452,8 +459,8 @@ class AgentRuntime:
             if decision.risk_classes != request.risk_classes:
                 raise ValueError("policy decision risk binding mismatch")
         except Exception:
-            await self._emit_policy_failure(call, iteration, "policy_engine_unavailable")
-            await self._record_denial(call, iteration, calls, "policy_engine_unavailable")
+            await self._emit_policy_failure(event_call, iteration, "policy_engine_unavailable")
+            await self._record_denial(event_call, iteration, calls, "policy_engine_unavailable")
             return StopReason.POLICY_DENIED
 
         decision_reason_codes = {
@@ -462,8 +469,8 @@ class AgentRuntime:
             PolicyAction.DENY: "policy_denied",
         }
         policy_data: dict[str, Any] = {
-            "id": call.id,
-            "name": call.name,
+            "id": tool_call_id,
+            "name": tool_name,
             "action": decision.action.value,
             "reason_code": decision_reason_codes[decision.action],
             "risk_classes": sorted(risk.value for risk in decision.risk_classes),
@@ -475,28 +482,31 @@ class AgentRuntime:
             policy_data["matched_rule_id"] = decision.matched_rule_id
         await self._emit(AgentEventKind.POLICY_DECIDED, iteration, policy_data)
 
+        binding = _PolicyExecutionBinding(
+            tool_call_id, tool_name, arguments_hash, request, decision.action
+        )
         if decision.action is PolicyAction.ALLOW:
-            return _PolicyExecutionBinding(arguments_hash, request, decision.action)
+            return binding
         if decision.action is PolicyAction.DENY:
-            await self._record_denial(call, iteration, calls, "policy_denied", arguments_hash)
+            await self._record_denial(event_call, iteration, calls, "policy_denied", arguments_hash)
             return StopReason.POLICY_DENIED
 
         if self._authorizer is None:
             await self._record_denial(
-                call, iteration, calls, "approval_unavailable", arguments_hash
+                event_call, iteration, calls, "approval_unavailable", arguments_hash
             )
             return StopReason.APPROVAL_UNAVAILABLE
 
         authorization_request = AuthorizationRequest(
-            tool_call_id=call.id,
-            tool_name=call.name,
+            tool_call_id=tool_call_id,
+            tool_name=tool_name,
             arguments_hash=arguments_hash,
             risk_classes=decision.risk_classes,
             matched_rule_id=decision.matched_rule_id,
         )
         approval_data = {
-            "id": call.id,
-            "name": call.name,
+            "id": tool_call_id,
+            "name": tool_name,
             "arguments_hash": arguments_hash,
             "risk_classes": sorted(risk.value for risk in decision.risk_classes),
         }
@@ -505,8 +515,12 @@ class AgentRuntime:
         runtime_remaining = self._budget.max_seconds - (self._clock() - started_at)
         timeout = min(runtime_remaining, self._approval_timeout_seconds)
         if timeout <= 0:
-            await self._emit_approval_failure(call, iteration, arguments_hash, "approval_timeout")
-            await self._record_denial(call, iteration, calls, "approval_timeout", arguments_hash)
+            await self._emit_approval_failure(
+                event_call, iteration, arguments_hash, "approval_timeout"
+            )
+            await self._record_denial(
+                event_call, iteration, calls, "approval_timeout", arguments_hash
+            )
             return StopReason.APPROVAL_TIMEOUT
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
@@ -521,10 +535,10 @@ class AgentRuntime:
                 authorization_task.cancel()
                 authorization_task.add_done_callback(self._consume_background_task)
                 await self._emit_approval_failure(
-                    call, iteration, arguments_hash, "approval_timeout"
+                    event_call, iteration, arguments_hash, "approval_timeout"
                 )
                 await self._record_denial(
-                    call, iteration, calls, "approval_timeout", arguments_hash
+                    event_call, iteration, calls, "approval_timeout", arguments_hash
                 )
                 return StopReason.APPROVAL_TIMEOUT
             outcome = authorization_task.result()
@@ -535,10 +549,10 @@ class AgentRuntime:
             raise
         except Exception:
             await self._emit_approval_failure(
-                call, iteration, arguments_hash, "approval_unavailable"
+                event_call, iteration, arguments_hash, "approval_unavailable"
             )
             await self._record_denial(
-                call, iteration, calls, "approval_unavailable", arguments_hash
+                event_call, iteration, calls, "approval_unavailable", arguments_hash
             )
             return StopReason.APPROVAL_UNAVAILABLE
 
@@ -546,66 +560,73 @@ class AgentRuntime:
             authorization_request
         ):
             await self._emit_approval_failure(
-                call, iteration, arguments_hash, "approval_binding_mismatch"
+                event_call, iteration, arguments_hash, "approval_binding_mismatch"
             )
             await self._record_denial(
-                call, iteration, calls, "approval_binding_mismatch", arguments_hash
+                event_call,
+                iteration,
+                calls,
+                "approval_binding_mismatch",
+                arguments_hash,
             )
             return StopReason.APPROVAL_UNAVAILABLE
-        if outcome.approved:
-            try:
-                arguments_unchanged = canonical_arguments_hash(call.arguments) == arguments_hash
-            except (TypeError, ValueError):
-                arguments_unchanged = False
-            if not arguments_unchanged:
-                await self._emit_approval_failure(
-                    call, iteration, arguments_hash, "approval_binding_mismatch"
-                )
-                await self._record_denial(
-                    call, iteration, calls, "approval_binding_mismatch", arguments_hash
-                )
-                return StopReason.APPROVAL_UNAVAILABLE
 
         await self._emit(
             AgentEventKind.APPROVAL_DECIDED,
             iteration,
             {
-                "id": call.id,
-                "name": call.name,
+                "id": tool_call_id,
+                "name": tool_name,
                 "arguments_hash": arguments_hash,
                 "approved": outcome.approved,
                 "reason_code": outcome.reason_code,
             },
         )
         if outcome.approved:
-            return _PolicyExecutionBinding(arguments_hash, request, decision.action)
-        await self._record_denial(call, iteration, calls, outcome.reason_code, arguments_hash)
+            return binding
+        await self._record_denial(event_call, iteration, calls, outcome.reason_code, arguments_hash)
         return StopReason.POLICY_DENIED
 
     def _prepare_policy_execution_call(
         self, call: ToolCall, binding: _PolicyExecutionBinding
     ) -> ToolCall:
-        """Revalidate exact policy metadata and return a fresh dispatch-only snapshot."""
+        """Revalidate exact identity, arguments, and policy metadata before dispatch."""
         if not isinstance(self._tools, PolicyAwareToolExecutor):
             raise TypeError("policy-aware tool metadata is unavailable")
-        verification_call = ToolCall(
-            call.id, call.name, canonical_arguments_snapshot(call.arguments)
-        )
-        request = self._tools.policy_request(verification_call)
-        arguments_hash = canonical_arguments_hash(verification_call.arguments)
+
+        execution_arguments = canonical_arguments_snapshot(call.arguments)
+        arguments_hash = canonical_arguments_hash(execution_arguments)
         if (
-            verification_call.name != canonical_tool_name(verification_call.name)
-            or request.tool_name != verification_call.name
-            or request != binding.request
+            call.id != binding.tool_call_id
+            or call.name != binding.tool_name
+            or call.name != canonical_tool_name(call.name)
             or arguments_hash != binding.arguments_hash
         ):
             raise ValueError("policy execution binding changed")
-        # policy_request may retain its input. Dispatch a final detached copy that has never been
-        # exposed across an await or to policy/authorization collaborators.
+
+        verification_call = ToolCall(
+            binding.tool_call_id,
+            binding.tool_name,
+            canonical_arguments_snapshot(execution_arguments),
+        )
+        request = self._tools.policy_request(verification_call)
+        verification_hash = canonical_arguments_hash(verification_call.arguments)
+        if (
+            verification_call.id != binding.tool_call_id
+            or verification_call.name != binding.tool_name
+            or request.tool_name != binding.tool_name
+            or request != binding.request
+            or verification_hash != binding.arguments_hash
+        ):
+            raise ValueError("policy execution binding changed")
+
+        # Dispatch only bound identity fields and detached, validated arguments. Neither the
+        # ToolCall nor its argument graph has been exposed to a policy or authorization
+        # collaborator.
         execution_call = ToolCall(
-            verification_call.id,
-            verification_call.name,
-            canonical_arguments_snapshot(verification_call.arguments),
+            binding.tool_call_id,
+            binding.tool_name,
+            canonical_arguments_snapshot(execution_arguments),
         )
         if canonical_arguments_hash(execution_call.arguments) != binding.arguments_hash:
             raise ValueError("policy execution arguments changed")

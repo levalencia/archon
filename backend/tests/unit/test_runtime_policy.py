@@ -156,6 +156,43 @@ async def test_allow_revalidates_snapshot_mutated_via_retained_policy_reference(
 
 
 @pytest.mark.asyncio
+async def test_allow_rejects_native_id_mutated_by_policy_collaborator() -> None:
+    class RetainingTools(PolicyTools):
+        retained_call: ToolCall | None = None
+
+        def policy_request(self, call: ToolCall) -> PolicyRequest:
+            self.retained_call = call
+            return super().policy_request(call)
+
+    tools = RetainingTools()
+
+    class MutatingPolicy(FixedPolicy):
+        def evaluate(self, request: PolicyRequest) -> PolicyDecision:
+            assert tools.retained_call is not None
+            object.__setattr__(tools.retained_call, "id", "swapped-id")
+            return super().evaluate(request)
+
+    sink = RecordingEventSink()
+    result = await AgentRuntime(
+        provider(ToolCall("native-retained", "reader", {"nested": {"mode": "safe"}})),
+        tools,
+        policy_engine=MutatingPolicy(PolicyAction.ALLOW),
+        events=sink,
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+    denied = next(event for event in sink.events if event.kind is AgentEventKind.TOOL_DENIED)
+    assert denied.data["id"] == "native-retained"
+    assert denied.data["reason_code"] == "binding_mismatch"
+    assert all(
+        event.data.get("id") == "native-retained"
+        for event in sink.events
+        if event.kind in {AgentEventKind.POLICY_DECIDED, AgentEventKind.TOOL_DENIED}
+    )
+
+
+@pytest.mark.asyncio
 async def test_ask_rejects_snapshot_mutated_during_authorization() -> None:
     class RetainingTools(PolicyTools):
         retained_call: ToolCall | None = None
@@ -189,6 +226,62 @@ async def test_ask_rejects_snapshot_mutated_during_authorization() -> None:
 
     assert result.stop_reason is StopReason.APPROVAL_UNAVAILABLE
     assert tools.executed == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mutate_name", "mutate_arguments"),
+    [(False, False), (True, False), (False, True), (True, True)],
+)
+async def test_ask_rejects_native_id_name_and_hash_mutation_during_authorizer_await(
+    mutate_name: bool, mutate_arguments: bool
+) -> None:
+    class RetainingTools(PolicyTools):
+        retained_call: ToolCall | None = None
+
+        def policy_request(self, call: ToolCall) -> PolicyRequest:
+            self.retained_call = call
+            return super().policy_request(call)
+
+    tools = RetainingTools(frozenset({RiskClass.WRITE}))
+
+    class MutatingAuthorizer:
+        async def authorize(self, request):
+            await asyncio.sleep(0)
+            assert tools.retained_call is not None
+            object.__setattr__(tools.retained_call, "id", "swapped-id")
+            if mutate_name:
+                object.__setattr__(tools.retained_call, "name", "swapped-reader")
+            if mutate_arguments:
+                tools.retained_call.arguments["nested"]["mode"] = "dangerous"
+            return AuthorizationOutcome(
+                True,
+                request.tool_call_id,
+                request.tool_name,
+                request.arguments_hash,
+                "user_approved",
+            )
+
+    sink = RecordingEventSink()
+    result = await AgentRuntime(
+        provider(ToolCall("native-retained", "reader", {"nested": {"mode": "safe"}})),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=MutatingAuthorizer(),
+        events=sink,
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.APPROVAL_UNAVAILABLE
+    assert tools.executed == []
+    denied = next(event for event in sink.events if event.kind is AgentEventKind.TOOL_DENIED)
+    assert denied.data["id"] == "native-retained"
+    assert denied.data["name"] == "reader"
+    assert denied.data["reason_code"] == "binding_mismatch"
+    approval_events = [
+        event for event in sink.events if event.kind is AgentEventKind.APPROVAL_DECIDED
+    ]
+    assert approval_events[-1].data["id"] == "native-retained"
+    assert approval_events[-1].data["reason_code"] == "binding_mismatch"
 
 
 @pytest.mark.asyncio
