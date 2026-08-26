@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+import uuid
 
 import structlog
 
@@ -29,11 +30,9 @@ class StructuredAuditLogger:
     Production would use PostgreSQL; SQLite is for local dev and tests.
     """
 
-    def __init__(
-        self, db_path: str = ":memory:", redactor: PersistenceRedactor | None = None
-    ) -> None:
+    def __init__(self, redactor: PersistenceRedactor, db_path: str = ":memory:") -> None:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._redactor = redactor or PersistenceRedactor()
+        self._redactor = redactor
         self._conn.row_factory = sqlite3.Row
         self._create_table()
 
@@ -72,6 +71,16 @@ class StructuredAuditLogger:
         safe_action = self._redactor.redact_text(action).text
         safe_resource = self._redactor.redact_text(resource).text
         safe_result = self._redactor.redact_text(result).text
+        safe_security_level = (
+            security_level if security_level in {"info", "warning", "error"} else "warning"
+        )
+        safe_correlation_id: str | None = None
+        if correlation_id is not None:
+            try:
+                safe_correlation_id = str(uuid.UUID(correlation_id))
+            except (ValueError, AttributeError, TypeError):
+                # Untrusted metadata is neither persisted nor emitted to structured logs.
+                safe_correlation_id = None
         self._conn.execute(
             """INSERT INTO audit_log
                (timestamp, agent_id, action, resource,
@@ -84,8 +93,8 @@ class StructuredAuditLogger:
                 safe_resource,
                 json.dumps(self._redactor.redact_value(parameters)) if parameters else None,
                 safe_result,
-                security_level,
-                correlation_id,
+                safe_security_level,
+                safe_correlation_id,
             ),
         )
         self._conn.commit()
@@ -96,8 +105,8 @@ class StructuredAuditLogger:
             action=safe_action,
             resource=safe_resource,
             result=safe_result,
-            security_level=security_level,
-            correlation_id=correlation_id,
+            security_level=safe_security_level,
+            correlation_id=safe_correlation_id,
         )
 
     async def get_recent(self, limit: int = 100) -> list[dict]:

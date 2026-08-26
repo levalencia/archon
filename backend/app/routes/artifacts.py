@@ -14,13 +14,12 @@ from app.services.artifacts import Artifact, ArtifactStore
 router = APIRouter(
     prefix="/api/artifacts", tags=["artifacts"], dependencies=[Depends(get_current_user)]
 )
-_store = ArtifactStore()
 _RENDER_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"
 
 
-def get_artifact_store(request: Request | None = None) -> ArtifactStore:
-    """Resolve the injected store; retain the legacy store for isolated callers."""
-    return request.app.state.artifacts if request is not None else _store
+def get_artifact_store(request: Request) -> ArtifactStore:
+    """Resolve the application-scoped store."""
+    return request.app.state.artifacts
 
 
 class ArtifactUpdate(BaseModel):

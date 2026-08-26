@@ -12,9 +12,9 @@ from app.services.db_store import DatabaseStore
 class ConversationRepository:
     """Persist user-scoped conversations, messages, and runtime events."""
 
-    def __init__(self, database_url: str, redactor: PersistenceRedactor | None = None) -> None:
+    def __init__(self, database_url: str, redactor: PersistenceRedactor) -> None:
         self._store = DatabaseStore(database_url)
-        self._redactor = redactor or PersistenceRedactor()
+        self._redactor = redactor
 
     async def initialize(self) -> None:
         await self._store.initialize()

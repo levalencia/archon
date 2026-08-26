@@ -189,3 +189,49 @@ class TestCircuitBreaker:
         assert await first == "recovered"
         assert calls == 1
         assert cb.state is CircuitState.CLOSED
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_stale_success_cannot_close_after_concurrent_failure_opens(self) -> None:
+        cb = CircuitBreaker(failure_threshold=1, recovery_timeout=60)
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def slow_success() -> str:
+            entered.set()
+            await release.wait()
+            return "late"
+
+        stale = asyncio.create_task(cb.call(slow_success))
+        await entered.wait()
+        with pytest.raises(ConnectionError):
+            await cb.call(lambda: (_ for _ in ()).throw(ConnectionError("down")))
+        release.set()
+        assert await stale == "late"
+        assert cb.state is CircuitState.OPEN
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_cancelled_half_open_probe_returns_to_open_then_allows_one_probe(self) -> None:
+        now = 0.0
+        cb = CircuitBreaker(failure_threshold=1, recovery_timeout=5, clock=lambda: now)
+        with pytest.raises(ConnectionError):
+            await cb.call(lambda: (_ for _ in ()).throw(ConnectionError("down")))
+        now = 6.0
+        entered = asyncio.Event()
+
+        async def probe() -> str:
+            entered.set()
+            await asyncio.Event().wait()
+            return "unreachable"
+
+        task = asyncio.create_task(cb.call(probe))
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert cb.state is CircuitState.OPEN
+
+        now = 12.0
+        assert await cb.call(lambda: "recovered") == "recovered"
+        assert cb.state is CircuitState.CLOSED

@@ -14,7 +14,6 @@ import structlog
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from app.security.audit_logger import StructuredAuditLogger
 from app.security.auth import require_admin
 from app.security.circuit_breaker import CircuitBreaker
 
@@ -22,8 +21,6 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
-# Module-level instances (will be replaced by DI)
-_audit_logger = StructuredAuditLogger()
 _circuit_breakers: dict[str, CircuitBreaker] = {}
 _start_time = time.time()
 
@@ -46,9 +43,9 @@ async def detailed_health(request: Request) -> dict:
 
 
 @router.get("/audit")
-async def get_audit_log(limit: int = 50) -> dict:
+async def get_audit_log(request: Request, limit: int = 50) -> dict:
     """Get recent audit entries."""
-    entries = await _audit_logger.get_recent(limit=limit)
+    entries = await request.app.state.audit_logger.get_recent(limit=limit)
     return {
         "entries": entries,
         "count": len(entries),
@@ -57,9 +54,9 @@ async def get_audit_log(limit: int = 50) -> dict:
 
 
 @router.get("/audit/stats")
-async def get_audit_stats() -> dict:
+async def get_audit_stats(request: Request) -> dict:
     """Get audit action counts."""
-    counts = await _audit_logger.count_by_action()
+    counts = await request.app.state.audit_logger.count_by_action()
     return {
         "action_counts": counts,
         "total": sum(counts.values()),
@@ -68,13 +65,14 @@ async def get_audit_stats() -> dict:
 
 @router.get("/audit/search")
 async def search_audit(
+    request: Request,
     correlation_id: str | None = None,
     agent_id: str | None = None,
     action: str | None = None,
     security_level: str | None = None,
 ) -> dict:
     """Search audit entries by filters."""
-    entries = await _audit_logger.search(
+    entries = await request.app.state.audit_logger.search(
         correlation_id=correlation_id,
         agent_id=agent_id,
         action=action,

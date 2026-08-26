@@ -13,6 +13,7 @@ from app.memory.scoped import (
     ScopedEncryptedMemoryRepository,
 )
 from app.runtime.factory import RunContext
+from app.security.persistence_redactor import PersistenceRedactor
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore, MemoryFactRow, MemoryScopeRow
 from app.tools.memory_tools import create_memory_tool, create_session_search_tool
@@ -26,7 +27,9 @@ async def encrypted_memory(tmp_path):
     url = f"sqlite+aiosqlite:///{tmp_path / 'memory.db'}"
     store = DatabaseStore(url)
     await store.initialize()
-    repository = ScopedEncryptedMemoryRepository(store.session_factory, MASTER_KEY)
+    repository = ScopedEncryptedMemoryRepository(
+        store.session_factory, MASTER_KEY, redactor=PersistenceRedactor()
+    )
     yield store, repository, tmp_path / "memory.db"
     await store.close()
 
@@ -61,10 +64,14 @@ async def test_two_users_and_projects_are_isolated_and_raw_db_has_no_plaintext(e
 async def test_restart_decrypts_and_wrong_key_and_tampering_fail_closed(encrypted_memory):
     store, repository, _ = encrypted_memory
     fact = await repository.add("alice", "red", "durable", provenance={"source_action": "add"})
-    restarted = ScopedEncryptedMemoryRepository(store.session_factory, MASTER_KEY)
+    restarted = ScopedEncryptedMemoryRepository(
+        store.session_factory, MASTER_KEY, redactor=PersistenceRedactor()
+    )
     assert (await restarted.list("alice", "red"))[0].content == "durable"
 
-    wrong_key = ScopedEncryptedMemoryRepository(store.session_factory, WRONG_KEY)
+    wrong_key = ScopedEncryptedMemoryRepository(
+        store.session_factory, WRONG_KEY, redactor=PersistenceRedactor()
+    )
     with pytest.raises(MemoryEncryptionError):
         await wrong_key.list("alice", "red")
 
@@ -117,7 +124,9 @@ async def test_export_replace_remove_delete_and_limit(encrypted_memory):
     assert await repository.remove("alice", "red", "new") == 1
     await repository.add("alice", "red", "x", provenance={"source_action": "add"})
     assert await repository.delete_all("alice", "red") == 1
-    limited = ScopedEncryptedMemoryRepository(repository._sessions, MASTER_KEY, max_chars=3)
+    limited = ScopedEncryptedMemoryRepository(
+        repository._sessions, MASTER_KEY, max_chars=3, redactor=PersistenceRedactor()
+    )
     with pytest.raises(MemoryLimitError):
         await limited.add("alice", "blue", "four", provenance={"source_action": "add"})
 
@@ -127,8 +136,12 @@ async def test_independent_engines_serialize_concurrent_adds_at_limit(tmp_path):
     first_store, second_store = DatabaseStore(url), DatabaseStore(url)
     await first_store.initialize()
     await second_store.initialize()
-    first = ScopedEncryptedMemoryRepository(first_store.session_factory, MASTER_KEY, max_chars=5)
-    second = ScopedEncryptedMemoryRepository(second_store.session_factory, MASTER_KEY, max_chars=5)
+    first = ScopedEncryptedMemoryRepository(
+        first_store.session_factory, MASTER_KEY, max_chars=5, redactor=PersistenceRedactor()
+    )
+    second = ScopedEncryptedMemoryRepository(
+        second_store.session_factory, MASTER_KEY, max_chars=5, redactor=PersistenceRedactor()
+    )
 
     results = await asyncio.gather(
         first.add("alice", "red", "aaa", provenance={}),
@@ -150,8 +163,12 @@ async def test_concurrent_replace_delete_add_preserves_aggregate_and_restart(tmp
     first_store, second_store = DatabaseStore(url), DatabaseStore(url)
     await first_store.initialize()
     await second_store.initialize()
-    first = ScopedEncryptedMemoryRepository(first_store.session_factory, MASTER_KEY, max_chars=20)
-    second = ScopedEncryptedMemoryRepository(second_store.session_factory, MASTER_KEY, max_chars=20)
+    first = ScopedEncryptedMemoryRepository(
+        first_store.session_factory, MASTER_KEY, max_chars=20, redactor=PersistenceRedactor()
+    )
+    second = ScopedEncryptedMemoryRepository(
+        second_store.session_factory, MASTER_KEY, max_chars=20, redactor=PersistenceRedactor()
+    )
     await first.add("alice", "red", "old-one", provenance={})
     await first.add("alice", "red", "remove-me", provenance={})
 
@@ -168,7 +185,10 @@ async def test_concurrent_replace_delete_add_preserves_aggregate_and_restart(tmp
         version = scope.version
 
     restarted = ScopedEncryptedMemoryRepository(
-        second_store.session_factory, MASTER_KEY, max_chars=20
+        second_store.session_factory,
+        MASTER_KEY,
+        max_chars=20,
+        redactor=PersistenceRedactor(),
     )
     assert (
         sum(len(fact.content) for fact in await restarted.list("alice", "red")) == scope.chars_used
@@ -184,7 +204,7 @@ async def test_concurrent_replace_delete_add_preserves_aggregate_and_restart(tmp
 async def test_bound_tools_and_conversation_search_are_owner_scoped(encrypted_memory, tmp_path):
     _, repository, _ = encrypted_memory
     conversation_url = f"sqlite+aiosqlite:///{tmp_path / 'conversations.db'}"
-    conversations = ConversationRepository(conversation_url)
+    conversations = ConversationRepository(conversation_url, PersistenceRedactor())
     await conversations.initialize()
     await conversations.create("alice-conv", "Alice", "alice")
     await conversations.store("alice-conv", "user", "private telescope notes", "alice")

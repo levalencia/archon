@@ -59,6 +59,9 @@ class CircuitBreaker:
         self._success_count = 0
         self._total_calls = 0
         self._probe_in_flight = False
+        self._epoch = 0
+        self._generation = 0
+        self._probe_token: object | None = None
         self._lock = asyncio.Lock()
 
     @property
@@ -74,6 +77,7 @@ class CircuitBreaker:
         self, func: Callable[..., _T | Awaitable[_T]], *args: object, **kwargs: object
     ) -> _T:
         is_probe = False
+        probe_token: object | None = None
         async with self._lock:
             current = self.state
             if current is CircuitState.OPEN or (
@@ -85,30 +89,81 @@ class CircuitBreaker:
             if current is CircuitState.HALF_OPEN:
                 self._state = CircuitState.HALF_OPEN
                 self._probe_in_flight = True
+                self._epoch += 1
+                probe_token = object()
+                self._probe_token = probe_token
                 is_probe = True
+            admission_epoch = self._epoch
+            admission_generation = self._generation
             self._total_calls += 1
         try:
             value = func(*args, **kwargs)
             result = await value if inspect.isawaitable(value) else value
+        except asyncio.CancelledError:
+            if is_probe:
+                await self._abandon_probe(probe_token)
+            raise
         except Exception:
             async with self._lock:
-                self._failure_count += 1
-                self._last_failure_time = self._clock()
-                self._probe_in_flight = False
-                if is_probe or self._failure_count >= self.failure_threshold:
+                if is_probe and self._probe_token is probe_token:
+                    self._failure_count += 1
+                    self._last_failure_time = self._clock()
+                    self._probe_in_flight = False
+                    self._probe_token = None
                     self._state = CircuitState.OPEN
+                    self._epoch += 1
+                    self._generation += 1
                     logger.warning(
                         "circuit_breaker_opened",
                         name=self.name,
                         failure_count=self._failure_count,
                     )
+                elif not is_probe and self._epoch == admission_epoch:
+                    self._failure_count += 1
+                    self._last_failure_time = self._clock()
+                    self._generation += 1
+                    if self._failure_count >= self.failure_threshold:
+                        self._state = CircuitState.OPEN
+                        self._epoch += 1
+                        logger.warning(
+                            "circuit_breaker_opened",
+                            name=self.name,
+                            failure_count=self._failure_count,
+                        )
+            raise
+        except BaseException:
+            if is_probe:
+                await self._abandon_probe(probe_token)
             raise
         async with self._lock:
-            self._state = CircuitState.CLOSED
-            self._probe_in_flight = False
-            self._failure_count = 0
-            self._success_count += 1
+            if is_probe and self._probe_token is probe_token:
+                self._state = CircuitState.CLOSED
+                self._probe_in_flight = False
+                self._probe_token = None
+                self._failure_count = 0
+                self._success_count += 1
+                self._epoch += 1
+                self._generation += 1
+            elif (
+                not is_probe
+                and self._state is CircuitState.CLOSED
+                and self._epoch == admission_epoch
+                and self._generation == admission_generation
+            ):
+                self._failure_count = 0
+                self._success_count += 1
         return result
+
+    async def _abandon_probe(self, probe_token: object | None) -> None:
+        """Release a cancelled/aborted half-open trial without wedging the breaker."""
+        async with self._lock:
+            if self._probe_token is probe_token:
+                self._probe_in_flight = False
+                self._probe_token = None
+                self._state = CircuitState.OPEN
+                self._last_failure_time = self._clock()
+                self._epoch += 1
+                self._generation += 1
 
     def get_stats(self) -> dict[str, str | int | float]:
         return {
@@ -126,6 +181,9 @@ class CircuitBreaker:
         self._failure_count = 0
         self._success_count = 0
         self._probe_in_flight = False
+        self._probe_token = None
+        self._epoch += 1
+        self._generation += 1
         logger.info("circuit_breaker_reset", name=self.name)
 
 

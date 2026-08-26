@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.agents.mock_llm import MockLLM
 from app.config import Settings
 from app.main import create_app
+from app.security.persistence_redactor import PersistenceRedactor
 from app.services.conversations import ConversationRepository
 
 
@@ -71,13 +72,13 @@ def test_conversation_lifecycle_and_restart_persistence(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_repository_data_survives_reinstantiation(tmp_path) -> None:
     database_url = f"sqlite+aiosqlite:///{tmp_path}/repository.db"
-    first = ConversationRepository(database_url)
+    first = ConversationRepository(database_url, PersistenceRedactor())
     await first.initialize()
     await first.create("conversation-1", "Repository test")
     await first.store("conversation-1", "user", "durable message")
     await first.close()
 
-    second = ConversationRepository(database_url)
+    second = ConversationRepository(database_url, PersistenceRedactor())
     await second.initialize()
     persisted = await second.get("conversation-1")
     assert persisted is not None

@@ -37,11 +37,27 @@ class PersistenceRedactor:
         return RedactionResult(redacted, sum(counts.values()), types)
 
     def redact_value(self, value: Any) -> Any:
-        """Recursively redact string leaves while preserving JSON-like shape."""
+        """Recursively redact strings, including mapping keys.
+
+        Redaction can collapse distinct keys. Preserve every entry with an ordinal
+        suffix that contains no part of either original key.
+        """
         if isinstance(value, str):
             return self.redact_text(value).text
         if isinstance(value, Mapping):
-            return {str(key): self.redact_value(item) for key, item in value.items()}
+            redacted: dict[str, Any] = {}
+            key_counts: Counter[str] = Counter()
+            for key, item in value.items():
+                base_key = self.redact_text(str(key)).text
+                key_counts[base_key] += 1
+                ordinal = key_counts[base_key]
+                safe_key = base_key if ordinal == 1 else f"{base_key}__{ordinal}"
+                while safe_key in redacted:
+                    ordinal += 1
+                    key_counts[base_key] = ordinal
+                    safe_key = f"{base_key}__{ordinal}"
+                redacted[safe_key] = self.redact_value(item)
+            return redacted
         if isinstance(value, tuple):
             return tuple(self.redact_value(item) for item in value)
         if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):

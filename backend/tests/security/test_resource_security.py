@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.routes.artifacts import get_artifact_store
 from app.services.artifacts import Artifact
 
 
@@ -75,7 +77,7 @@ def test_documents_are_owner_scoped(client: TestClient) -> None:
 
 @pytest.mark.security
 def test_artifacts_are_owner_scoped_and_render_inert(client: TestClient) -> None:
-    store = get_artifact_store()
+    store = cast(FastAPI, client.app).state.artifacts
     artifact = Artifact(
         id="dangerous-artifact",
         user_id="owner",

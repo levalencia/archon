@@ -71,10 +71,10 @@ class Artifact:
 class ArtifactStore:
     """In-memory artifact storage. PostgreSQL in production."""
 
-    def __init__(self, redactor: PersistenceRedactor | None = None) -> None:
+    def __init__(self, redactor: PersistenceRedactor) -> None:
         self._artifacts: dict[str, Artifact] = {}
         self._by_conversation: dict[str, list[str]] = {}
-        self._redactor = redactor or PersistenceRedactor()
+        self._redactor = redactor
 
     async def save(self, artifact: Artifact) -> Artifact:
         """Save or update an artifact."""

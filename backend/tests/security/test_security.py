@@ -14,6 +14,7 @@ import pytest
 from app.agents.protocols import AuditLog, PermissionChecker
 from app.security.audit_logger import StructuredAuditLogger
 from app.security.permission_manager import SecurePermissionManager
+from app.security.persistence_redactor import PersistenceRedactor
 
 
 @pytest.fixture
@@ -134,35 +135,38 @@ class TestAuditLoggerProtocol:
 
     @pytest.mark.unit
     def test_satisfies_protocol(self) -> None:
-        audit = StructuredAuditLogger()
+        audit = StructuredAuditLogger(PersistenceRedactor())
         assert isinstance(audit, AuditLog)
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_log_and_retrieve(self) -> None:
-        audit = StructuredAuditLogger()
-        await audit.log(agent_id="a1", action="test", resource="r1", correlation_id="c1")
+        audit = StructuredAuditLogger(PersistenceRedactor())
+        correlation_id = "00000000-0000-0000-0000-000000000001"
+        await audit.log(agent_id="a1", action="test", resource="r1", correlation_id=correlation_id)
 
         entries = await audit.get_recent(limit=10)
         assert len(entries) == 1
         assert entries[0]["agent_id"] == "a1"
-        assert entries[0]["correlation_id"] == "c1"
+        assert entries[0]["correlation_id"] == correlation_id
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_search_by_correlation_id(self) -> None:
-        audit = StructuredAuditLogger()
-        await audit.log(agent_id="a1", action="x", resource="r1", correlation_id="target")
-        await audit.log(agent_id="a1", action="y", resource="r2", correlation_id="other")
+        audit = StructuredAuditLogger(PersistenceRedactor())
+        target = "00000000-0000-0000-0000-000000000001"
+        other = "00000000-0000-0000-0000-000000000002"
+        await audit.log(agent_id="a1", action="x", resource="r1", correlation_id=target)
+        await audit.log(agent_id="a1", action="y", resource="r2", correlation_id=other)
 
-        results = await audit.search(correlation_id="target")
+        results = await audit.search(correlation_id=target)
         assert len(results) == 1
         assert results[0]["action"] == "x"
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_search_by_security_level(self) -> None:
-        audit = StructuredAuditLogger()
+        audit = StructuredAuditLogger(PersistenceRedactor())
         await audit.log(agent_id="a1", action="ok", resource="r1", security_level="info")
         await audit.log(agent_id="a1", action="bad", resource="r2", security_level="warning")
 
@@ -173,7 +177,7 @@ class TestAuditLoggerProtocol:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_count_by_action(self) -> None:
-        audit = StructuredAuditLogger()
+        audit = StructuredAuditLogger(PersistenceRedactor())
         await audit.log(agent_id="a1", action="read", resource="r1")
         await audit.log(agent_id="a1", action="read", resource="r2")
         await audit.log(agent_id="a1", action="write", resource="r3")

@@ -9,6 +9,7 @@ from app.observability.metrics import get_metrics_snapshot, reset_metrics
 from app.observability.runtime_events import CompositeEventSink
 from app.observability.tracing import Tracer
 from app.runtime import AgentEvent, AgentEventKind, TokenUsage
+from app.security.persistence_redactor import PersistenceRedactor
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 
@@ -157,7 +158,9 @@ def test_log_redaction_is_recursive_and_handles_free_form_values() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_recent_runtime_events_are_persisted_and_retrieved(tmp_path) -> None:
-    repository = ConversationRepository(f"sqlite+aiosqlite:///{tmp_path}/events.db")
+    repository = ConversationRepository(
+        f"sqlite+aiosqlite:///{tmp_path}/events.db", PersistenceRedactor()
+    )
     await repository.initialize()
     try:
         await repository.append_runtime_event(

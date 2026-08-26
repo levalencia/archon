@@ -21,7 +21,6 @@ from app.config import Settings
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
-from app.routes.artifacts import get_artifact_store
 from app.routes.skills import get_skill_registry
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.support import prepare_messages
@@ -474,7 +473,7 @@ async def chat(
     # Detect and save artifacts from response
     detected = detect_artifact_in_response(result.content)
     saved_artifacts = []
-    artifact_store = get_artifact_store(request)
+    artifact_store = request.app.state.artifacts
     for art_data in detected:
         artifact = Artifact(
             conversation_id=conv_id,

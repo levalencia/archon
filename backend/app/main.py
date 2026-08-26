@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 
 import structlog
@@ -43,11 +43,13 @@ from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
 from app.runtime.support import as_model_provider
 from app.security.approval_repository import ApprovalRepository
+from app.security.audit_logger import StructuredAuditLogger
 from app.security.auth import AuthRepository
 from app.security.circuit_breaker import CircuitBreaker, CircuitBreakingProvider
 from app.security.live_approvals import DurableApprovalBroker
 from app.security.persistence_redactor import PersistenceRedactor
 from app.security.rate_limiter import RateLimiter
+from app.services.artifacts import ArtifactStore
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 
@@ -83,7 +85,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Store settings and explicitly injected application-scoped services.
     app.state.settings = settings
-    redactor = PersistenceRedactor()
+    redactor = app.state.persistence_redactor_factory()
     app.state.persistence_redactor = redactor
     repository = ConversationRepository(settings.database_url, redactor)
     await repository.initialize()
@@ -103,9 +105,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         timeout_seconds=settings.approval_timeout_seconds,
         poll_interval_seconds=settings.approval_poll_interval_seconds,
     )
-    from app.routes.artifacts import get_artifact_store
-
-    app.state.artifacts = get_artifact_store()
+    app.state.artifacts = ArtifactStore(redactor)
+    app.state.audit_logger = StructuredAuditLogger(redactor)
 
     if settings.rate_limit_backend == "redis":
         from redis.asyncio import Redis
@@ -154,7 +155,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("archon_shutdown")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    persistence_redactor_factory: Callable[[], PersistenceRedactor] = PersistenceRedactor,
+) -> FastAPI:
     """Application factory. Accepts optional settings for testing."""
     if settings is None:
         settings = get_settings()
@@ -165,6 +170,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.persistence_redactor_factory = persistence_redactor_factory
 
     # --- Middleware (order matters: last added = first executed) ---
 

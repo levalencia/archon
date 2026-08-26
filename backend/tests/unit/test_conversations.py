@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.security.persistence_redactor import PersistenceRedactor
 from app.services.conversations import ConversationRepository
 
 
@@ -128,13 +129,13 @@ class TestConversationCRUD:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_data_survives_fresh_database_store(self, isolated_database: str) -> None:
-        first = ConversationRepository(isolated_database)
+        first = ConversationRepository(isolated_database, PersistenceRedactor())
         await first.initialize()
         await first.create("persistent-id", "Survives Restart")
         await first.store("persistent-id", "user", "still here")
         await first.close()
 
-        fresh = ConversationRepository(isolated_database)
+        fresh = ConversationRepository(isolated_database, PersistenceRedactor())
         await fresh.initialize()
         try:
             conversation = await fresh.get("persistent-id")
