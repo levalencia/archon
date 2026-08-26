@@ -23,6 +23,7 @@ from app.security.policy import (
     PolicyDecision,
     PolicyEngine,
     PolicyRequest,
+    RiskClass,
     canonical_arguments_hash,
     canonical_arguments_snapshot,
     canonical_tool_name,
@@ -91,6 +92,9 @@ class _PolicyExecutionBinding:
     arguments_json: str
     request: PolicyRequest
     action: PolicyAction
+    risk_classes: frozenset[RiskClass]
+    matched_rule_id: str | None
+    reason: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,8 +245,25 @@ class AgentRuntime:
                 history.append(
                     Message(Role.ASSISTANT, response_content or "", tool_calls=history_tool_calls)
                 )
-                for call_index, call in enumerate(tool_calls):
-                    if len(calls) >= self._budget.max_tool_calls:
+                prepared_policy_calls: (
+                    tuple[tuple[ToolCall, _PolicyExecutionBinding] | None, ...] | None
+                ) = None
+                if self._policy_engine is not None:
+                    # Prevalidate duplicates and reserve every novel call in the response before
+                    # authorization: no call may execute if a later member exceeds the budget.
+                    budget_keys = set(seen_calls)
+                    batch_tool_count = 0
+                    for budget_call in tool_calls:
+                        budget_key = json.dumps(
+                            [budget_call.name, dict(budget_call.arguments)],
+                            sort_keys=True,
+                            separators=(",", ":"),
+                            default=str,
+                        )
+                        if budget_key not in budget_keys:
+                            budget_keys.add(budget_key)
+                            batch_tool_count += 1
+                    if len(calls) + batch_tool_count > self._budget.max_tool_calls:
                         return await self._finalize(
                             StopReason.TOOL_BUDGET_EXHAUSTED,
                             history,
@@ -252,52 +273,70 @@ class AgentRuntime:
                             usage,
                             started_at,
                         )
-                    call_key = json.dumps(
-                        [call.name, dict(call.arguments)],
-                        sort_keys=True,
-                        separators=(",", ":"),
-                        default=str,
-                    )
-                    if call_key in seen_calls:
-                        duplicate = {"error": "Duplicate tool call blocked; use existing result."}
-                        history.append(
-                            Message(
-                                Role.TOOL,
-                                json.dumps(duplicate, separators=(",", ":")),
-                                tool_call_id=call.id,
-                            )
-                        )
-                        continue
-                    seen_calls.add(call_key)
-                    request_data: dict[str, Any] = {"id": call.id, "name": call.name}
-                    native_binding = native_bindings[call_index]
-                    if self._policy_engine is None:
-                        request_data["arguments"] = copy.deepcopy(dict(call.arguments))
-                    else:
-                        assert native_binding is not None
-                        request_data = {
-                            "id": native_binding.tool_call_id,
-                            "name": native_binding.tool_name,
-                            "arguments_hash": native_binding.arguments_hash,
-                        }
-                    await self._emit(
-                        AgentEventKind.TOOL_CALL_REQUESTED,
+                    preparation = await self._prepare_policy_batch(
+                        tool_calls,
+                        native_bindings,
                         iterations,
-                        request_data,
+                        calls,
+                        history,
+                        seen_calls,
+                        started_at,
                     )
+                    if isinstance(preparation, StopReason):
+                        return await self._stop(preparation, content, iterations, calls, usage)
+                    prepared_policy_calls = preparation
+                for call_index, call in enumerate(tool_calls):
                     policy_binding: _PolicyExecutionBinding | None = None
-                    if self._policy_engine is not None:
-                        assert native_binding is not None
-                        enforcement = await self._enforce_policy(
-                            call, native_binding, iterations, calls, started_at
+                    if prepared_policy_calls is not None:
+                        prepared_call = prepared_policy_calls[call_index]
+                        if prepared_call is None:
+                            continue
+                        execution_call, policy_binding = prepared_call
+                    else:
+                        if len(calls) >= self._budget.max_tool_calls:
+                            return await self._finalize(
+                                StopReason.TOOL_BUDGET_EXHAUSTED,
+                                history,
+                                content,
+                                iterations,
+                                calls,
+                                usage,
+                                started_at,
+                            )
+                        call_key = json.dumps(
+                            [call.name, dict(call.arguments)],
+                            sort_keys=True,
+                            separators=(",", ":"),
+                            default=str,
                         )
-                        if isinstance(enforcement, StopReason):
-                            return await self._stop(enforcement, content, iterations, calls, usage)
-                        policy_binding = enforcement
+                        if call_key in seen_calls:
+                            duplicate = {
+                                "error": "Duplicate tool call blocked; use existing result."
+                            }
+                            history.append(
+                                Message(
+                                    Role.TOOL,
+                                    json.dumps(duplicate, separators=(",", ":")),
+                                    tool_call_id=call.id,
+                                )
+                            )
+                            continue
+                        seen_calls.add(call_key)
+                        await self._emit(
+                            AgentEventKind.TOOL_CALL_REQUESTED,
+                            iterations,
+                            {
+                                "id": call.id,
+                                "name": call.name,
+                                "arguments": copy.deepcopy(dict(call.arguments)),
+                            },
+                        )
+                        execution_call = call
                     # Deprecated compatibility path. It is deliberately unreachable in policy
                     # mode, so a legacy hook cannot bypass or replace policy authorization.
-                    elif (
-                        self._approval_hook
+                    if (
+                        prepared_policy_calls is None
+                        and self._approval_hook
                         and hasattr(self._tools, "tool_requires_approval")
                         and self._tools.tool_requires_approval(call.name)
                     ):
@@ -335,41 +374,6 @@ class AgentRuntime:
                                 )
                             )
                             continue
-                    execution_call = call
-                    if policy_binding is not None:
-                        try:
-                            execution_call = self._prepare_policy_execution_call(
-                                call, policy_binding
-                            )
-                        except Exception:
-                            bound_call = ToolCall(
-                                policy_binding.tool_call_id, policy_binding.tool_name
-                            )
-                            reason_code = "binding_mismatch"
-                            if policy_binding.action is PolicyAction.ASK:
-                                await self._emit_approval_failure(
-                                    bound_call,
-                                    iterations,
-                                    policy_binding.arguments_hash,
-                                    reason_code,
-                                )
-                                stop_reason = StopReason.APPROVAL_UNAVAILABLE
-                            else:
-                                await self._emit_policy_failure(
-                                    bound_call,
-                                    iterations,
-                                    reason_code,
-                                    policy_binding.arguments_hash,
-                                )
-                                stop_reason = StopReason.POLICY_DENIED
-                            await self._record_denial(
-                                bound_call,
-                                iterations,
-                                calls,
-                                reason_code,
-                                policy_binding.arguments_hash,
-                            )
-                            return await self._stop(stop_reason, content, iterations, calls, usage)
                     try:
                         output = await self._within_deadline(
                             self._tools.execute(execution_call), started_at
@@ -603,6 +607,79 @@ class AgentRuntime:
                 raise _ProviderToolCallSnapshotError(safe_id, safe_name) from None
         return tuple(snapshots)
 
+    async def _prepare_policy_batch(
+        self,
+        tool_calls: tuple[ToolCall, ...],
+        native_bindings: tuple[_NativeToolBinding, ...],
+        iteration: int,
+        calls: list[dict[str, Any]],
+        history: list[Message],
+        seen_calls: set[str],
+        started_at: float,
+    ) -> StopReason | tuple[tuple[ToolCall, _PolicyExecutionBinding] | None, ...]:
+        """Authorize and bind an entire provider batch before dispatching any call."""
+        prepared: list[tuple[ToolCall, _PolicyExecutionBinding] | None] = []
+        batch_seen = set(seen_calls)
+        for call, native_binding in zip(tool_calls, native_bindings, strict=True):
+            call_key = json.dumps(
+                [call.name, dict(call.arguments)],
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+            if call_key in batch_seen:
+                duplicate = {"error": "Duplicate tool call blocked; use existing result."}
+                history.append(
+                    Message(
+                        Role.TOOL,
+                        json.dumps(duplicate, separators=(",", ":")),
+                        tool_call_id=call.id,
+                    )
+                )
+                prepared.append(None)
+                continue
+            batch_seen.add(call_key)
+            await self._emit(
+                AgentEventKind.TOOL_CALL_REQUESTED,
+                iteration,
+                {
+                    "id": native_binding.tool_call_id,
+                    "name": native_binding.tool_name,
+                    "arguments_hash": native_binding.arguments_hash,
+                },
+            )
+            enforcement = await self._enforce_policy(
+                call, native_binding, iteration, calls, started_at
+            )
+            if isinstance(enforcement, StopReason):
+                return enforcement
+            try:
+                execution_call = self._prepare_policy_execution_call(call, enforcement)
+            except Exception:
+                bound_call = ToolCall(enforcement.tool_call_id, enforcement.tool_name)
+                reason_code = "binding_mismatch"
+                if enforcement.action is PolicyAction.ASK:
+                    await self._emit_approval_failure(
+                        bound_call, iteration, enforcement.arguments_hash, reason_code
+                    )
+                    stop_reason = StopReason.APPROVAL_UNAVAILABLE
+                else:
+                    await self._emit_policy_failure(
+                        bound_call, iteration, reason_code, enforcement.arguments_hash
+                    )
+                    stop_reason = StopReason.POLICY_DENIED
+                await self._record_denial(
+                    bound_call,
+                    iteration,
+                    calls,
+                    reason_code,
+                    enforcement.arguments_hash,
+                )
+                return stop_reason
+            prepared.append((execution_call, enforcement))
+        seen_calls.update(batch_seen)
+        return tuple(prepared)
+
     async def _enforce_policy(
         self,
         call: ToolCall,
@@ -692,8 +769,21 @@ class AgentRuntime:
             decision = self._policy_engine.evaluate(request)
             if not isinstance(decision, PolicyDecision):
                 raise TypeError("policy engine returned an invalid decision")
-            if decision.risk_classes != request.risk_classes:
+            # Bind every authorization-relevant value before constructing an event or awaiting
+            # any collaborator. PolicyDecision is frozen by convention only: object.__setattr__
+            # can still mutate an instance retained by a hostile engine or event sink.
+            decision_action = decision.action
+            decision_risks = frozenset(decision.risk_classes)
+            decision_rule = decision.matched_rule_id
+            decision_reason = decision.reason
+            if not isinstance(decision_action, PolicyAction):
+                raise TypeError("policy decision action is invalid")
+            if decision_risks != request.risk_classes:
                 raise ValueError("policy decision risk binding mismatch")
+            if decision_rule is not None and not isinstance(decision_rule, str):
+                raise TypeError("policy decision rule is invalid")
+            if not isinstance(decision_reason, str):
+                raise TypeError("policy decision reason is invalid")
         except Exception:
             await self._emit_policy_failure(
                 event_call, iteration, "policy_engine_unavailable", arguments_hash
@@ -711,15 +801,13 @@ class AgentRuntime:
         policy_data: dict[str, Any] = {
             "id": native_binding.tool_call_id,
             "name": tool_name,
-            "action": decision.action.value,
-            "reason_code": decision_reason_codes[decision.action],
-            "risk_classes": sorted(risk.value for risk in decision.risk_classes),
+            "action": decision_action.value,
+            "reason_code": decision_reason_codes[decision_action],
+            "risk_classes": sorted(risk.value for risk in decision_risks),
             "arguments_hash": arguments_hash,
         }
-        if decision.matched_rule_id and re.fullmatch(
-            r"[A-Za-z0-9_.:-]{1,128}", decision.matched_rule_id
-        ):
-            policy_data["matched_rule_id"] = decision.matched_rule_id
+        if decision_rule and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", decision_rule):
+            policy_data["matched_rule_id"] = decision_rule
         await self._emit(AgentEventKind.POLICY_DECIDED, iteration, policy_data)
 
         binding = _PolicyExecutionBinding(
@@ -728,11 +816,14 @@ class AgentRuntime:
             arguments_hash,
             native_binding.arguments_json,
             request,
-            decision.action,
+            decision_action,
+            decision_risks,
+            decision_rule,
+            decision_reason,
         )
-        if decision.action is PolicyAction.ALLOW:
+        if decision_action is PolicyAction.ALLOW:
             return binding
-        if decision.action is PolicyAction.DENY:
+        if decision_action is PolicyAction.DENY:
             await self._record_denial(event_call, iteration, calls, "policy_denied", arguments_hash)
             return StopReason.POLICY_DENIED
 
@@ -745,8 +836,8 @@ class AgentRuntime:
         approval_tool_call_id = native_binding.tool_call_id
         approval_tool_name = tool_name
         approval_arguments_hash = arguments_hash
-        approval_risk_classes = frozenset(decision.risk_classes)
-        approval_matched_rule_id = decision.matched_rule_id
+        approval_risk_classes = decision_risks
+        approval_matched_rule_id = decision_rule
         authorization_request = AuthorizationRequest(
             tool_call_id=approval_tool_call_id,
             tool_name=approval_tool_name,
@@ -758,7 +849,7 @@ class AgentRuntime:
             "id": native_binding.tool_call_id,
             "name": tool_name,
             "arguments_hash": arguments_hash,
-            "risk_classes": sorted(risk.value for risk in decision.risk_classes),
+            "risk_classes": sorted(risk.value for risk in decision_risks),
         }
         await self._emit(AgentEventKind.APPROVAL_REQUIRED, iteration, approval_data)
 

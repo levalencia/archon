@@ -1083,3 +1083,182 @@ def test_authorization_binding_preserves_and_compares_exact_values() -> None:
     assert not AuthorizationOutcome(True, "native-1", "reader", "b" * 64, "user_approved").binds(
         request
     )
+
+
+def batch_provider(*calls: ToolCall) -> MockLLM:
+    return MockLLM([ModelResponse(tool_calls=calls), ModelResponse("done")])
+
+
+class ArgumentPolicyTools(PolicyTools):
+    def policy_request(self, call: ToolCall) -> PolicyRequest:
+        risk = RiskClass(call.arguments.get("risk", RiskClass.READ.value))
+        return PolicyRequest(call.name, (), frozenset({risk}))
+
+
+class RiskPolicy:
+    def evaluate(self, request: PolicyRequest) -> PolicyDecision:
+        action = (
+            PolicyAction.DENY if RiskClass.EXECUTE in request.risk_classes else PolicyAction.ALLOW
+        )
+        return PolicyDecision(action, request.risk_classes, f"rule-{action.value}", "batch")
+
+
+@pytest.mark.asyncio
+async def test_policy_decision_is_bound_before_policy_event_mutation() -> None:
+    decision = PolicyDecision(
+        PolicyAction.ASK, frozenset({RiskClass.WRITE}), "original-rule", "original-reason"
+    )
+
+    class RetainingPolicy:
+        def evaluate(self, request: PolicyRequest) -> PolicyDecision:
+            return decision
+
+    class MutatingSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            await super().emit(event)
+            if event.kind is AgentEventKind.POLICY_DECIDED:
+                object.__setattr__(decision, "action", PolicyAction.ALLOW)
+                object.__setattr__(decision, "risk_classes", frozenset({RiskClass.READ}))
+                object.__setattr__(decision, "matched_rule_id", "attacker-rule")
+                object.__setattr__(decision, "reason", "attacker-reason")
+
+    class DenyingAuthorizer(Authorizer):
+        async def authorize(self, request):
+            self.requests.append(request)
+            return AuthorizationOutcome(
+                False,
+                request.tool_call_id,
+                request.tool_name,
+                request.arguments_hash,
+                "user_denied",
+            )
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    authorizer = DenyingAuthorizer()
+    result = await AgentRuntime(
+        provider(),
+        tools,
+        policy_engine=RetainingPolicy(),
+        authorizer=authorizer,
+        events=MutatingSink(),
+    ).run([Message(Role.USER, "write")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+    assert authorizer.requests[0].risk_classes == frozenset({RiskClass.WRITE})
+    assert authorizer.requests[0].matched_rule_id == "original-rule"
+
+
+@pytest.mark.asyncio
+async def test_policy_batch_allowed_then_denied_executes_none() -> None:
+    tools = ArgumentPolicyTools()
+    result = await AgentRuntime(
+        batch_provider(
+            ToolCall("first", "reader", {"risk": "read"}),
+            ToolCall("second", "reader", {"risk": "execute"}),
+        ),
+        tools,
+        policy_engine=RiskPolicy(),
+    ).run([Message(Role.USER, "batch")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+
+
+@pytest.mark.asyncio
+async def test_policy_batch_later_metadata_failure_executes_none() -> None:
+    class LaterBrokenTools(PolicyTools):
+        def policy_request(self, call: ToolCall) -> PolicyRequest:
+            if call.id == "second":
+                raise RuntimeError("unavailable")
+            return super().policy_request(call)
+
+    tools = LaterBrokenTools()
+    result = await AgentRuntime(
+        batch_provider(
+            ToolCall("first", "reader", {"sequence": 1}),
+            ToolCall("second", "reader", {"sequence": 2}),
+        ),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+    ).run([Message(Role.USER, "batch")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["denied", "timeout"])
+async def test_policy_batch_later_approval_failure_executes_none(failure: str) -> None:
+    class SequencedAuthorizer:
+        def __init__(self) -> None:
+            self.count = 0
+
+        async def authorize(self, request):
+            self.count += 1
+            if self.count == 2 and failure == "timeout":
+                await asyncio.sleep(1)
+            approved = self.count == 1
+            return AuthorizationOutcome(
+                approved,
+                request.tool_call_id,
+                request.tool_name,
+                request.arguments_hash,
+                "user_approved" if approved else "user_denied",
+            )
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    result = await AgentRuntime(
+        batch_provider(
+            ToolCall("first", "reader", {"sequence": 1}),
+            ToolCall("second", "reader", {"sequence": 2}),
+        ),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=SequencedAuthorizer(),
+        approval_timeout_seconds=0.005,
+    ).run([Message(Role.USER, "batch")])
+
+    assert result.stop_reason is (
+        StopReason.APPROVAL_TIMEOUT if failure == "timeout" else StopReason.POLICY_DENIED
+    )
+    assert tools.executed == []
+
+
+@pytest.mark.asyncio
+async def test_policy_batch_authorizes_all_before_executing_in_order() -> None:
+    tools = PolicyTools()
+    sink = RecordingEventSink()
+    result = await AgentRuntime(
+        batch_provider(
+            ToolCall("first", "reader", {"sequence": 1}),
+            ToolCall("second", "reader", {"sequence": 2}),
+        ),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        events=sink,
+    ).run([Message(Role.USER, "batch")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert [call.id for call in tools.executed] == ["first", "second"]
+    kinds = [event.kind for event in sink.events]
+    first_completion = kinds.index(AgentEventKind.TOOL_CALL_COMPLETED)
+    assert kinds[:first_completion].count(AgentEventKind.TOOL_CALL_REQUESTED) == 2
+    assert kinds[:first_completion].count(AgentEventKind.POLICY_DECIDED) == 2
+
+
+@pytest.mark.asyncio
+async def test_policy_batch_budget_exhaustion_prevents_first_execution() -> None:
+    tools = PolicyTools()
+    result = await AgentRuntime(
+        batch_provider(
+            ToolCall("first", "reader", {"sequence": 1}),
+            ToolCall("second", "reader", {"sequence": 2}),
+        ),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        budget=RuntimeBudget(max_tool_calls=1),
+    ).run([Message(Role.USER, "batch")])
+
+    assert result.stop_reason is StopReason.TOOL_BUDGET_EXHAUSTED
+    assert tools.executed == []
