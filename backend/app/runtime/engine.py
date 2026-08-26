@@ -742,12 +742,17 @@ class AgentRuntime:
             )
             return StopReason.APPROVAL_UNAVAILABLE
 
+        approval_tool_call_id = native_binding.tool_call_id
+        approval_tool_name = tool_name
+        approval_arguments_hash = arguments_hash
+        approval_risk_classes = frozenset(decision.risk_classes)
+        approval_matched_rule_id = decision.matched_rule_id
         authorization_request = AuthorizationRequest(
-            tool_call_id=native_binding.tool_call_id,
-            tool_name=tool_name,
-            arguments_hash=arguments_hash,
-            risk_classes=decision.risk_classes,
-            matched_rule_id=decision.matched_rule_id,
+            tool_call_id=approval_tool_call_id,
+            tool_name=approval_tool_name,
+            arguments_hash=approval_arguments_hash,
+            risk_classes=approval_risk_classes,
+            matched_rule_id=approval_matched_rule_id,
         )
         approval_data = {
             "id": native_binding.tool_call_id,
@@ -801,9 +806,19 @@ class AgentRuntime:
             )
             return StopReason.APPROVAL_UNAVAILABLE
 
-        if not isinstance(outcome, AuthorizationOutcome) or not outcome.binds(
-            authorization_request
-        ):
+        request_binding_matches = (
+            authorization_request.tool_call_id == approval_tool_call_id
+            and authorization_request.tool_name == approval_tool_name
+            and authorization_request.arguments_hash == approval_arguments_hash
+            and authorization_request.risk_classes == approval_risk_classes
+            and authorization_request.matched_rule_id == approval_matched_rule_id
+        )
+        outcome_binding_matches = isinstance(outcome, AuthorizationOutcome) and (
+            outcome.tool_call_id == approval_tool_call_id
+            and outcome.tool_name == approval_tool_name
+            and outcome.arguments_hash == approval_arguments_hash
+        )
+        if not request_binding_matches or not outcome_binding_matches:
             await self._emit_approval_failure(
                 event_call, iteration, arguments_hash, "approval_binding_mismatch"
             )

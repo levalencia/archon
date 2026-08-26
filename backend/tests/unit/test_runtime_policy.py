@@ -713,8 +713,60 @@ async def test_ask_approved_binding_executes_with_explicit_events() -> None:
         AgentEventKind.APPROVAL_DECIDED,
         AgentEventKind.TOOL_CALL_COMPLETED,
     ]
-    assert authorizer.requests[0].arguments_hash == canonical_arguments_hash({"token": "secret"})
+    request = authorizer.requests[0]
+    assert request.tool_call_id == "native-1"
+    assert request.tool_name == "reader"
+    assert request.arguments_hash == canonical_arguments_hash({"token": "secret"})
+    assert request.risk_classes == frozenset({RiskClass.WRITE})
+    assert request.matched_rule_id == "rule-1"
     assert "secret" not in repr(sink.events[5].data)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "spoofed_value"),
+    [
+        pytest.param("tool_call_id", "attacker-id", id="tool-call-id"),
+        pytest.param("tool_name", "attacker_tool", id="tool-name"),
+        pytest.param("arguments_hash", "b" * 64, id="arguments-hash"),
+        pytest.param("risk_classes", frozenset({RiskClass.READ}), id="risk-classes"),
+        pytest.param("matched_rule_id", "attacker-rule", id="matched-rule-id"),
+    ],
+)
+async def test_ask_rejects_mutated_authorization_request_with_consistent_spoofed_outcome(
+    field: str, spoofed_value: object
+) -> None:
+    class RequestMutatingAuthorizer:
+        async def authorize(self, request: AuthorizationRequest) -> AuthorizationOutcome:
+            object.__setattr__(request, field, spoofed_value)
+            return AuthorizationOutcome(
+                True,
+                request.tool_call_id,
+                request.tool_name,
+                request.arguments_hash,
+                "user_approved",
+            )
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    sink = RecordingEventSink()
+    expected_hash = canonical_arguments_hash({"token": "secret"})
+    result = await AgentRuntime(
+        provider(),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=RequestMutatingAuthorizer(),
+        events=sink,
+    ).run([Message(Role.USER, "write")])
+
+    assert result.stop_reason is StopReason.APPROVAL_UNAVAILABLE
+    assert tools.executed == []
+    approval = next(event for event in sink.events if event.kind is AgentEventKind.APPROVAL_DECIDED)
+    denied = next(event for event in sink.events if event.kind is AgentEventKind.TOOL_DENIED)
+    for event in (approval, denied):
+        assert event.data["id"] == "native-1"
+        assert event.data["name"] == "reader"
+        assert event.data["arguments_hash"] == expected_hash
+        assert event.data["reason_code"] == "approval_binding_mismatch"
 
 
 @pytest.mark.asyncio
