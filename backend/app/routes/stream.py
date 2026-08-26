@@ -86,11 +86,15 @@ async def chat_stream_real(
     )
     run_context = replace(run_context, project_id=body.project_id)
     scoped_memory = request.app.state.scoped_memory
+    bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
+        user["user_id"], body.project_id
+    )
     tools = get_tool_registry(
         context=run_context,
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
+        bound_tools=bound_tools,
     )
     approval_broker: ApprovalBroker = request.app.state.approval_broker
 

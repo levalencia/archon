@@ -23,6 +23,7 @@ from app.eval.service import EvaluationService
 from app.mcp.inventory import MCPInventoryService
 from app.mcp.models import ServerProfile
 from app.mcp.repository import MCPRepository
+from app.mcp.runtime import MCPRuntimeToolProvider
 from app.memory.keys import decode_memory_master_key
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
@@ -133,6 +134,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.conversations = repository
     app.state.mcp_repository = MCPRepository(repository.session_factory)
     app.state.mcp_inventory = MCPInventoryService(
+        app.state.mcp_repository, profiles=app.state.mcp_profiles
+    )
+    app.state.mcp_runtime_tools = MCPRuntimeToolProvider(
         app.state.mcp_repository, profiles=app.state.mcp_profiles
     )
     app.state.evaluation_repository = EvaluationRepository(repository.session_factory)

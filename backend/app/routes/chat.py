@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any, cast
 
@@ -16,6 +17,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.mcp.runtime import MCPBoundToolSpec
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
@@ -60,6 +62,7 @@ def get_tool_registry(
     scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
     sandbox_executor: SandboxExecutor | None = None,
+    bound_tools: Sequence[MCPBoundToolSpec] = (),
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
     if _tools_singleton is not None:
@@ -69,6 +72,7 @@ def get_tool_registry(
         scoped_memory=scoped_memory,
         conversations=conversations,
         sandbox_executor=sandbox_executor,
+        bound_tools=bound_tools,
     )
 
 
@@ -102,6 +106,7 @@ def _create_tool_registry(
     scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
     sandbox_executor: SandboxExecutor | None = None,
+    bound_tools: Sequence[MCPBoundToolSpec] = (),
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
     registry = SecureToolRegistry()
@@ -300,6 +305,17 @@ def _create_tool_registry(
         risk_classes=frozenset({RiskClass.READ}),
     )
 
+    for spec in bound_tools:
+        registry.register(
+            name=spec.name,
+            handler=spec.handler,
+            description=spec.description,
+            input_schema=dict(spec.input_schema),
+            timeout=spec.timeout,
+            requires_approval=spec.requires_approval,
+            risk_classes=spec.risk_classes,
+        )
+
     return registry
 
 
@@ -369,11 +385,15 @@ async def chat(
     )
     run_context = replace(run_context, project_id=body.project_id)
     scoped_memory = request.app.state.scoped_memory
+    bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
+        user["user_id"], body.project_id
+    )
     tools = get_tool_registry(
         context=run_context,
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
+        bound_tools=bound_tools,
     )
 
     logger.info(
