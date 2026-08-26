@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.agents.agent import SYSTEM_PROMPT
@@ -13,8 +14,8 @@ from app.runtime.models import Message, Role
 async def build_messages(
     user_input: str,
     conversation_id: str,
-    memory,
-    tools,
+    memory: Any,
+    tools: Any,
     system_prompt_extra: str = "",
     images: list[str] | None = None,
     user_id: str = "default",

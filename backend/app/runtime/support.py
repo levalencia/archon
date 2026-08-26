@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 from app.runtime.context import build_messages
 from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
+from app.runtime.ports import ModelProvider
 
 
 class JsonModeProvider:
@@ -23,9 +24,10 @@ class JsonModeProvider:
         max_tokens: int = 4096,
         response_format: str | None = None,
     ) -> ModelResponse:
-        return await self._delegate.complete(
+        response: ModelResponse = await self._delegate.complete(
             messages, tools, max_tokens=max_tokens, response_format="json"
         )
+        return response
 
 
 class TextOnlyProvider:
@@ -49,8 +51,10 @@ class TextOnlyProvider:
         return ModelResponse(text, usage=TokenUsage(output_tokens=max(1, len(text.split()))))
 
 
-def as_model_provider(client: Any) -> Any:
-    return client if callable(getattr(client, "complete", None)) else TextOnlyProvider(client)
+def as_model_provider(client: Any) -> ModelProvider:
+    if callable(getattr(client, "complete", None)):
+        return cast(ModelProvider, client)
+    return TextOnlyProvider(client)
 
 
 async def prepare_messages(

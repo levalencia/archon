@@ -57,6 +57,8 @@ git clone https://github.com/levalencia/archon.git
 cd archon/backend
 uv sync --extra dev --extra llm
 cp .env.example .env
+# Edit .env and set ARCHON_ENCRYPTION_MASTER_KEY to a unique secret of at least 32 UTF-8 bytes.
+# Encrypted persistent memory is mandatory by default; startup fails safely without a valid key.
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Terminal 2, from the directory containing the clone
@@ -67,7 +69,7 @@ npm run dev -- --host 0.0.0.0
 
 Open `http://localhost:3000`.
 
-The default example configuration targets Ollama. Hosted providers require their own credentials. Never commit `.env` files or runtime memory/database files.
+The default example configuration targets Ollama. Hosted providers require their own credentials. Encrypted persistent memory is enabled by default and requires `ARCHON_ENCRYPTION_MASTER_KEY` to contain at least 32 UTF-8 bytes. Setting `ARCHON_MEMORY_ENCRYPTION_ENABLED=false` explicitly disables the persistent-memory API and removes the live memory tool rather than falling back to plaintext. Never commit `.env` files, encryption keys, or runtime memory/database files.
 
 ## Architecture
 

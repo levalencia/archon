@@ -54,6 +54,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: startup and shutdown."""
     settings = app.state.settings
 
+    # Validate before opening databases or initializing any other application resource.
+    if settings.memory_encryption_enabled:
+        key = settings.encryption_master_key
+        if not key or len(key.encode("utf-8")) < 32:
+            raise RuntimeError("Encrypted memory startup configuration is invalid")
+
     # Configure structured logging
     setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
 
@@ -76,10 +82,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
     if settings.memory_encryption_enabled:
-        if not settings.encryption_master_key:
-            raise RuntimeError(
-                "ARCHON_ENCRYPTION_MASTER_KEY is required when encrypted memory is enabled"
-            )
         app.state.scoped_memory = ScopedEncryptedMemoryRepository(
             auth_store.session_factory, settings.encryption_master_key
         )
@@ -148,7 +150,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(artifacts_router)
     app.include_router(images_router)
     app.include_router(research_router)
-    app.include_router(memory_router)
+    if settings.memory_encryption_enabled:
+        app.include_router(memory_router)
     app.include_router(multi_agent_router)
     app.include_router(compliance_router)
     app.include_router(mcp_router)

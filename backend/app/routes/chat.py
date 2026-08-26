@@ -10,12 +10,15 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import replace
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.agents.llm_factory import create_llm_client
+from app.config import Settings
+from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
 from app.routes.artifacts import get_artifact_store
@@ -43,11 +46,13 @@ from app.tools.web_search import web_search_tool
 logger = structlog.get_logger()
 
 # Singletons — created once, reused across requests
-_llm_singleton = None
-_tools_singleton = None  # Historical test override; production never populates this.
+_llm_singleton: Any = None
+_tools_singleton: SecureToolRegistry | None = (
+    None  # Historical test override; production never populates this.
+)
 
 
-def get_llm_client(settings):
+def get_llm_client(settings: Settings) -> Any:
     global _llm_singleton
     if _llm_singleton is None:
         _llm_singleton = create_llm_client(settings)
@@ -60,7 +65,7 @@ def get_llm_client(settings):
 def get_tool_registry(
     *,
     context: RunContext | None = None,
-    scoped_memory=None,
+    scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
@@ -81,10 +86,10 @@ class _NoOpContextOptimizer:
         self.max_tokens = max_tokens
         self.reserve_for_response = reserve_for_response
 
-    def optimize(self, messages: list[dict]) -> list[dict]:
+    def optimize(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return messages  # pass-through
 
-    def get_stats(self, messages: list[dict]) -> dict:
+    def get_stats(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         return {"total_tokens": 0, "utilization_pct": 0.0}
 
 
@@ -92,13 +97,13 @@ _context_optimizer = _NoOpContextOptimizer(max_tokens=200000, reserve_for_respon
 
 
 def get_conversation_repository(request: Request) -> ConversationRepository:
-    return request.app.state.conversations
+    return cast(ConversationRepository, request.app.state.conversations)
 
 
 def _create_tool_registry(
     *,
     context: RunContext | None = None,
-    scoped_memory=None,
+    scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
@@ -177,29 +182,41 @@ def _create_tool_registry(
         risk_classes=frozenset({RiskClass.NETWORK, RiskClass.EXTERNAL_SIDE_EFFECT}),
     )
 
-    memory_handler = (
-        create_memory_tool(scoped_memory, context) if context is not None else memory_tool
-    )
-    registry.register(
-        name="memory",
-        handler=memory_handler,
-        description=(
-            "Save/recall persistent facts about the user. "
-            "Actions: add (content=fact), remove (old_text=substring), "
-            "replace (old_text=old, content=new), list (no args). "
-            "Example: memory(action='add', content='User is 47 years old')"
-        ),
-        input_schema={
-            "required": ["action"],
-            "properties": {
-                "action": {"type": "string", "enum": ["add", "remove", "replace", "list"]},
-                "content": {"type": "string", "description": "The fact to save (add/replace)"},
-                "old_text": {"type": "string", "description": "Substring to find (remove/replace)"},
+    # Context-free construction is retained for registry metadata compatibility only.
+    # Every live request has a context, and disabled mode therefore omits the tool entirely.
+    if context is None or scoped_memory is not None:
+        memory_handler = (
+            create_memory_tool(scoped_memory, context) if context is not None else memory_tool
+        )
+        registry.register(
+            name="memory",
+            handler=memory_handler,
+            description=(
+                "Save/recall persistent facts about the user. "
+                "Actions: add (content=fact), remove (old_text=substring), "
+                "replace (old_text=old, content=new), list (no args). "
+                "Example: memory(action='add', content='User is 47 years old')"
+            ),
+            input_schema={
+                "required": ["action"],
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "remove", "replace", "list"],
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The fact to save (add/replace)",
+                    },
+                    "old_text": {
+                        "type": "string",
+                        "description": "Substring to find (remove/replace)",
+                    },
+                },
             },
-        },
-        requires_approval=True,
-        risk_classes=frozenset({RiskClass.READ, RiskClass.WRITE}),
-    )
+            requires_approval=True,
+            risk_classes=frozenset({RiskClass.READ, RiskClass.WRITE}),
+        )
 
     session_handler = (
         create_session_search_tool(conversations, context)
@@ -220,7 +237,7 @@ def _create_tool_registry(
         risk_classes=frozenset({RiskClass.READ}),
     )
 
-    async def _code_execute_handler(code: str) -> dict:
+    async def _code_execute_handler(code: str) -> dict[str, Any]:
         return await execute_sandboxed(code)
 
     registry.register(
@@ -257,7 +274,7 @@ def _create_tool_registry(
         risk_classes=frozenset({RiskClass.EXECUTE}),
     )
 
-    async def _background_task_handler(action: str, task_id: str = "") -> dict:
+    async def _background_task_handler(action: str, task_id: str = "") -> dict[str, Any]:
         """Manage background tasks: submit, status, list."""
         queue = get_task_queue()
         if action == "list":
@@ -301,19 +318,19 @@ class ChatResponse(BaseModel):
     conversation_id: str
     correlation_id: str
     iterations: int
-    tool_calls: list[dict]
+    tool_calls: list[dict[str, Any]]
     tokens_used: int
-    thinking_steps: list[dict]
-    skills_used: list[dict]
+    thinking_steps: list[dict[str, Any]]
+    skills_used: list[dict[str, Any]]
     image_analyzed: bool = False
-    artifacts: list[dict] = []
+    artifacts: list[dict[str, Any]] = []
 
 
 @router.post("", response_model=ChatResponse)
 async def chat(
     body: ChatRequest,
     request: Request,
-    user: dict = Depends(get_current_user),  # noqa: B008
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> ChatResponse:
     """Send a message. The agent reasons with tools and skills, returns thinking steps."""
     cid = get_correlation_id()
@@ -484,7 +501,7 @@ async def chat(
         conversation_id=conv_id,
         correlation_id=cid,
         iterations=result.iterations,
-        tool_calls=result.tool_calls,
+        tool_calls=list(result.tool_calls),
         tokens_used=result.usage.total_tokens,
         thinking_steps=thinking_steps,
         skills_used=skills_used,
@@ -497,8 +514,8 @@ async def chat(
 async def get_history(
     conversation_id: str,
     request: Request,
-    user: dict = Depends(get_current_user),  # noqa: B008
-) -> dict:
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
     """Get conversation history."""
     repository = get_conversation_repository(request)
     if await repository.get(conversation_id, user["user_id"]) is None:

@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from sqlalchemy import delete, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.db_store import MemoryFactRow
@@ -69,15 +70,13 @@ class ScopedEncryptedMemoryRepository:
 
     def _key(self, user_id: str, project_id: str, version: int) -> bytes:
         info = b"archon/memory/v1\0" + user_id.encode() + b"\0" + project_id.encode()
-        return cast(
-            bytes,
-            HKDF(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=b"archon-scoped-memory-hkdf-v1",
-                info=info + b"\0" + str(version).encode(),
-            ).derive(self._master_key),
-        )
+        derived_key: bytes = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=b"archon-scoped-memory-hkdf-v1",
+            info=info + b"\0" + str(version).encode(),
+        ).derive(self._master_key)
+        return derived_key
 
     @staticmethod
     def _aad(user_id: str, project_id: str, fact_id: str, version: int) -> bytes:
@@ -107,11 +106,8 @@ class ScopedEncryptedMemoryRepository:
             sort_keys=True,
         ).encode("utf-8")
         nonce = os.urandom(_NONCE_BYTES)
-        encrypted = cast(
-            bytes,
-            AESGCM(self._key(user_id, project_id, _KEY_VERSION)).encrypt(
-                nonce, payload, self._aad(user_id, project_id, fact_id, _KEY_VERSION)
-            ),
+        encrypted: bytes = AESGCM(self._key(user_id, project_id, _KEY_VERSION)).encrypt(
+            nonce, payload, self._aad(user_id, project_id, fact_id, _KEY_VERSION)
         )
         return bytes([_KEY_VERSION]) + nonce + encrypted
 
@@ -127,18 +123,18 @@ class ScopedEncryptedMemoryRepository:
                 ciphertext,
                 self._aad(row.user_id, row.project_id, row.id, row.key_version),
             )
-            payload: Any = json.loads(cleartext)
-            content = payload["content"]
-            provenance = payload["provenance"]
-            if (
-                not isinstance(content, str)
-                or not isinstance(provenance, dict)
-                or not all(
-                    isinstance(key, str) and isinstance(value, str)
-                    for key, value in provenance.items()
-                )
-            ):
+            decoded: object = json.loads(cleartext)
+            if not isinstance(decoded, dict):
                 raise ValueError("invalid payload")
+            content = decoded.get("content")
+            raw_provenance = decoded.get("provenance")
+            if not isinstance(content, str) or not isinstance(raw_provenance, dict):
+                raise ValueError("invalid payload")
+            provenance: dict[str, str] = {}
+            for key, value in raw_provenance.items():
+                if not isinstance(key, str) or not isinstance(value, str):
+                    raise ValueError("invalid payload")
+                provenance[key] = value
         except (
             InvalidTag,
             UnicodeDecodeError,
@@ -263,7 +259,8 @@ class ScopedEncryptedMemoryRepository:
                     )
                 )
                 await session.commit()
-                return int(result.rowcount or 0)
+                cursor_result = cast(CursorResult[Any], result)
+                return int(cursor_result.rowcount or 0)
 
     async def delete_all(self, user_id: str, project_id: str) -> int:
         async with self._sessions() as session:
@@ -273,7 +270,8 @@ class ScopedEncryptedMemoryRepository:
                 )
             )
             await session.commit()
-            return int(result.rowcount or 0)
+            cursor_result = cast(CursorResult[Any], result)
+            return int(cursor_result.rowcount or 0)
 
     async def export(self, user_id: str, project_id: str) -> tuple[MemoryFact, ...]:
         return await self.list(user_id, project_id)

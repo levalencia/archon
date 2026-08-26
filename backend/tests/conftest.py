@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from app.config import Settings
+
+TEST_MEMORY_ENCRYPTION_KEY = "test-memory-encryption-key-32-bytes-minimum"
+os.environ["ARCHON_ENCRYPTION_MASTER_KEY"] = TEST_MEMORY_ENCRYPTION_KEY
 
 
 @pytest.fixture(autouse=True)

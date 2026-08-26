@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
+from app.memory.persistent import SessionStore
 from app.memory.scoped import MemoryLimitError, ScopedEncryptedMemoryRepository
 from app.runtime.factory import RunContext
 from app.services.conversations import ConversationRepository
@@ -21,7 +22,7 @@ def _provenance(context: RunContext, action: str) -> dict[str, str]:
 
 def create_memory_tool(
     repository: ScopedEncryptedMemoryRepository | None, context: RunContext
-) -> Callable[..., Any]:
+) -> Callable[..., Awaitable[str]]:
     """Bind encrypted memory operations to an immutable request context."""
 
     async def memory_tool(action: str, content: str = "", old_text: str = "") -> str:
@@ -77,7 +78,7 @@ def create_memory_tool(
 
 def create_session_search_tool(
     repository: ConversationRepository, context: RunContext
-) -> Callable[..., Any]:
+) -> Callable[..., Awaitable[str]]:
     """Bind conversation search to the authenticated owner for this request."""
 
     async def session_search_tool(query: str, limit: int = 3) -> str:
@@ -91,7 +92,7 @@ def create_session_search_tool(
 
 
 # Historical entry points remain outside live request wiring.
-def get_session_store():
+def get_session_store() -> SessionStore:
     """Compatibility hook for historical tests; never used by live request registries."""
     from app.memory.persistent import get_session_store as legacy_get_session_store
 

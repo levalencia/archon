@@ -5,9 +5,12 @@ Exposes the memory subsystem to the frontend dashboard.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.memory.checkpoints import CheckpointManager
+from app.memory.scoped import MemoryFact, ScopedEncryptedMemoryRepository
 from app.security.auth import get_current_user
 
 router = APIRouter(prefix="/api/memory", tags=["memory"], dependencies=[Depends(get_current_user)])
@@ -23,7 +26,7 @@ def _project_id(
     return value
 
 
-def _serialize_fact(fact) -> dict:
+def _serialize_fact(fact: MemoryFact) -> dict[str, Any]:
     return {
         "id": fact.id,
         "content": fact.content,
@@ -37,10 +40,10 @@ def _serialize_fact(fact) -> dict:
 async def list_memory_facts(
     request: Request,
     project_id: str = Depends(_project_id),
-    user: dict = Depends(get_current_user),  # noqa: B008
-) -> dict:
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
     """List decrypted facts in the authenticated owner/project scope."""
-    repository = request.app.state.scoped_memory
+    repository = cast(ScopedEncryptedMemoryRepository | None, request.app.state.scoped_memory)
     if repository is None:
         raise HTTPException(status_code=503, detail="Persistent memory is disabled")
     facts = await repository.list(user["user_id"], project_id)
@@ -51,10 +54,10 @@ async def list_memory_facts(
 async def export_memory_facts(
     request: Request,
     project_id: str = Depends(_project_id),
-    user: dict = Depends(get_current_user),  # noqa: B008
-) -> dict:
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
     """Export the authenticated owner's decrypted facts and encrypted provenance."""
-    repository = request.app.state.scoped_memory
+    repository = cast(ScopedEncryptedMemoryRepository | None, request.app.state.scoped_memory)
     if repository is None:
         raise HTTPException(status_code=503, detail="Persistent memory is disabled")
     facts = await repository.export(user["user_id"], project_id)
@@ -65,10 +68,10 @@ async def export_memory_facts(
 async def delete_memory_facts(
     request: Request,
     project_id: str = Depends(_project_id),
-    user: dict = Depends(get_current_user),  # noqa: B008
-) -> dict:
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
     """Delete every fact in exactly one authenticated owner/project scope."""
-    repository = request.app.state.scoped_memory
+    repository = cast(ScopedEncryptedMemoryRepository | None, request.app.state.scoped_memory)
     if repository is None:
         raise HTTPException(status_code=503, detail="Persistent memory is disabled")
     deleted = await repository.delete_all(user["user_id"], project_id)
@@ -76,7 +79,7 @@ async def delete_memory_facts(
 
 
 @router.get("/tiers")
-async def get_memory_tiers() -> dict:
+async def get_memory_tiers() -> dict[str, Any]:
     """Return memory tier descriptions and status.
 
     The tiers are architectural — we report their design, not live metrics
@@ -110,7 +113,7 @@ async def get_memory_tiers() -> dict:
 
 
 @router.get("/context")
-async def get_context_window() -> dict:
+async def get_context_window() -> dict[str, Any]:
     """Return context window usage estimate.
 
     In a real deployment this would reflect the active conversation's
@@ -129,9 +132,9 @@ async def get_context_window() -> dict:
 
 
 @router.get("/checkpoints")
-async def list_checkpoints() -> dict:
+async def list_checkpoints() -> dict[str, Any]:
     """Return all saved checkpoints across conversations."""
-    all_cps: list[dict] = []
+    all_cps: list[dict[str, Any]] = []
     for cps in _checkpoint_mgr._checkpoints.values():
         all_cps.extend(cp.to_dict() for cp in cps)
     all_cps.sort(key=lambda c: c["created_at"], reverse=True)
