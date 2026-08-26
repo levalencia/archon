@@ -42,109 +42,53 @@ def admin_client() -> Iterator[TestClient]:
 # ---------------------------------------------------------------------------
 
 
-def test_ab_test_returns_two_variants():
-    with admin_client() as api:
-        resp = api.post(
-            "/api/security/ab-test",
-            json={"question": "What is Python?", "models": ["model-a", "model-b"]},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["question"] == "What is Python?"
-        assert len(data["variants"]) == 2
-        names = [v["name"] for v in data["variants"]]
-        assert "model-a" in names
-        assert "model-b" in names
-        for v in data["variants"]:
-            assert v["samples"] == 1
-            assert "avg_score" in v
-
-
-def test_ab_test_single_model_duplicated():
-    """When only one model is provided, it should still work (same model both sides)."""
-    with admin_client() as api:
-        resp = api.post(
-            "/api/security/ab-test",
-            json={"question": "Hello?", "models": ["only-model", "only-model"]},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["variants"]) == 2
-
-
-def test_ab_test_custom_prompts():
-    with admin_client() as api:
-        resp = api.post(
-            "/api/security/ab-test",
-            json={
+@pytest.mark.parametrize(
+    ("endpoint", "payload"),
+    [
+        ("ab-test", {"question": "What is Python?", "models": ["model-a", "model-b"]}),
+        ("ab-test", {"question": "Hello?", "models": ["only-model", "only-model"]}),
+        (
+            "ab-test",
+            {
                 "question": "Explain AI",
                 "models": ["gpt-4", "claude"],
                 "system_prompt_a": "Be concise.",
                 "system_prompt_b": "Be verbose.",
             },
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["test_name"].startswith("ab-")
-
-
-# ---------------------------------------------------------------------------
-# TASK 2: Eval harness endpoint tests
-# ---------------------------------------------------------------------------
-
-
-def test_harness_batch_returns_results():
-    with admin_client() as api:
-        resp = api.post(
-            "/api/security/harness",
-            json={
+        ),
+        (
+            "harness",
+            {
                 "test_cases": [
                     {"question": "What is 2+2?", "expected_contains": ["answer"]},
                     {"question": "Explain gravity", "context": "physics"},
-                ],
+                ]
             },
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["total"] == 2
-        assert data["passed"] + data["failed"] == 2
-        assert 0.0 <= data["pass_rate"] <= 1.0
-        assert len(data["results"]) == 2
-        for r in data["results"]:
-            assert "case_id" in r
-            assert "score" in r
-
-
-def test_harness_with_expected_answer():
-    with admin_client() as api:
-        resp = api.post(
-            "/api/security/harness",
-            json={
+        ),
+        (
+            "harness",
+            {
                 "test_cases": [
                     {
                         "question": "Capital of France?",
                         "expected_answer": "Paris",
                         "expected_contains": ["Paris"],
-                    },
+                    }
                 ],
                 "quality_threshold": 0.0,
             },
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["total"] == 1
-
-
-def test_harness_empty_cases():
+        ),
+        ("harness", {"test_cases": []}),
+    ],
+)
+def test_fabricated_live_evaluation_routes_are_retired(endpoint: str, payload: dict) -> None:
     with admin_client() as api:
-        resp = api.post(
-            "/api/security/harness",
-            json={"test_cases": []},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["total"] == 0
-        assert data["pass_rate"] == 0.0
+        response = api.post(f"/api/security/{endpoint}", json=payload)
+        assert response.status_code == 410
+        body = response.json()
+        assert "/api/evals/runs" in body["detail"]
+        assert "variants" not in body
+        assert "results" not in body
 
 
 # ---------------------------------------------------------------------------

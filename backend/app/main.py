@@ -17,6 +17,8 @@ load_dotenv()
 
 from app.agents.llm_factory import create_llm_client
 from app.config import Settings, get_settings
+from app.eval.persistence import EvaluationRepository
+from app.eval.service import EvaluationService
 from app.memory.keys import decode_memory_master_key
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
@@ -32,6 +34,7 @@ from app.routes.chat import router as chat_router
 from app.routes.compliance import router as compliance_router
 from app.routes.conversations import router as conversations_router
 from app.routes.documents import router as documents_router
+from app.routes.evaluations import router as evaluations_router
 from app.routes.images import router as images_router
 from app.routes.log_stream import router as log_router
 from app.routes.mcp import router as mcp_router
@@ -124,6 +127,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     repository = ConversationRepository(settings.database_url, redactor)
     await repository.initialize()
     app.state.conversations = repository
+    app.state.evaluation_repository = EvaluationRepository(repository.session_factory)
+    app.state.evaluation_service = EvaluationService(
+        repository.runs, app.state.evaluation_repository
+    )
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
@@ -267,6 +274,7 @@ def create_app(
     app.include_router(mcp_router)
     app.include_router(tasks_router)
     app.include_router(runs_router)
+    app.include_router(evaluations_router)
 
     @app.get("/metrics")
     async def prometheus_metrics():
