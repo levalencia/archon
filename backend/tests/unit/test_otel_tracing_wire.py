@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.runtime_events import CompositeEventSink
 from app.observability.tracing import Span, Tracer
 from app.runtime import AgentEvent, AgentEventKind, TokenUsage
+from app.security.persistence_redactor import PersistenceRedactor
 
 
 class Clock:
@@ -38,6 +40,8 @@ async def test_otel_exporter_receives_spans_when_wired():
     sink = CompositeEventSink(
         conversation_id="conv-otel-1",
         model="test-model",
+        redactor=PersistenceRedactor(),
+        log_buffer=OwnerLogBuffer(),
         tracer=tracer,
         exporter=exporter,
         clock=clock,
@@ -84,6 +88,8 @@ async def test_otel_exporter_receives_tool_spans():
     sink = CompositeEventSink(
         conversation_id="conv-otel-2",
         model="test-model",
+        redactor=PersistenceRedactor(),
+        log_buffer=OwnerLogBuffer(),
         tracer=tracer,
         exporter=exporter,
         clock=clock,
@@ -134,6 +140,8 @@ async def test_no_exporter_means_no_export():
     sink = CompositeEventSink(
         conversation_id="conv-otel-3",
         model="test-model",
+        redactor=PersistenceRedactor(),
+        log_buffer=OwnerLogBuffer(),
         tracer=tracer,
         exporter=None,
         clock=clock,

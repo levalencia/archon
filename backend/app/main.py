@@ -15,11 +15,13 @@ from fastapi.responses import JSONResponse
 
 load_dotenv()
 
+from app.agents.llm_factory import create_llm_client
 from app.config import Settings, get_settings
 from app.memory.keys import decode_memory_master_key
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
+from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.logging import setup_logging
 from app.observability.otel_exporter import OTLPExporter
 from app.research.api import router as research_router
@@ -31,7 +33,6 @@ from app.routes.compliance import router as compliance_router
 from app.routes.conversations import router as conversations_router
 from app.routes.documents import router as documents_router
 from app.routes.images import router as images_router
-from app.routes.log_stream import install_log_capture
 from app.routes.log_stream import router as log_router
 from app.routes.mcp import router as mcp_router
 from app.routes.memory import router as memory_router
@@ -73,7 +74,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Configure structured logging
     setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
 
-    install_log_capture()
     logger.info(
         "archon_starting",
         app=settings.app_name,
@@ -87,6 +87,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.settings = settings
     redactor = app.state.persistence_redactor_factory()
     app.state.persistence_redactor = redactor
+    app.state.log_buffer = OwnerLogBuffer()
     repository = ConversationRepository(settings.database_url, redactor)
     await repository.initialize()
     app.state.conversations = repository
@@ -129,8 +130,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             window_seconds=settings.rate_limit_window,
         )
 
-    from app.routes.chat import get_llm_client
-
     breaker = CircuitBreaker(
         settings.circuit_breaker_failure_threshold,
         settings.circuit_breaker_recovery_timeout,
@@ -138,7 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.provider_breaker = breaker
     app.state.model_provider = CircuitBreakingProvider(
-        as_model_provider(get_llm_client(settings)), breaker
+        as_model_provider(app.state.model_provider_factory(settings)), breaker
     )
     exporter = None
     if settings.otel_endpoint:
@@ -159,6 +158,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     persistence_redactor_factory: Callable[[], PersistenceRedactor] = PersistenceRedactor,
+    model_provider_factory: Callable[[Settings], object] = create_llm_client,
 ) -> FastAPI:
     """Application factory. Accepts optional settings for testing."""
     if settings is None:
@@ -171,6 +171,7 @@ def create_app(
     )
     app.state.settings = settings
     app.state.persistence_redactor_factory = persistence_redactor_factory
+    app.state.model_provider_factory = model_provider_factory
 
     # --- Middleware (order matters: last added = first executed) ---
 

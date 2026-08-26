@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.logging import redact_event
 from app.observability.metrics import get_metrics_snapshot, reset_metrics
 from app.observability.runtime_events import CompositeEventSink
@@ -46,6 +47,8 @@ async def test_exact_event_to_metric_span_and_correlation_mapping() -> None:
         correlation_id="correlation-1",
         run_id="run-1",
         model="model-1",
+        redactor=PersistenceRedactor(),
+        log_buffer=OwnerLogBuffer(),
         repository=repository,
         tracer=tracer,
         clock=clock,
@@ -121,7 +124,13 @@ async def test_error_timeout_event_marks_metrics_and_spans() -> None:
     clock = Clock()
     tracer = Tracer()
     sink = CompositeEventSink(
-        conversation_id="conversation-1", run_id="run-1", model="model", tracer=tracer, clock=clock
+        conversation_id="conversation-1",
+        run_id="run-1",
+        model="model",
+        redactor=PersistenceRedactor(),
+        log_buffer=OwnerLogBuffer(),
+        tracer=tracer,
+        clock=clock,
     )
     await sink.emit(AgentEvent(AgentEventKind.RUN_STARTED, 0))
     clock.value = 2.0

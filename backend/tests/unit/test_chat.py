@@ -30,10 +30,8 @@ def reset_singletons():
     """Reset LLM and tool singletons before each test."""
     from app.routes import chat
 
-    chat._llm_singleton = None
     chat._tools_singleton = None
     yield
-    chat._llm_singleton = None
     chat._tools_singleton = None
 
 

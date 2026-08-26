@@ -23,6 +23,7 @@ from app.observability.cost_tracker import CostTracker
 from app.observability.logging import get_correlation_id
 from app.routes.chat import (
     get_conversation_repository,
+    get_model_provider,
     get_skill_registry,
     get_skills_top_k,
     get_tool_registry,
@@ -67,6 +68,7 @@ async def chat_stream_real(
     body: StreamRequest,
     request: Request,
     user: dict = Depends(get_current_user),  # noqa: B008
+    app_provider: Any = Depends(get_model_provider),  # noqa: B008
 ) -> StreamingResponse:
     await enforce_rate_limit(request, user, "chat")
     settings = request.app.state.settings
@@ -139,7 +141,7 @@ async def chat_stream_real(
 
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
 
-        provider = request.app.state.model_provider
+        provider = app_provider
         if json_mode:
             from app.runtime.support import JsonModeProvider
 
@@ -152,6 +154,8 @@ async def chat_stream_real(
             settings=settings,
             repository=memory,
             exporter=request.app.state.otel_exporter,
+            redactor=request.app.state.persistence_redactor,
+            log_buffer=request.app.state.log_buffer,
             downstream=QueueEventSink(queue),
             authorizer=approval_broker.authorizer(run_context),
         )

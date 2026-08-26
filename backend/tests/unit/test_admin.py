@@ -89,3 +89,14 @@ class TestAdminMetrics:
     def test_get_circuit_breakers(self, client: TestClient) -> None:
         response = client.get("/api/admin/circuit-breakers")
         assert response.status_code == 200
+        assert response.json()["mock"]["state"] == "closed"
+
+    @pytest.mark.unit
+    def test_reset_uses_the_app_breaker(self, client: TestClient) -> None:
+        breaker = client.app.state.provider_breaker  # type: ignore[union-attr]
+        breaker._failure_count = 3
+        response = client.post("/api/admin/circuit-breakers/mock/reset")
+        assert response.status_code == 200
+        assert breaker.get_stats()["failure_count"] == 0
+        metrics = client.get("/api/admin/metrics").json()
+        assert metrics["circuit_breakers"]["mock"]["state"] == "closed"

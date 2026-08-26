@@ -1,79 +1,41 @@
-"""Live backend log stream via SSE.
-
-Captures structlog output and streams to frontend in real-time.
-"""
+"""Authenticated, owner-scoped live operational logs."""
 
 from __future__ import annotations
 
 import asyncio
 import json
-import time
-from collections import deque
-from contextlib import suppress
+from collections.abc import AsyncIterator
+from typing import Any, cast
 
-import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Request
 from starlette.responses import StreamingResponse
 
+from app.observability.log_buffer import OwnerLogBuffer
 from app.security.auth import get_current_user
 
-logger = structlog.get_logger()
-
-router = APIRouter(prefix="/api/logs", tags=["logs"], dependencies=[Depends(get_current_user)])
-
-# Circular buffer of recent logs + subscriber queues
-_log_buffer: deque[dict] = deque(maxlen=200)
-_subscribers: list[asyncio.Queue] = []
+router = APIRouter(prefix="/api/logs", tags=["logs"])
 
 
-class LogCapture:
-    """Structlog processor that captures logs for streaming."""
-
-    def __call__(self, logger_obj, method_name, event_dict):
-        entry = {
-            "ts": time.strftime("%H:%M:%S"),
-            "level": method_name,
-            "event": event_dict.get("event", ""),
-            "data": {
-                k: str(v)[:200]
-                for k, v in event_dict.items()
-                if k not in ("event", "timestamp", "_record", "_from_structlog")
-            },
-        }
-        _log_buffer.append(entry)
-
-        # Push to all subscribers
-        for q in _subscribers[:]:
-            with suppress(asyncio.QueueFull):
-                q.put_nowait(entry)
-
-        return event_dict
-
-
-def install_log_capture():
-    """Add LogCapture processor to structlog chain."""
-    current = structlog.get_config().get("processors", [])
-    # Insert our capture before the last processor (renderer)
-    if not any(isinstance(p, LogCapture) for p in current):
-        capture = LogCapture()
-        new_processors = current[:-1] + [capture] + current[-1:]
-        structlog.configure(processors=new_processors)
-        logger.info("log_capture_installed")
+def _visibility(user: dict[str, Any], all_users: bool) -> tuple[str, bool]:
+    """Admins may explicitly request all owners; everyone defaults to their own logs."""
+    return str(user["user_id"]), bool(all_users and user.get("is_admin") is True)
 
 
 @router.get("/stream")
-async def stream_logs():
-    """SSE endpoint for real-time backend logs."""
-    queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-    _subscribers.append(queue)
+async def stream_logs(
+    request: Request,
+    all_users: bool = Query(default=False),
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> StreamingResponse:
+    """Stream this owner's logs, or all app-local logs when explicitly requested by an admin."""
+    buffer = cast(OwnerLogBuffer, request.app.state.log_buffer)
+    owner_id, include_all = _visibility(user, all_users)
+    queue = buffer.subscribe(owner_id=owner_id, include_all=include_all)
 
-    async def event_stream():
+    async def event_stream() -> AsyncIterator[str]:
         try:
-            # Send buffered logs first
-            for entry in list(_log_buffer)[-50:]:
+            for entry in buffer.recent(owner_id=owner_id, include_all=include_all, limit=50):
                 yield f"data: {json.dumps(entry, ensure_ascii=False)}\n\n"
-
-            # Stream new logs
             while True:
                 try:
                     entry = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -81,8 +43,7 @@ async def stream_logs():
                 except TimeoutError:
                     yield ": heartbeat\n\n"
         finally:
-            if queue in _subscribers:
-                _subscribers.remove(queue)
+            buffer.unsubscribe(queue)
 
     return StreamingResponse(
         event_stream(),
@@ -92,6 +53,13 @@ async def stream_logs():
 
 
 @router.get("/recent")
-async def recent_logs(limit: int = 50):
-    """Get recent logs (non-streaming)."""
-    return list(_log_buffer)[-limit:]
+async def recent_logs(
+    request: Request,
+    limit: int = Query(default=50, ge=0, le=200),
+    all_users: bool = Query(default=False),
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> list[dict[str, Any]]:
+    """Return app-local recent logs visible to the authenticated owner."""
+    owner_id, include_all = _visibility(user, all_users)
+    buffer = cast(OwnerLogBuffer, request.app.state.log_buffer)
+    return buffer.recent(owner_id=owner_id, include_all=include_all, limit=limit)

@@ -20,8 +20,6 @@ from app.runtime.models import Message, ModelResponse, ToolDefinition
 def authenticated_client(
     tmp_path, responses: list[str | ModelResponse], **overrides: object
 ) -> Iterator[TestClient]:
-    from app.routes import chat
-
     database = tmp_path / f"live-{uuid.uuid4().hex}.db"
     settings = Settings(
         llm_provider="mock",
@@ -29,19 +27,15 @@ def authenticated_client(
         database_url=f"sqlite+aiosqlite:///{database}",
         **overrides,
     )
-    chat._llm_singleton = MockLLM(responses)
-    try:
-        with TestClient(create_app(settings)) as client:
-            token = client.post(
-                "/api/auth/register",
-                json={"username": f"user-{uuid.uuid4().hex}", "password": "secret1"},
-            ).json()["access_token"]
-            client.headers.update({"Authorization": f"Bearer {token}"})
-            client.database_path = database  # type: ignore[attr-defined]
-            yield client
-    finally:
-        chat._llm_singleton = None
-        chat._tools_singleton = None
+    app = create_app(settings, model_provider_factory=lambda _settings: MockLLM(responses))
+    with TestClient(app) as client:
+        token = client.post(
+            "/api/auth/register",
+            json={"username": f"user-{uuid.uuid4().hex}", "password": "secret1"},
+        ).json()["access_token"]
+        client.headers.update({"Authorization": f"Bearer {token}"})
+        client.database_path = database  # type: ignore[attr-defined]
+        yield client
 
 
 def raw_database_text(path: object) -> str:
@@ -202,10 +196,7 @@ def test_sync_failure_opens_shared_breaker_and_sse_does_not_call_delegate(tmp_pa
             self.calls += 1
             raise RuntimeError(secret)
 
-    from app.routes import chat
-
     provider = FailingProvider()
-    chat._llm_singleton = provider
     settings = Settings(
         llm_provider="mock",
         debug=True,
@@ -213,25 +204,117 @@ def test_sync_failure_opens_shared_breaker_and_sse_does_not_call_delegate(tmp_pa
         circuit_breaker_failure_threshold=1,
         circuit_breaker_recovery_timeout=60,
     )
-    try:
-        with TestClient(create_app(settings)) as client:
-            token = client.post(
-                "/api/auth/register", json={"username": "breaker-user", "password": "secret1"}
-            ).json()["access_token"]
-            client.headers.update({"Authorization": f"Bearer {token}"})
-            sync = client.post("/api/chat", json={"message": "prompt secret"})
-            assert sync.status_code == 200
-            assert client.app.state.provider_breaker.state.value == "open"
-            calls_after_open = provider.calls
+    app = create_app(settings, model_provider_factory=lambda _settings: provider)
+    with TestClient(app) as client:
+        token = client.post(
+            "/api/auth/register", json={"username": "breaker-user", "password": "secret1"}
+        ).json()["access_token"]
+        client.headers.update({"Authorization": f"Bearer {token}"})
+        sync = client.post("/api/chat", json={"message": "prompt secret"})
+        assert sync.status_code == 200
+        assert client.app.state.provider_breaker.state.value == "open"
+        calls_after_open = provider.calls
 
-            stream = client.post("/api/chat/stream", json={"message": "another prompt secret"})
-            readiness = client.get("/readyz")
+        stream = client.post("/api/chat/stream", json={"message": "another prompt secret"})
+        readiness = client.get("/readyz")
 
-        assert provider.calls == calls_after_open == 1
-        assert secret not in sync.text
-        assert secret not in stream.text
-        assert "prompt secret" not in stream.text
-        assert readiness.status_code == 200
-        assert readiness.json()["dependencies"]["model_provider_circuit"] == "open"
-    finally:
-        chat._llm_singleton = None
+    assert provider.calls == calls_after_open == 1
+    assert secret not in sync.text
+    assert secret not in stream.text
+    assert "prompt secret" not in stream.text
+    assert readiness.status_code == 200
+    assert readiness.json()["dependencies"]["model_provider_circuit"] == "open"
+
+
+@pytest.mark.integration
+def test_runtime_logs_are_redacted_owner_scoped_and_app_isolated(tmp_path, capsys) -> None:
+    secrets = (
+        "owner.one@example.com",
+        "123-45-6789",
+        "4111-1111-1111-1111",
+        "202-555-0147",
+    )
+    raw_answer = " | ".join(secrets)
+    settings_a = Settings(
+        llm_provider="mock",
+        debug=True,
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'logs-a.db'}",
+    )
+    settings_b = Settings(
+        llm_provider="mock",
+        debug=True,
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'logs-b.db'}",
+    )
+    app_a = create_app(settings_a, model_provider_factory=lambda _settings: MockLLM([raw_answer]))
+    app_b = create_app(
+        settings_b, model_provider_factory=lambda _settings: MockLLM(["app-b-response"])
+    )
+
+    with TestClient(app_a) as first, TestClient(app_b) as second:
+        alice = first.post(
+            "/api/auth/register", json={"username": "alice", "password": "secret1"}
+        ).json()
+        bob = first.post(
+            "/api/auth/register", json={"username": "bob", "password": "secret1"}
+        ).json()
+        admin = first.post(
+            "/api/auth/register", json={"username": "admin", "password": "valid-password-123"}
+        ).json()
+        other = second.post(
+            "/api/auth/register", json={"username": "other", "password": "secret1"}
+        ).json()
+        alice_headers = {"Authorization": f"Bearer {alice['access_token']}"}
+        bob_headers = {"Authorization": f"Bearer {bob['access_token']}"}
+        admin_headers = {"Authorization": f"Bearer {admin['access_token']}"}
+        other_headers = {"Authorization": f"Bearer {other['access_token']}"}
+
+        response = first.post("/api/chat", json={"message": "hello"}, headers=alice_headers)
+        assert response.json()["response"] == raw_answer
+        alice_logs = first.get("/api/logs/recent", headers=alice_headers).json()
+        bob_logs = first.get("/api/logs/recent?all_users=true", headers=bob_headers).json()
+        admin_logs = first.get("/api/logs/recent?all_users=true", headers=admin_headers).json()
+        other_logs = second.get("/api/logs/recent", headers=other_headers).json()
+
+        assert alice_logs
+        encoded = str(alice_logs)
+        assert all(secret not in encoded for secret in secrets)
+        assert all(token in encoded for token in ("[EMAIL]", "[SSN]", "[CREDIT_CARD]", "[PHONE]"))
+        assert bob_logs == []
+        assert admin_logs == alice_logs
+        assert other_logs == []
+        assert first.app.state.log_buffer is not second.app.state.log_buffer
+        assert first.app.state.log_buffer.subscriber_count == 0
+        assert second.app.state.log_buffer.subscriber_count == 0
+
+    output = capsys.readouterr().out
+    assert all(secret not in output for secret in secrets)
+    assert "[EMAIL]" in output
+
+
+@pytest.mark.integration
+def test_two_apps_use_their_own_provider_and_breaker(tmp_path) -> None:
+    def app(name: str, response: str):
+        settings = Settings(
+            llm_provider="mock",
+            debug=True,
+            database_url=f"sqlite+aiosqlite:///{tmp_path / f'{name}.db'}",
+        )
+        return create_app(settings, model_provider_factory=lambda _settings: MockLLM([response]))
+
+    first_app = app("first", "first-provider")
+    second_app = app("second", "second-provider")
+    with TestClient(first_app) as first, TestClient(second_app) as second:
+        first_auth = first.post(
+            "/api/auth/register", json={"username": "first-user", "password": "secret1"}
+        ).json()
+        second_auth = second.post(
+            "/api/auth/register", json={"username": "second-user", "password": "secret1"}
+        ).json()
+        first.headers["Authorization"] = f"Bearer {first_auth['access_token']}"
+        second.headers["Authorization"] = f"Bearer {second_auth['access_token']}"
+        first_response = first.post("/api/chat", json={"message": "one"}).json()
+        second_response = second.post("/api/chat", json={"message": "two"}).json()
+        assert first_response["response"] == "first-provider"
+        assert second_response["response"] == "second-provider"
+        assert first.app.state.model_provider is not second.app.state.model_provider
+        assert first.app.state.provider_breaker is not second.app.state.provider_breaker

@@ -14,13 +14,11 @@ from app.services.conversations import ConversationRepository
 
 @pytest.mark.integration
 def test_conversation_lifecycle_and_restart_persistence(tmp_path) -> None:
-    from app.routes import chat
-
     database_url = f"sqlite+aiosqlite:///{tmp_path}/conversations.db"
     settings = Settings(llm_provider="mock", debug=True, database_url=database_url)
-    chat._llm_singleton = MockLLM(["persisted answer"])
-
-    with TestClient(create_app(settings)) as client:
+    provider = MockLLM(["persisted answer"])
+    app = create_app(settings, model_provider_factory=lambda _settings: provider)
+    with TestClient(app) as client:
         registered = client.post(
             "/api/auth/register", json={"username": "persistent-chat", "password": "secret1"}
         )
@@ -52,7 +50,6 @@ def test_conversation_lifecycle_and_restart_persistence(tmp_path) -> None:
         assert detail["message_count"] == 2
         assert client.get("/api/conversations").json()[0]["message_count"] == 2
 
-    chat._llm_singleton = None
     with TestClient(create_app(settings)) as restarted_client:
         logged_in = restarted_client.post(
             "/api/auth/login", json={"username": "persistent-chat", "password": "secret1"}

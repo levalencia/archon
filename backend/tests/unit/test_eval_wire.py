@@ -17,19 +17,23 @@ from app.main import create_app
 def reset_chat_state(tmp_path, monkeypatch):
     from app.routes import chat
 
-    chat._llm_singleton = None
     chat._tools_singleton = None
     chat._db_store = None
     monkeypatch.setenv("ARCHON_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/eval.db")
     yield
-    chat._llm_singleton = None
     chat._tools_singleton = None
     chat._db_store = None
 
 
 @contextmanager
-def admin_client() -> Iterator[TestClient]:
-    with TestClient(create_app(Settings(llm_provider="mock", debug=True))) as api:
+def admin_client(provider=None) -> Iterator[TestClient]:
+    settings = Settings(llm_provider="mock", debug=True)
+    app = (
+        create_app(settings)
+        if provider is None
+        else create_app(settings, model_provider_factory=lambda _settings: provider)
+    )
+    with TestClient(app) as api:
         token = api.post(
             "/api/auth/register",
             json={"username": "admin", "password": "secret1"},
@@ -128,10 +132,9 @@ def test_cost_tracker_defaults_for_unknown_model():
 def test_stream_done_event_includes_cost_usd():
     """Verify the done SSE event payload includes cost_usd field."""
     from app.agents.mock_llm import MockLLM
-    from app.routes import chat
 
-    chat._llm_singleton = MockLLM(["hello world"])
-    with admin_client() as api:
+    provider = MockLLM(["hello world"])
+    with admin_client(provider) as api:
         conv = api.post("/api/conversations", json={}).json()["id"]
         resp = api.post(
             "/api/chat/stream",

@@ -6,11 +6,13 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.runtime_events import CompositeEventSink
 from app.runtime.engine import AgentRuntime, RuntimeBudget
 from app.runtime.events import EventSink
 from app.runtime.ports import ModelProvider, ToolAuthorizer
 from app.security.default_policy import default_policy_engine
+from app.security.persistence_redactor import PersistenceRedactor
 from app.tools.registry import SecureToolRegistry
 
 
@@ -39,6 +41,8 @@ def create_chat_runtime(
     settings: Any,
     repository: Any,
     exporter: Any | None,
+    redactor: PersistenceRedactor,
+    log_buffer: OwnerLogBuffer,
     downstream: EventSink | None = None,
     authorizer: ToolAuthorizer | None = None,
 ) -> AgentRuntime:
@@ -49,9 +53,12 @@ def create_chat_runtime(
     """
     sink = CompositeEventSink(
         conversation_id=context.conversation_id,
+        user_id=context.user_id,
         correlation_id=context.correlation_id,
         run_id=context.run_id,
         model=settings.llm_model,
+        redactor=redactor,
+        log_buffer=log_buffer,
         repository=repository,
         exporter=exporter,
         downstream=downstream,

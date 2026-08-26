@@ -16,8 +16,6 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.agents.llm_factory import create_llm_client
-from app.config import Settings
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
@@ -45,21 +43,15 @@ from app.tools.web_search import web_search_tool
 
 logger = structlog.get_logger()
 
-# Singletons — created once, reused across requests
-_llm_singleton: Any = None
+# Historical tool-registry test override; production never populates this.
 _tools_singleton: SecureToolRegistry | None = (
     None  # Historical test override; production never populates this.
 )
 
 
-def get_llm_client(settings: Settings) -> Any:
-    global _llm_singleton
-    if _llm_singleton is None:
-        _llm_singleton = create_llm_client(settings)
-        logger.info(
-            "llm_singleton_created", provider=settings.llm_provider, model=settings.llm_model
-        )
-    return _llm_singleton
+def get_model_provider(request: Request) -> Any:
+    """Resolve the exact provider owned by this FastAPI application."""
+    return request.app.state.model_provider
 
 
 def get_tool_registry(
@@ -331,6 +323,7 @@ async def chat(
     body: ChatRequest,
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+    provider: Any = Depends(get_model_provider),  # noqa: B008
 ) -> ChatResponse:
     """Send a message. The agent reasons with tools and skills, returns thinking steps."""
     await enforce_rate_limit(request, user, "chat")
@@ -414,11 +407,13 @@ async def chat(
     )
     runtime = create_chat_runtime(
         context=run_context,
-        provider=request.app.state.model_provider,
+        provider=provider,
         tools=tools,
         settings=settings,
         repository=memory,
         exporter=request.app.state.otel_exporter,
+        redactor=request.app.state.persistence_redactor,
+        log_buffer=request.app.state.log_buffer,
     )
     result = await runtime.run(messages)
     await memory.store(conv_id, "user", body.message, user["user_id"])

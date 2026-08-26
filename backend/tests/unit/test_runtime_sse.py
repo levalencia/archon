@@ -17,19 +17,23 @@ from app.runtime import ModelResponse, ToolCall
 def reset_chat_state(tmp_path, monkeypatch):
     from app.routes import chat
 
-    chat._llm_singleton = None
     chat._tools_singleton = None
     chat._db_store = None
     monkeypatch.setenv("ARCHON_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/chat.db")
     yield
-    chat._llm_singleton = None
     chat._tools_singleton = None
     chat._db_store = None
 
 
 @contextmanager
-def client() -> Iterator[TestClient]:
-    with TestClient(create_app(Settings(llm_provider="mock", debug=True))) as api:
+def client(provider=None) -> Iterator[TestClient]:
+    settings = Settings(llm_provider="mock", debug=True)
+    app = (
+        create_app(settings)
+        if provider is None
+        else create_app(settings, model_provider_factory=lambda _settings: provider)
+    )
+    with TestClient(app) as api:
         token = api.post(
             "/api/auth/register", json={"username": "runtime-user", "password": "secret1"}
         ).json()["access_token"]
@@ -44,10 +48,9 @@ def done_payload(text: str) -> dict:
 
 def test_chat_uses_typed_runtime_and_preserves_history() -> None:
     from app.agents.mock_llm import MockLLM
-    from app.routes import chat
 
-    chat._llm_singleton = MockLLM(["hello"])
-    with client() as api:
+    provider = MockLLM(["hello"])
+    with client(provider) as api:
         conversation_id = api.post("/api/conversations", json={}).json()["id"]
         response = api.post("/api/chat", json={"message": "hi", "conversation_id": conversation_id})
         history = api.get(f"/api/chat/history/{conversation_id}")
@@ -59,15 +62,14 @@ def test_chat_uses_typed_runtime_and_preserves_history() -> None:
 
 def test_sse_receives_native_runtime_events_and_stop_reason() -> None:
     from app.agents.mock_llm import MockLLM
-    from app.routes import chat
 
-    chat._llm_singleton = MockLLM(
+    provider = MockLLM(
         [
             ModelResponse(tool_calls=(ToolCall("t1", "calculator", {"expression": "2+2"}),)),
             ModelResponse("The answer is 4."),
         ]
     )
-    with client() as api:
+    with client(provider) as api:
         conversation_id = api.post("/api/conversations", json={}).json()["id"]
         response = api.post(
             "/api/chat/stream", json={"message": "calculate", "conversation_id": conversation_id}
@@ -81,10 +83,9 @@ def test_sse_receives_native_runtime_events_and_stop_reason() -> None:
 
 def test_concurrent_sse_streams_do_not_cross_talk() -> None:
     from app.agents.mock_llm import MockLLM
-    from app.routes import chat
 
-    chat._llm_singleton = MockLLM(["alpha-response", "beta-response"])
-    with client() as api:
+    provider = MockLLM(["alpha-response", "beta-response"])
+    with client(provider) as api:
         # TestClient requests are separate runs; unique conversation IDs also verify sink ownership.
         alpha = api.post("/api/conversations", json={}).json()["id"]
         beta = api.post("/api/conversations", json={}).json()["id"]

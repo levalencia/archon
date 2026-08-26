@@ -235,7 +235,6 @@ def _test_client() -> Iterator:
     from app.main import create_app
     from app.routes import chat
 
-    chat._llm_singleton = None
     chat._tools_singleton = None
     try:
         with TestClient(create_app(Settings(llm_provider="mock", debug=True))) as api:
@@ -246,7 +245,6 @@ def _test_client() -> Iterator:
             api.headers.update({"Authorization": f"Bearer {token}"})
             yield api
     finally:
-        chat._llm_singleton = None
         chat._tools_singleton = None
 
 

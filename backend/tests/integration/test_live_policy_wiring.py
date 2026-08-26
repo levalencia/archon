@@ -24,17 +24,21 @@ from app.tools.registry import SecureToolRegistry
 def reset_chat_state(tmp_path, monkeypatch):
     from app.routes import chat
 
-    chat._llm_singleton = None
     chat._tools_singleton = None
     monkeypatch.setenv("ARCHON_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/live.db")
     yield
-    chat._llm_singleton = None
     chat._tools_singleton = None
 
 
 @contextmanager
-def client(username: str = "live-user") -> Iterator[TestClient]:
-    with TestClient(create_app(Settings(llm_provider="mock", debug=True))) as api:
+def client(username: str = "live-user", provider=None) -> Iterator[TestClient]:
+    settings = Settings(llm_provider="mock", debug=True)
+    app = (
+        create_app(settings)
+        if provider is None
+        else create_app(settings, model_provider_factory=lambda _settings: provider)
+    )
+    with TestClient(app) as api:
         token = api.post(
             "/api/auth/register",
             json={"username": username, "password": "valid-password-123"},
@@ -55,8 +59,8 @@ def test_both_chat_routes_use_shared_runtime_factory(monkeypatch) -> None:
 
     monkeypatch.setattr(chat, "create_chat_runtime", spy)
     monkeypatch.setattr(stream, "create_chat_runtime", spy)
-    chat._llm_singleton = MockLLM(["sync", "stream"])
-    with client() as api:
+    provider = MockLLM(["sync", "stream"])
+    with client(provider=provider) as api:
         first = api.post("/api/chat", json={"message": "one"})
         second = api.post("/api/chat/stream", json={"message": "two"})
     assert first.status_code == second.status_code == 200
@@ -65,12 +69,10 @@ def test_both_chat_routes_use_shared_runtime_factory(monkeypatch) -> None:
 
 
 def test_sync_dangerous_call_fails_closed_without_execution() -> None:
-    from app.routes import chat
-
-    chat._llm_singleton = MockLLM(
+    provider = MockLLM(
         [ModelResponse(tool_calls=(ToolCall("danger-1", "terminal", {"command": "printf bad"}),))]
     )
-    with client() as api:
+    with client(provider=provider) as api:
         response = api.post("/api/chat", json={"message": "run it"})
     assert response.status_code == 200
     call = response.json()["tool_calls"][0]
@@ -79,9 +81,7 @@ def test_sync_dangerous_call_fails_closed_without_execution() -> None:
 
 
 def test_sync_and_sse_safe_read_call_execute_under_policy() -> None:
-    from app.routes import chat
-
-    chat._llm_singleton = MockLLM(
+    provider = MockLLM(
         [
             ModelResponse(tool_calls=(ToolCall("safe-sync", "calculator", {"expression": "2+2"}),)),
             ModelResponse("sync answer 4"),
@@ -89,7 +89,7 @@ def test_sync_and_sse_safe_read_call_execute_under_policy() -> None:
             ModelResponse("stream answer 6"),
         ]
     )
-    with client() as api:
+    with client(provider=provider) as api:
         sync_response = api.post("/api/chat", json={"message": "two plus two"})
         sse_response = api.post("/api/chat/stream", json={"message": "three plus three"})
     assert sync_response.json()["tool_calls"][0]["status"] == "success"
@@ -142,9 +142,9 @@ def test_live_sse_approval_decision_controls_dangerous_execution(
     ]
     if approved:
         responses.append(ModelResponse("approved result"))
-    chat._llm_singleton = MockLLM(responses)
+    provider = MockLLM(responses)
 
-    with client(f"live-{'approve' if approved else 'deny'}") as api:
+    with client(f"live-{'approve' if approved else 'deny'}", provider) as api:
         with ThreadPoolExecutor(max_workers=1) as pool:
             stream = pool.submit(api.post, "/api/chat/stream", json={"message": "run it"})
             assert api.portal is not None
@@ -215,7 +215,7 @@ def test_web_search_sources_are_projected_without_result_content() -> None:
         risk_classes=frozenset({RiskClass.READ}),
     )
     chat._tools_singleton = tools
-    chat._llm_singleton = MockLLM(
+    provider = MockLLM(
         [
             ModelResponse(
                 tool_calls=(ToolCall("search-1", "web_search", {"query": "safe projection"}),)
@@ -224,7 +224,7 @@ def test_web_search_sources_are_projected_without_result_content() -> None:
         ]
     )
 
-    with client("source-user") as api:
+    with client("source-user", provider) as api:
         response = api.post("/api/chat/stream", json={"message": "search"})
 
     assert response.status_code == 200

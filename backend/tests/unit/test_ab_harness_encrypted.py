@@ -18,12 +18,10 @@ from app.main import create_app
 def reset_chat_state(tmp_path, monkeypatch):
     from app.routes import chat
 
-    chat._llm_singleton = None
     chat._tools_singleton = None
     chat._db_store = None
     monkeypatch.setenv("ARCHON_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/test.db")
     yield
-    chat._llm_singleton = None
     chat._tools_singleton = None
     chat._db_store = None
 

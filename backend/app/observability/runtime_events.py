@@ -11,9 +11,11 @@ from typing import Any
 import structlog
 
 from app.observability import metrics
+from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.logging import get_correlation_id, redact_sensitive
 from app.observability.tracing import Span, Tracer, get_tracer
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink
+from app.security.persistence_redactor import PersistenceRedactor
 
 Clock = Callable[[], float]
 _SECRET_KEY = re.compile(
@@ -44,6 +46,9 @@ class CompositeEventSink:
         *,
         conversation_id: str,
         model: str,
+        redactor: PersistenceRedactor,
+        log_buffer: OwnerLogBuffer,
+        user_id: str = "",
         correlation_id: str | None = None,
         run_id: str | None = None,
         repository: Any | None = None,
@@ -54,7 +59,10 @@ class CompositeEventSink:
         logger: Any | None = None,
     ) -> None:
         self.conversation_id = conversation_id
+        self.user_id = user_id
         self.model = model
+        self.redactor = redactor
+        self.log_buffer = log_buffer
         self.correlation_id = correlation_id or get_correlation_id()
         self.run_id = run_id or str(uuid.uuid4())
         self.repository = repository
@@ -91,11 +99,14 @@ class CompositeEventSink:
             try:
                 self.exporter.export_span(span)
             except Exception as exc:
-                self.logger.warning("runtime_span_export_failed", error=str(exc))
+                safe_error = self.redactor.redact_text(str(exc)).text
+                self.logger.warning("runtime_span_export_failed", error=safe_error)
 
     async def emit(self, event: AgentEvent) -> None:
         now = self.clock()
-        safe_data = sanitize(event.data)
+        # Raw provider output is reserved for the requesting response sink. Every
+        # operational and persistence path gets an independent redacted copy.
+        safe_data = sanitize(self.redactor.redact_value(event.data))
         common_log = {
             "event_kind": event.kind.value,
             "iteration": event.iteration,
@@ -120,7 +131,7 @@ class CompositeEventSink:
             self._model_span.attributes.update(
                 {
                     "gen_ai.response.finish_reasons": str(
-                        event.data.get("provider_stop_reason") or ""
+                        safe_data.get("provider_stop_reason") or ""
                     ),
                     "gen_ai.usage.input_tokens": event.usage.input_tokens,
                     "gen_ai.usage.output_tokens": event.usage.output_tokens,
@@ -133,14 +144,14 @@ class CompositeEventSink:
             self._model_span = None
         elif event.kind is AgentEventKind.TOOL_CALL_REQUESTED:
             self._tool_count += 1
-            call_id = str(event.data.get("id", ""))
-            name = str(event.data.get("name", "unknown"))
+            call_id = str(safe_data.get("id", ""))
+            name = str(safe_data.get("name", "unknown"))
             self._tools[call_id] = self._start(
                 f"tool.{name}", {"tool.name": name, "tool.call.id": call_id}
             )
         elif event.kind is AgentEventKind.TOOL_CALL_COMPLETED:
-            call_id = str(event.data.get("id", ""))
-            name = str(event.data.get("name", "unknown"))
+            call_id = str(safe_data.get("id", ""))
+            name = str(safe_data.get("name", "unknown"))
             span = self._tools.pop(call_id, None)
             if span is None:
                 span = self._start(f"tool.{name}", {"tool.name": name})
@@ -149,8 +160,8 @@ class CompositeEventSink:
             span.attributes["tool.success"] = True
             self._finish(span)
         elif event.kind is AgentEventKind.RUN_STOPPED:
-            reason = str(event.data.get("reason", "unknown"))
-            error = event.data.get("error")
+            reason = str(safe_data.get("reason", "unknown"))
+            error = safe_data.get("error")
             for span in self._tools.values():
                 tool_name = str(span.attributes.get("tool.name", "unknown"))
                 metrics.record_tool_call(tool_name, 0, error=True)
@@ -180,6 +191,12 @@ class CompositeEventSink:
             self._run = None
 
         self.logger.info("runtime_event", **common_log)
+        self.log_buffer.append(
+            owner_id=self.user_id,
+            level="info",
+            event="runtime_event",
+            data=common_log,
+        )
         if self.repository is not None:
             try:
                 await self.repository.append_runtime_event(
@@ -191,6 +208,7 @@ class CompositeEventSink:
                     data=safe_data,
                 )
             except Exception as error:
-                self.logger.warning("runtime_event_persistence_failed", error=str(error))
+                safe_error = self.redactor.redact_text(str(error)).text
+                self.logger.warning("runtime_event_persistence_failed", error=safe_error)
         if self.downstream is not None:
             await self.downstream.emit(event)
