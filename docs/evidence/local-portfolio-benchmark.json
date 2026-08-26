@@ -1,0 +1,215 @@
+{
+  "benchmark_kind": "deterministic-local-control-plane",
+  "claim_scope": "deterministic mock/control-plane; no production or model-quality claim",
+  "configuration": {
+    "estimated_cost_usd": 0,
+    "external_model": false,
+    "external_network": false,
+    "iterations": 10
+  },
+  "environment": {
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "python": "3.11.10",
+    "python_implementation": "CPython"
+  },
+  "generated_at_utc": "2026-08-26T23:10:00.913896Z",
+  "scenarios": [
+    {
+      "failures": [],
+      "id": "unsafe_write_approval",
+      "invariants": {
+        "approval_burden_recorded": true,
+        "approved_completes_exactly_once": true,
+        "default_policy_asks_for_write": true,
+        "unavailable_stops_without_execution": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 1.67,
+        "p50": 0.666,
+        "p95": 1.67
+      },
+      "observation": {
+        "approved": {
+          "approval_burden": {
+            "authorizer_requests": 1,
+            "decided": 1,
+            "required": 1
+          },
+          "event_kinds": [
+            "run_started",
+            "iteration_started",
+            "model_response",
+            "tool_call_requested",
+            "policy_decided",
+            "approval_required",
+            "approval_decided",
+            "tool_call_completed",
+            "iteration_started",
+            "model_response",
+            "text_delta",
+            "run_stopped"
+          ],
+          "handler_calls": 1,
+          "policy_decisions": [
+            {
+              "action": "ask",
+              "matched_rule_id": "side_effects_require_approval",
+              "risk_classes": [
+                "write"
+              ]
+            }
+          ],
+          "provider_calls": 2,
+          "stop_reason": "completed",
+          "tokens": 14
+        },
+        "unavailable": {
+          "approval_burden": {
+            "authorizer_requests": 0,
+            "decided": 0,
+            "required": 0
+          },
+          "event_kinds": [
+            "run_started",
+            "iteration_started",
+            "model_response",
+            "tool_call_requested",
+            "policy_decided",
+            "tool_denied",
+            "run_stopped"
+          ],
+          "handler_calls": 0,
+          "policy_decisions": [
+            {
+              "action": "ask",
+              "matched_rule_id": "side_effects_require_approval",
+              "risk_classes": [
+                "write"
+              ]
+            }
+          ],
+          "provider_calls": 1,
+          "stop_reason": "approval_unavailable",
+          "tokens": 8
+        }
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 220
+    },
+    {
+      "failures": [],
+      "id": "provider_resilience",
+      "invariants": {
+        "breaker_fails_fast": true,
+        "breaker_half_open_recovers": true,
+        "breaker_opens_at_threshold": true,
+        "errors_are_sanitized": true,
+        "failure_counts_recorded": true,
+        "fallback_uses_secondary": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 0.159,
+        "p50": 0.052,
+        "p95": 0.159
+      },
+      "observation": {
+        "breaker_callable_calls": 1,
+        "breaker_states": [
+          "open",
+          "half_open",
+          "closed"
+        ],
+        "breaker_total_admitted_calls": 2,
+        "fallback_failure_counts": {
+          "0": 1
+        },
+        "fallback_response": "secondary response",
+        "sanitized_errors": [
+          "provider_request_failed",
+          "Model provider temporarily unavailable"
+        ]
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
+    },
+    {
+      "failures": [],
+      "id": "grounded_document_workflow",
+      "invariants": {
+        "citation_is_verified": true,
+        "overclaim_excluded": true,
+        "provider_usage_recorded": true,
+        "run_persisted_completed": true,
+        "supported_claim_retained": true,
+        "terminal_events_persisted": true,
+        "unsupported_is_exact": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 443.811,
+        "p50": 36.589,
+        "p95": 443.811
+      },
+      "observation": {
+        "answer": "Alpha uses Python3 [E1]",
+        "citation_ids": [
+          "E1"
+        ],
+        "claims": [
+          "Alpha uses Python3"
+        ],
+        "persisted_event_kinds": [
+          "evidence_retrieved",
+          "claim_verified",
+          "grounded_answer",
+          "run_stopped"
+        ],
+        "persisted_status": "completed",
+        "persisted_stop_reason": "completed",
+        "provider_calls": 1,
+        "token_usage": {
+          "input": 12,
+          "output": 8,
+          "total": 20
+        },
+        "unsupported": [
+          "Alpha uses Python3 and Rust"
+        ]
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 200
+    }
+  ],
+  "schema_version": "1.0",
+  "summary": {
+    "estimated_cost_usd": 0,
+    "failures": [],
+    "pass_rate": 1.0,
+    "passed": true,
+    "passed_iterations": 30,
+    "scenario_iterations": 30,
+    "tokens": 420
+  },
+  "workspace": {
+    "after": {
+      "dirty_entries": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "before": {
+      "dirty_entries": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "workspace_unchanged": true
+  }
+}
