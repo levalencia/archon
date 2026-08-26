@@ -53,6 +53,8 @@ class CompositeEventSink:
         redactor: PersistenceRedactor,
         log_buffer: OwnerLogBuffer,
         user_id: str = "",
+        project_id: str = "default",
+        provider: str = "unknown",
         correlation_id: str | None = None,
         run_id: str | None = None,
         repository: Any | None = None,
@@ -64,6 +66,8 @@ class CompositeEventSink:
     ) -> None:
         self.conversation_id = conversation_id
         self.user_id = user_id
+        self.project_id = project_id
+        self.provider = provider
         self.model = model
         self.redactor = redactor
         self.log_buffer = log_buffer
@@ -207,11 +211,18 @@ class CompositeEventSink:
             try:
                 await self.repository.append_runtime_event(
                     run_id=self.run_id,
+                    user_id=self.user_id,
+                    project_id=self.project_id,
                     conversation_id=self.conversation_id,
                     correlation_id=self.correlation_id,
+                    provider=self.provider,
+                    model=self.model,
                     kind=event.kind.value,
                     iteration=event.iteration,
                     data=safe_data,
+                    input_tokens=event.usage.input_tokens,
+                    output_tokens=event.usage.output_tokens,
+                    total_tokens=event.usage.total_tokens,
                 )
             except Exception as error:
                 self.logger.warning(

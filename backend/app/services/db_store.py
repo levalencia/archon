@@ -10,12 +10,15 @@ import json
 import os
 import uuid
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import structlog
 from sqlalchemy import (
     CheckConstraint,
     Column,
     DateTime,
+    Float,
+    ForeignKey,
     Index,
     Integer,
     LargeBinary,
@@ -106,14 +109,60 @@ class ApiKeyRow(Base):
 
 class RuntimeEventRow(Base):
     __tablename__ = "runtime_events"
+    __table_args__ = (
+        UniqueConstraint("run_id", "sequence", name="uq_runtime_events_run_sequence"),
+        Index("ix_runtime_events_owner_run", "user_id", "run_id"),
+    )
     id = Column(Integer, primary_key=True, autoincrement=True)
-    run_id = Column(String(36), nullable=False, index=True)
-    conversation_id = Column(String(36), nullable=False, index=True)
+    run_id = Column(String(36), ForeignKey("runs.run_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False, default="default")
+    conversation_id = Column(String(255), nullable=False, index=True)
     correlation_id = Column(String(100), nullable=False, index=True)
+    sequence = Column(Integer, nullable=False)
+    event_at = Column(DateTime(timezone=True), nullable=False)
     kind = Column(String(40), nullable=False)
+    schema_version = Column(Integer, nullable=False, default=1)
     iteration = Column(Integer, nullable=False)
-    data = Column(Text, nullable=False, default="{}")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(tz=UTC))
+    payload = Column(Text, nullable=False, default="{}")
+
+
+class RunRow(Base):
+    """Durable owner-scoped runtime invocation and atomic event sequence allocator."""
+
+    __tablename__ = "runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('running','completed','failed','cancelled')", name="ck_runs_status"
+        ),
+        CheckConstraint("next_sequence >= 1", name="ck_runs_next_sequence"),
+        Index("ix_runs_owner_started", "user_id", "started_at"),
+        Index("ix_runs_owner_project_started", "user_id", "project_id", "started_at"),
+        Index("ix_runs_conversation", "conversation_id"),
+    )
+
+    run_id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False, default="default")
+    conversation_id = Column(String(255), nullable=False)
+    correlation_id = Column(String(100), nullable=False)
+    parent_run_id = Column(String(36), nullable=True)
+    fork_source_sequence = Column(Integer, nullable=True)
+    provider = Column(String(100), nullable=False, default="unknown")
+    model = Column(String(255), nullable=False, default="unknown")
+    schema_version = Column(Integer, nullable=False, default=1)
+    status = Column(String(20), nullable=False, default="running")
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    stop_reason = Column(String(100), nullable=True)
+    answer_summary = Column(Text, nullable=True)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    total_tokens = Column(Integer, nullable=False, default=0)
+    cost_usd = Column(Float, nullable=True)
+    latency_ms = Column(Float, nullable=True)
+    iterations = Column(Integer, nullable=False, default=0)
+    next_sequence = Column(Integer, nullable=False, default=1)
 
 
 class ApprovalRequestRow(Base):
@@ -233,17 +282,44 @@ class DatabaseStore:
         async with self._session_factory() as session:
             await session.execute(select(1))
 
-    async def append_runtime_event(self, event: dict, *, max_events: int = 1000) -> None:
-        """Persist an event and retain only the newest bounded process history."""
-        async with self._session_factory() as session:
-            values = {**event, "data": json.dumps(event.get("data", {}), default=str)}
-            session.add(RuntimeEventRow(**values))
-            await session.flush()
-            ids = select(RuntimeEventRow.id).order_by(RuntimeEventRow.id.desc()).offset(max_events)
-            await session.execute(delete(RuntimeEventRow).where(RuntimeEventRow.id.in_(ids)))
-            await session.commit()
+    async def append_runtime_event(self, event: dict[str, Any], *, max_events: int = 1000) -> None:
+        """Deprecated compatibility adapter; new code uses ``RunRepository.append``."""
+        from app.security.persistence_redactor import PersistenceRedactor
+        from app.services.run_ledger import RunRepository
 
-    async def recent_runtime_events(self, *, run_id: str | None, limit: int) -> list[dict]:
+        repository = RunRepository(self._session_factory, PersistenceRedactor())
+        await repository.append(
+            run_id=str(event["run_id"]),
+            user_id=str(event.get("user_id", "default")),
+            project_id=str(event.get("project_id", "default")),
+            conversation_id=str(event["conversation_id"]),
+            correlation_id=str(event["correlation_id"]),
+            provider=str(event.get("provider", "unknown")),
+            model=str(event.get("model", "unknown")),
+            kind=str(event["kind"]),
+            iteration=int(event["iteration"]),
+            payload=event.get("data", {}),
+        )
+        # Preserve the historical diagnostic bound by dropping entire oldest runs,
+        # never middle events. Production retention uses RunRepository.prune_completed.
+        async with self._session_factory() as session:
+            stale_run_ids = (
+                select(RuntimeEventRow.run_id)
+                .order_by(RuntimeEventRow.id.desc())
+                .offset(max_events)
+            )
+            stale = set((await session.scalars(stale_run_ids)).all())
+            if stale:
+                await session.execute(
+                    delete(RuntimeEventRow).where(RuntimeEventRow.run_id.in_(stale))
+                )
+                await session.execute(delete(RunRow).where(RunRow.run_id.in_(stale)))
+                await session.commit()
+
+    async def recent_runtime_events(
+        self, *, run_id: str | None, limit: int
+    ) -> list[dict[str, Any]]:
+        """Deprecated unscoped diagnostics retained for existing internal callers."""
         async with self._session_factory() as session:
             query = select(RuntimeEventRow)
             if run_id:
@@ -256,7 +332,7 @@ class DatabaseStore:
                     "correlation_id": row.correlation_id,
                     "kind": row.kind,
                     "iteration": row.iteration,
-                    "data": json.loads(row.data),
+                    "data": json.loads(cast(str, row.payload)),
                 }
                 for row in reversed(result.scalars().all())
             ]

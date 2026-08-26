@@ -54,9 +54,11 @@ def create_chat_runtime(
     sink = CompositeEventSink(
         conversation_id=context.conversation_id,
         user_id=context.user_id,
+        project_id=context.project_id,
         correlation_id=context.correlation_id,
         run_id=context.run_id,
         model=settings.llm_model,
+        provider=settings.llm_provider,
         redactor=redactor,
         log_buffer=log_buffer,
         repository=repository,

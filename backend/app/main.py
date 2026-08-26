@@ -38,6 +38,7 @@ from app.routes.mcp import router as mcp_router
 from app.routes.memory import router as memory_router
 from app.routes.multi_agent import router as multi_agent_router
 from app.routes.red_team import router as red_team_router
+from app.routes.runs import router as runs_router
 from app.routes.security_demo import router as security_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
@@ -233,6 +234,7 @@ def create_app(
     app.include_router(compliance_router)
     app.include_router(mcp_router)
     app.include_router(tasks_router)
+    app.include_router(runs_router)
 
     @app.get("/metrics")
     async def prometheus_metrics():
