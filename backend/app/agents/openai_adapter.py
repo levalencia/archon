@@ -5,6 +5,8 @@ from __future__ import annotations
 import httpx
 import structlog
 
+from app.observability.logging import safe_value_metadata
+
 logger = structlog.get_logger()
 
 
@@ -31,7 +33,9 @@ class OpenAIAdapter:
             },
             timeout=60.0,
         )
-        logger.info("openai_adapter_init", model=model, base_url=self.base_url)
+        logger.info(
+            "openai_adapter_init", model=model, **safe_value_metadata("base_url", self.base_url)
+        )
 
     async def chat(
         self,

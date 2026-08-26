@@ -17,17 +17,58 @@ from app.security.pii_detector import PIIDetector
 
 # ContextVar for request-scoped correlation ID
 correlation_id_ctx: ContextVar[str] = ContextVar("correlation_id", default="")
-_VALUE_PATTERN = re.compile(
-    r"(?i)(bearer\s+)[a-z0-9._~+/=-]+|((?:api[-_]?key|token|password)\s*[:=]\s*)[^\s,;}]+"
+_CREDENTIAL_PATTERN = re.compile(
+    r"""(?ix)
+    (?P<prefix>
+        \b(?:
+            authorization|auth|api[-_ ]?key|token|password|passwd|secret|
+            set[-_ ]?cookie|cookie
+        )\b\s*[:=]\s*
+    )
+    (?:
+        (?P<quote>["'])(?P<quoted>.*?)(?P=quote)
+        |
+        (?P<auth_scheme>basic|bearer)(?P<auth_space>\s+)(?P<auth_value>[^\s,;}\]\)]+)
+        |
+        (?P<value>[^\s,;}\]\)]+)
+    )
+    """
 )
-_SENSITIVE_KEYS = re.compile(r"(?i)(authorization|api[-_]?key|token|secret|password|cookie)")
+_CREDENTIAL_URI_PATTERN = re.compile(r"(?i)(?P<scheme>\b[a-z][a-z0-9+.-]*://)[^/@\s]+:[^/@\s]+@")
+_AUTH_SCHEME_PATTERN = re.compile(
+    r"(?i)\b(?P<scheme>basic|bearer)(?P<space>\s+)(?!\[REDACTED\])(?P<value>[^\s,;}\]\)]+)"
+)
+_SENSITIVE_KEYS = re.compile(
+    r"(?ix)^(?:"
+    r"authorization|auth|api[-_ ]?key|token|password|passwd|secret|"
+    r"set[-_ ]?cookie|cookie|url|uri|dsn|database[-_ ]?url|connection[-_ ]?string"
+    r")$"
+)
 # Logging must remain deterministic and must not initialize spaCy, which logs while loading.
 _LOG_REDACTOR = PersistenceRedactor(PIIDetector(use_spacy=False))
 
 
 def redact_sensitive(value: str) -> str:
-    """Redact common credentials embedded in free-form values."""
-    return _VALUE_PATTERN.sub(lambda match: f"{match.group(1) or match.group(2)}[REDACTED]", value)
+    """Redact bounded credential assignments and URI userinfo in free-form values."""
+
+    def redact_assignment(match: re.Match[str]) -> str:
+        prefix = match.group("prefix")
+        quote = match.group("quote")
+        if quote:
+            return f"{prefix}{quote}[REDACTED]{quote}"
+        auth_scheme = match.group("auth_scheme")
+        if auth_scheme:
+            return f"{prefix}{auth_scheme}{match.group('auth_space')}[REDACTED]"
+        return f"{prefix}[REDACTED]"
+
+    without_uri_credentials = _CREDENTIAL_URI_PATTERN.sub(
+        lambda match: f"{match.group('scheme')}[REDACTED]@", value
+    )
+    without_assignments = _CREDENTIAL_PATTERN.sub(redact_assignment, without_uri_credentials)
+    return _AUTH_SCHEME_PATTERN.sub(
+        lambda match: f"{match.group('scheme')}{match.group('space')}[REDACTED]",
+        without_assignments,
+    )
 
 
 def safe_value_metadata(name: str, value: str) -> dict[str, int | str]:

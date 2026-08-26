@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.agents.llm_factory import create_llm_client
+from app.observability.logging import safe_value_metadata
 from app.security.auth import get_current_user
 from app.services.chunker import EmbeddingService
 from app.services.rag_pipeline import RAGPipeline
@@ -52,7 +53,11 @@ def _get_vector_store(request: Request) -> Any:
         _vector_store = PgVectorStore(sf)
         # Store engine for table creation
         _vector_store._engine = engine  # type: ignore[attr-defined]
-        logger.info("vector_store_initialized", backend="postgres", url=settings.database_url)
+        logger.info(
+            "vector_store_initialized",
+            backend="postgres",
+            **safe_value_metadata("database_url", settings.database_url),
+        )
     else:
         _vector_store = VectorStore()
         logger.info("vector_store_initialized", backend="memory")

@@ -12,6 +12,7 @@ from app.observability.logging import (
     get_correlation_id,
     new_correlation_id,
     redact_event,
+    redact_sensitive,
     set_correlation_id,
     setup_logging,
 )
@@ -107,6 +108,87 @@ class TestStructuredLogging:
         assert result["nested"]["[EMAIL]"][0] == "[SSN]"
         assert result["nested"]["[EMAIL]__2"] == "[CREDIT_CARD]"
         assert result["nested"]["api_key"] == "[REDACTED]"
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("secret=top-secret retry=true", "secret=[REDACTED] retry=true"),
+            ("Bearer standalone-token next", "Bearer [REDACTED] next"),
+            ("cookie=session-cookie; status=failed", "cookie=[REDACTED]; status=failed"),
+            (
+                "authorization: Basic dXNlcjpwYXNz next",
+                "authorization: Basic [REDACTED] next",
+            ),
+            ("AUTH=Bearer AbC.123-xy next", "AUTH=Bearer [REDACTED] next"),
+            ("Api Key: 'quoted secret value' safe", "Api Key: '[REDACTED]' safe"),
+            ("passwd=bad-pass, attempt=2", "passwd=[REDACTED], attempt=2"),
+            (
+                "connect postgresql://db-user:db-pass@private-db.internal/app now",
+                "connect postgresql://[REDACTED]@private-db.internal/app now",
+            ),
+        ],
+    )
+    def test_free_form_credential_redaction_is_bounded(self, raw: str, expected: str) -> None:
+        assert redact_sensitive(raw) == expected
+
+    @pytest.mark.unit
+    def test_sensitive_mixed_case_nested_mapping_keys_are_fully_redacted(self) -> None:
+        result = redact_event(
+            None,  # type: ignore[arg-type]
+            "info",
+            {
+                "nested": {
+                    "DaTaBaSe_Url": "postgresql://db-user:db-pass@private-db.internal/app",
+                    "Connection_String": "Server=private-db;Password=bad-pass",
+                    "AUTHORIZATION": "Basic dXNlcjpwYXNz",
+                    "Set-Cookie": "session=session-cookie",
+                    "SeCrEt": "top-secret",
+                    "URL": "https://private.example/path",
+                    "uRi": "redis://cache.internal/0",
+                    "DSN": "host=db.internal user=admin",
+                    "source_url": "https://public.example/docs",
+                }
+            },
+        )
+
+        assert result["nested"] == {
+            "DaTaBaSe_Url": "[REDACTED]",
+            "Connection_String": "[REDACTED]",
+            "AUTHORIZATION": "[REDACTED]",
+            "Set-Cookie": "[REDACTED]",
+            "SeCrEt": "[REDACTED]",
+            "URL": "[REDACTED]",
+            "uRi": "[REDACTED]",
+            "DSN": "[REDACTED]",
+            "source_url": "https://public.example/docs",
+        }
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("json_format", [True, False])
+    def test_rendered_sinks_redact_free_form_credentials_and_credential_uris(
+        self, capsys, json_format: bool
+    ) -> None:
+        setup_logging(json_format=json_format)
+        try:
+            raise RuntimeError(
+                "secret=top-secret cookie=session-cookie "
+                "authorization: Basic dXNlcjpwYXNz "
+                "postgresql://db-user:db-pass@private-db.internal/app"
+            )
+        except RuntimeError:
+            structlog.get_logger().exception("credential failure")
+
+        rendered = capsys.readouterr().out
+        for secret in (
+            "top-secret",
+            "session-cookie",
+            "dXNlcjpwYXNz",
+            "db-user",
+            "db-pass",
+        ):
+            assert secret not in rendered
+        assert rendered.count("[REDACTED]") >= 4
 
     @pytest.mark.unit
     def test_json_sink_redacts_pii_credentials_and_formatted_exception(self, capsys) -> None:

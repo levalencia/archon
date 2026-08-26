@@ -9,6 +9,7 @@ import pytest
 import structlog
 from structlog.testing import capture_logs
 
+from app.agents import openai_adapter
 from app.routes import conversations
 from app.tools import terminal, web_search
 
@@ -81,3 +82,22 @@ async def test_conversation_title_log_contains_only_safe_metadata(monkeypatch) -
     assert PII not in repr(logs)
     assert logs[0]["title_length"] == len(PII)
     assert logs[0]["title_sha256"] == _prefix(PII)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_openai_adapter_log_contains_only_safe_base_url_metadata(monkeypatch) -> None:
+    base_url = "https://service-user:service-pass@private-llm.internal/v1"
+    with capture_logs() as logs:
+        monkeypatch.setattr(openai_adapter, "logger", structlog.get_logger())
+        adapter = openai_adapter.OpenAIAdapter(
+            api_key="adapter-key", model="private-model", base_url=base_url
+        )
+    await adapter._client.aclose()
+
+    rendered = repr(logs)
+    for sensitive in (base_url, "service-user", "service-pass", "private-llm.internal"):
+        assert sensitive not in rendered
+    assert logs[0]["base_url_length"] == len(base_url)
+    assert logs[0]["base_url_sha256"] == _prefix(base_url)
+    assert "base_url" not in logs[0]
