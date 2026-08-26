@@ -471,6 +471,8 @@
     >×</button>
     <Inspector
       {stats}
+      conversationId={currentId}
+      onFork={(id) => loadConversation(id)}
       {artifacts}
       {context}
       {logs}

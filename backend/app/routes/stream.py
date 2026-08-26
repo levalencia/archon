@@ -245,6 +245,15 @@ async def chat_stream_real(
             output_tokens=result.usage.output_tokens,
         )
 
+        elapsed_ms = (time.monotonic() - started) * 1000
+        await memory.runs.finalize_metadata(
+            user["user_id"],
+            str(run_context.run_id),
+            answer=result.content,
+            cost_usd=cost_info["cost_usd"],
+            latency_ms=elapsed_ms,
+        )
+
         yield _sse(
             "done",
             {
@@ -252,7 +261,7 @@ async def chat_stream_real(
                 "tools_used": len(result.tool_calls),
                 "skills_used": skills_used,
                 "artifacts": artifacts,
-                "elapsed_ms": round((time.monotonic() - started) * 1000, 2),
+                "elapsed_ms": round(elapsed_ms, 2),
                 "conversation_id": conv_id,
                 "stop_reason": result.stop_reason.value,
                 "tokens_used": result.usage.total_tokens,

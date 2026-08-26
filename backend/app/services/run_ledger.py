@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
@@ -15,7 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.runtime.events import AgentEventKind
 from app.runtime.run_models import EventPage, RunEventRecord, RunPage, RunRecord
 from app.security.persistence_redactor import PersistenceRedactor
-from app.services.db_store import RunRow, RuntimeEventRow
+from app.services.db_store import (
+    ConversationRow,
+    ForkDraftRow,
+    MessageRow,
+    RunCheckpointRow,
+    RunRow,
+    RuntimeEventRow,
+)
 
 SCHEMA_VERSION = 1
 _MAX_PAGE = 200
@@ -143,6 +151,15 @@ class RunRepository:
             "next_sequence": 1,
         }
         async with self._sessions() as session:
+            lineage = await session.scalar(
+                select(ForkDraftRow).where(
+                    ForkDraftRow.user_id == user_id,
+                    ForkDraftRow.target_conversation_id == conversation_id,
+                )
+            )
+            if lineage is not None:
+                values["parent_run_id"] = lineage.source_run_id
+                values["fork_source_sequence"] = lineage.source_sequence
             dialect = session.get_bind().dialect.name
             statement: Any
             if dialect == "postgresql":
@@ -267,14 +284,25 @@ class RunRepository:
             await session.commit()
             return sequence
 
-    async def list(self, user_id: str, *, limit: int = 50, offset: int = 0) -> RunPage:
+    async def list(
+        self,
+        user_id: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        conversation_id: str | None = None,
+        project_id: str | None = None,
+    ) -> RunPage:
         limit, offset = _bounded_page(limit, offset)
         async with self._sessions() as session:
+            query = select(RunRow).where(RunRow.user_id == user_id)
+            if conversation_id is not None:
+                query = query.where(RunRow.conversation_id == conversation_id)
+            if project_id is not None:
+                query = query.where(RunRow.project_id == project_id)
             rows = (
                 await session.scalars(
-                    select(RunRow)
-                    .where(RunRow.user_id == user_id)
-                    .order_by(RunRow.started_at.desc(), RunRow.run_id.desc())
+                    query.order_by(RunRow.started_at.desc(), RunRow.run_id.desc())
                     .limit(limit)
                     .offset(offset)
                 )
@@ -287,6 +315,140 @@ class RunRepository:
                 select(RunRow).where(RunRow.run_id == run_id, RunRow.user_id == user_id)
             )
         return self._run_record(row) if row is not None else None
+
+    async def finalize_metadata(
+        self,
+        user_id: str,
+        run_id: str,
+        *,
+        answer: str,
+        cost_usd: float | None = None,
+        latency_ms: float | None = None,
+    ) -> None:
+        """Persist bounded redacted display metadata after either sync or SSE completion."""
+        summary = self._redactor.redact_text(answer).text[:2000]
+        values: dict[str, Any] = {"answer_summary": summary}
+        if cost_usd is not None and cost_usd >= 0:
+            values["cost_usd"] = float(cost_usd)
+        if latency_ms is not None and latency_ms >= 0:
+            values["latency_ms"] = float(latency_ms)
+        async with self._sessions() as session:
+            changed = await session.execute(
+                update(RunRow)
+                .where(RunRow.run_id == run_id, RunRow.user_id == user_id)
+                .values(**values)
+            )
+            if getattr(changed, "rowcount", 0) != 1:
+                raise ValueError("run not found")
+            await session.commit()
+
+    async def fork(
+        self,
+        user_id: str,
+        run_id: str,
+        source_sequence: int,
+        *,
+        policy_profile: str = "default",
+        selected_memory_ids: tuple[str, ...] = (),
+    ) -> dict[str, Any] | None:
+        """Atomically checkpoint stored safe conversation data and create a fork draft."""
+        now = datetime.now(tz=UTC)
+        async with self._sessions() as session:
+            run = await session.scalar(
+                select(RunRow).where(RunRow.run_id == run_id, RunRow.user_id == user_id)
+            )
+            if run is None:
+                return None
+            event = await session.scalar(
+                select(RuntimeEventRow).where(
+                    RuntimeEventRow.run_id == run_id,
+                    RuntimeEventRow.user_id == user_id,
+                    RuntimeEventRow.sequence == source_sequence,
+                )
+            )
+            if event is None:
+                raise ValueError("source sequence not found")
+            conversation = await session.scalar(
+                select(ConversationRow).where(
+                    ConversationRow.id == run.conversation_id,
+                    ConversationRow.user_id == user_id,
+                )
+            )
+            if conversation is None:
+                raise ValueError("source conversation not found")
+            messages = (
+                await session.scalars(
+                    select(MessageRow)
+                    .where(MessageRow.conversation_id == run.conversation_id)
+                    .order_by(MessageRow.id)
+                )
+            ).all()
+            snapshot_items = [
+                {
+                    "role": str(item.role),
+                    "content": self._redactor.redact_text(str(item.content)).text[:10000],
+                }
+                for item in messages
+            ]
+            snapshot = json.dumps(snapshot_items, ensure_ascii=False, separators=(",", ":"))
+            checkpoint_id = str(uuid.uuid4())
+            target_id = str(uuid.uuid4())
+            session.add(
+                RunCheckpointRow(
+                    checkpoint_id=checkpoint_id,
+                    user_id=user_id,
+                    project_id=run.project_id,
+                    source_run_id=run_id,
+                    source_sequence=source_sequence,
+                    conversation_snapshot=snapshot,
+                    policy_profile=policy_profile[:100],
+                    selected_memory_ids=json.dumps(list(selected_memory_ids)),
+                    workspace_restoration="none",
+                    created_at=now,
+                )
+            )
+            session.add(
+                ConversationRow(
+                    id=target_id,
+                    title=f"Fork: {conversation.title}"[:200],
+                    user_id=user_id,
+                    created_at=now,
+                    updated_at=now,
+                    is_active=1,
+                )
+            )
+            for item in snapshot_items:
+                session.add(
+                    MessageRow(
+                        conversation_id=target_id,
+                        role=item["role"],
+                        content=item["content"],
+                        created_at=now,
+                    )
+                )
+            session.add(
+                ForkDraftRow(
+                    id=str(uuid.uuid4()),
+                    checkpoint_id=checkpoint_id,
+                    user_id=user_id,
+                    project_id=run.project_id,
+                    source_run_id=run_id,
+                    source_sequence=source_sequence,
+                    target_conversation_id=target_id,
+                    created_at=now,
+                )
+            )
+            await session.commit()
+        return {
+            "checkpoint_id": checkpoint_id,
+            "source_run_id": run_id,
+            "source_sequence": source_sequence,
+            "target_conversation_id": target_id,
+            "workspace_restoration": "none",
+            "policy_profile": policy_profile[:100],
+            "selected_memory_ids": list(selected_memory_ids),
+            "created_at": now,
+        }
 
     async def events(
         self, user_id: str, run_id: str, *, limit: int = 100, after_sequence: int = 0

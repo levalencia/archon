@@ -165,6 +165,47 @@ class RunRow(Base):
     next_sequence = Column(Integer, nullable=False, default=1)
 
 
+class RunCheckpointRow(Base):
+    """Privacy-safe immutable checkpoint used to create a conversation fork."""
+
+    __tablename__ = "run_checkpoints"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "source_run_id", "source_sequence", name="uq_checkpoint_source"
+        ),
+        Index("ix_checkpoints_owner_project", "user_id", "project_id"),
+    )
+    checkpoint_id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    source_run_id = Column(
+        String(36), ForeignKey("runs.run_id", ondelete="CASCADE"), nullable=False
+    )
+    source_sequence = Column(Integer, nullable=False)
+    conversation_snapshot = Column(Text, nullable=False)
+    policy_profile = Column(String(100), nullable=False, default="default")
+    selected_memory_ids = Column(Text, nullable=False, default="[]")
+    workspace_restoration = Column(String(20), nullable=False, default="none")
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class ForkDraftRow(Base):
+    """Durable ancestry from a checkpoint to its target conversation."""
+
+    __tablename__ = "fork_drafts"
+    __table_args__ = (Index("ix_fork_drafts_owner_target", "user_id", "target_conversation_id"),)
+    id = Column(String(36), primary_key=True)
+    checkpoint_id = Column(
+        String(36), ForeignKey("run_checkpoints.checkpoint_id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    source_run_id = Column(String(36), nullable=False)
+    source_sequence = Column(Integer, nullable=False)
+    target_conversation_id = Column(String(36), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class ApprovalRequestRow(Base):
     """Durable exact-binding approval state; raw tool arguments are never persisted."""
 

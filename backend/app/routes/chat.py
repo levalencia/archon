@@ -430,6 +430,9 @@ async def chat(
     await memory.store(conv_id, "assistant", result.content, user["user_id"])
 
     elapsed_ms = (time.monotonic() - start_time) * 1000
+    await memory.runs.finalize_metadata(
+        user["user_id"], str(run_context.run_id), answer=result.content, latency_ms=elapsed_ms
+    )
 
     thinking_steps = [
         {
