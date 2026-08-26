@@ -90,6 +90,15 @@ class _PolicyExecutionBinding:
     action: PolicyAction
 
 
+class _ProviderToolCallSnapshotError(Exception):
+    """A provider call could not be safely detached before yielding control."""
+
+    def __init__(self, tool_call_id: str, tool_name: str) -> None:
+        super().__init__("provider tool call snapshot unavailable")
+        self.tool_call_id = tool_call_id
+        self.tool_name = tool_name
+
+
 class AgentRuntime:
     def __init__(
         self,
@@ -134,29 +143,70 @@ class AgentRuntime:
                 iterations += 1
                 await self._emit(AgentEventKind.ITERATION_STARTED, iterations)
                 remaining_tokens = max(1, self._budget.max_tokens - usage.total_tokens)
-                response = await self._within_deadline(
+                remaining_seconds = self._budget.max_seconds - (self._clock() - started_at)
+                if remaining_seconds <= 0:
+                    raise TimeoutError
+                response = await asyncio.wait_for(
                     self._model.complete(
                         history, self._tools.definitions(), max_tokens=min(4096, remaining_tokens)
                     ),
-                    started_at,
+                    timeout=remaining_seconds,
                 )
-                usage += response.usage
-                if response.content:
-                    content = response.content
+                # This must be the first work after the provider returns: no clock, event sink,
+                # or other collaborator may observe a mutable provider call before it is copied.
+                snapshot_error: _ProviderToolCallSnapshotError | None = None
+                tool_calls = response.tool_calls
+                if self._policy_engine is not None:
+                    try:
+                        tool_calls = self._snapshot_provider_tool_calls(response.tool_calls)
+                    except _ProviderToolCallSnapshotError as error:
+                        snapshot_error = error
+                        tool_calls = ()
+                if self._expired(started_at):
+                    raise TimeoutError
+
+                # Capture scalar response fields before an event sink can mutate the provider
+                # response. Cumulative usage is distinct from the per-response event value.
+                response_content = response.content if isinstance(response.content, str) else None
+                raw_stop_reason = response.provider_stop_reason
+                provider_stop_reason = raw_stop_reason if isinstance(raw_stop_reason, str) else None
+                response_usage = TokenUsage(
+                    response.usage.input_tokens, response.usage.output_tokens
+                )
+                has_tool_calls = bool(tool_calls) or snapshot_error is not None
+                usage += response_usage
+                if response_content:
+                    content = response_content
                 await self._emit(
                     AgentEventKind.MODEL_RESPONSE,
                     iterations,
-                    {"provider_stop_reason": response.provider_stop_reason},
-                    response.usage,
+                    {"provider_stop_reason": provider_stop_reason},
+                    response_usage,
                 )
-                if response.content:
+                if response_content:
                     # Text accompanying tool calls is progress, not the final answer.
                     event_kind = (
                         AgentEventKind.MODEL_PROGRESS
-                        if response.tool_calls
+                        if has_tool_calls
                         else AgentEventKind.TEXT_DELTA
                     )
-                    await self._emit(event_kind, iterations, {"text": response.content})
+                    await self._emit(event_kind, iterations, {"text": response_content})
+                if snapshot_error is not None:
+                    failed_call = ToolCall(snapshot_error.tool_call_id, snapshot_error.tool_name)
+                    await self._emit(
+                        AgentEventKind.TOOL_CALL_REQUESTED,
+                        iterations,
+                        {"id": failed_call.id, "name": failed_call.name},
+                    )
+                    await self._emit_policy_failure(
+                        failed_call, iterations, "policy_metadata_unavailable"
+                    )
+                    await self._record_denial(
+                        failed_call, iterations, calls, "policy_metadata_unavailable"
+                    )
+                    return await self._stop(
+                        StopReason.POLICY_DENIED, content, iterations, calls, usage
+                    )
                 if usage.total_tokens > self._budget.max_tokens:
                     return await self._finalize(
                         StopReason.TOKEN_BUDGET_EXHAUSTED,
@@ -167,13 +217,13 @@ class AgentRuntime:
                         usage,
                         started_at,
                     )
-                if not response.tool_calls:
+                if not tool_calls:
                     return await self._stop(StopReason.COMPLETED, content, iterations, calls, usage)
 
                 history.append(
-                    Message(Role.ASSISTANT, response.content or "", tool_calls=response.tool_calls)
+                    Message(Role.ASSISTANT, response_content or "", tool_calls=tool_calls)
                 )
-                for provider_call in response.tool_calls:
+                for call in tool_calls:
                     if len(calls) >= self._budget.max_tool_calls:
                         return await self._finalize(
                             StopReason.TOOL_BUDGET_EXHAUSTED,
@@ -184,32 +234,6 @@ class AgentRuntime:
                             usage,
                             started_at,
                         )
-                    call = provider_call
-                    if self._policy_engine is not None:
-                        try:
-                            call = ToolCall(
-                                provider_call.id,
-                                provider_call.name,
-                                canonical_arguments_snapshot(provider_call.arguments),
-                            )
-                        except Exception:
-                            await self._emit(
-                                AgentEventKind.TOOL_CALL_REQUESTED,
-                                iterations,
-                                {"id": provider_call.id, "name": provider_call.name},
-                            )
-                            await self._emit_policy_failure(
-                                provider_call, iterations, "policy_metadata_unavailable"
-                            )
-                            await self._record_denial(
-                                provider_call,
-                                iterations,
-                                calls,
-                                "policy_metadata_unavailable",
-                            )
-                            return await self._stop(
-                                StopReason.POLICY_DENIED, content, iterations, calls, usage
-                            )
                     call_key = json.dumps(
                         [call.name, dict(call.arguments)],
                         sort_keys=True,
@@ -441,6 +465,35 @@ class AgentRuntime:
                 usage,
                 f"{type(error).__name__}: {error}",
             )
+
+    @staticmethod
+    def _snapshot_provider_tool_calls(
+        provider_calls: Sequence[ToolCall],
+    ) -> tuple[ToolCall, ...]:
+        """Detach and validate every provider call before the runtime next yields control."""
+        snapshots: list[ToolCall] = []
+        for provider_call in provider_calls:
+            try:
+                raw_id = provider_call.id
+            except Exception:
+                raw_id = None
+            try:
+                raw_name = provider_call.name
+            except Exception:
+                raw_name = None
+            safe_id = raw_id if isinstance(raw_id, str) and raw_id else "unavailable"
+            safe_name = raw_name if isinstance(raw_name, str) and raw_name else "unavailable"
+            try:
+                if raw_id != safe_id or raw_name != safe_name:
+                    raise ValueError("provider tool identity is invalid")
+                canonical_name = canonical_tool_name(safe_name)
+                if safe_name != canonical_name:
+                    raise ValueError("provider tool name is not canonical")
+                arguments = canonical_arguments_snapshot(provider_call.arguments)
+                snapshots.append(ToolCall(safe_id, canonical_name, arguments))
+            except Exception:
+                raise _ProviderToolCallSnapshotError(safe_id, safe_name) from None
+        return tuple(snapshots)
 
     async def _enforce_policy(
         self,

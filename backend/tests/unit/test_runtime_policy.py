@@ -125,6 +125,94 @@ async def test_policy_execution_uses_detached_nested_argument_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_provider_calls_are_snapshotted_before_model_events_can_mutate_them() -> None:
+    original_arguments = {"operation": {"mode": "safe", "items": ["public"]}}
+    call = ToolCall("native-before-events", "reader", original_arguments)
+
+    class MutatingModelEventSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            await super().emit(event)
+            if event.kind is AgentEventKind.MODEL_RESPONSE:
+                object.__setattr__(call, "id", "response-attacker-id")
+                object.__setattr__(call, "name", "response_attacker")
+                original_arguments["operation"]["mode"] = "response-dangerous"
+                original_arguments["operation"]["items"].append("response-secret")
+            elif event.kind is AgentEventKind.MODEL_PROGRESS:
+                object.__setattr__(call, "id", "progress-attacker-id")
+                object.__setattr__(call, "name", "progress_attacker")
+                original_arguments["operation"]["mode"] = "progress-dangerous"
+                original_arguments["operation"]["items"].append("progress-secret")
+            await asyncio.sleep(0)
+
+    tools = PolicyTools()
+    model = MockLLM([ModelResponse("working", tool_calls=(call,)), ModelResponse("done")])
+    result = await AgentRuntime(
+        model,
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        events=MutatingModelEventSink(),
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert len(tools.executed) == 1
+    executed = tools.executed[0]
+    assert (executed.id, executed.name) == ("native-before-events", "reader")
+    assert executed.arguments["operation"] == {"mode": "safe", "items": ["public"]}
+
+
+@pytest.mark.asyncio
+async def test_provider_multi_call_snapshots_have_independent_nested_arguments() -> None:
+    shared_operation = {"mode": "safe"}
+    calls = (
+        ToolCall("native-first", "reader", {"operation": shared_operation, "sequence": 1}),
+        ToolCall("native-second", "reader", {"operation": shared_operation, "sequence": 2}),
+    )
+
+    class MutatingTools(PolicyTools):
+        async def execute(self, call: ToolCall) -> Mapping[str, Any]:
+            self.executed.append(call)
+            if call.id == "native-first":
+                call.arguments["operation"]["mode"] = "mutated-by-first"
+            return {"ok": True}
+
+    tools = MutatingTools()
+    model = MockLLM([ModelResponse(tool_calls=calls), ModelResponse("done")])
+    result = await AgentRuntime(model, tools, policy_engine=FixedPolicy(PolicyAction.ALLOW)).run(
+        [Message(Role.USER, "run")]
+    )
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert len(tools.executed) == 2
+    assert tools.executed[1].arguments["operation"] == {"mode": "safe"}
+
+
+@pytest.mark.asyncio
+async def test_invalid_later_provider_call_fails_closed_before_any_call_executes() -> None:
+    cyclic: dict[str, Any] = {}
+    cyclic["self"] = cyclic
+    calls = (
+        ToolCall("native-valid", "reader", {"mode": "safe"}),
+        ToolCall("native-cyclic", "reader", cyclic),
+    )
+    tools = PolicyTools()
+    sink = RecordingEventSink()
+
+    result = await AgentRuntime(
+        MockLLM([ModelResponse(tool_calls=calls)]),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        events=sink,
+    ).run([Message(Role.USER, "run")])
+
+    assert result.stop_reason is StopReason.POLICY_DENIED
+    assert tools.executed == []
+    denied = next(event for event in sink.events if event.kind is AgentEventKind.TOOL_DENIED)
+    assert denied.data["id"] == "native-cyclic"
+    assert denied.data["name"] == "reader"
+    assert denied.data["reason_code"] == "policy_metadata_unavailable"
+
+
+@pytest.mark.asyncio
 async def test_allow_revalidates_snapshot_mutated_via_retained_policy_reference() -> None:
     class RetainingTools(PolicyTools):
         retained_call: ToolCall | None = None
