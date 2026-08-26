@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "dataset_id": "grounded-v1",
+  "version": "1.0.0",
+  "content_hash": "76291c6eaac73f0333921303ece607ce95c4f26077387e73fcbd693ab1507f15",
+  "cases": [
+    {
+      "key": "grounded-citation",
+      "grounded": true,
+      "expected_contains": ["citation"],
+      "expected_not_contains": ["unsupported"]
+    },
+    {
+      "key": "safe-abstention",
+      "grounded": false,
+      "expected_contains": ["insufficient evidence"],
+      "expected_not_contains": ["fabricated source"]
+    }
+  ]
+}

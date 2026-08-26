@@ -14,6 +14,7 @@ from typing import Any, cast
 
 import structlog
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     Column,
     DateTime,
@@ -206,6 +207,57 @@ class RunRow(Base):
     latency_ms = Column(Float, nullable=True)
     iterations = Column(Integer, nullable=False, default=0)
     next_sequence = Column(Integer, nullable=False, default=1)
+
+
+class EvalRunRow(Base):
+    """Owner-scoped metadata and safe aggregate metrics for an evaluation."""
+
+    __tablename__ = "eval_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('running','completed','failed')", name="ck_eval_runs_status"),
+        CheckConstraint("threshold >= 0 AND threshold <= 1", name="ck_eval_runs_threshold"),
+        CheckConstraint("passed IS NULL OR passed IN (0,1)", name="ck_eval_runs_passed"),
+        Index("ix_eval_runs_owner_project_created", "owner_id", "project_id", "created_at"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    dataset_id = Column(String(255), nullable=False)
+    dataset_version = Column(String(100), nullable=False)
+    dataset_hash = Column(String(64), nullable=False)
+    source_run_ids_json = Column(JSON, nullable=False)
+    threshold = Column(Float, nullable=False)
+    status = Column(String(20), nullable=False)
+    passed = Column(Integer, nullable=True)
+    aggregate_metrics_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class EvalCaseResultRow(Base):
+    """Privacy-safe result for one case; answers and event payloads are never stored."""
+
+    __tablename__ = "eval_case_results"
+    __table_args__ = (
+        CheckConstraint("passed IN (0,1)", name="ck_eval_case_results_passed"),
+        CheckConstraint("score >= 0 AND score <= 1", name="ck_eval_case_results_score"),
+        UniqueConstraint("eval_run_id", "case_key", name="uq_eval_case_results_run_case"),
+        Index("ix_eval_case_results_eval_run", "eval_run_id"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    eval_run_id = Column(
+        String(36), ForeignKey("eval_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    source_run_id = Column(String(36), nullable=False)
+    case_key = Column(String(255), nullable=False)
+    passed = Column(Integer, nullable=False)
+    score = Column(Float, nullable=False)
+    metrics_json = Column(JSON, nullable=False)
+    checks_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
 
 
 class RunCheckpointRow(Base):
