@@ -1,104 +1,126 @@
-# Cost, usage, and budgets
+# Cost, usage, and durable budgets
 
 > **Implementation status:** `partial`
-> **Status boundary:** Runs record token and estimated cost data and evaluations aggregate it, but the chat cost tracker is recreated per response and no durable monetary budget prevents spend.
-> **Reviewed revision:** `6e3e13f`
+> **Status boundary:** exact nUSD run/project reservations and reconciliation are wired into sync and SSE model calls, but live-provider pricing, PostgreSQL contention, and deployment evidence are not recorded.
 > **Used by module:** [Module 07-run-ledger](../modules/07-run-ledger/README.md)
 > **Catalog ID:** `cost-usage-budgets`
 
 ## Beginner explanation
 
-Usage measurement says what a model call consumed; costing applies a price; a budget stops or asks before a limit is exceeded. Reporting five cents after a run is not budget enforcement. Prices also change, so every estimate needs model and price-version context.
+Usage reports what a model call consumed. Pricing converts that usage into money. A budget must reserve an upper bound **before** dispatch, then reconcile actual usage afterward. Reporting cost after a run is observability; preventing an over-budget call is enforcement.
 
-## Problem and mental model
+Archon uses integer nano-US-dollars (`nUSD`) for enforcement. It does not use binary floating point in authoritative counters.
 
-Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.
-
-## Architecture and components
+## Architecture
 
 ```mermaid
 flowchart LR
-    ProviderUsage --> Estimator[CostTracker]
-    Estimator --> Run[(Run ledger)]
-    Run --> Eval[Evaluation aggregates]
-    DurableBudget[Durable owner/project budget: absent] -. blocks .-> ProviderUsage
+    Runtime --> Quote[Maximum no-cache quote]
+    Quote --> Reserve[Atomic run + project reserve]
+    Reserve -->|capacity available| Provider
+    Reserve -->|limit exceeded| Block[Fail before provider call]
+    Provider --> Usage[Actual provider/model usage]
+    Usage --> Reconcile[Exact nUSD reconciliation]
+    Reconcile --> Run[(Run counters)]
+    Reconcile --> Project[(Project counters)]
+    Run --> API[Run API / SSE]
 ```
-
-## Startup and request sequence
 
 ```mermaid
-sequenceDiagram
-    Runtime->>Provider: request
-    Provider-->>Runtime: input/output tokens
-    Runtime->>Estimator: model + usage
-    Estimator->>Ledger: estimated cost
-    Note over Runtime,Ledger: no atomic reserve/check before next call
+stateDiagram-v2
+    [*] --> reserved
+    reserved --> dispatched: immediately before provider await
+    reserved --> released: dispatch never started
+    dispatched --> reconciled: usage priced exactly
+    dispatched --> indeterminate: cancellation or unknown outcome
+    reserved --> indeterminate: ambiguous transition
+    reconciled --> [*]
+    released --> [*]
+    indeterminate --> [*]
 ```
 
-## Archon implementation and source walkthrough
+## Runtime sequence
 
-At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No persistent price version, reservation, atomic counter, hard budget, or cross-replica enforcement.
+1. `DurableBudgetedProvider` opens immutable run/project limits.
+2. It allocates a deterministic run-local call ordinal and charge ID.
+3. `quote_model_call_nusd` prices the maximum applicable candidate without assuming cache discounts.
+4. `MonetaryBudgetRepository.reserve_call` updates project then run counters atomically.
+5. A rejected reserve returns `monetary_budget_exhausted` before provider invocation.
+6. Immediately before the provider await, the charge becomes `dispatched`.
+7. The returned provider/model and token usage are detached from provider-owned objects.
+8. `price_model_usage_nusd` recomputes actual cost; caller-supplied cost is not trusted.
+9. Reconciliation moves reserved funds to spent and releases the unused quote.
+10. Sync, SSE, and run detail project the durable counters; in-memory `CostTracker` remains observational.
 
-### Source symbols
+## Source walkthrough
 
-| Source symbol | Role and boundary |
+| Source | Responsibility |
 |---|---|
-| [`backend/app/observability/cost_tracker.py:CostTracker.record`](../../../backend/app/observability/cost_tracker.py) | Calculates estimates and process-local threshold alerts. |
-| [`backend/app/routes/stream.py:chat_stream_real`](../../../backend/app/routes/stream.py) | Records response usage/cost in the run ledger. |
-| [`backend/app/eval/service.py:EvaluationService._aggregate`](../../../backend/app/eval/service.py) | Aggregates recorded cost and token metrics. |
+| [`backend/app/observability/cost_tracker.py`](../../../backend/app/observability/cost_tracker.py) | Exact Decimal pricing, provider/model allowlists, cache-aware actuals, conservative quotes. |
+| [`backend/app/services/monetary_budget.py`](../../../backend/app/services/monetary_budget.py) | Atomic project/run accounts and durable charge lifecycle. |
+| [`backend/app/runtime/monetary_budget.py`](../../../backend/app/runtime/monetary_budget.py) | Cancellation-safe provider wrapper around every `complete()` call. |
+| [`backend/app/runtime/factory.py`](../../../backend/app/runtime/factory.py) | Shared opt-in wiring for sync and SSE. |
+| [`backend/app/routes/chat.py`](../../../backend/app/routes/chat.py) | Sync projection of authoritative spend. |
+| [`backend/app/routes/stream.py`](../../../backend/app/routes/stream.py) | SSE cost plus limit/reserved/remaining projection. |
+| [`backend/app/routes/runs.py`](../../../backend/app/routes/runs.py) | Owner-scoped durable budget summary as decimal strings. |
 
-### Tests
+## Tests
 
-| Test | Contract proved and limit |
+| Test | Contract |
 |---|---|
-| [`backend/tests/unit/test_eval_wire.py::test_stream_done_event_includes_cost_usd`](../../../backend/tests/unit/test_eval_wire.py) | Checks SSE completion exposes a cost estimate. |
-| [`backend/tests/unit/test_recorded_evaluations.py::test_scores_good_and_bad_recorded_runs_by_explicit_case_key`](../../../backend/tests/unit/test_recorded_evaluations.py) | Exercises recorded cost metrics in deterministic evaluation. |
+| [`backend/tests/unit/test_monetary_budget.py`](../../../backend/tests/unit/test_monetary_budget.py) | Atomic limits, duplicates, recovery, exact pricing, owner isolation. |
+| [`backend/tests/unit/test_budgeted_provider.py`](../../../backend/tests/unit/test_budgeted_provider.py) | Reserve/dispatch/reconcile and repeated-cancellation safety. |
+| [`backend/tests/unit/test_durable_budget_wiring.py`](../../../backend/tests/unit/test_durable_budget_wiring.py) | Factory, stop reasons, real SQLite run creation, block-before-provider. |
+| [`backend/tests/integration/test_effect_budget_migration.py`](../../../backend/tests/integration/test_effect_budget_migration.py) | Reversible schema migration and integer constraints. |
+| [`backend/tests/integration/test_run_replay_api.py`](../../../backend/tests/integration/test_run_replay_api.py) | Owner-scoped API projection. |
 
-### Evidence boundary
+## Failure semantics
 
-Current implementation dimensions are centralized in [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md). Source/tests below are repository evidence; they are not public-deployment or production-certification evidence.
-
-## Try it: bounded study exercise
-
-From the repository root, inspect the mapped source and test, then run the named focused test with the project test environment if available. Confirm both the passing contract and this gap: No persistent price version, reservation, atomic counter, hard budget, or cross-replica enforcement.
-
-**Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
-
-## Risks, failures, and trade-offs
-
-| Topic | Assessment |
+| Condition | Behavior |
 |---|---|
-| Principal risk | Concurrent requests can overspend and stale prices can misstate cost. |
-| Current gap/failure | No persistent price version, reservation, atomic counter, hard budget, or cross-replica enforcement. |
-| Trade-off | Post-hoc estimates are easy; hard budgets require durable atomic accounting and a defined degradation policy. |
-| Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
+| Unknown provider/model price | Fail closed before dispatch. |
+| Run or project lacks capacity | No provider call; safe budget stop. |
+| Duplicate charge/ordinal | No second provider call. |
+| Cancellation before dispatch | Release reservation. |
+| Cancellation after dispatch | Retain funds and mark indeterminate. |
+| Actual cost exceeds quote | Mark indeterminate; do not silently overspend. |
+| Cache counters absent | Preserve unknown; do not treat as reported zero. |
 
-## Lab vs production
+## Security and privacy
 
-The status remains **partial** at `6e3e13f`. Runs record token and estimated cost data and evaluations aggregate it, but the chat cost tracker is recreated per response and no durable monetary budget prevents spend. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The charge ledger stores safe identities, integer amounts, token counters, and timestamps. It does not store prompts, messages, tool arguments, raw provider payloads, API keys, or exception strings. API amounts are decimal strings to avoid JSON-float ambiguity.
+
+## What this does not prove
+
+- Price tables are code/configuration and require maintenance when providers change prices.
+- SQLite concurrency tests and generated PostgreSQL SQL do not replace live PostgreSQL contention tests.
+- Deterministic provider doubles do not prove real-provider billing parity.
+- Local wiring does not prove a public deployment, production SLO, or legal/compliance guarantee.
+
+## Exercise
+
+1. Set a small run limit with durable budgets enabled.
+2. Run a priced mock provider call that fits and inspect the reconciled charge.
+3. Run a call whose conservative quote exceeds the remaining limit.
+4. Prove the provider was not invoked.
+5. Confirm run and project `spent + reserved <= limit` still holds.
+
+**Done criteria:** cite the charge row, run/project counters, stop reason, and focused test output without exposing request content.
 
 ## Interview answer
 
-> Usage measurement says what a model call consumed; costing applies a price; a budget stops or asks before a limit is exceeded. Reporting five cents after a run is not budget enforcement. Prices also change, so every estimate needs model and price-version context. In Archon the honest status is **partial**: Runs record token and estimated cost data and evaluations aggregate it, but the chat cost tracker is recreated per response and no durable monetary budget prevents spend.
+> Archon enforces monetary budgets with durable integer nUSD accounts. Every model call reserves a conservative upper bound across fallback candidates before dispatch, marks dispatch durably, and reconciles exact provider-reported usage before returning the response. Unknown prices and insufficient capacity fail closed. Cancellation after dispatch becomes indeterminate rather than releasing potentially billable funds. The honest limitation is that live provider and PostgreSQL contention evidence is still pending.
 
 ## Self-check
 
-1. What problem does this concept solve, and what nearby concept is it not?
-2. Trace the diagram’s trust boundary and failure path.
-3. Which mapped symbol/test proves current behavior, or why are the lists empty?
-4. What exact gap prevents a stronger status?
-5. Which risk would you test first before production use?
+1. Why is post-hoc cost reporting not a budget?
+2. Why does the quote ignore cache discounts?
+3. Why are `dispatched` cancellations not automatically released?
+4. Why are provider and model validated as a pair?
+5. Which evidence is still missing for production claims?
 
-<details>
-<summary>Answer guide</summary>
+## Related concepts
 
-A good answer names the contract in the beginner explanation, follows the sequence, cites the exact table entry (or the explicit absence), repeats the status boundary, and chooses a risk from the table rather than claiming unrecorded behavior.
-
-</details>
-
-## Related concepts and modules
-
-- **Module:** [Module 07-run-ledger](../modules/07-run-ledger/README.md)
-- **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
-- **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)
+- [Run ledger](run-ledger.md)
+- [Structured output and prompt caching](structured-output-prompt-caching.md)
+- [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any, cast
+from decimal import Decimal
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -11,9 +12,27 @@ from pydantic import BaseModel, Field
 from app.runtime.run_models import RunEventRecord
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
+from app.services.effect_ledger import EffectRepository, EffectReviewConflict
+from app.services.monetary_budget import MonetaryBudgetRepository
 from app.services.run_ledger import LedgerDataError, RunRepository
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
+
+
+class EffectReviewRequest(BaseModel):
+    disposition: Literal["confirmed_committed", "confirmed_failed", "requires_compensation"]
+
+
+def _effect_repository(request: Request) -> EffectRepository:
+    return EffectRepository(request.app.state.conversations.session_factory)
+
+
+def _budget_repository(request: Request) -> MonetaryBudgetRepository:
+    return MonetaryBudgetRepository(request.app.state.conversations.session_factory)
+
+
+def _usd_string(nusd: int) -> str:
+    return format(Decimal(nusd) / Decimal(1_000_000_000), "f")
 
 
 class ForkRequest(BaseModel):
@@ -152,9 +171,79 @@ async def get_run(
             raise HTTPException(status_code=404, detail="Run not found")
         result = asdict(run)
         result["trajectory"] = _trajectory(events.items, result)
+        budget = await _budget_repository(request).summary(
+            owner_id=user["user_id"], project_id=run.project_id, run_id=run_id
+        )
+        result["monetary_budget"] = (
+            None
+            if budget is None
+            else {
+                "limit_usd": _usd_string(budget.run_limit_nusd),
+                "spent_usd": _usd_string(budget.run_spent_nusd),
+                "reserved_usd": _usd_string(budget.run_reserved_nusd),
+                "remaining_usd": _usd_string(
+                    budget.run_limit_nusd
+                    - budget.run_spent_nusd
+                    - budget.run_reserved_nusd
+                ),
+                "project_limit_usd": _usd_string(budget.project_limit_nusd),
+                "project_spent_usd": _usd_string(budget.project_spent_nusd),
+                "project_reserved_usd": _usd_string(budget.project_reserved_nusd),
+            }
+        )
         return result
     except LedgerDataError as exc:
         raise HTTPException(status_code=500, detail="Stored run data is unavailable") from exc
+
+
+@router.get("/{run_id}/effects")
+async def get_run_effects(
+    run_id: str,
+    request: Request,
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await _rate_limit(request, user)
+    run = await _repository(request).get(user["user_id"], run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    effects = await _effect_repository(request).list(
+        owner_id=user["user_id"],
+        project_id=run.project_id,
+        run_id=run_id,
+        limit=limit,
+        offset=offset,
+    )
+    return {"items": [asdict(item) for item in effects], "limit": limit, "offset": offset}
+
+
+@router.post("/{run_id}/effects/{effect_id}/review")
+async def review_run_effect(
+    run_id: str,
+    effect_id: str,
+    body: EffectReviewRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await enforce_rate_limit(request, user, "run_effect_review")
+    run = await _repository(request).get(user["user_id"], run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    try:
+        reviewed = await _effect_repository(request).review_indeterminate(
+            effect_id,
+            owner_id=user["user_id"],
+            project_id=run.project_id,
+            run_id=run_id,
+            disposition=body.disposition,
+            reviewed_by=user["user_id"],
+        )
+    except EffectReviewConflict as exc:
+        raise HTTPException(status_code=409, detail="Effect is not reviewable") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid effect review") from exc
+    return asdict(reviewed)
 
 
 @router.get("/{run_id}/events")

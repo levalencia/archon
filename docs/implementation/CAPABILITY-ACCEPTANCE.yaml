@@ -66,10 +66,10 @@
       "owner_module": "docs/course/modules/05-policy-and-approvals/README.md",
       "status": "partial",
       "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "na", "deployed": "no"},
-      "sources": ["backend/app/runtime/engine.py", "backend/app/security/approval_repository.py"],
-      "tests": ["backend/tests/unit/test_runtime_policy.py", "backend/tests/unit/test_durable_live_approvals.py"],
+      "sources": ["backend/app/runtime/effect_ledger.py", "backend/app/services/effect_ledger.py", "backend/app/runtime/effect_executor.py", "backend/app/tools/registry.py"],
+      "tests": ["backend/tests/unit/test_effect_ledger.py", "backend/tests/unit/test_durable_effect_executor.py", "backend/tests/integration/test_run_replay_api.py"],
       "evidence": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/concepts/idempotency.md"],
-      "limitation": "Local duplicate blocking and atomic one-shot approval consumption do not guarantee exactly-once external effects across failures or replicas."
+      "limitation": "Archon provides durable at-most-once orchestration and optional downstream idempotency-key handoff; universal exactly-once execution, live PostgreSQL contention, and deployed external-service reconciliation are not claimed."
     },
     {
       "id": "context-provenance",
@@ -95,11 +95,11 @@
       "id": "durable-monetary-budgets",
       "owner_module": "docs/course/modules/07-run-ledger/README.md",
       "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "partial", "live_provider": "no", "deployed": "no"},
-      "sources": ["backend/app/observability/cost_tracker.py", "backend/app/routes/stream.py", "backend/app/eval/service.py"],
-      "tests": ["backend/tests/unit/test_eval_wire.py", "backend/tests/unit/test_recorded_evaluations.py"],
-      "evidence": ["docs/course/concepts/cost-usage-budgets.md"],
-      "limitation": "Runs record estimated costs, but there is no persistent price version, reservation, atomic counter, hard spend limit, or cross-replica enforcement."
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/services/monetary_budget.py", "backend/app/runtime/monetary_budget.py", "backend/app/runtime/factory.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py"],
+      "tests": ["backend/tests/unit/test_monetary_budget.py", "backend/tests/unit/test_budgeted_provider.py", "backend/tests/unit/test_durable_budget_wiring.py", "backend/tests/integration/test_effect_budget_migration.py"],
+      "evidence": ["docs/course/concepts/cost-usage-budgets.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "Atomic run/project reservation and exact nUSD reconciliation are wired locally; provider price tables require maintenance and live PostgreSQL/provider/deployment evidence remains absent."
     },
     {
       "id": "multimodal-e2e",

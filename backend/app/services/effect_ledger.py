@@ -22,6 +22,15 @@ _HASH = re.compile(r"^[0-9a-f]{64}$")
 _SAFE_CODE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _MAX_PAGE = 200
 _MAX_BIGINT = 2**63 - 1
+_REVIEW_DISPOSITIONS = frozenset(
+    {"confirmed_committed", "confirmed_failed", "requires_compensation"}
+)
+
+
+class EffectReviewConflict(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("effect_review_conflict")
+        self.code = "effect_review_conflict"
 
 
 class EffectStateConflict(RuntimeError):  # noqa: N818 - public domain terminology
@@ -58,6 +67,16 @@ def _safe_code(value: str) -> str:
     return value
 
 
+def _reviewer(value: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 255
+        or any(ord(character) < 32 or 0xD800 <= ord(character) <= 0xDFFF for character in value)
+    ):
+        raise ValueError("reviewed_by must be a bounded printable identifier")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class EffectReservation:
     effect_id: str
@@ -82,6 +101,9 @@ class EffectRecord:
     failure_code: str | None
     reserved_at: datetime
     completed_at: datetime | None
+    review_disposition: str | None
+    reviewed_by: str | None
+    reviewed_at: datetime | None
 
 
 class EffectRepository:
@@ -225,6 +247,52 @@ class EffectRepository:
             await session.commit()
             return count
 
+    async def review_indeterminate(
+        self,
+        effect_id: str,
+        *,
+        owner_id: str,
+        project_id: str,
+        run_id: str,
+        disposition: str,
+        reviewed_by: str,
+    ) -> EffectRecord:
+        effect_id = _effect_id(effect_id)
+        if disposition not in _REVIEW_DISPOSITIONS:
+            raise ValueError("unsupported effect review disposition")
+        reviewed_by = _reviewer(reviewed_by)
+        reviewed_at = datetime.now(tz=UTC)
+        async with self._sessions() as session:
+            result = cast(
+                CursorResult[Any],
+                await session.execute(
+                    update(EffectRow)
+                    .where(
+                        EffectRow.effect_id == effect_id,
+                        EffectRow.owner_id == owner_id,
+                        EffectRow.project_id == project_id,
+                        EffectRow.run_id == run_id,
+                        EffectRow.state == EffectState.INDETERMINATE.value,
+                        EffectRow.review_disposition.is_(None),
+                    )
+                    .values(
+                        review_disposition=disposition,
+                        reviewed_by=reviewed_by,
+                        reviewed_at=reviewed_at,
+                    )
+                ),
+            )
+            if result.rowcount != 1:
+                await session.rollback()
+                raise EffectReviewConflict
+            await session.commit()
+        record = await self.get(
+            effect_id, owner_id=owner_id, project_id=project_id, run_id=run_id
+        )
+        if record is None:  # pragma: no cover - committed scoped update guarantees visibility
+            raise EffectReviewConflict
+        return record
+
     async def get(
         self, effect_id: str, *, owner_id: str, project_id: str, run_id: str
     ) -> EffectRecord | None:
@@ -290,6 +358,11 @@ class EffectRepository:
             reserved_at=_utc(row.reserved_at, "reserved_at"),
             completed_at=(
                 None if row.completed_at is None else _utc(row.completed_at, "completed_at")
+            ),
+            review_disposition=row.review_disposition,
+            reviewed_by=row.reviewed_by,
+            reviewed_at=(
+                None if row.reviewed_at is None else _utc(row.reviewed_at, "reviewed_at")
             ),
         )
 

@@ -55,17 +55,23 @@ flowchart TD
 - [`RunRepository.append`](../../../backend/app/services/run_ledger.py) atomically allocates event sequence only while the run is active; terminal finalization is guarded by running status and null completion.
 - [`RunRepository.fork`](../../../backend/app/services/run_ledger.py) derives checkpoint identity with UUID5 from owner, source run, and sequence and uses a uniqueness conflict guard.
 - [`ApprovalRepository.decide_exact_for_owner`](../../../backend/app/security/approval_repository.py) allows only one live pending-to-terminal transition; later decisions return false.
-- [`AgentRuntime.run`](../../../backend/app/runtime/engine.py) tracks `seen_calls` and blocks duplicate semantic tool calls within one run.
+- [`AgentRuntime.run`](../../../backend/app/runtime/engine.py) still blocks duplicate semantic tool calls within one invocation.
+- [`bind_effect_identity`](../../../backend/app/runtime/effect_ledger.py) HMAC-binds owner, project, run, canonical tool, arguments, resources, and schema version without persisting raw payloads.
+- [`EffectRepository.reserve`](../../../backend/app/services/effect_ledger.py) uses a permanent effect tombstone and atomic first-writer reservation.
+- [`DurableEffectToolExecutor`](../../../backend/app/runtime/effect_executor.py) wraps effectful tools after policy/approval, commits safe output evidence, and blocks reserved, committed, failed, or indeterminate duplicates.
+- [`SecureToolRegistry.execute_effect`](../../../backend/app/tools/registry.py) passes the stable effect ID only to handlers that explicitly declare a hidden idempotency-key parameter.
 
-That last runtime guard is only in-memory and run-local. Archon has no universal HTTP idempotency-key ledger and cannot claim arbitrary tools are idempotent.
-A repeated terminal append is rejected with `ValueError("run is not running")`; state is protected, but the API does not silently replay the first success response.
+This is durable **at-most-once orchestration**, not universal exactly-once execution. A downstream service may apply an effect before Archon loses contact; that state becomes `indeterminate` and requires explicit review. Exactly-once can only be strengthened where the downstream system honors the handed-off idempotency key.
 
 ## Behavior-focused tests—and their limits
 
 - [`test_finalize_is_idempotent_and_cannot_overwrite_terminal_run`](../../../backend/tests/unit/test_run_ledger.py) proves repeated finalization cannot change terminal metadata. It does not prove the retry receives the original response.
 - [`test_concurrent_child_ensures_are_idempotent_and_parent_delete_is_restricted`](../../../backend/tests/unit/test_run_lineage.py) proves matching concurrent child creation converges. It does not cover cross-region replication.
-- [`test_duplicate_tool_calls_execute_only_once`](../../../backend/tests/unit/test_runtime_budget_regressions.py) proves one runtime blocks repeated name/argument calls. It does not survive restart or cover two runs.
-- [`test_concurrent_decisions_have_exactly_one_winner`](../../../backend/tests/unit/test_approval_repository.py) proves an approval transition has one winner. It does not make the later external tool call exactly once.
+- [`test_duplicate_tool_calls_execute_only_once`](../../../backend/tests/unit/test_runtime_budget_regressions.py) proves one runtime blocks repeated name/argument calls.
+- [`test_effect_ledger.py`](../../../backend/tests/unit/test_effect_ledger.py) proves canonical HMAC identity, concurrent first-writer reservation, terminal transitions, stale recovery, and owner isolation.
+- [`test_durable_effect_executor.py`](../../../backend/tests/unit/test_durable_effect_executor.py) proves effectful duplicate blocking, read-only bypass, hidden key handoff, and indeterminate failure behavior.
+- [`test_run_replay_api.py`](../../../backend/tests/integration/test_run_replay_api.py) proves owner-scoped list/review without raw argument disclosure.
+- [`test_concurrent_decisions_have_exactly_one_winner`](../../../backend/tests/unit/test_approval_repository.py) proves an approval transition has one winner. It does not itself make the later external tool call exactly once.
 
 ## Bounded executable exercise
 
@@ -105,22 +111,22 @@ Returning a stored prior result improves retry ergonomics but requires result re
 
 ## Lab versus production
 
-A lab can demonstrate conflict-safe inserts with SQLite and concurrent coroutines.
-Production needs documented key scope, payload binding, retention windows, durable constraints, downstream support, crash recovery, and reconciliation playbooks.
-Archon's partial guarantees must not be advertised as end-to-end exactly once.
+A lab can demonstrate conflict-safe inserts, concurrent first-writer reservation, restart-safe tombstones, and explicit indeterminate review with SQLite.
+Production still needs live PostgreSQL contention, downstream idempotency-key support, retention policy, external reconciliation playbooks, and deployment evidence.
+Archon's guarantee must be stated as at-most-once orchestration—not end-to-end exactly once.
 
 ## 30-second interview answer
 
-“Idempotency starts with stable logical identity and an atomic guard at each effect. Archon partially implements it: conflict-safe run creation, immutable child lineage, guarded terminal updates, deterministic fork checkpoints, one-shot approvals, and run-local duplicate tool-call blocking. It does not have a universal request-key ledger and cannot make arbitrary external tools exactly once. Safe retries require owner-scoped keys, payload binding, downstream idempotency, and reconciliation.”
+“Idempotency starts with stable logical identity and an atomic guard at each effect. Archon HMAC-binds owner, project, run, tool, arguments, resources, and schema, then stores a permanent metadata-only tombstone. Only the reservation winner dispatches; all duplicate terminal states are blocked. Ambiguous post-dispatch failures become indeterminate and require review. A declared handler may receive the same ID as a downstream idempotency key. This is at-most-once orchestration, not a universal exactly-once guarantee.”
 
 ## Self-check questions
 
 1. **Why are timeouts ambiguous?** The effect may commit even when its response is lost.
 2. **What makes `ensure_run` converge?** Stable `run_id` plus atomic conflict handling.
-3. **Is duplicate-call blocking durable?** No; `seen_calls` exists only in one runtime invocation.
+3. **Is effect duplicate blocking durable?** Yes when the effect ledger is enabled: a metadata-only tombstone survives runtime restart. The older `seen_calls` guard remains only an in-run optimization.
 4. **Why bind key to payload?** To prevent one key authorizing or suppressing different operations.
-5. **Does one approval winner imply one tool effect?** No; execution can still crash or retry separately.
-6. **What is Archon's honest status?** Partial idempotency at selected boundaries.
+5. **Does one approval winner imply one tool effect?** No; approval and effect reservation are separate boundaries.
+6. **What is Archon's honest status?** Durable at-most-once orchestration locally; live downstream/PostgreSQL/deployment evidence is still partial.
 
 ## Related modules and concepts
 
