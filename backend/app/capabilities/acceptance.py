@@ -62,6 +62,8 @@ class CapabilityAcceptance(BaseModel):
 
     @model_validator(mode="after")
     def validate_claim(self) -> CapabilityAcceptance:
+        if not self.owner_module.strip():
+            raise ValueError("owner_module must not be blank")
         if not self.limitation.strip():
             raise ValueError("limitation must not be blank")
         if self.status == "implemented" and not all((self.sources, self.tests, self.evidence)):

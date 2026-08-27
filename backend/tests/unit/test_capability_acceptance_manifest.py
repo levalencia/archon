@@ -68,6 +68,15 @@ def test_rejects_invalid_dimension_and_status(tmp_path: Path, field: str, value:
 
 
 @pytest.mark.unit
+def test_rejects_blank_owner_module(tmp_path: Path) -> None:
+    entry = _entry()
+    entry["owner_module"] = "  "
+
+    with pytest.raises(ValidationError, match="owner_module"):
+        load_capability_acceptance(_write(tmp_path, [entry]))
+
+
+@pytest.mark.unit
 def test_rejects_missing_or_blank_limitation(tmp_path: Path) -> None:
     entry = _entry()
     entry["limitation"] = "  "
