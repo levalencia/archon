@@ -6,13 +6,22 @@ import asyncio
 import copy
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 
 from app.runtime.effect_ledger import EffectIdentityInput, EffectState, bind_effect_identity
 from app.runtime.models import ToolCall
 from app.runtime.monetary_budget import _cancellation_resistant
+from app.security.policy import ResourcePattern, canonical_arguments_hash, canonical_tool_name
 from app.services.effect_ledger import EffectRepository
 from app.tools.registry import SecureToolRegistry
+
+
+class EffectDispatchRejectedError(RuntimeError):
+    code = "effect_dispatch_rejected"
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
 
 
 class IndeterminateToolEffectError(RuntimeError):
@@ -30,6 +39,56 @@ class EffectRunContext:
 
 
 def _output_evidence(output: dict[str, object]) -> tuple[dict[str, object], str, int]:
+    stack: list[tuple[object, int]] = [(output, 0)]
+    ancestors: set[int] = set()
+    nodes = 0
+    string_bytes = 0
+    while stack:
+        value, depth = stack.pop()
+        nodes += 1
+        if depth > 32 or nodes > 4096:
+            raise IndeterminateToolEffectError from None
+        if value is None or type(value) is bool:
+            continue
+        if type(value) is int:
+            if len(str(abs(value))) > 1000:
+                raise IndeterminateToolEffectError from None
+            continue
+        if type(value) is float:
+            if not math.isfinite(value):
+                raise IndeterminateToolEffectError from None
+            continue
+        if type(value) is str:
+            try:
+                size = len(value.encode("utf-8"))
+            except UnicodeEncodeError:
+                raise IndeterminateToolEffectError from None
+            if size > 16_384:
+                raise IndeterminateToolEffectError from None
+            string_bytes += size
+            if string_bytes > 1_048_576:
+                raise IndeterminateToolEffectError from None
+            continue
+        if type(value) is dict:
+            identity = id(value)
+            if identity in ancestors:
+                raise IndeterminateToolEffectError from None
+            ancestors.add(identity)
+            for key, item in value.items():
+                if type(key) is not str:
+                    raise IndeterminateToolEffectError from None
+                stack.append((key, depth + 1))
+                stack.append((item, depth + 1))
+            continue
+        if type(value) is list:
+            identity = id(value)
+            if identity in ancestors:
+                raise IndeterminateToolEffectError from None
+            ancestors.add(identity)
+            stack.extend((item, depth + 1) for item in value)
+            continue
+        raise IndeterminateToolEffectError from None
+
     try:
         snapshot = copy.deepcopy(output)
         encoded = json.dumps(
@@ -38,7 +97,6 @@ def _output_evidence(output: dict[str, object]) -> tuple[dict[str, object], str,
             allow_nan=False,
             sort_keys=True,
             separators=(",", ":"),
-            default=lambda value: f"<{type(value).__name__}>",
         ).encode("utf-8")
     except (TypeError, ValueError, UnicodeEncodeError, RecursionError):
         raise IndeterminateToolEffectError from None
@@ -67,12 +125,25 @@ class DurableEffectToolExecutor:
         self._repository = repository
         self._context = context
         self._identity_secret = bytes(identity_secret)
+        self._approved_resources: dict[
+            tuple[str, str, str], tuple[ResourcePattern, ...]
+        ] = {}
+
+    @staticmethod
+    def _call_key(call: ToolCall) -> tuple[str, str, str]:
+        return (
+            call.id,
+            canonical_tool_name(call.name),
+            canonical_arguments_hash(call.arguments),
+        )
 
     def definitions(self):
         return self._delegate.definitions()
 
     def policy_request(self, call: ToolCall):
-        return self._delegate.policy_request(call)
+        request = self._delegate.policy_request(call)
+        self._approved_resources[self._call_key(call)] = request.resources
+        return request
 
     def tool_requires_approval(self, name: str) -> bool:
         return self._delegate.tool_requires_approval(name)
@@ -88,7 +159,8 @@ class DurableEffectToolExecutor:
             await self._repository.mark_indeterminate(effect_id, code)
 
     async def execute(self, call: ToolCall) -> dict[str, object]:
-        spec = self._delegate.effect_spec(call)
+        approved_resources = self._approved_resources.pop(self._call_key(call), None)
+        spec = self._delegate.effect_spec(call, approved_resources=approved_resources)
         if not spec.effectful:
             return await self._delegate.execute(call)
 
@@ -124,7 +196,6 @@ class DurableEffectToolExecutor:
         if not reservation.should_execute:
             return {
                 "status": "duplicate_effect_blocked",
-                "effect_id": reservation.effect_id,
                 "effect_state": reservation.state.value,
             }
 
@@ -150,7 +221,7 @@ class DurableEffectToolExecutor:
             )
             if failed.error is not None:
                 raise IndeterminateToolEffectError from None
-            raise
+            raise EffectDispatchRejectedError from None
         except BaseException as error:
             cleanup = await _cancellation_resistant(
                 self._mark_indeterminate(binding.effect_id, "dispatch_interrupted")
@@ -161,4 +232,6 @@ class DurableEffectToolExecutor:
                 raise error
             if cleanup.cancellation is not None:
                 raise cleanup.cancellation from None
+            if isinstance(error, Exception):
+                raise IndeterminateToolEffectError from None
             raise

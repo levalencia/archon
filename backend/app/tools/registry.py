@@ -196,8 +196,14 @@ class ToolDefinition:
             if parameter in schema.get("properties", {}) or parameter in schema.get("required", ()):
                 raise ValueError("idempotency key parameter must remain hidden from input schema")
             signature = inspect.signature(self.handler)
-            accepts_key = parameter in signature.parameters or any(
-                item.kind is inspect.Parameter.VAR_KEYWORD for item in signature.parameters.values()
+            declared = signature.parameters.get(parameter)
+            accepts_named_key = (
+                declared is not None
+                and declared.kind is not inspect.Parameter.POSITIONAL_ONLY
+            )
+            accepts_key = accepts_named_key or any(
+                item.kind is inspect.Parameter.VAR_KEYWORD
+                for item in signature.parameters.values()
             )
             if not accepts_key:
                 raise ValueError("handler does not accept the idempotency key parameter")
@@ -408,102 +414,25 @@ class SecureToolRegistry:
         parameters = self._validate_arguments(tool, parameters)
         return await self._execute_registered(tool_name, tool, parameters, parameters)
 
-        # 3. Permission check
-        if self._permissions and tool.required_permissions:
-            for perm in tool.required_permissions:
-                allowed = await self._permissions.check(
-                    agent_id="archon",
-                    resource=tool_name,
-                    action=perm,
-                    **parameters,
-                )
-                if not allowed:
-                    if self._audit:
-                        await self._audit.log(
-                            agent_id="archon",
-                            action="permission_denied",
-                            resource=tool_name,
-                            parameters=parameters,
-                            result="denied",
-                            correlation_id=correlation_id,
-                            security_level="warning",
-                        )
-                    error_msg = f"Permission denied for {perm} on {tool_name}"
-                    raise PermissionError(error_msg)
-
-        # 4. Execute with timeout
-        try:
-            if inspect.iscoroutinefunction(tool.handler):
-                result = await asyncio.wait_for(
-                    tool.handler(**parameters),
-                    timeout=tool.timeout,
-                )
-            else:
-                result = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
-                        None, lambda: tool.handler(**parameters)
-                    ),
-                    timeout=tool.timeout,
-                )
-        except TimeoutError:
-            logger.error(
-                "tool_timeout",
-                tool=tool_name,
-                timeout=tool.timeout,
-                correlation_id=correlation_id,
-            )
-            if self._audit:
-                await self._audit.log(
-                    agent_id="archon",
-                    action="tool_timeout",
-                    resource=tool_name,
-                    parameters=parameters,
-                    result="timeout",
-                    correlation_id=correlation_id,
-                    security_level="error",
-                )
-            raise TimeoutError(f"Tool '{tool_name}' timed out after {tool.timeout}s") from None
-        except Exception as e:
-            logger.error(
-                "tool_error",
-                tool=tool_name,
-                **safe_exception_metadata(e, "tool_execution_failed"),
-                correlation_id=correlation_id,
-            )
-            raise
-
-        # 5. Audit success
-        if self._audit:
-            await self._audit.log(
-                agent_id="archon",
-                action="tool_executed",
-                resource=tool_name,
-                parameters=parameters,
-                result="success",
-                correlation_id=correlation_id,
-            )
-
-        logger.info(
-            "tool_executed",
-            tool=tool_name,
-            correlation_id=correlation_id,
-        )
-
-        if isinstance(result, dict):
-            return result
-        return {"result": result}
-
-    def effect_spec(self, call: ToolCall) -> ToolEffectSpec:
+    def effect_spec(
+        self,
+        call: ToolCall,
+        *,
+        approved_resources: tuple[ResourcePattern, ...] | None = None,
+    ) -> ToolEffectSpec:
         tool_name = canonical_tool_name(call.name)
         tool = self._tools.get(tool_name)
         if tool is None:
             raise PolicyMetadataError(f"Unknown tool: {tool_name}")
         parameters = self._validate_arguments(tool, call.arguments)
-        request = self.policy_request(ToolCall(call.id, tool_name, parameters))
+        if approved_resources is None:
+            resources = self.policy_request(ToolCall(call.id, tool_name, parameters)).resources
+        else:
+            resources = approved_resources
         return ToolEffectSpec(
             effectful=tool.effectful,
             input_schema=cast(Mapping[str, Any], _deep_thaw(tool.input_schema)),
-            resources=request.resources,
+            resources=resources,
             idempotency_key_parameter=tool.idempotency_key_parameter,
         )
 
