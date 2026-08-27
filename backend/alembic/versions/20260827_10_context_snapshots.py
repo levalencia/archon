@@ -37,14 +37,10 @@ def upgrade() -> None:
         sa.Column("manifest_hash", sa.String(64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint("schema_version = 1", name="ck_context_snapshots_schema_version"),
-        sa.CheckConstraint(
-            "estimated_tokens >= 0", name="ck_context_snapshots_tokens_nonnegative"
-        ),
+        sa.CheckConstraint("estimated_tokens >= 0", name="ck_context_snapshots_tokens_nonnegative"),
         sa.UniqueConstraint("run_id", name="uq_context_snapshots_run"),
     )
-    op.create_index(
-        "ix_context_snapshots_owner_run", "context_snapshots", ["owner_id", "run_id"]
-    )
+    op.create_index("ix_context_snapshots_owner_run", "context_snapshots", ["owner_id", "run_id"])
     op.create_index(
         "ix_context_snapshots_owner_project_created",
         "context_snapshots",

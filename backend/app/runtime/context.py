@@ -55,9 +55,7 @@ async def _assemble_messages(
     if memory:
         metadata_reader = getattr(memory, "retrieve_with_metadata", None)
         if callable(metadata_reader):
-            reader = cast(
-                Callable[..., Awaitable[list[dict[str, Any]]]], metadata_reader
-            )
+            reader = cast(Callable[..., Awaitable[list[dict[str, Any]]]], metadata_reader)
             history = await reader(conversation_id, limit=20, user_id=user_id)
         else:
             history = await memory.retrieve(conversation_id, limit=20, user_id=user_id)
