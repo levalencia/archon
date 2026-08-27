@@ -10,10 +10,12 @@ from fastapi import FastAPI
 
 from app.config import Settings
 from app.routes.runs import router
+from app.runtime.context_provenance import EffectiveContextManifest
 from app.runtime.effect_ledger import EffectIdentityInput, bind_effect_identity
 from app.security.auth import get_current_user
 from app.security.persistence_redactor import PersistenceRedactor
 from app.security.rate_limiter import RateLimiter
+from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.db_store import DatabaseStore
 from app.services.effect_ledger import EffectRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
@@ -52,6 +54,18 @@ async def test_replay_is_owner_scoped_and_never_calls_model_or_tools(tmp_path) -
         project_id="project",
         provider="verifier",
         model="model",
+    )
+    await ContextSnapshotRepository(store.session_factory).record(
+        EffectiveContextManifest(
+            owner_id="alice",
+            project_id="project",
+            run_id="alice-run",
+            conversation_id="conversation",
+            selected_message_ids=(1, 2),
+            memory_ids=("memory-1",),
+            skill_ids=("skill-1",),
+            estimated_tokens=42,
+        )
     )
     effect_repository = EffectRepository(store.session_factory)
     binding = bind_effect_identity(
@@ -101,6 +115,14 @@ async def test_replay_is_owner_scoped_and_never_calls_model_or_tools(tmp_path) -
             "project_spent_usd": "0",
             "project_reserved_usd": "0",
         }
+        context = await client.get("/api/runs/alice-run/context")
+        assert context.status_code == 200
+        assert context.json()["selected_message_ids"] == [1, 2]
+        assert context.json()["memory_ids"] == ["memory-1"]
+        assert context.json()["skill_ids"] == ["skill-1"]
+        assert context.json()["estimated_tokens"] == 42
+        assert "content" not in context.text
+        assert "prompt" not in context.text
         effects = await client.get("/api/runs/alice-run/effects")
         assert effects.status_code == 200
         assert effects.json()["items"][0]["effect_id"] == binding.effect_id
@@ -125,6 +147,7 @@ async def test_replay_is_owner_scoped_and_never_calls_model_or_tools(tmp_path) -
         assert [item["run_id"] for item in children.json()["items"]] == ["alice-child"]
         assert children.json()["items"][0]["parent_run_id"] == "alice-run"
         assert (await client.get("/api/runs/bob-run")).status_code == 404
+        assert (await client.get("/api/runs/bob-run/context")).status_code == 404
         assert (await client.get("/api/runs/bob-run/events")).status_code == 404
         assert (await client.get("/api/runs/bob-run/effects")).status_code == 404
         assert (

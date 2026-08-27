@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from app.runtime.run_models import RunEventRecord
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
+from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.effect_ledger import EffectRepository, EffectReviewConflictError
 from app.services.monetary_budget import MonetaryBudgetRepository
 from app.services.run_ledger import LedgerDataError, RunRepository
@@ -152,6 +153,38 @@ async def compare_runs(
         }
 
     return {"a": await view(left), "b": await view(right)}
+
+
+@router.get("/{run_id}/context")
+async def get_run_context(
+    run_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await _rate_limit(request, user)
+    run = await _repository(request).get(user["user_id"], run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    snapshot = await ContextSnapshotRepository(
+        request.app.state.conversations.session_factory
+    ).get(owner_id=user["user_id"], project_id=run.project_id, run_id=run_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Context snapshot not found")
+    return {
+        "snapshot_id": snapshot.snapshot_id,
+        "schema_version": snapshot.schema_version,
+        "run_id": snapshot.run_id,
+        "conversation_id": snapshot.conversation_id,
+        "project_id": snapshot.project_id,
+        "selected_message_ids": list(snapshot.selected_message_ids),
+        "summarized_message_ids": list(snapshot.summarized_message_ids),
+        "memory_ids": list(snapshot.memory_ids),
+        "skill_ids": list(snapshot.skill_ids),
+        "estimated_tokens": snapshot.estimated_tokens,
+        "summary_version": snapshot.summary_version,
+        "truncation_reason": snapshot.truncation_reason,
+        "manifest_hash": snapshot.manifest_hash,
+    }
 
 
 @router.get("/{run_id}")
