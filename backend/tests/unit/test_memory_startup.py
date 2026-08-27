@@ -75,7 +75,10 @@ def test_example_template_key_is_rejected(tmp_path) -> None:
 
 
 def test_startup_configures_encrypted_memory_with_valid_key(tmp_path) -> None:
-    app = create_app(_settings(tmp_path, encryption_master_key=VALID_KEY))
+    settings = _settings(tmp_path, encryption_master_key=VALID_KEY)
+    assert VALID_KEY not in repr(settings)
+    assert VALID_KEY not in str(settings.model_dump())
+    app = create_app(settings)
     with TestClient(app):
         assert app.state.scoped_memory is not None
 

@@ -58,7 +58,7 @@ class ContextSnapshotRepository:
             "summarized_message_ids_json": _json(manifest.summarized_message_ids),
             "memory_ids_json": _json(manifest.memory_ids),
             "skill_ids_json": _json(manifest.skill_ids),
-            "input_asset_hashes_json": _json(manifest.input_asset_hashes),
+            "input_asset_fingerprints_json": _json(manifest.input_asset_fingerprints),
             "summary_version": manifest.summary_version,
             "estimated_tokens": manifest.estimated_tokens,
             "truncation_reason": manifest.truncation_reason,
@@ -137,8 +137,8 @@ class ContextSnapshotRepository:
             ),
             memory_ids=cast(tuple[str, ...], _decode_ids(row.memory_ids_json, integers=False)),
             skill_ids=cast(tuple[str, ...], _decode_ids(row.skill_ids_json, integers=False)),
-            input_asset_hashes=cast(
-                tuple[str, ...], _decode_ids(row.input_asset_hashes_json, integers=False)
+            input_asset_fingerprints=cast(
+                tuple[str, ...], _decode_ids(row.input_asset_fingerprints_json, integers=False)
             ),
             estimated_tokens=row.estimated_tokens,
             summary_version=row.summary_version,

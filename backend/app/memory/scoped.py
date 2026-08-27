@@ -370,7 +370,11 @@ class ScopedEncryptedMemoryRepository:
                 version_counts=counts,
             )
 
-    async def assert_key_retirable(self, version: int) -> None:
+    async def assert_key_retirable(
+        self, version: int, *, legacy_writers_drained: bool = False
+    ) -> None:
+        if legacy_writers_drained is not True:
+            raise MemoryKeyRetirementBlockedError
         if type(version) is not int or not 1 <= version <= 255:
             raise ValueError("memory key version must be between 1 and 255")
         if version == self._keyring.active_version:

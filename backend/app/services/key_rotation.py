@@ -43,5 +43,9 @@ class MemoryKeyRotationService:
     ) -> MemoryRotationBatch:
         return await self._repository.rotate_batch(owner_id, project_id, batch_size=batch_size)
 
-    async def assert_key_retirable(self, version: int) -> None:
-        await self._repository.assert_key_retirable(version)
+    async def assert_key_retirable(
+        self, version: int, *, legacy_writers_drained: bool = False
+    ) -> None:
+        await self._repository.assert_key_retirable(
+            version, legacy_writers_drained=legacy_writers_drained
+        )

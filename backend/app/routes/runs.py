@@ -180,7 +180,7 @@ async def get_run_context(
         "summarized_message_ids": list(snapshot.summarized_message_ids),
         "memory_ids": list(snapshot.memory_ids),
         "skill_ids": list(snapshot.skill_ids),
-        "input_asset_hashes": list(snapshot.input_asset_hashes),
+        "input_asset_fingerprints": list(snapshot.input_asset_fingerprints),
         "estimated_tokens": snapshot.estimated_tokens,
         "summary_version": snapshot.summary_version,
         "truncation_reason": snapshot.truncation_reason,

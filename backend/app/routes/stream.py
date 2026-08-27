@@ -29,6 +29,7 @@ from app.routes.chat import (
     get_tool_registry,
 )
 from app.runtime import AgentEvent, AgentEventKind, EventSink
+from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.support import prepare_effective_context
 from app.security.auth import get_current_user
@@ -211,6 +212,7 @@ async def chat_stream_real(
             memory_ids=memory_ids,
             skill_ids=tuple(skill.name for skill in skills),
             current_message_id=current_message_id,
+            asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
         )
         messages = list(effective_context.messages)
 

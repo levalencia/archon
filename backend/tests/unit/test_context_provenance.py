@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.runtime.context import build_effective_context
+from app.runtime.context import build_effective_context, derive_context_asset_hmac_key
 from app.runtime.context_provenance import EffectiveContextManifest
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.auto_compact import auto_compact_context
@@ -72,6 +73,7 @@ async def test_builder_returns_messages_and_metadata_only_manifest() -> None:
 @pytest.mark.asyncio
 async def test_persisted_current_message_and_image_fingerprint_match_provider_context() -> None:
     image = "data:image/png;base64,AAAA"
+    fingerprint_key = derive_context_asset_hmac_key("application-secret-for-tests")
     context = await build_effective_context(
         "raw secret input",
         "conversation-1",
@@ -82,15 +84,26 @@ async def test_persisted_current_message_and_image_fingerprint_match_provider_co
         project_id="project",
         run_id="run-1",
         current_message_id=21,
+        asset_hmac_key=fingerprint_key,
     )
 
     assert context.messages[-1].content == "[REDACTED] visible"
     assert context.messages[-1].images == (image,)
     assert context.source_message_ids[-1] == 21
     assert context.manifest.selected_message_ids == (21,)
-    assert context.manifest.input_asset_hashes == (
-        hashlib.sha256(image.encode("utf-8")).hexdigest(),
-    )
+    expected = hmac.new(
+        fingerprint_key,
+        b"archon/context-asset/v1\0alice\0project\0run-1\0" + image.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    assert context.manifest.input_asset_fingerprints == (expected,)
+    other_owner = hmac.new(
+        fingerprint_key,
+        b"archon/context-asset/v1\0bob\0project\0run-1\0" + image.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    assert expected != other_owner
+    assert expected != hashlib.sha256(image.encode("utf-8")).hexdigest()
     assert "raw secret input" not in str(context.manifest.semantic_document())
 
 

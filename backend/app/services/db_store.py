@@ -254,7 +254,7 @@ class ContextSnapshotRow(Base):
     summarized_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     memory_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     skill_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
-    input_asset_hashes_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    input_asset_fingerprints_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     summary_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     estimated_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
     truncation_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)

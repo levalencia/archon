@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import hmac
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
@@ -85,6 +86,41 @@ async def _assemble_messages(
     return tuple(result), tuple(source_ids)
 
 
+def derive_context_asset_hmac_key(application_secret: str) -> bytes:
+    if not isinstance(application_secret, str) or not application_secret:
+        raise ValueError("context asset fingerprint key is unavailable")
+    return hmac.new(
+        application_secret.encode("utf-8"),
+        b"archon/context-asset-fingerprint-key/v1",
+        hashlib.sha256,
+    ).digest()
+
+
+def _asset_fingerprints(
+    images: list[str] | None,
+    key: bytes | None,
+    *,
+    owner_id: str,
+    project_id: str,
+    run_id: str,
+) -> tuple[str, ...]:
+    if not images:
+        return ()
+    if not isinstance(key, bytes) or len(key) < 32:
+        raise ValueError("context asset fingerprint key is unavailable")
+    scope = b"\0".join(
+        (owner_id.encode("utf-8"), project_id.encode("utf-8"), run_id.encode("utf-8"))
+    )
+    return tuple(
+        hmac.new(
+            key,
+            b"archon/context-asset/v1\0" + scope + b"\0" + image.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        for image in images
+    )
+
+
 def _estimated_tokens(messages: tuple[Message, ...]) -> int:
     return sum(get_token_count(message.content) + 4 for message in messages)
 
@@ -104,6 +140,7 @@ async def build_effective_context(
     memory_ids: tuple[str, ...] = (),
     skill_ids: tuple[str, ...] = (),
     current_message_id: int | None = None,
+    asset_hmac_key: bytes | None = None,
 ) -> EffectiveContext:
     messages, source_ids = await _assemble_messages(
         user_input,
@@ -129,8 +166,12 @@ async def build_effective_context(
             ),
             memory_ids=memory_ids,
             skill_ids=skill_ids,
-            input_asset_hashes=tuple(
-                hashlib.sha256(image.encode("utf-8")).hexdigest() for image in images or ()
+            input_asset_fingerprints=_asset_fingerprints(
+                images,
+                asset_hmac_key,
+                owner_id=user_id,
+                project_id=project_id,
+                run_id=run_id,
             ),
             estimated_tokens=_estimated_tokens(messages),
         ),

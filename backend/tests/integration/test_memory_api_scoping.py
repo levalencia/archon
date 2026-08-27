@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.memory.scoped import ScopedEncryptedMemoryRepository
+from app.security.rate_limiter import RateLimiter
 
 
 def _register(client: TestClient, username: str) -> tuple[str, dict[str, str]]:
@@ -140,6 +141,7 @@ def test_rotation_status_and_batch_are_owner_project_scoped(memory_api) -> None:
         "version_counts": {"1": 1},
         "remaining": 0,
         "complete": True,
+        "retirement_requires_legacy_writer_drain": True,
     }
     assert bob.json()["version_counts"] == {"1": 1}
 
@@ -166,6 +168,21 @@ def test_rotation_rejects_invalid_batch_size(memory_api, payload) -> None:
         "/api/memory/rotation?project_id=red", headers=alice_headers, json=payload
     )
     assert response.status_code == 422
+
+
+@pytest.mark.integration
+def test_rotation_status_is_rate_limited(memory_api) -> None:
+    client, _, alice_headers, _, _ = memory_api
+    client.portal.call(client.app.state.rate_limiter.close)
+    client.app.state.rate_limiter = RateLimiter(max_requests=1)
+
+    assert (
+        client.get("/api/memory/rotation?project_id=red", headers=alice_headers).status_code
+        == 200
+    )
+    limited = client.get("/api/memory/rotation?project_id=red", headers=alice_headers)
+    assert limited.status_code == 429
+    assert "retry-after" in limited.headers
 
 
 @pytest.mark.integration

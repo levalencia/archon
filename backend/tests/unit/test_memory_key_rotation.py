@@ -65,7 +65,9 @@ async def test_active_writes_previous_reads_and_rotation_resumes_in_batches(tmp_
         assert all(bytes(row.ciphertext)[0] == 2 for row in rows)
         assert next(row for row in rows if row.id == new_fact.id).key_version == 2
     assert b"secret" not in (tmp_path / "rotation.db").read_bytes()
-    await rotating.assert_key_retirable(1)
+    with pytest.raises(MemoryKeyRetirementBlockedError):
+        await rotating.assert_key_retirable(1)
+    await rotating.assert_key_retirable(1, legacy_writers_drained=True)
     await store.close()
 
 
@@ -130,9 +132,9 @@ async def test_retirement_and_missing_previous_key_fail_closed(tmp_path) -> None
     )
     await full.activate_key_version()
     with pytest.raises(MemoryKeyRetirementBlockedError):
-        await full.assert_key_retirable(1)
+        await full.assert_key_retirable(1, legacy_writers_drained=True)
     with pytest.raises(MemoryKeyRetirementBlockedError):
-        await full.assert_key_retirable(2)
+        await full.assert_key_retirable(2, legacy_writers_drained=True)
     await store.close()
 
 

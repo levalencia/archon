@@ -100,6 +100,7 @@ async def prepare_effective_context(
     memory_ids: tuple[str, ...] = (),
     skill_ids: tuple[str, ...] = (),
     current_message_id: int | None = None,
+    asset_hmac_key: bytes | None = None,
 ) -> EffectiveContext:
     return await build_effective_context(
         user_input,
@@ -115,6 +116,7 @@ async def prepare_effective_context(
         memory_ids=memory_ids,
         skill_ids=skill_ids,
         current_message_id=current_message_id,
+        asset_hmac_key=asset_hmac_key,
     )
 
 

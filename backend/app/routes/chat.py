@@ -22,6 +22,7 @@ from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
 from app.routes.skills import get_skill_registry
+from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.support import prepare_effective_context
 from app.security.auth import get_current_user
@@ -455,6 +456,7 @@ async def chat(
         memory_ids=memory_ids,
         skill_ids=tuple(skill.name for skill in relevant_skills),
         current_message_id=current_message_id,
+        asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
     )
     await ContextSnapshotRepository(memory.session_factory).record(effective_context.manifest)
     messages = list(effective_context.messages)

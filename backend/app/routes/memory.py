@@ -40,6 +40,7 @@ def _rotation_payload(
         "version_counts": {str(version): count for version, count in sorted(counts.items())},
         "remaining": remaining,
         "complete": remaining == 0,
+        "retirement_requires_legacy_writer_drain": True,
     }
 
 
