@@ -15,11 +15,12 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.observability.cost_tracker import price_model_usage_nusd, validated_pricing_pair
 from app.services.db_store import ModelChargeRow, ProjectBudgetRow, RunRow
 
 _MAX_BIGINT = 2**63 - 1
 _MAX_PAGE = 200
-_SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,254}$")
+_SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 
 
 class ChargeState(StrEnum):
@@ -51,6 +52,12 @@ class BudgetLimitConflict(MonetaryBudgetError):  # noqa: N818 - public domain te
 
 class ChargeStateConflict(MonetaryBudgetError):  # noqa: N818 - public domain terminology
     code = "charge_state_conflict"
+
+
+class ChargeConflict(MonetaryBudgetError):  # noqa: N818 - public domain terminology
+    """A charge key collided outside the caller's visible owner scope."""
+
+    code = "charge_conflict"
 
 
 class QuoteExceeded(MonetaryBudgetError):  # noqa: N818 - public domain terminology
@@ -103,8 +110,8 @@ class BudgetSummary:
     run_reserved_nusd: int
 
 
-def _id(value: str, label: str) -> str:
-    if not isinstance(value, str) or not _SAFE_ID.fullmatch(value):
+def _id(value: str, label: str, maximum: int) -> str:
+    if not isinstance(value, str) or len(value) > maximum or not _SAFE_ID.fullmatch(value):
         raise ValueError(f"{label} must be a safe non-empty identifier")
     return value
 
@@ -144,9 +151,9 @@ class MonetaryBudgetRepository:
         project_limit_nusd: int,
     ) -> BudgetSummary:
         owner_id, project_id, run_id = (
-            _id(owner_id, "owner_id"),
-            _id(project_id, "project_id"),
-            _id(run_id, "run_id"),
+            _id(owner_id, "owner_id", 255),
+            _id(project_id, "project_id", 255),
+            _id(run_id, "run_id", 36),
         )
         run_limit = _amount(run_limit_nusd, "run_limit_nusd")
         project_limit = _amount(project_limit_nusd, "project_limit_nusd")
@@ -188,22 +195,30 @@ class MonetaryBudgetRepository:
                 await session.rollback()
                 raise BudgetLimitConflict
 
-            run = await session.scalar(
-                select(RunRow).where(RunRow.run_id == run_id).with_for_update()
+            opened = await session.execute(
+                update(RunRow)
+                .where(
+                    RunRow.run_id == run_id,
+                    RunRow.user_id == owner_id,
+                    RunRow.project_id == project_id,
+                    RunRow.budget_opened_at.is_(None),
+                )
+                .values(budget_limit_nusd=run_limit, budget_opened_at=now)
             )
-            if run is None or str(run.user_id) != owner_id or str(run.project_id) != project_id:
-                await session.rollback()
-                raise ValueError("run scope mismatch or run does not exist")
-            current = (
-                int(run.budget_limit_nusd),
-                int(run.budget_spent_nusd),
-                int(run.budget_reserved_nusd),
-            )
-            if current == (0, 0, 0):
-                run.budget_limit_nusd = run_limit
-            elif current[0] != run_limit:
-                await session.rollback()
-                raise BudgetLimitConflict
+            if _rows(opened) != 1:
+                run = await session.scalar(
+                    select(RunRow).where(
+                        RunRow.run_id == run_id,
+                        RunRow.user_id == owner_id,
+                        RunRow.project_id == project_id,
+                    )
+                )
+                if run is None:
+                    await session.rollback()
+                    raise ValueError("run scope mismatch or run does not exist")
+                if run.budget_opened_at is None or int(run.budget_limit_nusd) != run_limit:
+                    await session.rollback()
+                    raise BudgetLimitConflict
             await session.commit()
         summary = await self.summary(owner_id=owner_id, project_id=project_id, run_id=run_id)
         assert summary is not None
@@ -221,15 +236,17 @@ class MonetaryBudgetRepository:
         model: str,
     ) -> ChargeReservation:
         charge_id, owner_id, project_id, run_id = (
-            _id(charge_id, "charge_id"),
-            _id(owner_id, "owner_id"),
-            _id(project_id, "project_id"),
-            _id(run_id, "run_id"),
+            _id(charge_id, "charge_id", 128),
+            _id(owner_id, "owner_id", 255),
+            _id(project_id, "project_id", 255),
+            _id(run_id, "run_id", 36),
         )
         if type(ordinal) is not int or not 0 <= ordinal <= 2**31 - 1:
             raise ValueError("ordinal must be a nonnegative integer")
         quote = _amount(quote_nusd, "quote_nusd")
-        provider, model = _id(provider, "provider"), _id(model, "model")
+        provider = _id(provider, "provider", 100)
+        model = _id(model, "model", 255)
+        provider, model = validated_pricing_pair(model, provider)
         now = datetime.now(tz=UTC)
         async with self._sessions() as session:
             existing = await self._duplicate(
@@ -251,6 +268,11 @@ class MonetaryBudgetRepository:
             )
             if _rows(project_result) != 1:
                 await session.rollback()
+                existing = await self._duplicate(
+                    session, charge_id, owner_id, project_id, run_id, ordinal
+                )
+                if existing is not None:
+                    return self._reservation(existing, False)
                 raise ProjectBudgetExceeded
             run_result = await session.execute(
                 update(RunRow)
@@ -258,6 +280,7 @@ class MonetaryBudgetRepository:
                     RunRow.run_id == run_id,
                     RunRow.user_id == owner_id,
                     RunRow.project_id == project_id,
+                    RunRow.budget_opened_at.is_not(None),
                     quote
                     <= RunRow.budget_limit_nusd
                     - RunRow.budget_spent_nusd
@@ -267,6 +290,11 @@ class MonetaryBudgetRepository:
             )
             if _rows(run_result) != 1:
                 await session.rollback()
+                existing = await self._duplicate(
+                    session, charge_id, owner_id, project_id, run_id, ordinal
+                )
+                if existing is not None:
+                    return self._reservation(existing, False)
                 raise RunBudgetExceeded
             session.add(
                 ModelChargeRow(
@@ -293,7 +321,7 @@ class MonetaryBudgetRepository:
                     session, charge_id, owner_id, project_id, run_id, ordinal
                 )
                 if existing is None:
-                    raise
+                    raise ChargeConflict from None
                 return self._reservation(existing, False)
 
     async def mark_dispatched(
@@ -315,9 +343,9 @@ class MonetaryBudgetRepository:
         owner_id: str,
         project_id: str,
         run_id: str,
-        actual_nusd: int,
-        input_tokens: int,
-        output_tokens: int,
+        actual_nusd: int | None = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
         cache_read_tokens: int | None = None,
         cache_write_tokens: int | None = None,
         provider: str | None = None,
@@ -326,7 +354,7 @@ class MonetaryBudgetRepository:
         charge_id, owner_id, project_id, run_id = self._scope(
             charge_id, owner_id, project_id, run_id
         )
-        actual = _amount(actual_nusd, "actual_nusd")
+        supplied_actual = _optional_amount(actual_nusd, "actual_nusd")
         input_count = _amount(input_tokens, "input_tokens")
         output_count = _amount(output_tokens, "output_tokens")
         read = _optional_amount(cache_read_tokens, "cache_read_tokens")
@@ -334,9 +362,9 @@ class MonetaryBudgetRepository:
         if (read or 0) + (write or 0) > input_count:
             raise ValueError("cache token subsets cannot exceed total input tokens")
         if provider is not None:
-            provider = _id(provider, "provider")
+            provider = _id(provider, "provider", 100)
         if model is not None:
-            model = _id(model, "model")
+            model = _id(model, "model", 255)
         now = datetime.now(tz=UTC)
         async with self._sessions() as session:
             # Read the immutable quote, then mutate in project -> run -> charge order.
@@ -348,7 +376,39 @@ class MonetaryBudgetRepository:
             if charge is None or charge.state != ChargeState.DISPATCHED.value:
                 raise ChargeStateConflict
             quote = int(charge.reserved_nusd)
+            actual_provider = provider if provider is not None else charge.provider
+            actual_model = model if model is not None else charge.model
+            if actual_provider is None or actual_model is None:
+                raise ValueError("charge has no priceable provider/model")
+            actual_provider, actual_model = validated_pricing_pair(actual_model, actual_provider)
+            actual = price_model_usage_nusd(
+                actual_model,
+                actual_provider,
+                input_count,
+                output_count,
+                read,
+                write,
+            )
+            if supplied_actual is not None and supplied_actual != actual:
+                raise ValueError("actual_nusd does not match computed provider usage")
             if actual > quote:
+                project_lock = await session.execute(
+                    update(ProjectBudgetRow)
+                    .where(
+                        ProjectBudgetRow.owner_id == owner_id,
+                        ProjectBudgetRow.project_id == project_id,
+                    )
+                    .values(updated_at=ProjectBudgetRow.updated_at)
+                )
+                run_lock = await session.execute(
+                    update(RunRow)
+                    .where(
+                        RunRow.run_id == run_id,
+                        RunRow.user_id == owner_id,
+                        RunRow.project_id == project_id,
+                    )
+                    .values(budget_reserved_nusd=RunRow.budget_reserved_nusd)
+                )
                 changed = await session.execute(
                     update(ModelChargeRow)
                     .where(
@@ -361,7 +421,7 @@ class MonetaryBudgetRepository:
                         updated_at=now,
                     )
                 )
-                if _rows(changed) != 1:
+                if any(_rows(result) != 1 for result in (project_lock, run_lock, changed)):
                     await session.rollback()
                     raise ChargeStateConflict
                 await session.commit()
@@ -402,8 +462,8 @@ class MonetaryBudgetRepository:
                 .values(
                     state=ChargeState.RECONCILED.value,
                     actual_nusd=actual,
-                    provider=provider or charge.provider,
-                    model=model or charge.model,
+                    provider=actual_provider,
+                    model=actual_model,
                     input_tokens=input_count,
                     output_tokens=output_count,
                     cache_read_tokens=read,
@@ -435,7 +495,7 @@ class MonetaryBudgetRepository:
         run_id: str,
         reason_code: str = "indeterminate",
     ) -> ChargeRecord:
-        reason = _id(reason_code, "reason_code")
+        reason = _id(reason_code, "reason_code", 64)
         return await self._simple_transition(
             charge_id,
             owner_id,
@@ -447,11 +507,19 @@ class MonetaryBudgetRepository:
         )
 
     async def recover_stale(self, cutoff: datetime) -> int:
+        """Recover stale charges without ever taking a charge lock before account locks."""
         cutoff = _utc(cutoff, "cutoff")
         async with self._sessions() as session:
-            stale = (
-                await session.scalars(
-                    select(ModelChargeRow)
+            candidates = (
+                await session.execute(
+                    select(
+                        ModelChargeRow.charge_id,
+                        ModelChargeRow.owner_id,
+                        ModelChargeRow.project_id,
+                        ModelChargeRow.run_id,
+                        ModelChargeRow.state,
+                        ModelChargeRow.reserved_nusd,
+                    )
                     .where(
                         ModelChargeRow.state.in_(
                             [ChargeState.RESERVED.value, ChargeState.DISPATCHED.value]
@@ -464,19 +532,20 @@ class MonetaryBudgetRepository:
                         ModelChargeRow.run_id,
                         ModelChargeRow.charge_id,
                     )
-                    .with_for_update()
                 )
             ).all()
-            count = 0
+
+        count = 0
+        for charge_id, owner_id, project_id, run_id, state, reserved_nusd in candidates:
             now = datetime.now(tz=UTC)
-            for charge in stale:
-                if charge.state == ChargeState.RESERVED.value:
-                    quote = int(charge.reserved_nusd)
+            quote = int(reserved_nusd)
+            async with self._sessions() as session:
+                if state == ChargeState.RESERVED.value:
                     project = await session.execute(
                         update(ProjectBudgetRow)
                         .where(
-                            ProjectBudgetRow.owner_id == charge.owner_id,
-                            ProjectBudgetRow.project_id == charge.project_id,
+                            ProjectBudgetRow.owner_id == owner_id,
+                            ProjectBudgetRow.project_id == project_id,
                             ProjectBudgetRow.reserved_nusd >= quote,
                         )
                         .values(
@@ -487,25 +556,76 @@ class MonetaryBudgetRepository:
                     run = await session.execute(
                         update(RunRow)
                         .where(
-                            RunRow.run_id == charge.run_id,
-                            RunRow.user_id == charge.owner_id,
-                            RunRow.project_id == charge.project_id,
+                            RunRow.run_id == run_id,
+                            RunRow.user_id == owner_id,
+                            RunRow.project_id == project_id,
                             RunRow.budget_reserved_nusd >= quote,
                         )
                         .values(budget_reserved_nusd=RunRow.budget_reserved_nusd - quote)
                     )
-                    if _rows(project) != 1 or _rows(run) != 1:
-                        await session.rollback()
-                        raise ChargeStateConflict
-                    charge.state = ChargeState.RELEASED.value
-                    charge.reason_code = "stale_reserved"
+                    changed = await session.execute(
+                        update(ModelChargeRow)
+                        .where(
+                            ModelChargeRow.charge_id == charge_id,
+                            ModelChargeRow.owner_id == owner_id,
+                            ModelChargeRow.project_id == project_id,
+                            ModelChargeRow.run_id == run_id,
+                            ModelChargeRow.state == ChargeState.RESERVED.value,
+                            ModelChargeRow.reserved_nusd == quote,
+                            ModelChargeRow.updated_at < cutoff,
+                        )
+                        .values(
+                            state=ChargeState.RELEASED.value,
+                            reason_code="stale_reserved",
+                            updated_at=now,
+                        )
+                    )
                 else:
-                    charge.state = ChargeState.INDETERMINATE.value
-                    charge.reason_code = "stale_dispatched"
-                charge.updated_at = now
-                count += 1
-            await session.commit()
-            return count
+                    project = await session.execute(
+                        update(ProjectBudgetRow)
+                        .where(
+                            ProjectBudgetRow.owner_id == owner_id,
+                            ProjectBudgetRow.project_id == project_id,
+                        )
+                        .values(updated_at=ProjectBudgetRow.updated_at)
+                    )
+                    run = await session.execute(
+                        update(RunRow)
+                        .where(
+                            RunRow.run_id == run_id,
+                            RunRow.user_id == owner_id,
+                            RunRow.project_id == project_id,
+                        )
+                        .values(budget_reserved_nusd=RunRow.budget_reserved_nusd)
+                    )
+                    changed = await session.execute(
+                        update(ModelChargeRow)
+                        .where(
+                            ModelChargeRow.charge_id == charge_id,
+                            ModelChargeRow.owner_id == owner_id,
+                            ModelChargeRow.project_id == project_id,
+                            ModelChargeRow.run_id == run_id,
+                            ModelChargeRow.state == ChargeState.DISPATCHED.value,
+                            ModelChargeRow.updated_at < cutoff,
+                        )
+                        .values(
+                            state=ChargeState.INDETERMINATE.value,
+                            reason_code="stale_dispatched",
+                            updated_at=now,
+                        )
+                    )
+                rows = (_rows(project), _rows(run), _rows(changed))
+                if rows == (1, 1, 1):
+                    await session.commit()
+                    count += 1
+                elif rows[2] == 0:
+                    # Another recovery/terminal transition won. Roll back account
+                    # changes together so recovery remains exactly-once.
+                    await session.rollback()
+                else:
+                    await session.rollback()
+                    raise ChargeStateConflict
+        return count
 
     async def get(
         self, charge_id: str, *, owner_id: str, project_id: str, run_id: str
@@ -533,9 +653,9 @@ class MonetaryBudgetRepository:
         offset: int = 0,
     ) -> tuple[ChargeRecord, ...]:
         owner_id, project_id, run_id = (
-            _id(owner_id, "owner_id"),
-            _id(project_id, "project_id"),
-            _id(run_id, "run_id"),
+            _id(owner_id, "owner_id", 255),
+            _id(project_id, "project_id", 255),
+            _id(run_id, "run_id", 36),
         )
         if (
             type(limit) is not int
@@ -564,9 +684,9 @@ class MonetaryBudgetRepository:
 
     async def summary(self, *, owner_id: str, project_id: str, run_id: str) -> BudgetSummary | None:
         owner_id, project_id, run_id = (
-            _id(owner_id, "owner_id"),
-            _id(project_id, "project_id"),
-            _id(run_id, "run_id"),
+            _id(owner_id, "owner_id", 255),
+            _id(project_id, "project_id", 255),
+            _id(run_id, "run_id", 36),
         )
         async with self._sessions() as session:
             result = (
@@ -676,6 +796,23 @@ class MonetaryBudgetRepository:
         )
         values.update(state=target.value, updated_at=datetime.now(tz=UTC))
         async with self._sessions() as session:
+            project_lock = await session.execute(
+                update(ProjectBudgetRow)
+                .where(
+                    ProjectBudgetRow.owner_id == owner_id,
+                    ProjectBudgetRow.project_id == project_id,
+                )
+                .values(updated_at=ProjectBudgetRow.updated_at)
+            )
+            run_lock = await session.execute(
+                update(RunRow)
+                .where(
+                    RunRow.run_id == run_id,
+                    RunRow.user_id == owner_id,
+                    RunRow.project_id == project_id,
+                )
+                .values(budget_reserved_nusd=RunRow.budget_reserved_nusd)
+            )
             result = await session.execute(
                 update(ModelChargeRow)
                 .where(
@@ -684,7 +821,7 @@ class MonetaryBudgetRepository:
                 )
                 .values(**values)
             )
-            if _rows(result) != 1:
+            if any(_rows(item) != 1 for item in (project_lock, run_lock, result)):
                 await session.rollback()
                 raise ChargeStateConflict
             await session.commit()
@@ -705,14 +842,16 @@ class MonetaryBudgetRepository:
     ) -> ModelChargeRow | None:
         row = await session.scalar(
             select(ModelChargeRow).where(
-                (ModelChargeRow.charge_id == charge_id)
-                | ((ModelChargeRow.run_id == run_id) & (ModelChargeRow.ordinal == ordinal))
+                ModelChargeRow.owner_id == owner_id,
+                ModelChargeRow.project_id == project_id,
+                (
+                    (ModelChargeRow.charge_id == charge_id)
+                    | ((ModelChargeRow.run_id == run_id) & (ModelChargeRow.ordinal == ordinal))
+                ),
             )
         )
-        if row is not None and (
-            row.owner_id != owner_id or row.project_id != project_id or row.run_id != run_id
-        ):
-            raise ValueError("charge scope mismatch")
+        if row is not None and row.run_id != run_id:
+            raise ChargeConflict
         return row
 
     @staticmethod
@@ -720,10 +859,10 @@ class MonetaryBudgetRepository:
         charge_id: str, owner_id: str, project_id: str, run_id: str
     ) -> tuple[str, str, str, str]:
         return (
-            _id(charge_id, "charge_id"),
-            _id(owner_id, "owner_id"),
-            _id(project_id, "project_id"),
-            _id(run_id, "run_id"),
+            _id(charge_id, "charge_id", 128),
+            _id(owner_id, "owner_id", 255),
+            _id(project_id, "project_id", 255),
+            _id(run_id, "run_id", 36),
         )
 
     @staticmethod

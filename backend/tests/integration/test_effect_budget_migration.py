@@ -54,9 +54,12 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     engine = create_engine(f"sqlite:///{database}")
     inspector = inspect(engine)
     assert {"effects", "project_budgets", "model_charges"} <= set(inspector.get_table_names())
-    assert {"budget_limit_nusd", "budget_spent_nusd", "budget_reserved_nusd"} <= _names(
-        inspector.get_columns("runs")
-    )
+    assert {
+        "budget_limit_nusd",
+        "budget_spent_nusd",
+        "budget_reserved_nusd",
+        "budget_opened_at",
+    } <= _names(inspector.get_columns("runs"))
     with engine.connect() as connection:
         assert connection.execute(
             text(
@@ -115,6 +118,7 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
         "budget_limit_nusd",
         "budget_spent_nusd",
         "budget_reserved_nusd",
+        "budget_opened_at",
     } & _names(downgraded.get_columns("runs"))
 
     command.upgrade(config, "head")

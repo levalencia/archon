@@ -222,6 +222,7 @@ class RunRow(Base):
     budget_limit_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
     budget_spent_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
     budget_reserved_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
+    budget_opened_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class EffectRow(Base):
@@ -310,7 +311,7 @@ class ModelChargeRow(Base):
         Index("ix_model_charges_run_state", "run_id", "state"),
     )
 
-    charge_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    charge_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
     project_id: Mapped[str] = mapped_column(String(255), nullable=False)
     run_id: Mapped[str] = mapped_column(String(36), nullable=False)

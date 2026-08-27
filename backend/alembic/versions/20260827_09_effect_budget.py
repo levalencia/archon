@@ -31,6 +31,7 @@ def upgrade() -> None:
         batch.add_column(
             sa.Column("budget_reserved_nusd", sa.BigInteger(), nullable=False, server_default="0")
         )
+        batch.add_column(sa.Column("budget_opened_at", sa.DateTime(timezone=True), nullable=True))
         batch.create_check_constraint(
             "ck_runs_budget_amounts_nonnegative",
             "budget_limit_nusd >= 0 AND budget_spent_nusd >= 0 AND budget_reserved_nusd >= 0",
@@ -93,7 +94,7 @@ def upgrade() -> None:
 
     op.create_table(
         "model_charges",
-        sa.Column("charge_id", sa.String(255), primary_key=True),
+        sa.Column("charge_id", sa.String(128), primary_key=True),
         sa.Column("owner_id", sa.String(255), nullable=False),
         sa.Column("project_id", sa.String(255), nullable=False),
         sa.Column("run_id", sa.String(36), nullable=False),
@@ -156,3 +157,4 @@ def downgrade() -> None:
         batch.drop_column("budget_reserved_nusd")
         batch.drop_column("budget_spent_nusd")
         batch.drop_column("budget_limit_nusd")
+        batch.drop_column("budget_opened_at")

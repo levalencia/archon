@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 import structlog
@@ -27,31 +27,42 @@ class UnknownModelPricing(ValueError):  # noqa: N818 - stable public domain name
 
 @dataclass(frozen=True, slots=True)
 class ModelPricing:
-    """USD rates per 1K tokens; cache rates are explicit where published."""
+    """Exact USD rates per 1K tokens and provider families allowed to report them."""
 
     input: float
     output: float
     cache_read: float | None = None
     cache_write: float | None = None
+    providers: frozenset[str] = frozenset()
 
 
 # Source: provider pricing pages, reviewed Aug 2026. Rates are per 1K tokens.
+# Decimal(str(rate)) below preserves the published decimal exactly; provider
+# families prevent a known model name from laundering arbitrary provider usage.
 MODEL_PRICING: dict[str, ModelPricing] = {
-    "claude-opus-4-6": ModelPricing(0.005, 0.025, 0.0005, 0.00625),
-    "claude-sonnet-4-20250514": ModelPricing(0.003, 0.015, 0.0003, 0.00375),
-    "claude-haiku-3": ModelPricing(0.00025, 0.00125, 0.000025, 0.0003125),
-    "gpt-4o": ModelPricing(0.0025, 0.01),
-    "gpt-4o-mini": ModelPricing(0.00015, 0.0006),
-    "gpt-4-turbo": ModelPricing(0.01, 0.03),
-    "o1": ModelPricing(0.015, 0.06),
-    "llama3.1:8b": ModelPricing(0.0, 0.0),
-    "llava:7b": ModelPricing(0.0, 0.0),
-    "mock-model": ModelPricing(0.0, 0.0),
+    "claude-opus-4-6": ModelPricing(
+        0.005, 0.025, 0.0005, 0.00625, frozenset({"anthropic", "foundry"})
+    ),
+    "claude-sonnet-4-20250514": ModelPricing(
+        0.003, 0.015, 0.0003, 0.00375, frozenset({"anthropic", "foundry"})
+    ),
+    "claude-haiku-3": ModelPricing(
+        0.00025, 0.00125, 0.000025, 0.0003125, frozenset({"anthropic", "foundry"})
+    ),
+    "gpt-4o": ModelPricing(0.0025, 0.01, providers=frozenset({"openai", "foundry"})),
+    "gpt-4o-mini": ModelPricing(0.00015, 0.0006, providers=frozenset({"openai", "foundry"})),
+    "gpt-4-turbo": ModelPricing(0.01, 0.03, providers=frozenset({"openai", "foundry"})),
+    "o1": ModelPricing(0.015, 0.06, providers=frozenset({"openai", "foundry"})),
+    "llama3.1:8b": ModelPricing(0.0, 0.0, providers=frozenset({"ollama"})),
+    "llava:7b": ModelPricing(0.0, 0.0, providers=frozenset({"ollama"})),
+    "mock-model": ModelPricing(0.0, 0.0, providers=frozenset({"mock"})),
+    # Kept for non-enforcing CostTracker compatibility; never accepted by the
+    # exact budget pricing helpers.
     "default": ModelPricing(0.001, 0.002),
 }
 # Backward-compatible public table used by existing integrations/tests.
 COST_PER_1K: dict[str, tuple[float, float]] = {
-    model: (pricing.input, pricing.output) for model, pricing in MODEL_PRICING.items()
+    model: (float(pricing.input), float(pricing.output)) for model, pricing in MODEL_PRICING.items()
 }
 
 
@@ -70,6 +81,30 @@ def _supports_cache_pricing(provider: str) -> bool:
     """Recognize configured provider names and fallback adapter class names."""
     normalized = "".join(character for character in provider.casefold() if character.isalnum())
     return normalized in {"anthropic", "anthropicadapter", "foundry", "foundryadapter"}
+
+
+def validated_pricing_pair(model: str, provider: str) -> tuple[str, str]:
+    """Canonicalize an allowed provider/model pair for safe persistence."""
+    if not isinstance(model, str) or not model or model == "default" or model not in MODEL_PRICING:
+        raise UnknownModelPricing(str(model))
+    if not isinstance(provider, str) or not provider:
+        raise ValueError("provider must be a non-empty string")
+    normalized = provider.casefold()
+    aliases = {
+        "openai": "openai",
+        "openaiadapter": "openai",
+        "anthropic": "anthropic",
+        "anthropicadapter": "anthropic",
+        "foundry": "foundry",
+        "foundryadapter": "foundry",
+        "ollama": "ollama",
+        "ollamaadapter": "ollama",
+        "mock": "mock",
+    }
+    family = aliases.get(normalized)
+    if family is None or family not in MODEL_PRICING[model].providers:
+        raise UnknownModelPricing(model)
+    return family, model
 
 
 def _token_count(value: int | None, name: str, *, optional: bool = False) -> int | None:
@@ -91,10 +126,7 @@ def price_model_usage_nusd(
     cache_write: int | None = None,
 ) -> int:
     """Pure, exact nano-USD price for one provider usage report."""
-    if not isinstance(model, str) or not model or model == "default" or model not in MODEL_PRICING:
-        raise UnknownModelPricing(str(model))
-    if not isinstance(provider, str) or not provider:
-        raise ValueError("provider must be a non-empty string")
+    provider, model = validated_pricing_pair(model, provider)
     input_count = _token_count(input_tokens, "input_tokens")
     output_count = _token_count(output_tokens, "output_tokens")
     read_count = _token_count(cache_read, "cache_read", optional=True)
@@ -123,9 +155,9 @@ def price_model_usage_nusd(
         * Decimal(USD_TO_NUSD)
         / Decimal(1000)
     )
-    integral = amount.to_integral_value()
-    if amount != integral or not 0 <= integral <= _MAX_BIGINT:
-        raise OverflowError("priced usage is outside the exact BIGINT nUSD range")
+    integral = amount.to_integral_value(rounding=ROUND_CEILING)
+    if not 0 <= integral <= _MAX_BIGINT:
+        raise OverflowError("priced usage is outside the BIGINT nUSD range")
     return int(integral)
 
 
@@ -209,18 +241,27 @@ class CostTracker:
 
         known_model = model in MODEL_PRICING
         pricing = MODEL_PRICING.get(model, MODEL_PRICING["default"])
+        input_rate, output_rate = float(pricing.input), float(pricing.output)
         cache_pricing_supported = provider is not None and _supports_cache_pricing(provider)
-        cache_read_rate = pricing.cache_read if known_model and cache_pricing_supported else None
-        cache_write_rate = pricing.cache_write if known_model and cache_pricing_supported else None
+        cache_read_rate = (
+            float(pricing.cache_read)
+            if known_model and cache_pricing_supported and pricing.cache_read is not None
+            else None
+        )
+        cache_write_rate = (
+            float(pricing.cache_write)
+            if known_model and cache_pricing_supported and pricing.cache_write is not None
+            else None
+        )
         # No published/known cache rate means no assumed discount or surcharge.
-        read_rate = pricing.input if cache_read_rate is None else cache_read_rate
-        write_rate = pricing.input if cache_write_rate is None else cache_write_rate
-        baseline_cost = (input_tokens * pricing.input + output_tokens * pricing.output) / 1000
+        read_rate = input_rate if cache_read_rate is None else cache_read_rate
+        write_rate = input_rate if cache_write_rate is None else cache_write_rate
+        baseline_cost = (input_tokens * input_rate + output_tokens * output_rate) / 1000
         cost = (
-            uncached_input * pricing.input
+            uncached_input * input_rate
             + cache_read * read_rate
             + cache_write * write_rate
-            + output_tokens * pricing.output
+            + output_tokens * output_rate
         ) / 1000
         cache_savings = baseline_cost - cost if cache_reported else None
         total_tokens = input_tokens + output_tokens

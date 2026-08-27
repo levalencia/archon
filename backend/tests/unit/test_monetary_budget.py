@@ -30,8 +30,9 @@ from app.services.monetary_budget import (
 def test_exact_pricing_cache_unknown_and_bounds() -> None:
     assert price_model_usage_nusd("gpt-4o", "openai", 1_000, 1_000) == 12_500_000
     assert price_model_usage_nusd("claude-opus-4-6", "anthropic", 1_000, 0, 100, 100) == 4_675_000
-    # Cache reports do not get unpublished/unsupported discounts.
-    assert price_model_usage_nusd("claude-opus-4-6", "other", 1_000, 0, 100, 100) == 5_000_000
+    assert price_model_usage_nusd("claude-haiku-3", "AnthropicAdapter", 1, 0, 0, 1) == 313
+    with pytest.raises(UnknownModelPricing):
+        price_model_usage_nusd("claude-opus-4-6", "other", 1_000, 0, 100, 100)
     assert (
         quote_model_call_nusd([("openai", "gpt-4o-mini"), ("openai", "gpt-4o")], 1_000, 1_000)
         == 12_500_000
@@ -53,13 +54,18 @@ async def _repository(path: Path) -> tuple[MonetaryBudgetRepository, async_sessi
     return MonetaryBudgetRepository(sessions), sessions, engine
 
 
-async def _run(sessions: async_sessionmaker, run_id: str, owner: str = "alice") -> None:
+async def _run(
+    sessions: async_sessionmaker,
+    run_id: str,
+    owner: str = "alice",
+    project: str = "project",
+) -> None:
     async with sessions() as session:
         session.add(
             RunRow(
                 run_id=run_id,
                 user_id=owner,
-                project_id="project",
+                project_id=project,
                 conversation_id=run_id,
                 correlation_id=run_id,
                 provider="mock",
@@ -94,23 +100,23 @@ async def test_limits_duplicates_reconcile_release_and_restart(tmp_path: Path) -
             "charge-2", "alice", "project", "run-1", 1, 1, "mock", "mock-model"
         )
     await repository.mark_dispatched("charge-1", "alice", "project", "run-1")
-    charge = await repository.reconcile("charge-1", "alice", "project", "run-1", 75, 10, 5)
+    charge = await repository.reconcile("charge-1", "alice", "project", "run-1", 0, 10, 5)
     assert charge.state is ChargeState.RECONCILED
     summary = await repository.summary(owner_id="alice", project_id="project", run_id="run-1")
     assert summary is not None
-    assert (summary.run_spent_nusd, summary.run_reserved_nusd) == (75, 0)
+    assert (summary.run_spent_nusd, summary.run_reserved_nusd) == (0, 0)
 
     equal = await repository.reserve_call(
         "charge-3", "alice", "project", "run-1", 2, 25, "mock", "mock-model"
     )
     assert equal.should_dispatch
     await repository.mark_dispatched("charge-3", "alice", "project", "run-1")
-    await repository.reconcile("charge-3", "alice", "project", "run-1", 25, 1, 1)
+    await repository.reconcile("charge-3", "alice", "project", "run-1", 0, 1, 1)
 
     await engine.dispose()
     restarted, _, restarted_engine = await _repository(database)
     durable = await restarted.summary(owner_id="alice", project_id="project", run_id="run-1")
-    assert durable is not None and durable.project_spent_nusd == 100
+    assert durable is not None and durable.project_spent_nusd == 0
     await restarted_engine.dispose()
 
 
@@ -139,9 +145,15 @@ async def test_project_aggregate_concurrency_overquote_release_and_recovery(tmp_
     charges = await repository.list(owner_id="alice", project_id="project", run_id="run-a")
     released_id, dispatched_id = charges[0].charge_id, charges[1].charge_id
     await repository.release(released_id, "alice", "project", "run-a")
+    async with sessions() as session:
+        row = await session.get(ModelChargeRow, dispatched_id)
+        assert row is not None
+        row.provider = "openai"
+        row.model = "gpt-4o"
+        await session.commit()
     await repository.mark_dispatched(dispatched_id, "alice", "project", "run-a")
     with pytest.raises(QuoteExceeded):
-        await repository.reconcile(dispatched_id, "alice", "project", "run-a", 11, 1, 1)
+        await repository.reconcile(dispatched_id, "alice", "project", "run-a", None, 1, 1)
     over = await repository.get(
         dispatched_id, owner_id="alice", project_id="project", run_id="run-a"
     )
@@ -176,4 +188,153 @@ async def test_project_aggregate_concurrency_overquote_release_and_recovery(tmp_
     assert not ({"prompt", "usage", "payload"} & set(over.__dataclass_fields__))
     with pytest.raises(ChargeStateConflict):
         await repository.release(dispatched_id, "alice", "project", "run-a")
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_zero_limit_is_immutable_and_duplicate_exact_budget_race(tmp_path: Path) -> None:
+    repository, sessions, engine = await _repository(tmp_path / "immutability.db")
+    await _run(sessions, "zero")
+    await repository.open_run("alice", "project", "zero", 0, 10)
+    with pytest.raises(BudgetLimitConflict):
+        await repository.open_run("alice", "project", "zero", 1, 10)
+
+    await _run(sessions, "race")
+    await repository.open_run("alice", "project", "race", 10, 10)
+
+    async def duplicate() -> object:
+        return await repository.reserve_call(
+            "same-charge", "alice", "project", "race", 0, 10, "mock", "mock-model"
+        )
+
+    results = await asyncio.gather(duplicate(), duplicate())
+    assert sorted(result.should_dispatch for result in results) == [False, True]
+    summary = await repository.summary(owner_id="alice", project_id="project", run_id="race")
+    assert summary is not None
+    assert (summary.project_reserved_nusd, summary.run_reserved_nusd) == (10, 10)
+    with pytest.raises(ProjectBudgetExceeded):
+        await repository.reserve_call(
+            "one-over-exact", "alice", "project", "race", 1, 1, "mock", "mock-model"
+        )
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_foreign_collision_is_generic_and_identifiers_are_bounded(tmp_path: Path) -> None:
+    repository, sessions, engine = await _repository(tmp_path / "scope.db")
+    await _run(sessions, "alice-run")
+    await _run(sessions, "bob-run", "bob", "other")
+    await repository.open_run("alice", "project", "alice-run", 10, 10)
+    await repository.open_run("bob", "other", "bob-run", 10, 10)
+    await repository.reserve_call(
+        "shared", "alice", "project", "alice-run", 0, 1, "mock", "mock-model"
+    )
+    from app.services.monetary_budget import ChargeConflict
+
+    with pytest.raises(ChargeConflict, match="charge_conflict"):
+        await repository.reserve_call(
+            "shared", "bob", "other", "bob-run", 0, 1, "mock", "mock-model"
+        )
+
+    for field, bad in (
+        ("owner", "x" * 256),
+        ("project", "x" * 256),
+        ("run", "x" * 37),
+    ):
+        values = {"owner": "alice", "project": "project", "run": "alice-run"}
+        values[field] = bad
+        with pytest.raises(ValueError):
+            await repository.open_run(values["owner"], values["project"], values["run"], 1, 10)
+    for bad in ("x" * 129, " leading", "has space", "bad\n", "\ud800"):
+        with pytest.raises(ValueError):
+            await repository.reserve_call(
+                bad, "alice", "project", "alice-run", 2, 1, "mock", "mock-model"
+            )
+    for ordinal in (-1, True, 2**31):
+        with pytest.raises(ValueError):
+            await repository.reserve_call(
+                "bounded", "alice", "project", "alice-run", ordinal, 1, "mock", "mock-model"
+            )
+    with pytest.raises(UnknownModelPricing):
+        await repository.reserve_call(
+            "wrong-provider", "alice", "project", "alice-run", 3, 1, "anthropic", "gpt-4o"
+        )
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_recomputes_usage_and_allows_recognized_fallback(tmp_path: Path) -> None:
+    repository, sessions, engine = await _repository(tmp_path / "reconcile.db")
+    await _run(sessions, "paid")
+    await repository.open_run("alice", "project", "paid", 1_000_000, 1_000_000)
+    await repository.reserve_call(
+        "paid-charge", "alice", "project", "paid", 0, 1_000_000, "anthropic", "claude-haiku-3"
+    )
+    await repository.mark_dispatched("paid-charge", "alice", "project", "paid")
+    with pytest.raises(ValueError, match="does not match"):
+        await repository.reconcile(
+            "paid-charge", "alice", "project", "paid", 0, 1, 0, provider="foundry"
+        )
+    charge = await repository.reconcile(
+        "paid-charge", "alice", "project", "paid", None, 1, 0, provider="FoundryAdapter"
+    )
+    assert (charge.actual_nusd, charge.provider, charge.model) == (250, "foundry", "claude-haiku-3")
+    summary = await repository.summary(owner_id="alice", project_id="project", run_id="paid")
+    assert summary is not None
+    assert (summary.run_spent_nusd, summary.run_reserved_nusd) == (250, 0)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_recovery_is_idempotent_with_release(tmp_path: Path) -> None:
+    repository, sessions, engine = await _repository(tmp_path / "recovery-race.db")
+    await _run(sessions, "recover")
+    await repository.open_run("alice", "project", "recover", 20, 20)
+    await repository.reserve_call(
+        "stale-reserved", "alice", "project", "recover", 0, 10, "mock", "mock-model"
+    )
+    old = datetime.now(tz=UTC) - timedelta(days=1)
+    async with sessions() as session:
+        row = await session.get(ModelChargeRow, "stale-reserved")
+        assert row is not None
+        row.updated_at = old
+        await session.commit()
+
+    async def release_or_conflict() -> str:
+        try:
+            await repository.release("stale-reserved", "alice", "project", "recover")
+            return "released"
+        except ChargeStateConflict:
+            return "lost"
+
+    recovered, released = await asyncio.gather(
+        repository.recover_stale(datetime.now(tz=UTC) - timedelta(hours=1)),
+        release_or_conflict(),
+    )
+    assert (recovered, released) in {(1, "lost"), (0, "released")}
+    summary = await repository.summary(owner_id="alice", project_id="project", run_id="recover")
+    assert summary is not None
+    assert (summary.project_reserved_nusd, summary.run_reserved_nusd) == (0, 0)
+
+    await repository.reserve_call(
+        "stale-dispatched", "alice", "project", "recover", 1, 10, "mock", "mock-model"
+    )
+    await repository.mark_dispatched("stale-dispatched", "alice", "project", "recover")
+    async with sessions() as session:
+        row = await session.get(ModelChargeRow, "stale-dispatched")
+        assert row is not None
+        row.updated_at = old
+        await session.commit()
+    counts = await asyncio.gather(
+        repository.recover_stale(datetime.now(tz=UTC) - timedelta(hours=1)),
+        repository.recover_stale(datetime.now(tz=UTC) - timedelta(hours=1)),
+    )
+    assert sum(counts) == 1
+    charge = await repository.get(
+        "stale-dispatched", owner_id="alice", project_id="project", run_id="recover"
+    )
+    assert charge is not None and charge.state is ChargeState.INDETERMINATE
+    summary = await repository.summary(owner_id="alice", project_id="project", run_id="recover")
+    assert summary is not None
+    assert (summary.project_reserved_nusd, summary.run_reserved_nusd) == (10, 10)
     await engine.dispose()
