@@ -68,7 +68,9 @@ class MemoryKeyring:
             if type(version) is not int or not 1 <= version <= 255:
                 raise ValueError(_KEYRING_ERROR)
             normalized[version] = decode_memory_master_key(key)
-        if self.active_version not in normalized or len(set(normalized.values())) != len(normalized):
+        active_missing = self.active_version not in normalized
+        reused_material = len(set(normalized.values())) != len(normalized)
+        if active_missing or reused_material:
             raise ValueError(_KEYRING_ERROR)
         object.__setattr__(self, "keys", MappingProxyType(normalized))
 
