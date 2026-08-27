@@ -250,9 +250,7 @@ async def test_legacy_chat_forwards_temperature_when_supported() -> None:
     client = _LegacyTemperatureClient()
     messages = [{"role": "user", "content": "hi"}]
 
-    result = await FallbackLLMChain([client]).chat(
-        messages, max_tokens=77, temperature=0.1
-    )
+    result = await FallbackLLMChain([client]).chat(messages, max_tokens=77, temperature=0.1)
 
     assert result == "temperature-aware"
     assert client.calls == [(messages, 77, 0.1)]
