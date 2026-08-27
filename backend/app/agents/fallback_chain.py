@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import fields, replace
 from inspect import Parameter
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -214,16 +214,22 @@ class FallbackLLMChain:
         ]
         attempted_names: list[str] = []
         failed_attempts = 0
-        for index, (adapter, candidate) in enumerate(zip(self.adapters, self._candidates, strict=True)):
+        for index, (adapter, candidate) in enumerate(
+            zip(self.adapters, self._candidates, strict=True)
+        ):
             adapter_name = type(adapter).__name__
             attempted_names.append(adapter_name)
             try:
-                chat_method: Any = getattr(adapter, "chat", None)
-                if callable(chat_method):
+                chat_candidate = getattr(adapter, "chat", None)
+                if callable(chat_candidate):
+                    chat_method = cast(Callable[..., Awaitable[object]], chat_candidate)
                     kwargs: dict[str, Any] = {"max_tokens": max_tokens}
                     if _supports_temperature(adapter):
                         kwargs["temperature"] = temperature
-                    text = await chat_method(messages, **kwargs)
+                    raw_text = await chat_method(messages, **kwargs)
+                    if not isinstance(raw_text, str):
+                        raise TypeError("legacy provider chat response must be text")
+                    text = raw_text
                 else:
                     response = await candidate.complete(typed_messages, max_tokens=max_tokens)
                     text = response.content or ""
