@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -141,6 +142,10 @@ class Settings(BaseSettings):
     # Agent
     agent_max_iterations: int = 5
     agent_token_budget: int = 64_000
+    durable_monetary_budget_enabled: bool = False
+    agent_run_budget_usd: Decimal = Field(default=Decimal("1.00"), ge=0, le=1_000_000)
+    agent_project_budget_usd: Decimal = Field(default=Decimal("10.00"), ge=0, le=1_000_000)
+    agent_model_input_reservation_tokens: int = Field(default=64_000, ge=1, le=10_000_000)
     approval_timeout_seconds: float = Field(default=30.0, gt=0)
     approval_poll_interval_seconds: float = Field(default=0.05, gt=0)
     context_length: int = 200000  # Claude Opus: 200K, Sonnet: 200K, llama3.1: 128K

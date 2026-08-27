@@ -40,6 +40,7 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
             "cache_write_input_tokens",
         }
     ),
+    AgentEventKind.BUDGET_BLOCKED.value: frozenset({"code", "stop_reason"}),
     AgentEventKind.PROVIDER_CAPABILITY_REJECTED.value: frozenset({"code", "missing_capabilities"}),
     AgentEventKind.STRUCTURED_OUTPUT_REJECTED.value: frozenset({"code"}),
     AgentEventKind.MODEL_PROGRESS.value: frozenset(),

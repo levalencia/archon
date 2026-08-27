@@ -14,6 +14,7 @@ class AgentEventKind(StrEnum):
     RUN_STARTED = "run_started"
     ITERATION_STARTED = "iteration_started"
     MODEL_RESPONSE = "model_response"
+    BUDGET_BLOCKED = "budget_blocked"
     PROVIDER_CAPABILITY_REJECTED = "provider_capability_rejected"
     STRUCTURED_OUTPUT_REJECTED = "structured_output_rejected"
     MODEL_PROGRESS = "model_progress"

@@ -11,10 +11,43 @@ from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.runtime_events import CompositeEventSink
 from app.runtime.engine import AgentRuntime, RuntimeBudget
 from app.runtime.events import EventSink
+from app.runtime.monetary_budget import (
+    BudgetRunContext,
+    DurableBudgetedProvider,
+    PricingCandidate,
+    usd_limit_to_nusd,
+)
 from app.runtime.ports import ModelProvider, ToolAuthorizer
 from app.security.default_policy import default_policy_engine
 from app.security.persistence_redactor import PersistenceRedactor
+from app.services.monetary_budget import MonetaryBudgetRepository
 from app.tools.registry import SecureToolRegistry
+
+
+_SUPPORTED_PRICING_PROVIDERS = frozenset({"mock", "openai", "anthropic", "foundry", "ollama"})
+
+
+def _pricing_candidates(settings: Any) -> tuple[PricingCandidate, ...]:
+    names = [settings.llm_provider]
+    names.extend(
+        name.strip()
+        for name in settings.llm_fallback_providers.split(",")
+        if name.strip()
+    )
+    candidates: list[PricingCandidate] = []
+    seen: set[tuple[str, str]] = set()
+    for raw_name in names:
+        name = raw_name.strip().lower()
+        if name not in _SUPPORTED_PRICING_PROVIDERS:
+            continue
+        candidate = PricingCandidate(name, settings.llm_model)
+        pair = (candidate.provider, candidate.model)
+        if pair not in seen:
+            candidates.append(candidate)
+            seen.add(pair)
+    if not candidates:
+        raise ValueError("durable budget requires at least one priced provider/model")
+    return tuple(candidates)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +100,20 @@ def create_chat_runtime(
         exporter=exporter,
         downstream=downstream,
     )
+    if settings.durable_monetary_budget_enabled:
+        session_factory = getattr(repository, "session_factory", None)
+        if session_factory is None:
+            raise RuntimeError("durable budget requires a repository session factory")
+        provider = DurableBudgetedProvider(
+            provider,
+            MonetaryBudgetRepository(session_factory),
+            BudgetRunContext(context.user_id, context.project_id, context.run_id),
+            usd_limit_to_nusd(settings.agent_run_budget_usd),
+            usd_limit_to_nusd(settings.agent_project_budget_usd),
+            settings.agent_model_input_reservation_tokens,
+            _pricing_candidates(settings),
+        )
+
     return AgentRuntime(
         provider,
         tools,

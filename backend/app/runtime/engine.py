@@ -22,6 +22,12 @@ from app.runtime.capabilities import (
 )
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
 from app.runtime.models import Message, Role, TokenUsage, ToolCall
+from app.runtime.monetary_budget import (
+    DuplicateModelCharge,
+    DurableModelChargeStateError,
+    IndeterminateModelCharge,
+    ModelBudgetExhausted,
+)
 from app.runtime.ports import (
     ModelProvider,
     PolicyAwareToolExecutor,
@@ -64,6 +70,9 @@ class StopReason(StrEnum):
     PROVIDER_LENGTH_LIMIT = "provider_length_limit"
     PROVIDER_REFUSAL = "provider_refusal"
     PROVIDER_CONTENT_FILTER = "provider_content_filter"
+    MONETARY_BUDGET_EXHAUSTED = "monetary_budget_exhausted"
+    MODEL_CHARGE_DUPLICATE = "model_charge_duplicate"
+    MODEL_CHARGE_INDETERMINATE = "model_charge_indeterminate"
     PROVIDER_ERROR = "provider_error"
     ERROR = "error"
 
@@ -232,6 +241,19 @@ class AgentRuntime:
                     )
                 except _RuntimeDeadlineExceededError:
                     raise
+                except (
+                    ModelBudgetExhausted,
+                    DuplicateModelCharge,
+                    IndeterminateModelCharge,
+                    DurableModelChargeStateError,
+                ) as error:
+                    return await self._stop_for_budget_error(
+                        error,
+                        content=content,
+                        iterations=iterations,
+                        calls=calls,
+                        usage=usage,
+                    )
                 except UnsupportedProviderCapability as error:
                     return await self._reject_provider_capabilities(
                         self._safe_missing_capability_names(error),
@@ -663,6 +685,35 @@ class AgentRuntime:
                 usage,
                 f"runtime_error:{type(error).__name__}",
             )
+
+    async def _stop_for_budget_error(
+        self,
+        error: ModelBudgetExhausted | DuplicateModelCharge | IndeterminateModelCharge | DurableModelChargeStateError,
+        *,
+        content: str,
+        iterations: int,
+        calls: list[dict[str, Any]],
+        usage: TokenUsage,
+    ) -> AgentResult:
+        if isinstance(error, ModelBudgetExhausted):
+            reason = StopReason.MONETARY_BUDGET_EXHAUSTED
+        elif isinstance(error, DuplicateModelCharge):
+            reason = StopReason.MODEL_CHARGE_DUPLICATE
+        else:
+            reason = StopReason.MODEL_CHARGE_INDETERMINATE
+        await self._emit(
+            AgentEventKind.BUDGET_BLOCKED,
+            iterations,
+            {"code": error.code, "stop_reason": reason.value},
+        )
+        return await self._stop(
+            reason,
+            content,
+            iterations,
+            calls,
+            usage,
+            error=error.code,
+        )
 
     @staticmethod
     def _provider_requirements(
@@ -1495,6 +1546,19 @@ class AgentRuntime:
         except _RuntimeDeadlineExceededError:
             return await self._stop(
                 StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
+            )
+        except (
+            ModelBudgetExhausted,
+            DuplicateModelCharge,
+            IndeterminateModelCharge,
+            DurableModelChargeStateError,
+        ) as error:
+            return await self._stop_for_budget_error(
+                error,
+                content=content,
+                iterations=iterations,
+                calls=calls,
+                usage=usage,
             )
         except UnsupportedProviderCapability as error:
             return await self._reject_provider_capabilities(

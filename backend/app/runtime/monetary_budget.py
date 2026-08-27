@@ -13,6 +13,7 @@ import inspect
 import re
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Generic, TypeVar
 
 from app.observability.cost_tracker import (
@@ -48,6 +49,18 @@ def _amount(value: int, label: str) -> int:
     if type(value) is not int or not 0 <= value <= _MAX_BIGINT:
         raise ValueError(f"{label} must be an integer within the BIGINT range")
     return value
+
+
+def usd_limit_to_nusd(value: Decimal) -> int:
+    """Convert an exact USD limit to integer nUSD without rounding it up or down."""
+
+    if not isinstance(value, Decimal) or not value.is_finite() or value < 0:
+        raise ValueError("USD budget limit must be a finite non-negative Decimal")
+    scaled = value * Decimal(1_000_000_000)
+    integral = scaled.to_integral_value()
+    if scaled != integral:
+        raise ValueError("USD budget limit supports at most nine decimal places")
+    return _amount(int(integral), "budget_limit_nusd")
 
 
 @dataclass(frozen=True, slots=True)
