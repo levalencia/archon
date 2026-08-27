@@ -151,6 +151,8 @@ flowchart TD
 
 **Objective:** Make model input inspectable and rotate encrypted memory without downtime or plaintext export.
 
+**Status:** Complete locally. Metadata-only provenance, responsive context/rotation inspection, forward migration 11, bounded resumable rotation, generation fencing, and the mandatory legacy-writer drain barrier are implemented and tested. External KMS and deployment remain deferred.
+
 **Files:**
 - Create migration: `backend/alembic/versions/*_context_snapshots_and_key_versions.py`
 - Create: `backend/app/runtime/context_provenance.py`
