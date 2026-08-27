@@ -688,9 +688,7 @@ class AgentRuntime:
     ) -> tuple[str, ...]:
         """Copy only names from the closed capability vocabulary; never expose provider text."""
         reported = frozenset(error.missing_capabilities)
-        return tuple(
-            name for name in ProviderCapabilities.__dataclass_fields__ if name in reported
-        )
+        return tuple(name for name in ProviderCapabilities.__dataclass_fields__ if name in reported)
 
     @staticmethod
     def _normalize_provider_stop_reason(

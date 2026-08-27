@@ -167,9 +167,7 @@ async def test_runtime_maps_combined_no_compatible_fallback_to_capability_reject
     assert result.error == "provider_capability_unsupported:native_tools,images"
     assert tools_only.calls == images_only.calls == []
     rejection = next(
-        event
-        for event in sink.events
-        if event.kind is AgentEventKind.PROVIDER_CAPABILITY_REJECTED
+        event for event in sink.events if event.kind is AgentEventKind.PROVIDER_CAPABILITY_REJECTED
     )
     assert rejection.data["missing_capabilities"] == ("native_tools", "images")
 
