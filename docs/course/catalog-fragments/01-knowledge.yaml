@@ -1,0 +1,292 @@
+- id: context-windows
+  title: Context windows
+  status: partial
+  module: docs/course/modules/06-context-and-memory/README.md
+  sources:
+    - backend/app/runtime/context.py
+    - backend/app/services/auto_compact.py
+  tests:
+    - backend/tests/unit/test_conversations.py
+    - backend/tests/unit/test_memory_startup.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - Fixed message selection is not a token guarantee; full live compaction and effective-context provenance are not established.
+
+- id: conversation-lifecycle
+  title: Conversation lifecycle
+  status: implemented
+  module: docs/course/modules/06-context-and-memory/README.md
+  sources:
+    - backend/app/services/conversations.py
+    - backend/app/runtime/context.py
+  tests:
+    - backend/tests/unit/test_conversations.py
+    - backend/tests/integration/test_conversation_persistence.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - Conversation rows are redacted persistent history, distinct from encrypted fact memory; automatic expiry is absent.
+
+- id: encrypted-memory
+  title: Encrypted memory
+  status: implemented
+  module: docs/course/modules/06-context-and-memory/README.md
+  sources:
+    - backend/app/memory/scoped.py
+    - backend/app/memory/keys.py
+  tests:
+    - backend/tests/unit/test_scoped_encrypted_memory.py
+    - backend/tests/integration/test_memory_api_scoping.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - No online key rotation, automatic expiry, external KMS, or production security certification.
+
+- id: checkpoints
+  title: Checkpoints
+  status: partial
+  module: docs/course/modules/06-context-and-memory/README.md
+  sources:
+    - backend/app/memory/checkpoints.py
+    - backend/app/services/run_ledger.py
+  tests:
+    - backend/tests/integration/test_run_fork_compare.py
+    - backend/tests/unit/test_run_lineage.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - Durable fork checkpoints restore safe conversation state only; workspace restoration is none and the standalone manager is in-memory.
+
+- id: run-ledger
+  title: Durable Run Ledger
+  status: implemented
+  module: docs/course/modules/07-run-ledger/README.md
+  sources:
+    - backend/app/services/run_ledger.py
+    - backend/app/routes/runs.py
+  tests:
+    - backend/tests/unit/test_run_ledger.py
+    - backend/tests/integration/test_run_replay_api.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Recorded events are evidence of control flow, not semantic truth or tamper-proof WORM audit storage.
+
+- id: replay-fork-compare
+  title: Replay, fork, and compare
+  status: implemented
+  module: docs/course/modules/07-run-ledger/README.md
+  sources:
+    - backend/app/routes/runs.py
+    - backend/app/services/run_ledger.py
+  tests:
+    - backend/tests/integration/test_run_replay_api.py
+    - backend/tests/integration/test_run_fork_compare.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - Replay and compare are stored-only; fork does not rerun tools or restore arbitrary external workspace state.
+
+- id: chunking
+  title: Document chunking
+  status: implemented
+  module: docs/course/modules/08-rag-grounding/README.md
+  sources:
+    - backend/app/services/chunker.py
+  tests:
+    - backend/tests/unit/test_rag.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Character-based defaults are not corpus-optimized and do not preserve rich document structures.
+
+- id: embeddings
+  title: Embeddings
+  status: partial
+  module: docs/course/modules/08-rag-grounding/README.md
+  sources:
+    - backend/app/services/chunker.py
+  tests:
+    - backend/tests/unit/test_embedding_hardening.py
+    - backend/tests/unit/test_embedding_config.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Final acceptance used deterministic mock embeddings; no external semantic-quality acceptance is claimed.
+
+- id: retrieval
+  title: Scoped SQL JSON cosine retrieval
+  status: implemented
+  module: docs/course/modules/08-rag-grounding/README.md
+  sources:
+    - backend/app/services/sql_json_vector_store.py
+    - backend/app/services/vector_store.py
+  tests:
+    - backend/tests/unit/test_pgvector_store.py
+    - backend/tests/unit/test_grounded_rag.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - JSON vectors are scanned and cosine-ranked in Python; this is not pgvector or indexed production vector serving.
+
+- id: rag
+  title: Retrieval-augmented generation
+  status: implemented
+  module: docs/course/modules/08-rag-grounding/README.md
+  sources:
+    - backend/app/services/rag_pipeline.py
+    - backend/app/services/grounded_rag.py
+  tests:
+    - backend/tests/unit/test_rag.py
+    - backend/tests/unit/test_grounded_rag.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Deterministic mock provider/embedding evidence proves control behavior, not model or retrieval quality.
+
+- id: groundedness
+  title: Groundedness
+  status: implemented
+  module: docs/course/modules/08-rag-grounding/README.md
+  sources:
+    - backend/app/services/grounded_rag.py
+  tests:
+    - backend/tests/unit/test_grounded_rag.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Conservative lexical, numeric, and polarity support is not semantic NLI or source-truth validation.
+
+- id: faithfulness
+  title: Faithfulness
+  status: partial
+  module: docs/course/modules/08-rag-grounding/README.md
+  sources:
+    - backend/app/services/grounded_rag.py
+    - backend/app/eval/evaluators.py
+  tests:
+    - backend/tests/unit/test_grounded_rag.py
+    - backend/tests/unit/test_eval.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Current metrics are deterministic proxies/keyword heuristics without calibrated semantic-judge validation.
+
+- id: citations
+  title: Citations
+  status: implemented
+  module: docs/course/modules/08-rag-grounding/README.md
+  sources:
+    - backend/app/services/grounded_rag.py
+  tests:
+    - backend/tests/unit/test_grounded_rag.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Citation structure and conservative support do not establish source truth or overall answer relevance.
+
+- id: evaluation-harness
+  title: Evaluation harness
+  status: implemented
+  module: docs/course/modules/09-evaluation-harness/README.md
+  sources:
+    - backend/app/eval/harness.py
+    - backend/app/eval/service.py
+    - backend/app/eval/persistence.py
+  tests:
+    - backend/tests/unit/test_eval.py
+    - backend/tests/unit/test_recorded_evaluations.py
+    - backend/tests/integration/test_recorded_evaluation_api.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - Recorded-run evaluation is real, but deterministic fixture success is not model-quality proof.
+
+- id: datasets
+  title: Versioned evaluation datasets
+  status: implemented
+  module: docs/course/modules/09-evaluation-harness/README.md
+  sources:
+    - backend/app/eval/fixtures.py
+    - backend/app/eval/datasets/grounded-v1.json
+  tests:
+    - backend/tests/unit/test_evaluation_fixtures.py
+    - backend/tests/unit/test_recorded_evaluations.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - The shipped two-case fixture is narrow and not representative production-quality coverage.
+
+- id: idempotency
+  title: Idempotency
+  status: partial
+  module: docs/course/modules/10-resilience/README.md
+  sources:
+    - backend/app/services/run_ledger.py
+  tests:
+    - backend/tests/unit/test_run_ledger.py
+    - backend/tests/unit/test_run_lineage.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - Selected database boundaries are idempotent; arbitrary tools and external side effects have no universal idempotency-key layer.
+
+- id: retries-timeouts-cancellation
+  title: Retries, timeouts, and cancellation
+  status: partial
+  module: docs/course/modules/10-resilience/README.md
+  sources:
+    - backend/app/agents/resilient_coordinator.py
+    - backend/app/services/grounded_rag.py
+    - backend/app/tools/registry.py
+  tests:
+    - backend/tests/unit/test_evidence_verifier.py
+    - backend/tests/unit/test_grounded_rag.py
+    - backend/tests/unit/test_tools.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - Policies are path-specific; there is no universal end-to-end deadline/retry layer and coordinator degradation is prototype-grade.
+
+- id: circuit-breaker
+  title: Circuit breaker
+  status: implemented
+  module: docs/course/modules/10-resilience/README.md
+  sources:
+    - backend/app/security/circuit_breaker.py
+  tests:
+    - backend/tests/security/test_pii_circuit_breaker.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Breaker state is process-local and external-provider recovery was not observed in final evidence.
+
+- id: fallback
+  title: Provider fallback
+  status: partial
+  module: docs/course/modules/10-resilience/README.md
+  sources:
+    - backend/app/agents/fallback_chain.py
+    - backend/app/agents/llm_factory.py
+  tests:
+    - backend/tests/unit/test_fallback_wire.py
+  evidence:
+    - docs/evidence/local-portfolio-benchmark.json
+  limitations:
+    - Legacy text fallback loses typed capability parity and all-fail returns an error string.
+
+- id: rate-limiting
+  title: Rate limiting
+  status: implemented
+  module: docs/course/modules/10-resilience/README.md
+  sources:
+    - backend/app/security/rate_limiter.py
+    - backend/app/security/dependencies.py
+  tests:
+    - backend/tests/unit/test_rate_limiter.py
+    - backend/tests/integration/test_route_rate_limits.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations:
+    - Local mode is process-local; shared multi-instance semantics require Redis and production fairness is not established.
