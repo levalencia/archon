@@ -1,6 +1,6 @@
 # Company workshops
 
-> **Track status:** current at revision `3577b00`
+> **Track status:** draft; validate against the current branch before teaching
 > **Format:** eight 90-minute workshops; reading and concepts remain canonical in modules
 
 Use the [instructor guide](../workshops/instructor-guide.md), [student guide](../workshops/student-guide.md), [exercise sheets](../workshops/exercises.md), private [solution guide](../workshops/solutions.md), and [capstone rubric](../workshops/capstone-rubric.md). Each session uses disposable local data and no real secrets.
@@ -16,7 +16,7 @@ Use the [instructor guide](../workshops/instructor-guide.md), [student guide](..
 | 5. Memory boundaries | Separate request, conversation, encrypted memory, and ownership | [Module 06](../modules/06-context-and-memory/README.md) | Inspect ciphertext and owner/project scoping | [E5 context boundary](../workshops/exercises.md#e5-context-boundary) | Data-boundary note | What may persist, and where is plaintext forbidden? |
 | 6. Durable evidence | Read ordered run events and explain replay/fork/compare | [Module 07](../modules/07-run-ledger/README.md), [event catalog](../reference/event-catalog.md) | Query a run and events | [E6 evidence timeline](../workshops/exercises.md#e6-evidence-timeline) | Timeline with limitations | Does replay invoke a provider or tool? |
 | 7. Grounding and evaluation | Distinguish retrieval, verification, citation, and post-run scoring | [Modules 08](../modules/08-rag-grounding/README.md) and [09](../modules/09-evaluation-harness/README.md) | Inspect SQL-JSON cosine result and recorded evaluation | [E7 grounded evaluation](../workshops/exercises.md#e7-grounded-evaluation) | Cited answer plus eval note | What does a passing fixture not establish? |
-| 8. Reliability capstone | Select controls, demonstrate one failure, and defend boundaries | [Module 10](../modules/10-resilience/README.md), [operations track](operations-and-reliability.md) | Trigger a bounded failure and follow evidence | [E8 capstone](../workshops/exercises.md#e8-reliability-capstone) | 15-minute walkthrough and failure report | Can every claim be tied to source, test, observation, and scope? |
+| 8. Integrated capstone | Connect resilience, verifier delegation, MCP, observability, and recovery while defending evidence limits | [Modules 10](../modules/10-resilience/README.md), [11](../modules/11-bounded-delegation/README.md), [12](../modules/12-governed-mcp/README.md), [13](../modules/13-auth-ui-observability/README.md), [14](../modules/14-local-operations/README.md), and [15](../modules/15-capstone/README.md) | Demonstrate a bounded failure, verifier lineage, governed MCP inventory, observable request, and clean restore evidence | [E8 capstone](../workshops/exercises.md#e8-reliability-capstone) | 15-minute walkthrough and failure/recovery report | Can every claim be tied to source, test, observation, and scope? |
 
 ## Standard 90-minute rhythm
 

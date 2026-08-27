@@ -1,8 +1,8 @@
 # Learn from zero
 
-> **Track status:** current at revision `3577b00`
+> **Track status:** draft; validate against the current branch before teaching
 > **Audience:** programmers new to agent systems
-> **Time:** 20–30 hours for the current modules, plus optional labs
+> **Time:** 32–48 focused hours for modules 00–15, plus optional labs
 
 This is a navigation route, not a second textbook. Follow the linked module and concept pages for canonical explanations. Check unfamiliar words in the [beginner glossary](../reference/glossary.md).
 
@@ -25,10 +25,15 @@ You need basic Python, HTTP/JSON, command-line, and Git familiarity. Start by re
 | 9. How answers use documents | [08 — RAG and grounding](../modules/08-rag-grounding/README.md) | Cited answer | You can separate retrieval, groundedness, faithfulness, and citation. |
 | 10. How behavior is measured | [09 — Evaluation harness](../modules/09-evaluation-harness/README.md) | Recorded-run evaluation | You can state what a fixture proves and does not prove. |
 | 11. How failures are bounded | [10 — Resilience](../modules/10-resilience/README.md) | Failure drill | You can choose retry, timeout, idempotency, breaker, fallback, or rate limit for a scenario. |
+| 12. How bounded delegation adds a second opinion | [11 — Bounded verifier](../modules/11-bounded-delegation/README.md) | Parent-child evidence graph | You can distinguish model judgment from deterministic schema and budget controls. |
+| 13. How external tools are governed | [12 — Governed MCP](../modules/12-governed-mcp/README.md) | MCP lifecycle trace | You can trace discovery, inventory, policy, approval, and invocation. |
+| 14. How the system becomes inspectable | [13 — Auth, UI, SSE, and observability](../modules/13-auth-ui-observability/README.md) | Observable request | You can separate ownership, events, logs, metrics, and traces. |
+| 15. How the local system is operated and recovered | [14 — Local operations](../modules/14-local-operations/README.md) | Recovery report | You can explain liveness, readiness, migration, backup, restore, RTO, and RPO. |
+| 16. How to defend the capstone | [15 — Capstone](../modules/15-capstone/README.md) | 2/15/45-minute walkthrough | Every claim points to code, test, observation, and limitation. |
 
 ## Beginner checkpoints
 
-After stages 1–4, explain one request using only boxes and arrows. After stages 5–8, add trust boundaries and durable evidence. After stages 9–11, add a measurable claim and one controlled failure. If you cannot answer a module self-check without reading its answer guide, revisit its linked concept rather than memorizing this route.
+After stages 1–4, explain one request using only boxes and arrows. After stages 5–8, add trust boundaries and durable evidence. After stages 9–11, add a measurable claim and one controlled failure. After stages 12–16, defend delegation, integration, observability, recovery, and capstone limits. If you cannot answer a module self-check without reading its answer guide, revisit its linked concept rather than memorizing this route.
 
 ## Safe lab habits
 

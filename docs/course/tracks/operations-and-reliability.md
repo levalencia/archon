@@ -1,6 +1,6 @@
 # Operations and reliability
 
-> **Track status:** current at revision `3577b00`
+> **Track status:** draft; validate against the current branch before operating
 > **Scope:** verified local/test behavior; public production operation is not established
 
 This route helps a contributor diagnose and explain the local production-like target. It links to canonical teaching rather than duplicating it.
@@ -12,6 +12,9 @@ This route helps a contributor diagnose and explain the local production-like ta
 3. [Run Ledger](../modules/07-run-ledger/README.md): follow ordered durable evidence.
 4. [Evaluation](../modules/09-evaluation-harness/README.md): measure a recorded run without rerunning external effects.
 5. [Reliability](../modules/10-resilience/README.md): choose retries, idempotency, deadlines, breakers, fallback, and limits deliberately.
+6. [Governed MCP](../modules/12-governed-mcp/README.md): inspect external tool discovery, inventory, policy, approval, and invocation boundaries.
+7. [Auth, UI, SSE, and observability](../modules/13-auth-ui-observability/README.md): correlate owner scope, events, logs, metrics, traces, and Workbench views.
+8. [Local operations and recovery](../modules/14-local-operations/README.md): verify containers, migrations, readiness, backup, restore, and measured recovery observations.
 
 ## Operational lookup
 
