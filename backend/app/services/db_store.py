@@ -15,6 +15,7 @@ from typing import Any, cast
 import structlog
 from sqlalchemy import (
     JSON,
+    BigInteger,
     CheckConstraint,
     Column,
     DateTime,
@@ -181,6 +182,14 @@ class RunRow(Base):
             "status IN ('running','completed','failed','cancelled')", name="ck_runs_status"
         ),
         CheckConstraint("next_sequence >= 1", name="ck_runs_next_sequence"),
+        CheckConstraint(
+            "budget_limit_nusd >= 0 AND budget_spent_nusd >= 0 AND budget_reserved_nusd >= 0",
+            name="ck_runs_budget_amounts_nonnegative",
+        ),
+        CheckConstraint(
+            "budget_spent_nusd + budget_reserved_nusd <= budget_limit_nusd",
+            name="ck_runs_budget_within_limit",
+        ),
         Index("ix_runs_owner_started", "user_id", "started_at"),
         Index("ix_runs_owner_project_started", "user_id", "project_id", "started_at"),
         Index("ix_runs_conversation", "conversation_id"),
@@ -210,6 +219,116 @@ class RunRow(Base):
     latency_ms = Column(Float, nullable=True)
     iterations = Column(Integer, nullable=False, default=0)
     next_sequence = Column(Integer, nullable=False, default=1)
+    budget_limit_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
+    budget_spent_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
+    budget_reserved_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
+
+
+class EffectRow(Base):
+    """Durable effect tombstone containing hashes and lifecycle metadata only."""
+
+    __tablename__ = "effects"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('reserved','committed','failed','indeterminate')",
+            name="ck_effects_state",
+        ),
+        CheckConstraint("identity_version >= 0", name="ck_effects_identity_version_nonnegative"),
+        CheckConstraint(
+            "output_size IS NULL OR output_size >= 0", name="ck_effects_output_size_nonnegative"
+        ),
+        Index("ix_effects_owner_project_state", "owner_id", "project_id", "state"),
+        Index("ix_effects_owner_run", "owner_id", "run_id"),
+        Index("ix_effects_run_state", "run_id", "state"),
+    )
+
+    effect_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    identity_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    schema_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False)
+    output_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    output_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    review_disposition: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ProjectBudgetRow(Base):
+    """Integer nano-US-dollar budget counters for an owner/project scope."""
+
+    __tablename__ = "project_budgets"
+    __table_args__ = (
+        CheckConstraint(
+            "limit_nusd >= 0 AND spent_nusd >= 0 AND reserved_nusd >= 0",
+            name="ck_project_budgets_amounts_nonnegative",
+        ),
+        CheckConstraint(
+            "spent_nusd + reserved_nusd <= limit_nusd",
+            name="ck_project_budgets_within_limit",
+        ),
+    )
+
+    owner_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    limit_nusd: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    spent_nusd: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    reserved_nusd: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ModelChargeRow(Base):
+    """Safe monetary reservation and reconciliation metadata for one model dispatch."""
+
+    __tablename__ = "model_charges"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('reserved','dispatched','reconciled','released','indeterminate')",
+            name="ck_model_charges_state",
+        ),
+        CheckConstraint("ordinal >= 0", name="ck_model_charges_ordinal_nonnegative"),
+        CheckConstraint("reserved_nusd >= 0", name="ck_model_charges_reserved_nonnegative"),
+        CheckConstraint(
+            "actual_nusd IS NULL OR actual_nusd >= 0",
+            name="ck_model_charges_actual_nonnegative",
+        ),
+        CheckConstraint(
+            "(input_tokens IS NULL OR input_tokens >= 0) AND "
+            "(output_tokens IS NULL OR output_tokens >= 0) AND "
+            "(cache_read_tokens IS NULL OR cache_read_tokens >= 0) AND "
+            "(cache_write_tokens IS NULL OR cache_write_tokens >= 0)",
+            name="ck_model_charges_tokens_nonnegative",
+        ),
+        UniqueConstraint("run_id", "ordinal", name="uq_model_charges_run_ordinal"),
+        Index("ix_model_charges_owner_project_state", "owner_id", "project_id", "state"),
+        Index("ix_model_charges_run_state", "run_id", "state"),
+    )
+
+    charge_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False)
+    reserved_nusd: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    actual_nusd: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cache_read_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cache_write_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class EvalRunRow(Base):
