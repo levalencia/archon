@@ -5,10 +5,24 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any
 
 import structlog
 
 logger = structlog.get_logger()
+
+USD_TO_NUSD = 1_000_000_000
+_MAX_BIGINT = 2**63 - 1
+
+
+class UnknownModelPricing(ValueError):  # noqa: N818 - stable public domain name
+    """Pricing enforcement cannot safely price a model."""
+
+    def __init__(self, model: str) -> None:
+        super().__init__("unknown_model_pricing")
+        self.code = "unknown_model_pricing"
+        self.model = model
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +70,94 @@ def _supports_cache_pricing(provider: str) -> bool:
     """Recognize configured provider names and fallback adapter class names."""
     normalized = "".join(character for character in provider.casefold() if character.isalnum())
     return normalized in {"anthropic", "anthropicadapter", "foundry", "foundryadapter"}
+
+
+def _token_count(value: int | None, name: str, *, optional: bool = False) -> int | None:
+    if value is None and optional:
+        return None
+    if type(value) is not int:
+        raise TypeError(f"{name} must be an int")
+    if not 0 <= value <= _MAX_BIGINT:
+        raise ValueError(f"{name} must be between 0 and {_MAX_BIGINT}")
+    return value
+
+
+def price_model_usage_nusd(
+    model: str,
+    provider: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read: int | None = None,
+    cache_write: int | None = None,
+) -> int:
+    """Pure, exact nano-USD price for one provider usage report."""
+    if not isinstance(model, str) or not model or model == "default" or model not in MODEL_PRICING:
+        raise UnknownModelPricing(str(model))
+    if not isinstance(provider, str) or not provider:
+        raise ValueError("provider must be a non-empty string")
+    input_count = _token_count(input_tokens, "input_tokens")
+    output_count = _token_count(output_tokens, "output_tokens")
+    read_count = _token_count(cache_read, "cache_read", optional=True)
+    write_count = _token_count(cache_write, "cache_write", optional=True)
+    assert input_count is not None and output_count is not None
+    read = read_count or 0
+    write = write_count or 0
+    if read + write > input_count:
+        raise ValueError("cache token subsets cannot exceed total input tokens")
+
+    pricing = MODEL_PRICING[model]
+    cache_rates = _supports_cache_pricing(provider)
+    read_rate = (
+        pricing.cache_read if cache_rates and pricing.cache_read is not None else pricing.input
+    )
+    write_rate = (
+        pricing.cache_write if cache_rates and pricing.cache_write is not None else pricing.input
+    )
+    amount = (
+        (
+            Decimal(input_count - read - write) * Decimal(str(pricing.input))
+            + Decimal(read) * Decimal(str(read_rate))
+            + Decimal(write) * Decimal(str(write_rate))
+            + Decimal(output_count) * Decimal(str(pricing.output))
+        )
+        * Decimal(USD_TO_NUSD)
+        / Decimal(1000)
+    )
+    integral = amount.to_integral_value()
+    if amount != integral or not 0 <= integral <= _MAX_BIGINT:
+        raise OverflowError("priced usage is outside the exact BIGINT nUSD range")
+    return int(integral)
+
+
+def quote_model_call_nusd(candidates: object, max_input_tokens: int, max_output_tokens: int) -> int:
+    """Return the maximum no-cache quote across safe provider/model candidates."""
+    _token_count(max_input_tokens, "max_input_tokens")
+    _token_count(max_output_tokens, "max_output_tokens")
+    if isinstance(candidates, (str, bytes)):
+        raise ValueError("candidates must be a non-empty sequence")
+    try:
+        values = tuple(candidates)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise TypeError("candidates must be iterable") from exc
+    if not values:
+        raise ValueError("candidates must not be empty")
+    quotes: list[int] = []
+    for candidate in values:
+        provider: Any
+        model: Any
+        if isinstance(candidate, (tuple, list)) and len(candidate) == 2:
+            provider, model = candidate
+        elif isinstance(candidate, dict):
+            provider, model = candidate.get("provider"), candidate.get("model")
+        else:
+            provider, model = (
+                getattr(candidate, "provider", None),
+                getattr(candidate, "model", None),
+            )
+        if not isinstance(provider, str) or not provider or not isinstance(model, str) or not model:
+            raise ValueError("each candidate must contain safe provider and model strings")
+        quotes.append(price_model_usage_nusd(model, provider, max_input_tokens, max_output_tokens))
+    return max(quotes)
 
 
 class CostTracker:
