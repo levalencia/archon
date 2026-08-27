@@ -2,7 +2,7 @@
 
 > **Implementation status:** `partial`
 > **Status boundary:** Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 14-local-operations](../modules/14-local-operations/README.md)
 > **Catalog ID:** `kubernetes-public-deployment`
 
@@ -41,7 +41,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `c115d62`, the mapped symbols implement the bounded behavior below. No schema/render test, cluster smoke, TLS/DNS, external secret manager, immutable production image, migration job, or public URL evidence.
+At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No schema/render test, cluster smoke, TLS/DNS, external secret manager, immutable production image, migration job, or public URL evidence.
 
 ### Source symbols
 
@@ -77,7 +77,7 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **partial** at `c115d62`. Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **partial** at `6e3e13f`. Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

@@ -2,7 +2,7 @@
 
 > **Implementation status:** `not-implemented`
 > **Status boundary:** Archon feeds tool errors back into its bounded ReAct loop and can run post-run evaluation or a verifier child, but it has no general reflection memory, critique/revision contract, or measured reflection policy.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 03-react-loop](../modules/03-react-loop/README.md)
 > **Catalog ID:** `generic-self-reflection`
 
@@ -77,7 +77,7 @@ Code-reading exercise: search the repository for the missing components named in
 
 ## Lab vs production
 
-The status remains **not-implemented** at `c115d62`. Archon feeds tool errors back into its bounded ReAct loop and can run post-run evaluation or a verifier child, but it has no general reflection memory, critique/revision contract, or measured reflection policy. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **not-implemented** at `6e3e13f`. Archon feeds tool errors back into its bounded ReAct loop and can run post-run evaluation or a verifier child, but it has no general reflection memory, critique/revision contract, or measured reflection policy. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

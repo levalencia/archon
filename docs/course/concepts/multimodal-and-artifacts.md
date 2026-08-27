@@ -2,7 +2,7 @@
 
 > **Implementation status:** `partial`
 > **Status boundary:** Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 13-auth-ui-observability](../modules/13-auth-ui-observability/README.md)
 > **Catalog ID:** `multimodal-and-artifacts`
 
@@ -40,7 +40,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `c115d62`, the mapped symbols implement the bounded behavior below. No committed real-provider vision observation, input media validation pipeline, malware scanning, or durable ArtifactStore backend.
+At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No committed real-provider vision observation, input media validation pipeline, malware scanning, or durable ArtifactStore backend.
 
 ### Source symbols
 
@@ -79,7 +79,7 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **partial** at `c115d62`. Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **partial** at `6e3e13f`. Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

@@ -2,7 +2,7 @@
 
 > **Implementation status:** `implemented`
 > **Status boundary:** Supported message, run-event, memory, artifact, audit, and log persistence paths redact detected PII before storage; this is not a claim that detection is exhaustive or that provider-bound prompts are redacted.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 06-context-and-memory](../modules/06-context-and-memory/README.md)
 > **Catalog ID:** `pii-redaction-data-boundaries`
 
@@ -38,7 +38,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `c115d62`, the mapped symbols implement the bounded behavior below. Regex/optional NER can miss identifiers; provider transmission, backups, and every future sink need separate review.
+At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. Regex/optional NER can miss identifiers; provider transmission, backups, and every future sink need separate review.
 
 ### Source symbols
 
@@ -76,7 +76,7 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **implemented** at `c115d62`. Supported message, run-event, memory, artifact, audit, and log persistence paths redact detected PII before storage; this is not a claim that detection is exhaustive or that provider-bound prompts are redacted. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **implemented** at `6e3e13f`. Supported message, run-event, memory, artifact, audit, and log persistence paths redact detected PII before storage; this is not a claim that detection is exhaustive or that provider-bound prompts are redacted. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

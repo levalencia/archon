@@ -2,7 +2,7 @@
 
 > **Implementation status:** `partial`
 > **Status boundary:** Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 06-context-and-memory](../modules/06-context-and-memory/README.md)
 > **Catalog ID:** `skills-project-instructions`
 
@@ -37,7 +37,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `c115d62`, the mapped symbols implement the bounded behavior below. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract.
+At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract.
 
 ### Source symbols
 
@@ -74,7 +74,7 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **partial** at `c115d62`. Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **partial** at `6e3e13f`. Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

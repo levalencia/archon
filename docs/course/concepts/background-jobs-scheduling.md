@@ -2,7 +2,7 @@
 
 > **Implementation status:** `partial`
 > **Status boundary:** An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 10-resilience](../modules/10-resilience/README.md)
 > **Catalog ID:** `background-jobs-scheduling`
 
@@ -39,7 +39,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `c115d62`, the mapped symbols implement the bounded behavior below. No ownership in records, durable broker, leases, retry/idempotency policy, restart recovery, real agent payload, or scheduler.
+At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No ownership in records, durable broker, leases, retry/idempotency policy, restart recovery, real agent payload, or scheduler.
 
 ### Source symbols
 
@@ -75,7 +75,7 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **partial** at `c115d62`. An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **partial** at `6e3e13f`. An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

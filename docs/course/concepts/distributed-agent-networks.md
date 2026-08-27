@@ -2,7 +2,7 @@
 
 > **Implementation status:** `deferred`
 > **Status boundary:** No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 11-bounded-delegation](../modules/11-bounded-delegation/README.md)
 > **Catalog ID:** `distributed-agent-networks`
 
@@ -75,7 +75,7 @@ Code-reading exercise: search the repository for the missing components named in
 
 ## Lab vs production
 
-The status remains **deferred** at `c115d62`. No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **deferred** at `6e3e13f`. No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

@@ -2,7 +2,7 @@
 
 > **Implementation status:** `partial`
 > **Status boundary:** Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
 > **Catalog ID:** `provider-adapters-capability-parity`
 
@@ -40,7 +40,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `c115d62`, the mapped symbols implement the bounded behavior below. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics.
+At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics.
 
 ### Source symbols
 
@@ -77,7 +77,7 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **partial** at `c115d62`. Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **partial** at `6e3e13f`. Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

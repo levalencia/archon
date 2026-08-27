@@ -2,7 +2,7 @@
 
 > **Implementation status:** `partial`
 > **Status boundary:** HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 11-bounded-delegation](../modules/11-bounded-delegation/README.md)
 > **Catalog ID:** `agent-communication-security`
 
@@ -42,7 +42,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `c115d62`, the mapped symbols implement the bounded behavior below. Not injected into the active bounded verifier or legacy multi-agent route; no nonce store, key rotation, encryption, or durable receipt.
+At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. Not injected into the active bounded verifier or legacy multi-agent route; no nonce store, key rotation, encryption, or durable receipt.
 
 ### Source symbols
 
@@ -79,7 +79,7 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **partial** at `c115d62`. HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **partial** at `6e3e13f`. HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

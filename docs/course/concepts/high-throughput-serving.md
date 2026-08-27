@@ -2,7 +2,7 @@
 
 > **Implementation status:** `deferred`
 > **Status boundary:** Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 14-local-operations](../modules/14-local-operations/README.md)
 > **Catalog ID:** `high-throughput-serving`
 
@@ -75,7 +75,7 @@ Code-reading exercise: search the repository for the missing components named in
 
 ## Lab vs production
 
-The status remains **deferred** at `c115d62`. Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **deferred** at `6e3e13f`. Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

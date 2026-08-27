@@ -2,7 +2,7 @@
 
 > **Implementation status:** `not-implemented`
 > **Status boundary:** Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 09-evaluation-harness](../modules/09-evaluation-harness/README.md)
 > **Catalog ID:** `learning-optimization-drift`
 
@@ -74,7 +74,7 @@ Code-reading exercise: search the repository for the missing components named in
 
 ## Lab vs production
 
-The status remains **not-implemented** at `c115d62`. Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **not-implemented** at `6e3e13f`. Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

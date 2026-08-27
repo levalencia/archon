@@ -2,7 +2,7 @@
 
 > **Implementation status:** `implemented`
 > **Status boundary:** Optional Python and shell execution is Docker-only, digest-pinned, networkless, mountless, resource-bounded, and fail-closed; it is disabled by default and is not a VM-grade or multi-tenant production sandbox claim.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 05-policy-and-approvals](../modules/05-policy-and-approvals/README.md)
 > **Catalog ID:** `execution-isolation-sandbox`
 
@@ -40,7 +40,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `c115d62`, the mapped symbols implement the bounded behavior below. Most tests fake Docker; local smoke evidence is not hostile multi-tenant certification, seccomp customization, or microVM isolation.
+At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. Most tests fake Docker; local smoke evidence is not hostile multi-tenant certification, seccomp customization, or microVM isolation.
 
 ### Source symbols
 
@@ -79,7 +79,7 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **implemented** at `c115d62`. Optional Python and shell execution is Docker-only, digest-pinned, networkless, mountless, resource-bounded, and fail-closed; it is disabled by default and is not a VM-grade or multi-tenant production sandbox claim. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **implemented** at `6e3e13f`. Optional Python and shell execution is Docker-only, digest-pinned, networkless, mountless, resource-bounded, and fail-closed; it is disabled by default and is not a VM-grade or multi-tenant production sandbox claim. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

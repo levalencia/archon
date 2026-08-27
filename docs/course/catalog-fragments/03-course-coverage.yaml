@@ -1,223 +1,190 @@
-schema_version: 1
-fragment: course-coverage
-concepts:
 - id: provider-adapters-capability-parity
-  title: Provider adapters and capability parity
+  title: "Provider adapters and capability parity"
   status: partial
   module: docs/course/modules/02-typed-runtime/README.md
   sources:
-  - backend/app/runtime/ports.py
-  - backend/app/agents/llm_factory.py
+    - backend/app/runtime/ports.py
+    - backend/app/agents/llm_factory.py
   tests:
-  - backend/tests/unit/test_adapters.py
-  - backend/tests/unit/test_fallback_wire.py
+    - backend/tests/unit/test_adapters.py
+    - backend/tests/unit/test_fallback_wire.py
   evidence: []
-  limitations:
-  - Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback.
-  - No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics.
+  limitations: "Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics."
+
 - id: skills-project-instructions
-  title: Skills and project instructions
+  title: "Skills and project instructions"
   status: partial
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
-  - backend/app/skills/registry.py
-  - backend/app/routes/chat.py
-  - backend/app/routes/stream.py
+    - backend/app/skills/registry.py
+    - backend/app/routes/chat.py
+    - backend/app/routes/stream.py
   tests:
-  - backend/tests/unit/test_skills_security.py
+    - backend/tests/unit/test_skills_security.py
   evidence: []
-  limitations:
-  - Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector.
-  - Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract.
+  limitations: "Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract."
+
 - id: pii-redaction-data-boundaries
-  title: PII redaction and data boundaries
+  title: "PII redaction and data boundaries"
   status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
-  - backend/app/security/persistence_redactor.py
-  - backend/app/memory/scoped.py
-  - backend/app/observability/runtime_events.py
+    - backend/app/security/persistence_redactor.py
+    - backend/app/memory/scoped.py
+    - backend/app/observability/runtime_events.py
   tests:
-  - backend/tests/integration/test_pii_resilience_live.py
-  - backend/tests/security/test_persistence_redaction.py
+    - backend/tests/integration/test_pii_resilience_live.py
+    - backend/tests/security/test_persistence_redaction.py
   evidence:
-  - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations:
-  - Supported message, run-event, memory, artifact, audit, and log persistence paths redact detected PII before storage; this is not a claim that detection is exhaustive or that provider-bound prompts are redacted.
-  - Regex/optional NER can miss identifiers; provider transmission, backups, and every future sink need separate review.
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Supported message, run-event, memory, artifact, audit, and log persistence paths redact detected PII before storage; this is not a claim that detection is exhaustive or that provider-bound prompts are redacted. Regex/optional NER can miss identifiers; provider transmission, backups, and every future sink need separate review."
+
 - id: execution-isolation-sandbox
-  title: Execution isolation and the Docker sandbox
+  title: "Execution isolation and the Docker sandbox"
   status: implemented
   module: docs/course/modules/05-policy-and-approvals/README.md
   sources:
-  - backend/app/tools/sandbox.py
-  - backend/app/tools/terminal.py
-  - backend/app/main.py
+    - backend/app/tools/sandbox.py
+    - backend/app/tools/terminal.py
+    - backend/app/main.py
   tests:
-  - backend/tests/unit/test_docker_sandbox.py
-  - backend/tests/unit/test_docker_sandbox.py
-  - backend/tests/unit/test_sandbox_wire.py
+    - backend/tests/unit/test_docker_sandbox.py
+    - backend/tests/unit/test_sandbox_wire.py
   evidence:
-  - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations:
-  - Optional Python and shell execution is Docker-only, digest-pinned, networkless, mountless, resource-bounded, and fail-closed; it is disabled by default and is not a VM-grade or multi-tenant production sandbox claim.
-  - Most tests fake Docker; local smoke evidence is not hostile multi-tenant certification, seccomp customization, or microVM isolation.
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Optional Python and shell execution is Docker-only, digest-pinned, networkless, mountless, resource-bounded, and fail-closed; it is disabled by default and is not a VM-grade or multi-tenant production sandbox claim. Most tests fake Docker; local smoke evidence is not hostile multi-tenant certification, seccomp customization, or microVM isolation."
+
 - id: cost-usage-budgets
-  title: Cost, usage, and budgets
+  title: "Cost, usage, and budgets"
   status: partial
   module: docs/course/modules/07-run-ledger/README.md
   sources:
-  - backend/app/observability/cost_tracker.py
-  - backend/app/routes/stream.py
-  - backend/app/eval/service.py
+    - backend/app/observability/cost_tracker.py
+    - backend/app/routes/stream.py
+    - backend/app/eval/service.py
   tests:
-  - backend/tests/unit/test_eval_wire.py
-  - backend/tests/unit/test_recorded_evaluations.py
+    - backend/tests/unit/test_eval_wire.py
+    - backend/tests/unit/test_recorded_evaluations.py
   evidence: []
-  limitations:
-  - Runs record token and estimated cost data and evaluations aggregate it, but the chat cost tracker is recreated per response and no durable monetary budget prevents spend.
-  - No persistent price version, reservation, atomic counter, hard budget, or cross-replica enforcement.
+  limitations: "Runs record token and estimated cost data and evaluations aggregate it, but the chat cost tracker is recreated per response and no durable monetary budget prevents spend. No persistent price version, reservation, atomic counter, hard budget, or cross-replica enforcement."
+
 - id: structured-output-prompt-caching
-  title: Structured output and prompt caching
+  title: "Structured output and prompt caching"
   status: partial
   module: docs/course/modules/02-typed-runtime/README.md
   sources:
-  - backend/app/runtime/anthropic.py
-  - backend/app/runtime/support.py
+    - backend/app/runtime/anthropic.py
+    - backend/app/runtime/support.py
   tests:
-  - backend/tests/unit/test_json_mode_and_caching.py
-  - backend/tests/unit/test_json_mode_and_caching.py
+    - backend/tests/unit/test_json_mode_and_caching.py
   evidence: []
-  limitations:
-  - Anthropic request construction supports JSON prompting/prefill and ephemeral system-prompt cache control, but JSON is not schema-validated and cache hits or savings are not measured; parity across providers is absent.
-  - No response schema, parser/retry contract, provider matrix, cache-read token capture, or savings evidence.
+  limitations: "Anthropic request construction supports JSON prompting/prefill and ephemeral system-prompt cache control, but JSON is not schema-validated and cache hits or savings are not measured; parity across providers is absent. No response schema, parser/retry contract, provider matrix, cache-read token capture, or savings evidence."
+
 - id: multimodal-and-artifacts
-  title: Multimodal input and artifacts
+  title: "Multimodal input and artifacts"
   status: partial
   module: docs/course/modules/13-auth-ui-observability/README.md
   sources:
-  - backend/app/runtime/models.py
-  - backend/app/runtime/anthropic.py
-  - backend/app/services/artifacts.py
+    - backend/app/runtime/models.py
+    - backend/app/runtime/anthropic.py
+    - backend/app/services/artifacts.py
   tests:
-  - backend/tests/unit/test_wiring_gaps.py
-  - backend/tests/security/test_resource_security.py
-  - backend/tests/security/test_static_security.py
+    - backend/tests/unit/test_wiring_gaps.py
+    - backend/tests/security/test_resource_security.py
+    - backend/tests/security/test_static_security.py
   evidence: []
-  limitations:
-  - Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established.
-  - No committed real-provider vision observation, input media validation pipeline, malware scanning, or durable ArtifactStore backend.
+  limitations: "Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established. No committed real-provider vision observation, input media validation pipeline, malware scanning, or durable ArtifactStore backend."
+
 - id: background-jobs-scheduling
-  title: Background jobs and scheduling
+  title: "Background jobs and scheduling"
   status: partial
   module: docs/course/modules/10-resilience/README.md
   sources:
-  - backend/app/services/task_queue.py
-  - backend/app/routes/tasks.py
+    - backend/app/services/task_queue.py
+    - backend/app/routes/tasks.py
   tests:
-  - backend/tests/unit/test_streaming_and_tasks.py
+    - backend/tests/unit/test_streaming_and_tasks.py
   evidence: []
-  limitations:
-  - An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred.
-  - No ownership in records, durable broker, leases, retry/idempotency policy, restart recovery, real agent payload, or scheduler.
+  limitations: "An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred. No ownership in records, durable broker, leases, retry/idempotency policy, restart recovery, real agent payload, or scheduler."
+
 - id: compliance-red-teaming
-  title: Compliance controls and red teaming
+  title: "Compliance controls and red teaming"
   status: partial
   module: docs/course/modules/09-evaluation-harness/README.md
   sources:
-  - backend/app/security/compliance.py
-  - backend/app/routes/red_team.py
-  - backend/app/routes/red_team.py
+    - backend/app/security/compliance.py
+    - backend/app/routes/red_team.py
   tests:
-  - backend/tests/unit/test_compliance.py
-  - backend/tests/security/test_resource_security.py
+    - backend/tests/unit/test_compliance.py
+    - backend/tests/security/test_resource_security.py
   evidence: []
-  limitations:
-  - Rule-based compliance checks plus admin-only guardrail red-team and bounded fuzz routes exist and are unit-tested, but compliance is not a mandatory chat boundary and the probes do not execute full agent trajectories.
-  - No mandatory compliance call in both chat paths, versioned policy approvals, full-trajectory attacks, regression gate, or compliance certification.
+  limitations: "Rule-based compliance checks plus admin-only guardrail red-team and bounded fuzz routes exist and are unit-tested, but compliance is not a mandatory chat boundary and the probes do not execute full agent trajectories. No mandatory compliance call in both chat paths, versioned policy approvals, full-trajectory attacks, regression gate, or compliance certification."
+
 - id: agent-communication-security
-  title: Agent communication security
+  title: "Agent communication security"
   status: partial
   module: docs/course/modules/11-bounded-delegation/README.md
   sources:
-  - backend/app/agents/secure_channel.py
-  - backend/app/agents/agent_auth.py
+    - backend/app/agents/secure_channel.py
+    - backend/app/agents/agent_auth.py
   tests:
-  - backend/tests/unit/test_secure_channel.py
-  - backend/tests/unit/test_agent_auth.py
+    - backend/tests/unit/test_secure_channel.py
+    - backend/tests/unit/test_agent_auth.py
   evidence: []
-  limitations:
-  - HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary.
-  - Not injected into the active bounded verifier or legacy multi-agent route; no nonce store, key rotation, encryption, or durable receipt.
+  limitations: "HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary. Not injected into the active bounded verifier or legacy multi-agent route; no nonce store, key rotation, encryption, or durable receipt."
+
 - id: learning-optimization-drift
-  title: Learning, optimization, and drift
+  title: "Learning, optimization, and drift"
   status: not-implemented
   module: docs/course/modules/09-evaluation-harness/README.md
   sources: []
   tests: []
   evidence: []
-  limitations:
-  - Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system.
-  - Adjacent recorded evaluation is not an optimizer or drift monitor; no implementation exists for this concept.
+  limitations: "Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system. Adjacent recorded evaluation is not an optimizer or drift monitor; no implementation exists for this concept."
+
 - id: distributed-agent-networks
-  title: Distributed agent networks
+  title: "Distributed agent networks"
   status: deferred
   module: docs/course/modules/11-bounded-delegation/README.md
   sources: []
   tests: []
   evidence: []
-  limitations:
-  - No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration.
-  - No broker, discovery, leases, distributed cancellation, deduplication, cross-node auth, or deployment evidence.
+  limitations: "No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. No broker, discovery, leases, distributed cancellation, deduplication, cross-node auth, or deployment evidence."
+
 - id: high-throughput-serving
-  title: High-throughput model serving
+  title: "High-throughput model serving"
   status: deferred
   module: docs/course/modules/14-local-operations/README.md
   sources: []
   tests: []
   evidence: []
-  limitations:
-  - Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability.
-  - No serving engine, batching scheduler, queue policy, GPU topology, load test, or measured capacity.
+  limitations: "Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. No serving engine, batching scheduler, queue policy, GPU topology, load test, or measured capacity."
+
 - id: fine-tuning-vertical-adaptation
-  title: Fine-tuning and vertical adaptation
+  title: "Fine-tuning and vertical adaptation"
   status: deferred
   module: docs/course/modules/09-evaluation-harness/README.md
   sources: []
   tests: []
   evidence: []
-  limitations:
-  - No training, fine-tuning, adapter-weight, model-registry, or promotion pipeline exists; current skills, RAG, and prompts are runtime adaptation and must not be called fine-tuning.
-  - No dataset consent pipeline, trainer, checkpoints, registry, offline/online gate, or deployment rollback.
+  limitations: "No training, fine-tuning, adapter-weight, model-registry, or promotion pipeline exists; current skills, RAG, and prompts are runtime adaptation and must not be called fine-tuning. No dataset consent pipeline, trainer, checkpoints, registry, offline/online gate, or deployment rollback."
+
 - id: kubernetes-public-deployment
-  title: Kubernetes and public deployment
+  title: "Kubernetes and public deployment"
   status: partial
   module: docs/course/modules/14-local-operations/README.md
   sources:
-  - deploy/k8s/archon.yaml
-  - deploy/helm/archon/Chart.yaml
+    - deploy/k8s/archon.yaml
+    - deploy/helm/archon/Chart.yaml
   tests: []
   evidence: []
-  limitations:
-  - Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values.
-  - No schema/render test, cluster smoke, TLS/DNS, external secret manager, immutable production image, migration job, or public URL evidence.
+  limitations: "Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values. No schema/render test, cluster smoke, TLS/DNS, external secret manager, immutable production image, migration job, or public URL evidence."
+
 - id: export-share-redaction
-  title: Redacted run export and sharing
+  title: "Redacted run export and sharing"
   status: not-implemented
   module: docs/course/modules/07-run-ledger/README.md
   sources: []
   tests: []
   evidence: []
-  limitations:
-  - Archon has owner-scoped run reads and persistence redaction, but no export bundle, share token, recipient policy, revocation, expiry, or export-specific redaction/secret scan.
-  - No exporter or sharing model exists; persistence redaction does not establish safe disclosure.
-- id: generic-self-reflection
-  title: Generic self-reflection
-  status: not-implemented
-  module: docs/course/modules/03-react-loop/README.md
-  sources: []
-  tests: []
-  evidence: []
-  limitations:
-  - Archon feeds tool errors back into its bounded ReAct loop and can run post-run evaluation or a verifier child, but it has no general reflection memory, critique/revision contract, or measured reflection policy.
-  - The misleadingly named reflexion test proves tool-error feedback/retry only; no generic critique/revision lifecycle exists.
+  limitations: "Archon has owner-scoped run reads and persistence redaction, but no export bundle, share token, recipient policy, revocation, expiry, or export-specific redaction/secret scan. No exporter or sharing model exists; persistence redaction does not establish safe disclosure."

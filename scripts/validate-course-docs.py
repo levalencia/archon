@@ -150,6 +150,26 @@ def _validate_module(path: Path, issues: list[str]) -> None:
         issues.append(f"{path}: self-check has fewer than five numbered questions")
 
 
+def _validate_concept(path: Path, issues: list[str]) -> None:
+    text = path.read_text(encoding="utf-8")
+    lowered = text.lower()
+    if len(text.splitlines()) < 70:
+        issues.append(f"{path}: fewer than 70 lines; concept is too shallow")
+    if "```mermaid" not in text:
+        issues.append(f"{path}: missing concept-specific Mermaid diagram")
+    required_groups = [
+        ("source", "implementation", "code"),
+        ("test",),
+        ("interview", "30-second answer"),
+        ("self-check",),
+    ]
+    for group in required_groups:
+        if not any(term in lowered for term in group):
+            issues.append(f"{path}: missing required concept section matching {group}")
+    if len(QUESTION_RE.findall(_section(text, "self-check"))) < 5:
+        issues.append(f"{path}: self-check has fewer than five numbered questions")
+
+
 def _validate_markdown_links(course_root: Path, issues: list[str]) -> None:
     for path in sorted(course_root.rglob("*.md")):
         text = path.read_text(encoding="utf-8")
@@ -237,6 +257,8 @@ def validate_repository(repo_root: Path) -> list[str]:
             issues.append(f"missing course root file: {required}")
     for slug in MODULE_SLUGS:
         _validate_module(course_root / "modules" / slug / "README.md", issues)
+    for concept in sorted((course_root / "concepts").glob("*.md")):
+        _validate_concept(concept, issues)
     _validate_markdown_links(course_root, issues)
     _validate_catalog(repo_root, course_root, issues)
     return sorted(set(issues))

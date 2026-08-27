@@ -2,7 +2,7 @@
 
 > **Implementation status:** `not-implemented`
 > **Status boundary:** Archon has owner-scoped run reads and persistence redaction, but no export bundle, share token, recipient policy, revocation, expiry, or export-specific redaction/secret scan.
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Used by module:** [Module 07-run-ledger](../modules/07-run-ledger/README.md)
 > **Catalog ID:** `export-share-redaction`
 
@@ -74,7 +74,7 @@ Code-reading exercise: search the repository for the missing components named in
 
 ## Lab vs production
 
-The status remains **not-implemented** at `c115d62`. Archon has owner-scoped run reads and persistence redaction, but no export bundle, share token, recipient policy, revocation, expiry, or export-specific redaction/secret scan. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **not-implemented** at `6e3e13f`. Archon has owner-scoped run reads and persistence redaction, but no export bundle, share token, recipient policy, revocation, expiry, or export-specific redaction/secret scan. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 

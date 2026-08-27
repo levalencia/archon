@@ -1,6 +1,6 @@
 # AIAMastery Days 1–30: concept coverage
 
-> **Reviewed revision:** `c115d62`
+> **Reviewed revision:** `6e3e13f`
 > **Scope:** Luis-authored concept/status synthesis; no paid lesson prose is reproduced.
 > **Status vocabulary:** `implemented` means meaningful behavior is wired, tested, and evidenced within its stated boundary; `partial` names an incomplete boundary; `not-implemented` means no meaningful implementation; `deferred` means deliberately out of scope without a delivery promise.
 
