@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/auth', () => ({ authenticatedFetch: vi.fn() }));
 import { authenticatedFetch } from '$lib/auth';
-import { RunApiError, compareRuns, getRunEvents, listRuns } from './runs';
+import { RunApiError, compareRuns, getRunContext, getRunEvents, listRuns } from './runs';
 
 const fetchMock = vi.mocked(authenticatedFetch);
 beforeEach(() => fetchMock.mockReset());
@@ -16,6 +16,9 @@ describe('persisted run client', () => {
       { sequence: 1, event_at: '', kind: 'run_started', iteration: 0, payload: {} },
     ] }), { status: 200 }));
     expect((await getRunEvents('run/1')).map(e => e.sequence)).toEqual([1, 2]);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ run_id: 'run/1' }), { status: 200 }));
+    await getRunContext('run/1');
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/runs/run%2F1/context');
   });
 
   it('uses explicit errors for auth/not-found and calls compare endpoint', async () => {

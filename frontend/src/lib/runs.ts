@@ -9,6 +9,12 @@ export type Run = {
   trajectory?: { tools: Record<string, unknown>[]; approvals: Record<string, unknown>[]; policy: Record<string, unknown>[]; evidence: unknown[]; workspace_restoration: string };
 };
 export type RunEvent = { sequence: number; event_at: string; kind: string; iteration: number; payload: Record<string, unknown> };
+export type ContextManifest = {
+  snapshot_id: string; schema_version: number; run_id: string; conversation_id: string; project_id: string;
+  selected_message_ids: number[]; summarized_message_ids: number[]; memory_ids: string[]; skill_ids: string[];
+  input_asset_fingerprints: string[]; estimated_tokens: number; summary_version: string | null;
+  truncation_reason: string | null; manifest_hash: string;
+};
 export type ComparedRun = Pick<Run, 'run_id' | 'conversation_id' | 'project_id' | 'provider' | 'model' | 'answer_summary' | 'cost_usd' | 'latency_ms' | 'iterations' | 'stop_reason' | 'parent_run_id' | 'fork_source_sequence'> & {
   tokens: { input: number; output: number; total: number };
 };
@@ -29,6 +35,8 @@ export async function listRuns(options: { conversationId?: string; projectId?: s
   return Array.isArray(result.items) ? result.items : [];
 }
 export const getRun = (id: string) => json<Run>(`/api/runs/${encodeURIComponent(id)}`);
+export const getRunContext = (id: string) =>
+  json<ContextManifest>(`/api/runs/${encodeURIComponent(id)}/context`);
 export async function getRunEvents(id: string): Promise<RunEvent[]> {
   const result = await json<{ items?: RunEvent[] }>(`/api/runs/${encodeURIComponent(id)}/events?limit=200`);
   return (Array.isArray(result.items) ? result.items : []).slice().sort((a, b) => a.sequence - b.sequence);

@@ -1,10 +1,14 @@
 <script lang="ts">
   import { authenticatedFetch } from '$lib/auth';
-  import { Brain, Database, Thermometer, Archive, RotateCcw, HardDrive } from 'lucide-svelte';
+  import { Brain, Database, Thermometer, Archive, RotateCcw, HardDrive, KeyRound, ShieldCheck } from 'lucide-svelte';
+  import { getMemoryRotation, rotateMemoryKeys, type MemoryRotationStatus } from '$lib/memory';
 
   let tiers: any = $state(null);
   let context: any = $state(null);
   let checkpoints: any[] = $state([]);
+  let rotation: MemoryRotationStatus | null = $state(null);
+  let rotationBusy = $state(false);
+  let rotationError = $state('');
   let loading = $state(true);
   let error = $state('');
 
@@ -21,11 +25,13 @@
   async function loadMemory() {
     loading = true;
     error = '';
+    rotationError = '';
     try {
-      const [tiersRes, contextRes, checkpointsRes] = await Promise.allSettled([
+      const [tiersRes, contextRes, checkpointsRes, rotationRes] = await Promise.allSettled([
         authenticatedFetch('/api/memory/tiers'),
         authenticatedFetch('/api/memory/context'),
         authenticatedFetch('/api/memory/checkpoints'),
+        getMemoryRotation(),
       ]);
 
       if (tiersRes.status === 'fulfilled' && tiersRes.value.ok)
@@ -34,6 +40,8 @@
         context = await contextRes.value.json();
       if (checkpointsRes.status === 'fulfilled' && checkpointsRes.value.ok)
         checkpoints = await checkpointsRes.value.json();
+      if (rotationRes.status === 'fulfilled') rotation = rotationRes.value;
+      else rotationError = 'Rotation status unavailable';
     } catch {
       error = 'Failed to load memory data';
     }
@@ -43,6 +51,19 @@
   async function restoreCheckpoint(id: string) {
     await authenticatedFetch(`/api/memory/checkpoints/${id}/restore`, { method: 'POST' });
     await loadMemory();
+  }
+
+  async function rotateBatch() {
+    if (rotationBusy) return;
+    rotationBusy = true;
+    rotationError = '';
+    try {
+      rotation = await rotateMemoryKeys('default', 100);
+    } catch (cause) {
+      rotationError = cause instanceof Error ? cause.message : 'Rotation failed';
+    } finally {
+      rotationBusy = false;
+    }
   }
 
   $effect(() => { loadMemory(); });
@@ -175,6 +196,53 @@
         Reserved: {(ctxTotal - ctxUsed).toLocaleString()} tokens
       </div>
     </div>
+  </section>
+
+  <!-- Online key rotation -->
+  <section class="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-5" aria-labelledby="rotation-heading">
+    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-center gap-2">
+        <KeyRound size={16} class="text-[var(--accent)]" />
+        <div>
+          <h2 id="rotation-heading" class="text-base font-semibold text-[var(--text-primary)]">Encryption key rotation</h2>
+          <p class="mt-0.5 text-xs text-[var(--text-muted)]">Default project · metadata only</p>
+        </div>
+      </div>
+      {#if rotation}
+        <span class="w-fit rounded-full px-2.5 py-1 text-xs font-medium {rotation.complete ? 'bg-[rgba(85,214,190,.12)] text-[var(--accent)]' : 'bg-[rgba(240,189,98,.12)] text-[var(--warning)]'}">
+          {rotation.complete ? 'Current' : `${rotation.remaining} remaining`}
+        </span>
+      {/if}
+    </div>
+
+    {#if rotationError}
+      <div class="rounded-lg border border-[rgba(245,101,101,.35)] bg-[rgba(245,101,101,.08)] p-3 text-sm text-[var(--error)]" role="alert">{rotationError}</div>
+    {:else if loading && !rotation}
+      <div class="text-sm text-[var(--text-muted)]" aria-live="polite">Loading rotation status…</div>
+    {:else if rotation}
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="rounded-lg bg-[var(--bg-tertiary)] p-3"><span class="text-[11px] text-[var(--text-muted)]">Active version</span><strong class="mt-1 block font-mono text-lg text-[var(--text-primary)]">v{rotation.active_version}</strong></div>
+        <div class="rounded-lg bg-[var(--bg-tertiary)] p-3"><span class="text-[11px] text-[var(--text-muted)]">Rows remaining</span><strong class="mt-1 block font-mono text-lg text-[var(--text-primary)]">{rotation.remaining}</strong></div>
+        <div class="rounded-lg bg-[var(--bg-tertiary)] p-3"><span class="text-[11px] text-[var(--text-muted)]">Version counts</span><strong class="mt-1 block font-mono text-sm text-[var(--text-primary)]">{Object.entries(rotation.version_counts).map(([version, count]) => `v${version}: ${count}`).join(' · ') || 'No rows'}</strong></div>
+      </div>
+      {#if rotation.retirement_requires_legacy_writer_drain}
+        <div class="mt-3 flex items-start gap-2 rounded-lg border border-[rgba(240,189,98,.3)] bg-[rgba(240,189,98,.07)] p-3 text-xs text-[var(--warning)]">
+          <ShieldCheck size={16} class="mt-0.5 shrink-0" />
+          <span>Retirement requires the documented legacy-writer drain, even when remaining reaches zero.</span>
+        </div>
+      {/if}
+      <div class="mt-4 flex justify-end">
+        <button
+          type="button"
+          onclick={rotateBatch}
+          disabled={rotationBusy || rotation.complete}
+          class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-primary)] transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <RotateCcw size={15} class:animate-spin={rotationBusy} />
+          {rotationBusy ? 'Rotating…' : rotation.complete ? 'No rotation needed' : 'Rotate next 100 rows'}
+        </button>
+      </div>
+    {/if}
   </section>
 
   <!-- Checkpoints -->
