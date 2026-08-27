@@ -364,9 +364,7 @@ async def test_final_synthesis_tool_call_decision_is_captured_before_event_mutat
                     replacement = () if initial_has_call else (ToolCall("injected", "noop"),)
                     object.__setattr__(final_response, "tool_calls", replacement)
 
-    provider = Provider(
-        [ModelResponse(tool_calls=(ToolCall("call", "noop"),)), final_response]
-    )
+    provider = Provider([ModelResponse(tool_calls=(ToolCall("call", "noop"),)), final_response])
     result = await AgentRuntime(
         provider,
         WorkingTools(),
