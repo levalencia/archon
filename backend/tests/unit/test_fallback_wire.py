@@ -56,6 +56,15 @@ class _LegacyOKClient:
         return self._response
 
 
+class _LegacyTemperatureClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, int, float]] = []
+
+    async def chat(self, messages, max_tokens=4096, temperature=0.7):
+        self.calls.append((messages, max_tokens, temperature))
+        return "temperature-aware"
+
+
 class _LegacyFailClient:
     def __init__(self) -> None:
         self.calls = 0
@@ -234,6 +243,19 @@ async def test_legacy_chat_works_with_ollama_like_signature() -> None:
     assert client.calls == [
         ([{"role": "system", "content": "rules"}, {"role": "user", "content": "hi"}], 99)
     ]
+
+
+@pytest.mark.asyncio
+async def test_legacy_chat_forwards_temperature_when_supported() -> None:
+    client = _LegacyTemperatureClient()
+    messages = [{"role": "user", "content": "hi"}]
+
+    result = await FallbackLLMChain([client]).chat(
+        messages, max_tokens=77, temperature=0.1
+    )
+
+    assert result == "temperature-aware"
+    assert client.calls == [(messages, 77, 0.1)]
 
 
 @pytest.mark.asyncio

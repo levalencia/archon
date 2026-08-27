@@ -13,72 +13,66 @@ The key design question is not “did another endpoint answer?” but “which g
 
 ## Two fallback forms in Archon
 
-`backend/app/agents/fallback_chain.py::FallbackLLMChain` tries legacy `LLMClient` adapters in order.
-`backend/app/agents/resilient_coordinator.py::ResilientCoordinator` supplies fixed stage-specific degraded text.
-These are separate mechanisms with different contracts.
-The chain seeks the first provider text response.
+`backend/app/agents/fallback_chain.py::FallbackLLMChain` now supports the typed `ModelProvider.complete` boundary and the legacy text-only `chat` API.
+`backend/app/agents/resilient_coordinator.py::ResilientCoordinator` separately supplies fixed stage-specific degraded text.
+The typed chain computes the request requirements, skips incompatible candidates, and selects the first compatible provider that succeeds.
 The coordinator stops retrying a failed specialist and synthesizes or forwards a predetermined fallback response.
-Neither mechanism should be confused with `CircuitBreakingProvider`, which returns a typed unavailable error rather than selecting a fallback.
+Neither mechanism should be confused with `CircuitBreakingProvider`, which blocks calls to a known-unhealthy delegate rather than selecting another provider.
 
 ```mermaid
 flowchart TD
-  R[text chat request] --> P[primary LLMClient]
-  P -->|returns text| O[return primary text]
-  P -->|raises Exception| S[secondary LLMClient]
-  S -->|returns text| D[return secondary text and log degraded route]
-  S -->|raises Exception| N[next adapter]
-  N -->|all fail| E[return all-providers-failed text]
+  R[typed request] --> Q[derive tools images JSON requirements]
+  Q --> P{candidate satisfies every requirement?}
+  P -->|no| S[skip without invoking]
+  P -->|yes| C[call typed candidate]
+  C -->|ModelResponse| O[preserve usage cache stop reason and identity]
+  C -->|safe failure| N[next compatible candidate]
+  N -->|none succeed| E[raise typed ProviderFallbackExhausted]
+  S --> N
 ```
 
 ## Exact `FallbackLLMChain` behavior
 
-The constructor requires at least one adapter and otherwise raises `ValueError`.
-`chat` accepts `messages: list[dict[str, str]]`, `max_tokens`, and `temperature`.
-Adapters are attempted sequentially in configured list order.
-Each receives the same messages, token maximum, and temperature.
-The first returned string is returned unchanged.
-A successful primary produces no fallback-success log.
-A successful later adapter logs `llm_fallback_success` with adapter class name, zero-based position, and failures skipped.
+The constructor requires at least one adapter and accepts a covariant sequence of typed or legacy clients.
+`complete` accepts typed messages, tool definitions, `max_tokens`, and an optional response contract or legacy JSON format.
+It derives the complete requirement set before attempting providers; one candidate must satisfy all requirements.
+Incompatible candidates are skipped without invocation.
+The first compatible successful `ModelResponse` is returned with content, tool calls, images contract, usage, cache usage, stop reason, structured value, and provider/model identity preserved.
+A successful later adapter logs `llm_fallback_success` with adapter class name, list position, and the actual number of failed invocations—not incompatible skips.
 Every ordinary adapter exception increments an in-memory counter keyed by list position.
 Failure logging uses `safe_exception_metadata` rather than directly attaching the raw exception.
-`get_stats` returns adapter class names and the per-position cumulative failure counts.
-There is no timeout, backoff, per-adapter breaker, health scoring, or request deadline inside this chain.
-There is no sticky routing; every new request starts with adapter zero.
+`chat` remains a compatibility API. It forwards temperature only to clients whose declared signature supports it and omits the argument for Ollama-like clients.
+`get_stats` returns adapter class names and per-position cumulative failure counts.
+There is no sticky routing; each request starts from the configured priority order.
+An end-to-end runtime deadline still owns total latency; the chain itself does not create a separate deadline.
 
 ## All-provider failure semantics
 
-When every adapter raises, the method does **not** raise a typed unavailable exception.
-It creates strings such as `AdapterName: exception text` for each failure.
-It joins them and returns `[All LLM providers failed: ...]` as an ordinary text result.
-That means a caller can mistake total failure for a valid model answer.
-The returned text includes exception text even though structured failure logs are sanitized.
-This is an important legacy limitation and a possible information-disclosure path.
-Production code should prefer a typed failure with safe public text and protected internal diagnostics.
+When no single candidate satisfies the complete requirement set, the chain raises `NoCompatibleProviderError` before invoking a provider.
+When every compatible candidate raises, it raises `ProviderFallbackExhausted`.
+These errors expose stable capability/provider class metadata and attempt counts, not raw provider exception text.
+The chain therefore cannot turn a total outage into plausible assistant content.
+Operational logs receive sanitized exception metadata; prompts and credentials are not attached.
 
 ## Capability retained and capability lost
 
-The chain retains plain text chat, message ordering, `max_tokens`, and `temperature` at its declared interface.
-It retains deterministic configured priority: primary first, then fallback entries.
-It retains only the response string from the successful adapter.
-It does not expose the selected provider in the return type.
-It does not retain typed `ModelResponse` metadata.
-It does not retain tool definitions or tool calls.
-It does not retain images or multimodal inputs.
-It does not retain structured-output or JSON-mode guarantees.
-It does not retain token usage, cost, stop reason, finish reason, or provider request IDs.
-It does not guarantee safety-policy, context-window, tokenizer, or model-quality parity.
-It therefore cannot transparently replace the typed runtime `ModelProvider` contract.
+The typed path preserves `Message` objects, tool definitions, images, response contracts, `ModelResponse`, token/cache usage, provider stop reason, and actual provider/model identity.
+The legacy `chat` path intentionally returns text only, while preserving `max_tokens` and supported temperature semantics.
+The chain advertises the union of candidate capabilities so a capable primary is not rejected because a weaker fallback exists.
+At execution time it checks every requirement against each candidate; capabilities cannot be assembled across different providers.
+A text-only fallback is never eligible for a request requiring tools, images, or JSON mode.
+The chain does not guarantee equivalent model quality, safety policy, context length, tokenizer, cost, geography, or data residency.
+Those differences remain explicit acceptance and deployment concerns.
 
 ```mermaid
 flowchart LR
-  C[requested capability] --> T{legacy chain retains it?}
-  T -->|text messages| Y[retained]
-  T -->|max tokens and temperature arguments| Y
-  T -->|tools or typed response| N[lost]
-  T -->|images or structured mode| N
-  T -->|usage and stop reason| N
-  N --> V[reject request or expose degraded contract]
-  Y --> Q[still validate provider-specific semantics]
+  C[request requirements] --> T{one candidate satisfies all?}
+  T -->|yes| Y[preserve typed contract and metadata]
+  T -->|no| N[typed capability error]
+  Y --> P{candidate call succeeds?}
+  P -->|yes| R[return ModelResponse]
+  P -->|no| F[next compatible candidate]
+  F -->|exhausted| E[typed exhaustion error]
 ```
 
 ## Factory wiring
@@ -127,9 +121,9 @@ Choose whether cost, geography, and data residency permit each route.
 A weaker fallback can silently bypass content filtering or data-location requirements.
 Sending the same prompt to multiple vendors expands data exposure.
 Sequential attempts can increase latency and spend.
-An ambiguous provider error can cause duplicate side effects if the request included tool execution.
-A returned all-failed string can be rendered as trustworthy assistant content.
-Raw exception text in that string can disclose endpoints, configuration, or provider details.
+A typed fallback may still duplicate a provider request, but tool side effects execute only after the runtime selects and validates one response.
+Typed exhaustion prevents provider failure text from being rendered as trustworthy assistant content.
+Sanitized errors avoid returning raw exception text, but provider class names remain operational metadata and must stay non-secret.
 Fallback success can hide a sustained primary outage unless explicitly measured.
 Permanent caller errors should not fan out to every provider.
 A fallback model may not understand the same system prompt or output schema.
@@ -172,38 +166,39 @@ Use hedging only for safe idempotent requests because parallel providers increas
 
 ## Exercise
 
-1. Create a failing fake primary and a successful text fallback.
-2. Verify that each is called once and the secondary text is returned.
-3. Make both fail and inspect the returned value's type and contents.
-4. List the information disclosure and caller-confusion risks of that ordinary string.
-5. Define a request requiring JSON mode and tools; explain why `FallbackLLMChain` cannot preserve it.
-6. Trace all four coordinator stage fallbacks and mark exactly which capability each loses.
-7. Redesign the result as a typed union of success, degraded success, and unavailable.
+1. Create a failing typed primary and a successful typed fallback.
+2. Verify that each compatible candidate is called once and the secondary `ModelResponse` retains usage and stop reason.
+3. Make both fail and confirm `ProviderFallbackExhausted` contains no raw exception text.
+4. Add a text-only candidate before a provider supporting tools; verify the text candidate is skipped without invocation.
+5. Define a request requiring JSON mode and tools; prove that one provider—not the union—must satisfy both.
+6. Call the legacy `chat` API with a temperature-aware client and an Ollama-like client; verify each receives only supported arguments.
+7. Trace all four coordinator stage fallbacks and mark exactly which capability each loses.
 8. Add an end-to-end deadline and state where it must be checked before each new provider.
 
 ## Exact source and test evidence
 
-- `backend/app/agents/fallback_chain.py::FallbackLLMChain.chat` defines sequential first-text-success behavior.
+- `backend/app/agents/fallback_chain.py::FallbackLLMChain.complete` defines typed capability-aware selection.
+- `backend/app/agents/fallback_chain.py::FallbackLLMChain.chat` preserves compatible legacy sampling arguments.
 - `backend/app/agents/fallback_chain.py::FallbackLLMChain.get_stats` exposes process-local failure counts.
 - `backend/app/agents/llm_factory.py::create_llm_client` defines configuration order and unknown-provider skipping.
-- `backend/app/agents/resilient_coordinator.py::ResilientCoordinator._execute_with_fallback` defines bounded attempts and degraded dictionaries.
-- `backend/tests/unit/test_fallback_wire.py::test_fallback_chain_uses_primary_when_healthy` proves primary preference.
-- `backend/tests/unit/test_fallback_wire.py::test_fallback_chain_falls_through_on_failure` proves secondary selection.
-- `backend/tests/unit/test_fallback_wire.py::test_fallback_chain_all_fail_returns_error_message` locks the current ordinary-string failure behavior.
-- `backend/tests/unit/test_fallback_wire.py::test_factory_returns_fallback_chain_with_fallbacks` proves primary plus configured fallback wiring.
+- `backend/app/agents/resilient_coordinator.py::ResilientCoordinator._execute_with_fallback` defines bounded specialist attempts and degraded dictionaries.
+- `backend/tests/unit/test_fallback_wire.py::test_typed_failure_then_compatible_fallback` proves typed secondary selection.
+- `backend/tests/unit/test_fallback_wire.py::test_combined_requirements_need_one_candidate_not_union_only_match` proves capabilities cannot be assembled across providers.
+- `backend/tests/unit/test_fallback_wire.py::test_all_compatible_failures_raise_without_raw_errors` proves safe typed exhaustion.
+- `backend/tests/unit/test_fallback_wire.py::test_legacy_chat_forwards_temperature_when_supported` proves legacy temperature preservation.
 - `docs/evidence/local-portfolio-benchmark.json` uses injected clients and is not evidence of live-provider equivalence.
 
 ## 30-second interview answer
 
-“Fallback is a semantic substitution, not just another endpoint. Archon's legacy `FallbackLLMChain` tries text adapters in order and retains plain text plus token/temperature arguments, but it loses typed tools, images, structured output, usage, and stop-reason semantics. If all fail, it currently returns an exception-bearing text string rather than a typed error. The coordinator also uses stage-specific degraded text, including a validation-skipped value that must never count as security approval. Production needs capability negotiation, typed degradation, safe errors, deadlines, and explicit observability.”
+“Fallback is a semantic substitution, not just another endpoint. Archon's typed `FallbackLLMChain` derives tools, image, and JSON requirements, skips incompatible candidates, and preserves the winning `ModelResponse`, usage, cache counters, stop reason, and provider identity. No single provider means a typed capability error; total outage means typed exhaustion, never an exception-bearing assistant string. The remaining production questions are end-to-end deadlines, live parity, cost, geography, and safety-policy equivalence.”
 
 ## Self-checks
 
-1. **What does the chain return when all adapters fail?** An ordinary string containing an all-providers-failed summary and adapter exception text.
-2. **Does a secondary text response preserve typed tool capability?** No. The legacy interface returns only `str`.
-3. **How are unknown configured fallback providers handled?** The factory logs and skips them; if none remain, it returns the primary.
-4. **Is the coordinator's validation fallback an approval?** No. It says validation was skipped and cannot substitute for policy or security enforcement.
-5. **Why can fallback increase risk during outage?** It expands data exposure and may route to providers with weaker capabilities or controls under pressure.
-6. **What should be visible in a fallback result?** At least degraded status, selected provider/path, reason code, and capability changes.
-7. **Does the current chain impose a total deadline?** No. Sequential adapter latency can accumulate.
-8. **What does injected fake-client evidence prove?** Wiring and deterministic selection behavior, not real-provider parity or recovery.
+1. **What happens when no provider satisfies every required capability?** `NoCompatibleProviderError` is raised before any incompatible provider call.
+2. **Can tools from one provider and images from another satisfy one request?** No. One candidate must satisfy the complete requirement set.
+3. **What happens when all compatible providers fail?** The chain raises `ProviderFallbackExhausted` without raw exception text.
+4. **Does legacy chat still preserve temperature?** Yes for clients whose signature supports it; the argument is omitted for Ollama-like clients that do not.
+5. **Is the coordinator's validation fallback an approval?** No. It says validation was skipped and cannot substitute for policy or security enforcement.
+6. **Why can fallback increase risk during outage?** It expands data exposure and may route to providers with different controls, cost, geography, or quality.
+7. **What metadata survives typed fallback?** Tool calls, usage/cache counters, stop reason, structured value, and actual provider/model identity.
+8. **What does deterministic fake-client evidence prove?** Contract wiring and selection behavior, not live-provider parity or outage recovery.

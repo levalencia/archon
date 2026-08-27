@@ -5,11 +5,11 @@ from __future__ import annotations
 import inspect
 from collections.abc import Sequence
 from dataclasses import fields, replace
+from inspect import Parameter
 from typing import Any
 
 import structlog
 
-from app.agents.protocols import LLMClient
 from app.observability.logging import safe_exception_metadata
 from app.runtime.capabilities import (
     ProviderCapabilities,
@@ -85,16 +85,31 @@ def _safe_model_name(adapter: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _supports_temperature(adapter: object) -> bool:
+    """Inspect the declared chat signature without invoking descriptors."""
+    method = inspect.getattr_static(type(adapter), "chat", None)
+    if method is None:
+        return False
+    try:
+        parameters = inspect.signature(method).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        parameter.name == "temperature" or parameter.kind is Parameter.VAR_KEYWORD
+        for parameter in parameters
+    )
+
+
 class FallbackLLMChain:
     """Try compatible model providers in order, preserving typed response contracts."""
 
-    def __init__(self, adapters: list[LLMClient | ModelProvider]) -> None:
+    def __init__(self, adapters: Sequence[object]) -> None:
         if not adapters:
             msg = "At least one adapter required"
             raise ValueError(msg)
         # Keep the originals for legacy identity and stable statistics. Typed candidates
         # are deliberately created only through the existing conservative adapter.
-        self.adapters = adapters
+        self.adapters = list(adapters)
         self._candidates = tuple(as_model_provider(adapter) for adapter in adapters)
         self.capabilities = _union_capabilities(self._candidates)
         self._failures: dict[int, int] = {}
@@ -132,6 +147,7 @@ class FallbackLLMChain:
             )
 
         attempted_names: list[str] = []
+        failed_attempts = 0
         for index in compatible_indices:
             adapter = self.adapters[index]
             candidate = self._candidates[index]
@@ -145,6 +161,7 @@ class FallbackLLMChain:
             try:
                 response = await candidate.complete(messages, tools, **kwargs)
             except Exception as exc:
+                failed_attempts += 1
                 self._failures[index] = self._failures.get(index, 0) + 1
                 logger.warning(
                     "llm_adapter_failed",
@@ -160,7 +177,7 @@ class FallbackLLMChain:
                     "llm_fallback_success",
                     adapter=adapter_name,
                     position=index,
-                    failures_skipped=index,
+                    failures_skipped=failed_attempts,
                 )
 
             model_name = _safe_model_name(adapter)
@@ -191,13 +208,51 @@ class FallbackLLMChain:
         max_tokens: int = 4096,
         temperature: float = 0.7,
     ) -> str:
-        """Compatibility API backed by the typed fallback path."""
-        del temperature
+        """Compatibility API that preserves supported legacy sampling arguments."""
         typed_messages = [
             Message(role=Role(message["role"]), content=message["content"]) for message in messages
         ]
-        response = await self.complete(typed_messages, max_tokens=max_tokens)
-        return response.content or ""
+        attempted_names: list[str] = []
+        failed_attempts = 0
+        for index, (adapter, candidate) in enumerate(zip(self.adapters, self._candidates, strict=True)):
+            adapter_name = type(adapter).__name__
+            attempted_names.append(adapter_name)
+            try:
+                chat_method: Any = getattr(adapter, "chat", None)
+                if callable(chat_method):
+                    kwargs: dict[str, Any] = {"max_tokens": max_tokens}
+                    if _supports_temperature(adapter):
+                        kwargs["temperature"] = temperature
+                    text = await chat_method(messages, **kwargs)
+                else:
+                    response = await candidate.complete(typed_messages, max_tokens=max_tokens)
+                    text = response.content or ""
+            except Exception as exc:
+                failed_attempts += 1
+                self._failures[index] = self._failures.get(index, 0) + 1
+                logger.warning(
+                    "llm_adapter_failed",
+                    adapter=adapter_name,
+                    position=index,
+                    **safe_exception_metadata(exc, "provider_request_failed"),
+                    total_failures=self._failures[index],
+                )
+                continue
+            if index > 0:
+                logger.info(
+                    "llm_fallback_success",
+                    adapter=adapter_name,
+                    position=index,
+                    failures_skipped=failed_attempts,
+                )
+            return text
+
+        logger.error(
+            "llm_all_adapters_failed",
+            attempted_count=len(attempted_names),
+            provider_names=tuple(attempted_names),
+        )
+        raise ProviderFallbackExhausted(len(attempted_names), tuple(attempted_names))
 
     def get_stats(self) -> dict[str, object]:
         """Get failure stats keyed by original adapter position."""
