@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from app.runtime.anthropic import anthropic_request, anthropic_response
+from app.runtime.capabilities import ProviderCapabilities
 from app.runtime.models import Message, ModelResponse, ToolDefinition
+from app.runtime.structured_output import ResponseContract
 
 
 class AnthropicAdapter:
@@ -19,6 +21,14 @@ class AnthropicAdapter:
 
         self.model = model
         self.prompt_caching_enabled = prompt_caching_enabled
+        self.capabilities = ProviderCapabilities(
+            native_tools=True,
+            images=True,
+            json_mode=True,
+            prompt_caching=prompt_caching_enabled,
+            usage=True,
+            stop_reason=True,
+        )
         self._client = AsyncAnthropic(api_key=api_key)
 
     async def complete(
@@ -27,8 +37,12 @@ class AnthropicAdapter:
         tools: Sequence[ToolDefinition] = (),
         *,
         max_tokens: int = 4096,
+        response_contract: ResponseContract | None = None,
         response_format: str | None = None,
     ) -> ModelResponse:
+        if response_contract is not None and response_format is not None:
+            raise ValueError("response_contract and response_format are mutually exclusive")
+        del response_contract
         request = anthropic_request(
             messages,
             tools,

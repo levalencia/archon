@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any, cast
 
+from app.runtime.capabilities import TEXT_ONLY_CAPABILITIES, get_provider_capabilities
 from app.runtime.context import build_messages
 from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
 from app.runtime.ports import ModelProvider
+from app.runtime.structured_output import ResponseContract
 
 
 class JsonModeProvider:
@@ -15,6 +18,7 @@ class JsonModeProvider:
 
     def __init__(self, delegate: Any) -> None:
         self._delegate = delegate
+        self.capabilities = replace(get_provider_capabilities(delegate), json_mode=True)
 
     async def complete(
         self,
@@ -22,16 +26,24 @@ class JsonModeProvider:
         tools: Sequence[ToolDefinition] = (),
         *,
         max_tokens: int = 4096,
+        response_contract: ResponseContract | None = None,
         response_format: str | None = None,
     ) -> ModelResponse:
-        response: ModelResponse = await self._delegate.complete(
-            messages, tools, max_tokens=max_tokens, response_format="json"
-        )
+        if response_contract is not None and response_format is not None:
+            raise ValueError("response_contract and response_format are mutually exclusive")
+        kwargs: dict[str, Any] = {"max_tokens": max_tokens}
+        if response_contract is not None:
+            kwargs["response_contract"] = response_contract
+        else:
+            kwargs["response_format"] = "json"
+        response: ModelResponse = await self._delegate.complete(messages, tools, **kwargs)
         return response
 
 
 class TextOnlyProvider:
     """Non-parsing compatibility adapter for providers without native tool support yet."""
+
+    capabilities = TEXT_ONLY_CAPABILITIES
 
     def __init__(self, client: Any) -> None:
         self.client = client
@@ -42,9 +54,13 @@ class TextOnlyProvider:
         tools: Sequence[ToolDefinition] = (),
         *,
         max_tokens: int = 4096,
+        response_contract: ResponseContract | None = None,
         response_format: str | None = None,
     ) -> ModelResponse:
+        if response_contract is not None and response_format is not None:
+            raise ValueError("response_contract and response_format are mutually exclusive")
         del tools
+        del response_contract
         del response_format
         legacy = [{"role": message.role.value, "content": message.content} for message in messages]
         text = await self.client.chat(legacy, max_tokens=max_tokens)
