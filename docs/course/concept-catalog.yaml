@@ -503,7 +503,7 @@
   module: docs/course/modules/13-auth-ui-observability/README.md
   sources:
     - backend/app/security/auth.py
-    - backend/app/routes/auth.py
+    - backend/app/security/auth.py
   tests:
     - backend/tests/integration/test_auth_persistence.py
     - backend/tests/unit/test_agent_auth.py
@@ -632,7 +632,7 @@
     - backend/tests/unit/test_verify_script.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Run 33042890654 was green at 6e3e13f; that does not prove later revisions, deployment, or provider quality."
+  limitations: "The canonical evidence page records a green revision-scoped run; it does not prove later revisions, deployment, or provider quality. Exact run/revision evidence is centralized in docs/IMPLEMENTATION-EVIDENCE.md and does not prove deployment or provider quality."
 
 - id: backup-restore
   title: "Backup and restore"
@@ -651,7 +651,7 @@
 
 - id: rto-rpo
   title: "RTO and RPO"
-  status: implemented
+  status: partial
   module: docs/course/modules/14-local-operations/README.md
   sources:
     - scripts/local-dr-smoke.sh
@@ -660,4 +660,4 @@
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
     - docs/evidence/local-dr-report.json
-  limitations: "21.586-second RTO and zero changed records at snapshot are one local observation, not production objectives."
+  limitations: "Recovery timing and record-difference values are one local measured observation, not adopted RTO/RPO objectives. Measured recovery values from one local drill are observations, not adopted objectives or guarantees."
