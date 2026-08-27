@@ -1,7 +1,6 @@
 # Module 12 — Governed MCP discovery and execution
 
 > **Documentation status:** Draft
-> **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 110 minutes
 > **Canonical concepts:** [mcp](../../concepts/mcp.md), [mcp-transports-inventory](../../concepts/mcp-transports-inventory.md), [authorization-ownership](../../concepts/authorization-ownership.md)
 

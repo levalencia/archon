@@ -1,6 +1,7 @@
 # 01 — Python architecture: OOP, Protocols, DI, and async
 
-**Status:** implemented
+> **Documentation status:** Draft
+> **Capability status:** implemented for current Protocol/DI composition; provider capability parity remains partial
 
 ## Outcomes and prerequisites
 
@@ -50,7 +51,7 @@ sequenceDiagram
 
 ## Source, tests, and evidence
 
-Read [`runtime/ports.py`](../../../../backend/app/runtime/ports.py), [`runtime/models.py`](../../../../backend/app/runtime/models.py), [`AgentRuntime.__init__`](../../../../backend/app/runtime/engine.py), [`create_chat_runtime`](../../../../backend/app/runtime/factory.py), and [`create_app`/`lifespan`](../../../../backend/app/main.py). Tests: [`test_adapters.py`](../../../../backend/tests/unit/test_adapters.py), [`test_runtime_v2.py`](../../../../backend/tests/unit/test_runtime_v2.py), and `TestSecureToolRegistry.test_satisfies_protocol` in [`test_tools.py`](../../../../backend/tests/unit/test_tools.py).
+Read [`runtime/ports.py`](../../../../backend/app/runtime/ports.py), [`runtime/models.py`](../../../../backend/app/runtime/models.py), [`AgentRuntime.__init__`](../../../../backend/app/runtime/engine.py), [`create_chat_runtime`](../../../../backend/app/runtime/factory.py), and [`create_app`/`lifespan`](../../../../backend/app/main.py). Tests: [`test_adapters.py`](../../../../backend/tests/unit/test_adapters.py), [`test_runtime_v2.py`](../../../../backend/tests/unit/test_runtime_v2.py), and `TestToolRegistration.test_satisfies_protocol` in [`test_tools.py`](../../../../backend/tests/unit/test_tools.py).
 
 ## Read/test exercise
 

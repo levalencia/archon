@@ -1,7 +1,6 @@
 # Module 13 — Authentication, ownership, SSE, UI, and observability
 
 > **Documentation status:** Draft
-> **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 120 minutes
 > **Canonical concepts:** [authentication](../../concepts/authentication.md), [authorization-ownership](../../concepts/authorization-ownership.md), [sse](../../concepts/sse.md), [structured-logging](../../concepts/structured-logging.md), [metrics](../../concepts/metrics.md), [tracing-opentelemetry](../../concepts/tracing-opentelemetry.md)
 

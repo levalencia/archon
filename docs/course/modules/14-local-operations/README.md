@@ -1,7 +1,6 @@
 # Module 14 — Local operations: Compose, health, migrations, CI, and recovery
 
 > **Documentation status:** Draft
-> **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 150 minutes
 > **Canonical concepts:** [liveness-readiness](../../concepts/liveness-readiness.md), [docker-compose](../../concepts/docker-compose.md), [migrations](../../concepts/migrations.md), [ci](../../concepts/ci.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md)
 

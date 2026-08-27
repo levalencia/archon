@@ -1,6 +1,6 @@
 # Archon Course Concept Map
 
-This map shows learning dependencies, not runtime call order. Follow the [course home](README.md) for routes and the [syllabus](syllabus.md) for pacing. Canonical explanations will live in one future `concepts/` page each; modules and tracks will link to them.
+This map shows learning dependencies, not runtime call order. Follow the [course home](README.md) for routes and the [syllabus](syllabus.md) for pacing. Canonical explanations live in one `concepts/` page each; modules and tracks link to them.
 
 ## Status semantics
 
@@ -13,7 +13,7 @@ Concept status describes current implementation depth, not documentation maturit
 | `not-implemented` | No meaningful current implementation exists. Types, routes, stubs, mocks, historical experiments, or documentation alone do not qualify. |
 | `deferred` | Deliberately excluded from current scope. It is neither promised nor assigned a delivery date. |
 
-Only those four values belong in the future concept catalog. Evidence dimensions such as Exists, Wired, Tested, Observed, UI, and Deployed remain separate in the [implementation evidence matrix](../IMPLEMENTATION-EVIDENCE.md).
+Only those four values belong in the [concept catalog](concept-catalog.yaml). Evidence dimensions such as Exists, Wired, Tested, Observed, UI, and Deployed remain separate in the [implementation evidence matrix](../IMPLEMENTATION-EVIDENCE.md).
 
 ## Terms that must not be collapsed
 
@@ -139,6 +139,6 @@ The disconnected, dashed-style **Generic self-reflection** node is intentional: 
 
 1. If a term is new, read its canonical concept page once, then return to the module exercise.
 2. Treat module arrows as prerequisites, not proof of implementation.
-3. Resolve status from the future catalog entry and current evidence matrix, never from a diagram alone.
+3. Resolve status from the catalog entry and current evidence matrix, never from a diagram alone.
 4. Treat architecture, startup, request, class, and state diagrams as different views; do not substitute one for another.
 5. When old audits disagree with current evidence, current evidence wins and the historical revision remains labeled.

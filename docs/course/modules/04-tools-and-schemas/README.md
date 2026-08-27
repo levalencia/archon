@@ -1,6 +1,7 @@
 # 04 — Tool contracts and schemas
 
-**Status:** implemented with a deliberately small JSON Schema subset
+> **Documentation status:** Draft
+> **Capability status:** typed tools implemented with a deliberately partial JSON Schema subset
 
 ## Outcomes and prerequisites
 

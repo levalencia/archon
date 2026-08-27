@@ -1,6 +1,7 @@
 # 05 — Policy and durable approvals
 
-**Status:** implemented locally
+> **Documentation status:** Draft
+> **Capability status:** policy and durable exact-bound approvals implemented locally
 
 ## Outcomes and prerequisites
 

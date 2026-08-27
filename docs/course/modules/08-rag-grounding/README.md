@@ -1,6 +1,7 @@
 # Module 08 — Documents, embeddings, RAG, and grounded answers
 
-**Status:** implemented local grounded workflow; real external-provider/embedding acceptance partial
+> **Documentation status:** Draft
+> **Capability status:** local grounded workflow implemented; external provider/embedding acceptance partial
 
 ## Beginner explanation
 

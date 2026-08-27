@@ -1,7 +1,6 @@
 # Module 11 — Bounded verifier delegation
 
 > **Documentation status:** Draft
-> **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 90 minutes
 > **Canonical concepts:** [bounded-delegation](../../concepts/bounded-delegation.md), [verifier-child](../../concepts/verifier-child.md), [parent-child-lineage](../../concepts/parent-child-lineage.md)
 

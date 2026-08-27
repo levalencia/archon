@@ -1,7 +1,6 @@
 # Module 15 — Capstone: evidence-first demo and interview defense
 
 > **Documentation status:** Draft
-> **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 180 minutes
 > **Canonical concepts:** [bounded-delegation](../../concepts/bounded-delegation.md), [mcp](../../concepts/mcp.md), [authentication](../../concepts/authentication.md), [tracing-opentelemetry](../../concepts/tracing-opentelemetry.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md)
 

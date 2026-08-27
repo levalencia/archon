@@ -1,6 +1,7 @@
 # 02 — Typed runtime and state machine
 
-**Status:** implemented
+> **Documentation status:** Draft
+> **Capability status:** implemented for the typed bounded runtime
 
 ## Outcomes and prerequisites
 

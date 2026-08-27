@@ -1,6 +1,7 @@
 # 03 — ReAct loop, budgets, and stop reasons
 
-**Status:** implemented (ReAct-style tool loop); generic self-reflection is **not implemented**
+> **Documentation status:** Draft
+> **Capability status:** ReAct-style tool loop implemented; generic self-reflection is **not implemented**
 
 ## Outcomes and prerequisites
 

@@ -1,6 +1,7 @@
 # Module 09 — Evaluation harness and regression evidence
 
-**Status:** implemented recorded-run evaluation; model-quality evidence limited
+> **Documentation status:** Draft
+> **Capability status:** durable recorded-run evaluation implemented; model-quality evidence limited
 
 ## Beginner explanation
 

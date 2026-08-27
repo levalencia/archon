@@ -1,6 +1,7 @@
 # Module 10 — Resilience: idempotency, retries, deadlines, breakers, fallback, and rate limits
 
-**Status:** implemented control patterns with important integration/semantics limits
+> **Documentation status:** Draft
+> **Capability status:** selected resilience controls implemented with explicit integration and semantics limits
 
 ## Beginner explanation
 

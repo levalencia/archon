@@ -1,6 +1,7 @@
 # Module 06 — Context, conversations, and encrypted memory
 
-**Status:** implemented core, partial context inspection/compaction
+> **Documentation status:** Draft
+> **Capability status:** core persistence/encryption implemented; context inspection and compaction partial
 
 ## Beginner explanation
 

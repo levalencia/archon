@@ -1,6 +1,7 @@
 # Module 07 — Durable Run Ledger, replay, fork, and compare
 
-**Status:** implemented; executable resume/workspace restoration partial
+> **Documentation status:** Draft
+> **Capability status:** durable ledger/replay/fork/compare implemented; executable resume/workspace restoration partial
 
 ## Beginner explanation
 

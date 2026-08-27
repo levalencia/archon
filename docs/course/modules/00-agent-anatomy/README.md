@@ -1,6 +1,7 @@
 # 00 — Agent anatomy
 
-**Status:** implemented (local, production-like target)
+> **Documentation status:** Draft
+> **Capability status:** implemented in the verified local production-like target; public deployment remains deferred
 
 ## Outcomes and prerequisites
 
