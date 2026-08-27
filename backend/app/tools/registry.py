@@ -45,9 +45,7 @@ DEFAULT_TOOL_TIMEOUT = 30
 
 ResourceResolver = Callable[[Mapping[str, Any]], tuple[ResourcePattern, ...]]
 _SUPPORTED_PROPERTY_TYPES = frozenset({"string", "integer", "number", "boolean", "object", "array"})
-_EFFECTFUL_RISKS = frozenset(
-    {RiskClass.WRITE, RiskClass.EXECUTE, RiskClass.EXTERNAL_SIDE_EFFECT}
-)
+_EFFECTFUL_RISKS = frozenset({RiskClass.WRITE, RiskClass.EXECUTE, RiskClass.EXTERNAL_SIDE_EFFECT})
 
 
 def _value_matches_type(value: Any, declared_type: str) -> bool:
@@ -199,8 +197,7 @@ class ToolDefinition:
                 raise ValueError("idempotency key parameter must remain hidden from input schema")
             signature = inspect.signature(self.handler)
             accepts_key = parameter in signature.parameters or any(
-                item.kind is inspect.Parameter.VAR_KEYWORD
-                for item in signature.parameters.values()
+                item.kind is inspect.Parameter.VAR_KEYWORD for item in signature.parameters.values()
             )
             if not accepts_key:
                 raise ValueError("handler does not accept the idempotency key parameter")
@@ -519,9 +516,7 @@ class SecureToolRegistry:
         handler_parameters = copy.deepcopy(audit_parameters)
         if tool.idempotency_key_parameter is not None:
             handler_parameters[tool.idempotency_key_parameter] = effect_id
-        return await self._execute_registered(
-            tool_name, tool, handler_parameters, audit_parameters
-        )
+        return await self._execute_registered(tool_name, tool, handler_parameters, audit_parameters)
 
     def list_tools(self) -> list[dict[str, Any]]:
         """List all registered tools with their schemas."""

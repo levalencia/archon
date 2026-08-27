@@ -48,7 +48,9 @@ async def test_effectful_duplicate_executes_once_and_returns_safe_tombstone(tmp_
         return {"written": value}
 
     registry = SecureToolRegistry()
-    registry.register("write", write, input_schema=schema(), risk_classes=frozenset({RiskClass.WRITE}))
+    registry.register(
+        "write", write, input_schema=schema(), risk_classes=frozenset({RiskClass.WRITE})
+    )
     wrapped, repository, engine = await executor(tmp_path, registry)
 
     first = await wrapped.execute(ToolCall("call-1", "write", {"value": "x"}))
@@ -73,7 +75,9 @@ async def test_arguments_and_run_scope_create_distinct_effects(tmp_path) -> None
         return {"written": value}
 
     registry = SecureToolRegistry()
-    registry.register("write", write, input_schema=schema(), risk_classes=frozenset({RiskClass.WRITE}))
+    registry.register(
+        "write", write, input_schema=schema(), risk_classes=frozenset({RiskClass.WRITE})
+    )
     first, _, first_engine = await executor(tmp_path, registry, "run-1")
     second, _, second_engine = await executor(tmp_path, registry, "run-2")
 
@@ -144,7 +148,9 @@ async def test_handler_failure_becomes_indeterminate_and_never_reexecutes(tmp_pa
         raise RuntimeError("raw downstream secret")
 
     registry = SecureToolRegistry()
-    registry.register("send", fail, input_schema=schema(), risk_classes=frozenset({RiskClass.WRITE}))
+    registry.register(
+        "send", fail, input_schema=schema(), risk_classes=frozenset({RiskClass.WRITE})
+    )
     wrapped, repository, engine = await executor(tmp_path, registry)
     call = ToolCall("first", "send", {"value": "x"})
 
