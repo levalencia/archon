@@ -121,6 +121,12 @@ Ten iterations each exercised:
 
 The benchmark is deterministic and offline. Its timings and synthetic token counts are not production performance claims.
 
+### Effective context and online memory-key rotation
+
+Sync and SSE runs persist a metadata-only context manifest after the run and current user message are durable. The manifest identifies selected and summarized conversation rows, memory fact IDs, skill IDs, token estimates, compaction reason/version, and owner/project/run-scoped HMAC fingerprints for image inputs. It does not store prompts, message content, memory content, skill content, image payloads, summaries, or hidden reasoning. Authenticated owners can inspect the manifest through `GET /api/runs/{run_id}/context`.
+
+Encrypted memory supports versioned keyrings, row-version decryption, active-version writes, bounded transactional re-encryption, interruption-safe resume, owner/project-scoped status and rotation APIs, startup validation, and a durable global active-generation fence for updated writers. Migration `20260827_11` forward-migrates databases already stamped at revision 10. Retirement additionally requires the explicit pre-fence writer drain documented in `docs/operations/memory-key-rotation.md`; external KMS integration, automatic expiry, and a frontend rotation/context inspector are not claimed.
+
 ## Defensible summary
 
 Archon is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.

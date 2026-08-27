@@ -74,22 +74,22 @@
     {
       "id": "context-provenance",
       "owner_module": "docs/course/modules/06-context-and-memory/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "partial", "wired": "partial", "tested": "yes", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
-      "sources": ["backend/app/runtime/context.py", "backend/app/services/auto_compact.py"],
-      "tests": ["backend/tests/unit/test_conversations.py", "backend/tests/unit/test_memory_startup.py"],
-      "evidence": ["docs/course/concepts/context-windows.md"],
-      "limitation": "Context selection exists, but effective-context provenance, immutable skill versions, precedence, token guarantees, and an inspector are not established."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/runtime/context.py", "backend/app/runtime/context_provenance.py", "backend/app/services/context_snapshots.py", "backend/app/services/auto_compact.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py", "backend/app/routes/runs.py"],
+      "tests": ["backend/tests/unit/test_context_provenance.py", "backend/tests/integration/test_effect_budget_migration.py", "backend/tests/integration/test_run_replay_api.py"],
+      "evidence": ["docs/course/concepts/context-windows.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "Archon persists metadata-only effective-context lineage and owner-scoped inspection, including keyed asset fingerprints; no dedicated frontend context inspector or deployed observation is claimed."
     },
     {
       "id": "online-key-rotation",
       "owner_module": "docs/course/modules/06-context-and-memory/README.md",
-      "status": "not-implemented",
-      "dimensions": {"exists": "no", "wired": "no", "tested": "no", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
-      "sources": [],
-      "tests": [],
-      "evidence": ["docs/course/concepts/encrypted-memory.md"],
-      "limitation": "Encrypted memory uses a startup key, but online rotation, re-encryption orchestration, automatic expiry, and external KMS integration are absent."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/memory/keys.py", "backend/app/memory/scoped.py", "backend/app/services/key_rotation.py", "backend/app/routes/memory.py", "backend/alembic/versions/20260827_11_memory_key_fencing.py"],
+      "tests": ["backend/tests/unit/test_memory_keys.py", "backend/tests/unit/test_memory_key_rotation.py", "backend/tests/unit/test_memory_startup.py", "backend/tests/integration/test_memory_api_scoping.py", "backend/tests/integration/test_effect_budget_migration.py"],
+      "evidence": ["docs/course/concepts/encrypted-memory.md", "docs/operations/memory-key-rotation.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "Rotation is transactional, resumable, and generation-fenced for current binaries; pre-20260827_11 writers require the documented mandatory drain barrier, and external KMS integration is not claimed."
     },
     {
       "id": "durable-monetary-budgets",
