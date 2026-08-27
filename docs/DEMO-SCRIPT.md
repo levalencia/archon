@@ -106,7 +106,7 @@ Show the limitations section.
 
 Say:
 
-> This is not publicly deployed. Remote CI and real external-provider behavior were not rerun in this evidence cycle. The value is that those limits are explicit, while the local reliability paths are executable and measured.
+> This is not publicly deployed. Remote CI is green at `9696ad8`, but real external-provider behavior was not rerun in this evidence cycle. The value is that those limits are explicit, while the local reliability paths are executable and measured.
 
 ## Live commands
 

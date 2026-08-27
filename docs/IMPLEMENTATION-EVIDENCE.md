@@ -6,7 +6,7 @@
 
 - **Current accepted candidate:** `60a8d6a` on local `feature/s7-local` (2026-08-27 Europe/Brussels).
 - **Final integrated S7.5 acceptance:** passed at `60a8d6a`; the follow-up evidence-only commit changes no runtime code.
-- **Remote status:** no push and no remote CI rerun. Last remote status is not claimed green.
+- **Remote status:** `main` pushed; GitHub Actions [run #33042478912](https://github.com/levalencia/archon/actions/runs/33042478912) passed at `9696ad8`.
 - **Deployment status:** production-like **local** target observed; no non-local/public deployment. Every `Deployed` value remains **No**.
 
 This document separates code presence, wiring, tests, direct observation, UI, and deployment. Local tests, mocks, Docker smokes, and manifests are not public-production evidence.
@@ -86,7 +86,7 @@ Evidence files:
 | Backup/restore | Yes | Yes | Yes | Yes | No | No | SHA-256 verified custom dump, clean-target guard, full restore and exact record/hash checks with measured RTO/RPO. |
 | Portfolio benchmark | Yes | Yes | Yes | Yes | No | No | Deterministic local control-plane benchmark; not model quality, load, cost, or production latency evidence. |
 | Public/cloud deployment | Partial | No | No | No | No | No | Historical manifests exist but were not selected or verified. User explicitly chose local-only. No Azure resources were created. |
-| Remote CI | Yes | Partial | Yes | No | No | No | Workflow exists; no current push or green remote run is claimed. |
+| Remote CI | Yes | Yes | Yes | Yes | No | No | GitHub Actions backend, frontend and backend-image jobs passed in run `33042478912` at `9696ad8`. CI evidence is not deployment. |
 
 ## Directly observed local scenarios
 
@@ -112,7 +112,7 @@ The benchmark is deterministic and offline. Its timings and synthetic token coun
 
 Archon is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.
 
-It is **not** a publicly deployed production platform. Real external-provider behavior, indexed vector serving, remote CI, production traffic, SLOs, multi-host scaling, and cloud operations remain unverified or deliberately deferred.
+It is **not** a publicly deployed production platform. Real external-provider behavior, indexed vector serving, production traffic, SLOs, multi-host scaling, and cloud operations remain unverified or deliberately deferred.
 
 ## Claim policy
 

@@ -80,7 +80,7 @@ The goal was one verified target. Luis explicitly chose local-only and no cloud 
 
 ## 20. What would you do before production?
 
-Choose and authorize one public target; use managed secrets/database/Redis; verify real model/search/embedding providers; add remote encrypted backups and PITR; define SLOs/alerts/load tests; resolve broad Mypy debt and dev dependency findings; run remote CI; add TLS/DNS/WAF and image scanning/signing; test rollback and key rotation; perform threat modeling and tenant isolation review under production traffic assumptions.
+Choose and authorize one public target; use managed secrets/database/Redis; verify real model/search/embedding providers; add remote encrypted backups and PITR; define SLOs/alerts/load tests; resolve broad Mypy debt and dev dependency findings; add TLS/DNS/WAF and image scanning/signing; test rollback and key rotation; perform threat modeling and tenant isolation review under production traffic assumptions.
 
 ## 21. What are you most proud of?
 
@@ -88,7 +88,7 @@ The project became more truthful as it became more capable. I removed false pgve
 
 ## 22. What remains incomplete?
 
-No public deployment or green remote CI rerun, no final external-provider acceptance, no indexed vector service, no online memory-key rotation, no production SLO/load evidence, and broad historical Mypy debt outside scoped ratchets. Legacy experimental multi-agent code exists but is not the product claim.
+No public deployment, no final external-provider acceptance, no indexed vector service, no online memory-key rotation, no production SLO/load evidence, and broad historical Mypy debt outside scoped ratchets. Remote CI is green at `9696ad8`. Legacy experimental multi-agent code exists but is not the product claim.
 
 ## STAR story: PostgreSQL DR failure
 

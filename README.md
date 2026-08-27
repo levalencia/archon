@@ -25,7 +25,7 @@ Archon is a serious **local portfolio system**, not a public production service.
 | DR | Backup 0.343 s; clean restore 21.586 s; 0 records lost at snapshot boundary |
 | Portfolio benchmark | 30/30 deterministic control-plane iterations passed; external cost $0 |
 | Public/cloud deployment | **No — explicitly deferred** |
-| Remote CI | Not rerun; no push performed |
+| Remote CI | **Green** — [run #33042478912](https://github.com/levalencia/archon/actions/runs/33042478912) at `9696ad8` |
 
 Exact definitions and limits live in the [canonical evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md).
 
@@ -165,7 +165,7 @@ OpenAPI is available at `/docs` while the backend is running.
 
 ## Current limitations
 
-- No public/cloud deployment, remote CI rerun, or production SLO evidence.
+- No public/cloud deployment or production SLO evidence.
 - External model, search, and embedding behavior was not part of final local acceptance.
 - Retrieval is `sql-json-cosine`, not pgvector or an indexed vector service.
 - Broad repository Mypy debt remains; new/touched modules use scoped strict ratchets.
