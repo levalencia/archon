@@ -6,8 +6,13 @@ import json
 
 import httpx
 import pytest
+import structlog
+from structlog.testing import capture_logs
 
+from app.agents import openai_adapter
+from app.agents.llm_factory import _create_single_client
 from app.agents.openai_adapter import OpenAIAdapter, OpenAIAdapterError
+from app.config import Settings
 from app.runtime.capabilities import ProviderCapabilities
 from app.runtime.models import Message, Role, TokenUsage, ToolCall, ToolDefinition
 from app.runtime.structured_output import ResponseContract
@@ -300,8 +305,170 @@ async def test_contract_and_format_are_mutually_exclusive_without_transport() ->
 
 
 @pytest.mark.unit
-def test_capabilities_are_explicit() -> None:
+@pytest.mark.asyncio
+async def test_cached_tokens_cannot_exceed_prompt_tokens() -> None:
+    adapter = adapter_with_response(
+        response(
+            usage={
+                "prompt_tokens": 2,
+                "completion_tokens": 1,
+                "prompt_tokens_details": {"cached_tokens": 3},
+            }
+        ),
+        [],
+    )
+
+    with pytest.raises(OpenAIAdapterError, match="Invalid OpenAI response"):
+        await adapter.complete([Message(Role.USER, "hi")])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_nonfinite_nested_tool_arguments_are_rejected_without_raw_content() -> None:
+    raw_arguments = '{"outer":{"secret":1e999}}'
+    adapter = adapter_with_response(
+        response(
+            message={
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "weather", "arguments": raw_arguments},
+                    }
+                ],
+            }
+        ),
+        [],
+    )
+
+    with pytest.raises(OpenAIAdapterError) as raised:
+        await adapter.complete([Message(Role.USER, "hi")])
+    assert raised.value.code == "invalid_tool_arguments"
+    assert raw_arguments not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("call_id", ["call-1", "   "])
+async def test_duplicate_or_blank_tool_call_ids_are_rejected(call_id: str) -> None:
+    calls = [
+        {
+            "id": "call-1",
+            "type": "function",
+            "function": {"name": "weather", "arguments": "{}"},
+        },
+        {
+            "id": call_id,
+            "type": "function",
+            "function": {"name": "weather", "arguments": "{}"},
+        },
+    ]
+    adapter = adapter_with_response(
+        response(message={"role": "assistant", "content": None, "tool_calls": calls}), []
+    )
+
+    with pytest.raises(OpenAIAdapterError, match="Invalid OpenAI response"):
+        await adapter.complete([Message(Role.USER, "hi")])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", [Role.SYSTEM, Role.ASSISTANT, Role.TOOL])
+async def test_non_user_images_are_rejected_before_transport(role: Role) -> None:
+    requests: list[httpx.Request] = []
+    adapter = adapter_with_response(response(), requests)
+    message = Message(role, "hidden image", tool_call_id="call-1", images=("secret-image",))
+
+    with pytest.raises(ValueError, match="only supported on user messages"):
+        await adapter.complete([message])
+    assert requests == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("response_model", "configured_model", "expected"),
+    [
+        ("unsafe model", "configured/model", "configured/model"),
+        ("bad\nmodel", "also bad", "unknown"),
+        ("x" * 129, "configured-model", "configured-model"),
+    ],
+)
+async def test_model_identity_is_bounded_sanitized_and_never_logged_raw(
+    monkeypatch: pytest.MonkeyPatch,
+    response_model: str,
+    configured_model: str,
+    expected: str,
+) -> None:
+    with capture_logs() as logs:
+        monkeypatch.setattr(openai_adapter, "logger", structlog.get_logger())
+        adapter = OpenAIAdapter("test", model=configured_model)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=response(model=response_model))
+
+        await adapter._client.aclose()
+        adapter._client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="https://api.openai.com/v1"
+        )
+        result = await adapter.complete([Message(Role.USER, "hi")])
+    assert result.actual_model == expected
+    rendered = repr(logs)
+    if response_model != expected:
+        assert response_model not in rendered
+    if configured_model != expected:
+        assert configured_model not in rendered
+
+
+@pytest.mark.unit
+def test_capabilities_are_explicit_and_conservative_by_default() -> None:
     adapter = OpenAIAdapter("test")
+    assert adapter.capabilities == ProviderCapabilities(
+        native_tools=False,
+        images=False,
+        json_mode=False,
+        json_schema=False,
+        prompt_caching=False,
+        cache_usage=False,
+        usage=True,
+        stop_reason=True,
+        streaming=False,
+    )
+
+
+@pytest.mark.unit
+def test_capability_opt_ins_and_schema_implies_json_mode() -> None:
+    adapter = OpenAIAdapter(
+        "test",
+        native_tools_enabled=True,
+        images_enabled=True,
+        json_schema_enabled=True,
+        cache_usage_enabled=True,
+    )
+    assert adapter.capabilities.native_tools is True
+    assert adapter.capabilities.images is True
+    assert adapter.capabilities.json_schema is True
+    assert adapter.capabilities.json_mode is True
+    assert adapter.capabilities.cache_usage is True
+
+
+@pytest.mark.unit
+def test_factory_forwards_openai_capability_opt_ins() -> None:
+    settings = Settings(
+        llm_provider="openai",
+        openai_native_tools_enabled=True,
+        openai_images_enabled=True,
+        openai_json_mode_enabled=False,
+        openai_json_schema_enabled=True,
+        openai_cache_usage_enabled=True,
+    )
+    assert settings.openai_json_mode_enabled is True
+
+    adapter = _create_single_client("openai", settings)
+    assert isinstance(adapter, OpenAIAdapter)
     assert adapter.capabilities == ProviderCapabilities(
         native_tools=True,
         images=True,

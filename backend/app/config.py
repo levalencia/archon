@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_fallback_providers: str = ""  # comma-separated list e.g. "openai,ollama"
+    # OpenAI-compatible endpoints vary; opt in only to capabilities verified for the endpoint.
+    openai_native_tools_enabled: bool = False
+    openai_images_enabled: bool = False
+    openai_json_mode_enabled: bool = False
+    openai_json_schema_enabled: bool = False
+    openai_cache_usage_enabled: bool = False
 
     # Isolated evidence verifier (uses the application model provider, without tools)
     verifier_enabled: bool = False
@@ -109,6 +115,13 @@ class Settings(BaseSettings):
                 "execution_docker_image must be an immutable sha256 registry digest "
                 "or local image ID"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_openai_capabilities(self) -> Settings:
+        """JSON Schema support also satisfies the less specific JSON-mode capability."""
+        if self.openai_json_schema_enabled:
+            self.openai_json_mode_enabled = True
         return self
 
     # Agent

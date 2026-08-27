@@ -26,6 +26,11 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             base_url=settings.llm_base_url or None,
+            native_tools_enabled=settings.openai_native_tools_enabled,
+            images_enabled=settings.openai_images_enabled,
+            json_mode_enabled=settings.openai_json_mode_enabled,
+            json_schema_enabled=settings.openai_json_schema_enabled,
+            cache_usage_enabled=settings.openai_cache_usage_enabled,
         )
 
     if provider == "anthropic":

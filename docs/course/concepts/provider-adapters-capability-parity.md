@@ -1,7 +1,7 @@
 # Provider adapters and capability parity
 
 > **Implementation status:** `partial`
-> **Status boundary:** Archon now declares capabilities, automatically enforces native tools/images/JSON requirements, validates structured terminal output locally, and preserves typed contracts through fallback. Full parity remains partial because OpenAI/Ollama are legacy text adapters in the typed path, cache accounting is incomplete, and live cross-provider evidence is absent.
+> **Status boundary:** Archon declares capabilities, automatically enforces native tools/images/JSON requirements, validates structured terminal output locally, and preserves typed contracts through fallback. OpenAI has a typed adapter, but endpoint-dependent capabilities are conservatively disabled unless explicitly configured. Full parity remains partial because Ollama is still a legacy text adapter, cache billing semantics are not live-verified, and live cross-provider evidence is absent.
 > **Reviewed revision:** current S8 provider-contract branch
 > **Used by module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
 > **Catalog ID:** `provider-adapters-capability-parity`
@@ -43,7 +43,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-The mapped symbols now implement explicit `ProviderCapabilities`, immutable `ResponseContract`, runtime fail-before-call for images/JSON/explicit requirements, local terminal validation, normalized stop reasons, and capability-aware typed fallback. The remaining boundary is adapter parity and live evidence, not absence of negotiation.
+The mapped symbols implement explicit `ProviderCapabilities`, immutable `ResponseContract`, runtime fail-before-call for images/JSON/explicit requirements, local terminal validation, normalized stop reasons, and capability-aware typed fallback. OpenAI-compatible endpoints vary, so `ARCHON_OPENAI_NATIVE_TOOLS_ENABLED`, `ARCHON_OPENAI_IMAGES_ENABLED`, `ARCHON_OPENAI_JSON_MODE_ENABLED`, `ARCHON_OPENAI_JSON_SCHEMA_ENABLED`, and `ARCHON_OPENAI_CACHE_USAGE_ENABLED` default to false and must be enabled only after endpoint verification. JSON Schema opt-in also enables JSON mode. The remaining boundary is endpoint parity and live evidence, not absence of negotiation.
 
 ### Source symbols
 
@@ -69,7 +69,7 @@ Current implementation dimensions are centralized in [Implementation Evidence](.
 
 ## Try it: bounded study exercise
 
-From the repository root, inspect the mapped source and run the focused tests. Confirm both the passing contract and the remaining gap: typed negotiation/fallback exists, while OpenAI/Ollama typed parity, complete cache accounting, and live cross-provider evidence remain incomplete.
+From the repository root, inspect the mapped source and run the focused tests. Confirm both the passing contract and the remaining gap: typed negotiation/fallback and a hardened typed OpenAI boundary exist, while Ollama typed parity, live cache-accounting verification, and live cross-provider evidence remain incomplete.
 
 **Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
 
@@ -78,17 +78,17 @@ From the repository root, inspect the mapped source and run the focused tests. C
 | Topic | Assessment |
 |---|---|
 | Principal risk | Silent capability loss can turn a safe typed-tool workflow into unstructured text. |
-| Current gap/failure | OpenAI/Ollama still enter the typed runtime as text-only compatibility adapters; complete cache pricing and real cross-provider acceptance remain unproved. |
+| Current gap/failure | OpenAI features depend on the configured model and compatible endpoint, Ollama remains text-only in the typed runtime, and complete cache pricing plus real cross-provider acceptance remain unproved. |
 | Trade-off | One lowest-common-denominator contract is simple but wastes provider features; capability negotiation is safer but adds branching and tests. |
 | Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
 
 ## Lab vs production
 
-The status remains **partial**. Typed capability negotiation, local structured validation, stop normalization, and fallback contract preservation are implemented and unit-tested. Unit tests do not prove live external-provider parity, cache billing semantics, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **partial**. Typed capability negotiation, local structured validation, stop normalization, fallback contract preservation, and OpenAI response validation are implemented and unit-tested. OpenAI's model/endpoint-dependent features remain opt-in; unit tests do not prove live external-provider parity, cache billing semantics, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 
-> A provider adapter translates Archon’s typed request into one vendor API and translates the reply back. Capability parity means changing providers cannot silently remove required tools, images, or structured output. Archon now declares and enforces capabilities and preserves typed contracts through fallback, but parity remains **partial** because OpenAI/Ollama compatibility, cache accounting, and live cross-provider evidence are incomplete.
+> A provider adapter translates Archon’s typed request into one vendor API and translates the reply back. Capability parity means changing providers cannot silently remove required tools, images, or structured output. Archon declares and enforces capabilities and preserves typed contracts through fallback. OpenAI endpoint-dependent capabilities are explicit opt-ins, and parity remains **partial** because endpoint compatibility, Ollama's typed boundary, cache accounting, and live cross-provider evidence are incomplete.
 
 ## Self-check
 
