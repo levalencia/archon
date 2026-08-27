@@ -75,13 +75,13 @@ def test_token_cache_usage_unknown_zero_and_addition_semantics() -> None:
 
 
 @pytest.mark.unit
-def test_wrappers_preserve_or_explicitly_extend_capabilities() -> None:
+def test_wrappers_preserve_declared_capabilities() -> None:
     delegate = MockLLM()
     breaker_wrapper = CircuitBreakingProvider(delegate, CircuitBreaker())
     json_wrapper = JsonModeProvider(delegate)
 
     assert get_provider_capabilities(breaker_wrapper) == get_provider_capabilities(delegate)
-    assert get_provider_capabilities(json_wrapper).json_mode
+    assert get_provider_capabilities(json_wrapper) == get_provider_capabilities(delegate)
     assert get_provider_capabilities(json_wrapper).native_tools
 
 
