@@ -1,0 +1,687 @@
+schema_version: 1
+fragment: advanced
+concepts:
+  - id: bounded-delegation
+    title: Bounded delegation
+    status: implemented
+    status_boundary: >-
+      One evidence-only no-tools child; no dynamic swarm or generic reflection.
+    canonical_page: docs/course/concepts/bounded-delegation.md
+    modules:
+      - docs/course/modules/11-bounded-delegation/README.md
+    prerequisites:
+      - run-ledger
+      - groundedness
+    source_symbols:
+      - path: backend/app/delegation/models.py
+        symbol: ChildVerificationRequest
+        role: >-
+          Implements the reviewed bounded delegation boundary described by the canonical page.
+      - path: backend/app/delegation/service.py
+        symbol: EvidenceVerifierSpecialist.verify
+        role: >-
+          Implements the reviewed bounded delegation boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_delegation_contract.py
+        symbol: test_models_are_frozen_slotted_and_exclude_context_and_secrets
+        proves: >-
+          Exercises a deterministic contract for bounded delegation in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/unit/test_evidence_verifier.py
+        symbol: test_valid_call_is_isolated_bounded_and_durable
+        proves: >-
+          Exercises a deterministic contract for bounded delegation in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for bounded delegation.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - One evidence-only no-tools child; no dynamic swarm or generic reflection.
+  - id: verifier-child
+    title: Evidence-only verifier child
+    status: implemented
+    status_boundary: >-
+      Final external providers were not verified; deterministic/local evidence does not establish reviewer truth.
+    canonical_page: docs/course/concepts/verifier-child.md
+    modules:
+      - docs/course/modules/11-bounded-delegation/README.md
+    prerequisites:
+      - bounded-delegation
+    source_symbols:
+      - path: backend/app/delegation/service.py
+        symbol: EvidenceVerifierSpecialist.verify
+        role: >-
+          Implements the reviewed evidence-only verifier child boundary described by the canonical page.
+      - path: backend/app/services/grounded_rag.py
+        symbol: GroundedDocumentWorkflow._verify_with_child
+        role: >-
+          Implements the reviewed evidence-only verifier child boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_evidence_verifier.py
+        symbol: test_valid_call_is_isolated_bounded_and_durable
+        proves: >-
+          Exercises a deterministic contract for evidence-only verifier child in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/integration/test_verifier_benefit.py
+        symbol: test_versioned_fixture_measures_verifier_value_and_lineage
+        proves: >-
+          Exercises a deterministic contract for evidence-only verifier child in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for evidence-only verifier child.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Final external providers were not verified; deterministic/local evidence does not establish reviewer truth.
+  - id: parent-child-lineage
+    title: Parent-child run lineage
+    status: implemented
+    status_boundary: >-
+      A persisted lineage edge supports inspection but does not prove causal quality improvement.
+    canonical_page: docs/course/concepts/parent-child-lineage.md
+    modules:
+      - docs/course/modules/11-bounded-delegation/README.md
+    prerequisites:
+      - run-ledger
+    source_symbols:
+      - path: backend/app/services/run_ledger.py
+        symbol: RunRepository.ensure_child_run
+        role: >-
+          Implements the reviewed parent-child run lineage boundary described by the canonical page.
+      - path: backend/app/services/db_store.py
+        symbol: RunRow.parent_run_id
+        role: >-
+          Implements the reviewed parent-child run lineage boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_run_lineage.py
+        symbol: test_child_requires_exact_parent_project_and_creates_nothing_on_rejection
+        proves: >-
+          Exercises a deterministic contract for parent-child run lineage in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/integration/test_run_parent_migration.py
+        symbol: test_run_parent_fk_migrates_valid_rows_and_roundtrips
+        proves: >-
+          Exercises a deterministic contract for parent-child run lineage in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for parent-child run lineage.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - A persisted lineage edge supports inspection but does not prove causal quality improvement.
+  - id: mcp
+    title: Model Context Protocol
+    status: implemented
+    status_boundary: >-
+      Governed MCP stdio only; HTTP/OAuth and arbitrary user-supplied processes are not supported claims.
+    canonical_page: docs/course/concepts/mcp.md
+    modules:
+      - docs/course/modules/12-governed-mcp/README.md
+    prerequisites:
+      - tool-contracts
+      - policy-engine
+    source_symbols:
+      - path: backend/app/mcp/runtime.py
+        symbol: MCPRuntimeToolProvider.for_scope
+        role: >-
+          Implements the reviewed model context protocol boundary described by the canonical page.
+      - path: backend/app/routes/chat.py
+        symbol: get_tool_registry
+        role: >-
+          Implements the reviewed model context protocol boundary described by the canonical page.
+    tests:
+      - path: backend/tests/integration/test_mcp_runtime.py
+        symbol: test_untrusted_schema_values_always_raise_stable_runtime_error
+        proves: >-
+          Exercises a deterministic contract for model context protocol in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/integration/test_mcp_api.py
+        symbol: test_crud_discovery_enablement_restart_scope_and_no_profile_secrets
+        proves: >-
+          Exercises a deterministic contract for model context protocol in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for model context protocol.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Governed MCP stdio only; HTTP/OAuth and arbitrary user-supplied processes are not supported claims.
+  - id: mcp-transports-inventory
+    title: MCP transports and inventory
+    status: implemented
+    status_boundary: >-
+      Official MCP 2.1.1 stdio was verified locally; durable metadata is not authorization or live health proof.
+    canonical_page: docs/course/concepts/mcp-transports-inventory.md
+    modules:
+      - docs/course/modules/12-governed-mcp/README.md
+    prerequisites:
+      - mcp
+    source_symbols:
+      - path: backend/app/mcp/client.py
+        symbol: StdioMCPClient.list_tools
+        role: >-
+          Implements the reviewed mcp transports and inventory boundary described by the canonical page.
+      - path: backend/app/mcp/inventory.py
+        symbol: MCPInventoryService.discover
+        role: >-
+          Implements the reviewed mcp transports and inventory boundary described by the canonical page.
+      - path: backend/app/mcp/repository.py
+        symbol: MCPRepository.replace_inventory
+        role: >-
+          Implements the reviewed mcp transports and inventory boundary described by the canonical page.
+    tests:
+      - path: backend/tests/integration/test_mcp_stdio.py
+        symbol: test_official_stdio_initialize_list_call_env_and_cleanup
+        proves: >-
+          Exercises a deterministic contract for mcp transports and inventory in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/integration/test_mcp_inventory.py
+        symbol: test_scope_restart_refresh_selection_and_cascade
+        proves: >-
+          Exercises a deterministic contract for mcp transports and inventory in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for mcp transports and inventory.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Official MCP 2.1.1 stdio was verified locally; durable metadata is not authorization or live health proof.
+  - id: authentication
+    title: Authentication
+    status: implemented
+    status_boundary: >-
+      Local scrypt/JWT/API-key auth has no external IdP, automated signing-key rotation, or production certification.
+    canonical_page: docs/course/concepts/authentication.md
+    modules:
+      - docs/course/modules/13-auth-ui-observability/README.md
+    prerequisites: []
+    source_symbols:
+      - path: backend/app/security/auth.py
+        symbol: AuthRepository.verify_jwt
+        role: >-
+          Implements the reviewed authentication boundary described by the canonical page.
+      - path: backend/app/routes/auth.py
+        symbol: get_current_user
+        role: >-
+          Implements the reviewed authentication boundary described by the canonical page.
+    tests:
+      - path: backend/tests/integration/test_auth_persistence.py
+        symbol: test_register_login_and_api_key_survive_app_rebuild
+        proves: >-
+          Exercises a deterministic contract for authentication in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/unit/test_agent_auth.py
+        symbol: test_create_token_default_permissions
+        proves: >-
+          Exercises a deterministic contract for authentication in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for authentication.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Local scrypt/JWT/API-key auth has no external IdP, automated signing-key rotation, or production certification.
+  - id: authorization-ownership
+    title: Authorization and ownership
+    status: implemented
+    status_boundary: >-
+      Tested owner/project paths do not eliminate the need to review every new query and side effect.
+    canonical_page: docs/course/concepts/authorization-ownership.md
+    modules:
+      - docs/course/modules/13-auth-ui-observability/README.md
+    prerequisites:
+      - authentication
+    source_symbols:
+      - path: backend/app/security/auth.py
+        symbol: get_current_user
+        role: >-
+          Implements the reviewed authorization and ownership boundary described by the canonical page.
+      - path: backend/app/routes/stream.py
+        symbol: chat_stream_real
+        role: >-
+          Implements the reviewed authorization and ownership boundary described by the canonical page.
+    tests:
+      - path: backend/tests/security/test_conversation_ownership.py
+        symbol: test_conversation_routes_require_authentication
+        proves: >-
+          Exercises a deterministic contract for authorization and ownership in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/integration/test_security_boundaries.py
+        symbol: test_health_remains_public_and_has_security_headers
+        proves: >-
+          Exercises a deterministic contract for authorization and ownership in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for authorization and ownership.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Tested owner/project paths do not eliminate the need to review every new query and side effect.
+  - id: sse
+    title: Server-Sent Events
+    status: implemented
+    status_boundary: >-
+      One-way transient delivery has no durable client acknowledgement or cross-connection replay guarantee.
+    canonical_page: docs/course/concepts/sse.md
+    modules:
+      - docs/course/modules/13-auth-ui-observability/README.md
+    prerequisites:
+      - authentication
+      - typed-runtime
+    source_symbols:
+      - path: backend/app/routes/stream.py
+        symbol: chat_stream_real
+        role: >-
+          Implements the reviewed server-sent events boundary described by the canonical page.
+      - path: frontend/src/lib/sse.ts
+        symbol: SSEParser
+        role: >-
+          Implements the reviewed server-sent events boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_runtime_sse.py
+        symbol: test_chat_uses_typed_runtime_and_preserves_history
+        proves: >-
+          Exercises a deterministic contract for server-sent events in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: frontend/src/lib/sse.test.ts
+        symbol: SSEParser parses events split at arbitrary chunk boundaries
+        proves: >-
+          Exercises a deterministic contract for server-sent events in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for server-sent events.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - One-way transient delivery has no durable client acknowledgement or cross-connection replay guarantee.
+  - id: structured-logging
+    title: Structured logging
+    status: implemented
+    status_boundary: >-
+      Redaction is defense in depth, not proof that every future payload is free of sensitive data.
+    canonical_page: docs/course/concepts/structured-logging.md
+    modules:
+      - docs/course/modules/13-auth-ui-observability/README.md
+    prerequisites:
+      - authentication
+    source_symbols:
+      - path: backend/app/observability/logging.py
+        symbol: redact_event
+        role: >-
+          Implements the reviewed structured logging boundary described by the canonical page.
+      - path: backend/app/observability/runtime_events.py
+        symbol: CompositeEventSink.emit
+        role: >-
+          Implements the reviewed structured logging boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_logging.py
+        symbol: test_get_generates_when_empty
+        proves: >-
+          Exercises a deterministic contract for structured logging in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/unit/test_operational_log_privacy.py
+        symbol: test_terminal_logs_only_command_length_and_hash
+        proves: >-
+          Exercises a deterministic contract for structured logging in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for structured logging.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Redaction is defense in depth, not proof that every future payload is free of sensitive data.
+  - id: metrics
+    title: Metrics
+    status: implemented
+    status_boundary: >-
+      Registry and samples are process-local; no durable multi-replica aggregation, alerts, or SLO evidence.
+    canonical_page: docs/course/concepts/metrics.md
+    modules:
+      - docs/course/modules/13-auth-ui-observability/README.md
+    prerequisites:
+      - structured-logging
+    source_symbols:
+      - path: backend/app/observability/metrics.py
+        symbol: get_prometheus_text
+        role: >-
+          Implements the reviewed metrics boundary described by the canonical page.
+      - path: backend/app/main.py
+        symbol: create_app
+        role: >-
+          Implements the reviewed metrics boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_runtime_observability.py
+        symbol: test_exact_event_to_metric_span_and_correlation_mapping
+        proves: >-
+          Exercises a deterministic contract for metrics in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/unit/test_health.py
+        symbol: test_verifier_settings_are_disabled_and_bounded_by_default
+        proves: >-
+          Exercises a deterministic contract for metrics in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for metrics.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Registry and samples are process-local; no durable multi-replica aggregation, alerts, or SLO evidence.
+  - id: tracing-opentelemetry
+    title: Tracing and OpenTelemetry
+    status: implemented
+    status_boundary: >-
+      A local collector observed agent.run; no hosted backend, production sampling, retention, or SLO.
+    canonical_page: docs/course/concepts/tracing-opentelemetry.md
+    modules:
+      - docs/course/modules/13-auth-ui-observability/README.md
+    prerequisites:
+      - structured-logging
+    source_symbols:
+      - path: backend/app/observability/runtime_events.py
+        symbol: CompositeEventSink.emit
+        role: >-
+          Implements the reviewed tracing and opentelemetry boundary described by the canonical page.
+      - path: backend/app/observability/otel_exporter.py
+        symbol: OTLPExporter.export_span
+        role: >-
+          Implements the reviewed tracing and opentelemetry boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_otel_tracing_wire.py
+        symbol: test_otel_exporter_receives_spans_when_wired
+        proves: >-
+          Exercises a deterministic contract for tracing and opentelemetry in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/unit/test_tracing.py
+        symbol: test_span_creation
+        proves: >-
+          Exercises a deterministic contract for tracing and opentelemetry in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for tracing and opentelemetry.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - A local collector observed agent.run; no hosted backend, production sampling, retention, or SLO.
+  - id: liveness-readiness
+    title: Liveness and readiness
+    status: implemented
+    status_boundary: >-
+      Dependency probes establish local traffic eligibility, not every provider workflow or an availability SLA.
+    canonical_page: docs/course/concepts/liveness-readiness.md
+    modules:
+      - docs/course/modules/14-local-operations/README.md
+    prerequisites: []
+    source_symbols:
+      - path: backend/app/main.py
+        symbol: create_app
+        role: >-
+          Implements the reviewed liveness and readiness boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_health.py
+        symbol: test_verifier_settings_are_disabled_and_bounded_by_default
+        proves: >-
+          Exercises a deterministic contract for liveness and readiness in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/unit/test_local_deployment.py
+        symbol: test_only_loopback_gateway_is_published
+        proves: >-
+          Exercises a deterministic contract for liveness and readiness in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for liveness and readiness.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Dependency probes establish local traffic eligibility, not every provider workflow or an availability SLA.
+  - id: docker-compose
+    title: Docker and Compose
+    status: implemented
+    status_boundary: >-
+      Verified target is loopback-only local Compose; public deployment remains deferred.
+    canonical_page: docs/course/concepts/docker-compose.md
+    modules:
+      - docs/course/modules/14-local-operations/README.md
+    prerequisites:
+      - liveness-readiness
+    source_symbols:
+      - path: docker-compose.local.yml
+        symbol: services
+        role: >-
+          Implements the reviewed docker and compose boundary described by the canonical page.
+      - path: deploy/nginx.local.conf
+        symbol: server configuration
+        role: >-
+          Implements the reviewed docker and compose boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_local_deployment.py
+        symbol: test_only_loopback_gateway_is_published
+        proves: >-
+          Exercises a deterministic contract for docker and compose in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for docker and compose.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Verified target is loopback-only local Compose; public deployment remains deferred.
+  - id: migrations
+    title: Database migrations
+    status: implemented
+    status_boundary: >-
+      Revision 20260826_08 was locally observed; rollback and zero-downtime mixed-version operation are unverified.
+    canonical_page: docs/course/concepts/migrations.md
+    modules:
+      - docs/course/modules/14-local-operations/README.md
+    prerequisites:
+      - docker-compose
+    source_symbols:
+      - path: backend/alembic/versions/20260826_08_mcp_inventory.py
+        symbol: upgrade
+        role: >-
+          Implements the reviewed database migrations boundary described by the canonical page.
+      - path: backend/alembic/env.py
+        symbol: run_migrations_online
+        role: >-
+          Implements the reviewed database migrations boundary described by the canonical page.
+    tests:
+      - path: backend/tests/integration/test_mcp_inventory_migration.py
+        symbol: test_mcp_migration_round_trip_and_postgresql_safe
+        proves: >-
+          Exercises a deterministic contract for database migrations in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+      - path: backend/tests/integration/test_run_parent_migration.py
+        symbol: test_run_parent_fk_migrates_valid_rows_and_roundtrips
+        proves: >-
+          Exercises a deterministic contract for database migrations in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for database migrations.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Revision 20260826_08 was locally observed; rollback and zero-downtime mixed-version operation are unverified.
+  - id: ci
+    title: Continuous integration
+    status: implemented
+    status_boundary: >-
+      Run 33042890654 was green at 6e3e13f; that does not prove later revisions, deployment, or provider quality.
+    canonical_page: docs/course/concepts/ci.md
+    modules:
+      - docs/course/modules/14-local-operations/README.md
+    prerequisites: []
+    source_symbols:
+      - path: .github/workflows/ci.yml
+        symbol: jobs
+        role: >-
+          Implements the reviewed continuous integration boundary described by the canonical page.
+      - path: scripts/verify.sh
+        symbol: main
+        role: >-
+          Implements the reviewed continuous integration boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_verify_script.py
+        symbol: test_docker_smoke_uses_ephemeral_validated_memory_key
+        proves: >-
+          Exercises a deterministic contract for continuous integration in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for continuous integration.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+    limitations:
+      - Run 33042890654 was green at 6e3e13f; that does not prove later revisions, deployment, or provider quality.
+  - id: backup-restore
+    title: Backup and restore
+    status: implemented
+    status_boundary: >-
+      Local checksummed clean restore is verified; scheduling, off-site storage, PITR, and cloud failover are absent.
+    canonical_page: docs/course/concepts/backup-restore.md
+    modules:
+      - docs/course/modules/14-local-operations/README.md
+    prerequisites:
+      - docker-compose
+      - migrations
+    source_symbols:
+      - path: scripts/local-backup.sh
+        symbol: main
+        role: >-
+          Implements the reviewed backup and restore boundary described by the canonical page.
+      - path: scripts/local-restore.sh
+        symbol: main
+        role: >-
+          Implements the reviewed backup and restore boundary described by the canonical page.
+      - path: scripts/local-dr-smoke.sh
+        symbol: main
+        role: >-
+          Implements the reviewed backup and restore boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_local_dr.py
+        symbol: test_backup_is_private_atomic_and_refuses_overwrite
+        proves: >-
+          Exercises a deterministic contract for backup and restore in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for backup and restore.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+      - path: docs/evidence/local-dr-report.json
+        proves: >-
+          Records the checksummed clean-restore observation and measured local recovery values.
+        scope: >-
+          One development-machine run; measurements are not production objectives.
+    limitations:
+      - Local checksummed clean restore is verified; scheduling, off-site storage, PITR, and cloud failover are absent.
+  - id: rto-rpo
+    title: RTO and RPO
+    status: implemented
+    status_boundary: >-
+      21.586-second RTO and zero changed records at snapshot are one local observation, not production objectives.
+    canonical_page: docs/course/concepts/rto-rpo.md
+    modules:
+      - docs/course/modules/14-local-operations/README.md
+    prerequisites:
+      - backup-restore
+    source_symbols:
+      - path: scripts/local-dr-smoke.sh
+        symbol: main
+        role: >-
+          Implements the reviewed rto and rpo boundary described by the canonical page.
+    tests:
+      - path: backend/tests/unit/test_local_dr.py
+        symbol: test_backup_is_private_atomic_and_refuses_overwrite
+        proves: >-
+          Exercises a deterministic contract for rto and rpo in the repository test environment.
+        does_not_prove: >-
+          External-provider parity, sustained load, public deployment, or production SLOs.
+    evidence:
+      - path: docs/IMPLEMENTATION-EVIDENCE.md
+        anchor: capability-matrix
+        proves: >-
+          Records implemented, wired, tested, observed, UI, and deployment dimensions for rto and rpo.
+        scope: >-
+          Revision-scoped repository and local evidence; deployment remains No.
+      - path: docs/evidence/local-dr-report.json
+        proves: >-
+          Records the checksummed clean-restore observation and measured local recovery values.
+        scope: >-
+          One development-machine run; measurements are not production objectives.
+    limitations:
+      - 21.586-second RTO and zero changed records at snapshot are one local observation, not production objectives.

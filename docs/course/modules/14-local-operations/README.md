@@ -1,0 +1,292 @@
+# Module 14 — Local operations: Compose, health, migrations, CI, and recovery
+
+> **Content status:** current
+> **Reviewed revision:** `3577b00` documentation review
+> **Estimated time:** 150 minutes
+> **Canonical concepts:** [liveness-readiness](../../concepts/liveness-readiness.md), [docker-compose](../../concepts/docker-compose.md), [migrations](../../concepts/migrations.md), [ci](../../concepts/ci.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md)
+
+## Why this module exists
+
+Code is not operable until it starts reproducibly, reports dependency health, migrates durable state, passes clean-room checks, and can recover from loss. You will inspect the local Compose target and produce or analyze a checksummed clean-restore report without calling it production deployment.
+
+## Beginner explanation
+
+A production-oriented agent is more than a model response: it must limit authority, preserve ownership, make failures explicit, and leave evidence that another person can inspect. This module introduces those ideas in plain language before tracing their concrete Archon implementation. The diagrams are maps of verified boundaries, not claims that every dependency is production deployed.
+
+## Prerequisites and vocabulary
+
+### Learn first
+
+- [Module 05: policy and approvals](../05-policy-and-approvals/README.md) — trust and exact authorization.
+- [Module 07: Run Ledger](../07-run-ledger/README.md) — durable event evidence and lineage.
+- [Module 10: resilience](../10-resilience/README.md) — timeout, cancellation and bounded failure.
+
+### Vocabulary
+
+| Term | Beginner definition | Canonical source |
+|---|---|---|
+| liveness | Whether the process should be restarted. | [liveness-readiness](../../concepts/liveness-readiness.md) |
+| readiness | Whether required dependencies permit traffic. | [liveness-readiness](../../concepts/liveness-readiness.md) |
+| migration | Versioned durable schema transition. | [liveness-readiness](../../concepts/liveness-readiness.md) |
+| backup | Protected recoverable copy of authoritative data. | [liveness-readiness](../../concepts/liveness-readiness.md) |
+| RTO | Time from disaster to ready service. | [liveness-readiness](../../concepts/liveness-readiness.md) |
+| RPO | Amount of data lost relative to recovery point. | [liveness-readiness](../../concepts/liveness-readiness.md) |
+| CI | Automated clean-worker quality gates. | [liveness-readiness](../../concepts/liveness-readiness.md) |
+
+## Learning outcomes
+
+After this module, the learner can:
+
+1. explain Compose dependency and hardening boundaries;
+2. distinguish health, readiness, and end-to-end smoke;
+3. trace Alembic migration before app readiness;
+4. execute focused operations tests and read the DR report;
+5. quote CI and RTO/RPO with revision/environment limits;
+
+## Problem and mental model
+
+Operations is a chain of evidence: configuration → start → migrate → ready → serve → observe → back up → destroy → restore → verify exact records. A manifest is a recipe, not proof the meal was cooked. A backup is unproven until restored.
+
+The connection to the course spine is explicit: **Policy → Run → Approval → Tool → Evidence → Evaluation**. Inputs are authenticated/scoped data; outputs are typed results plus inspectable evidence; mutable authority never comes from model prose.
+
+## Architecture and components
+
+```mermaid
+flowchart LR
+  G[loopback nginx gateway] --> F[frontend]
+  G --> B[backend]
+  B --> P[(PostgreSQL durable truth)]
+  B --> R[(Redis rate limits)]
+  B --> O[OTEL collector]
+  M[Alembic migration] --> P
+  BK[backup + SHA-256 sidecars] --> P
+  P --> RS[clean restore]
+  CI[GitHub Actions] --> IMG[backend image smoke]
+```
+
+### Component responsibilities
+
+| Component | Responsibility | Must not be assumed |
+|---|---|---|
+| API/UI boundary | Validate identity, shape and request scope. | UI visibility is not authorization. |
+| Core service/runtime | Enforce typed bounds and coordinate dependencies. | A class existing means every route uses it. |
+| Persistence | Store owner-scoped state/evidence atomically where required. | Evidence means semantic truth or tamper-proof WORM audit. |
+| Observability | Emit redacted, correlatable signals. | Telemetry is durable delivery or chain-of-thought. |
+
+## Startup sequence
+
+```mermaid
+sequenceDiagram
+  participant Compose
+  participant DB as PostgreSQL
+  participant Redis
+  participant OTEL
+  participant Backend
+  participant Gateway
+  Compose->>DB: start + pg_isready
+  Compose->>Redis: start + ping
+  Compose->>OTEL: start collector
+  Compose->>DB: run Alembic to head
+  Compose->>Backend: start non-root/read-only app
+  Backend->>DB: health query
+  Backend->>Redis: rate-limit health
+  Backend->>OTEL: active exporter required when configured
+  Gateway->>Backend: /readyz before routing
+```
+
+Startup validates deployment-owned settings, constructs dependencies, and fails closed when a required security or persistence dependency is unavailable. Optional capabilities remain visibly disabled rather than silently simulated.
+
+## Per-request sequence
+
+```mermaid
+sequenceDiagram
+  participant Operator
+  participant Gateway
+  participant App
+  participant DB
+  participant Redis
+  participant OTEL
+  Operator->>Gateway: /healthz
+  Gateway->>App: liveness
+  App-->>Operator: alive (no deep dependency proof)
+  Operator->>Gateway: /readyz
+  App->>DB: check_health
+  App->>Redis: check_health
+  App->>OTEL: exporter active state
+  alt required dependency down
+    App-->>Operator: 503 degraded + safe statuses
+  else ready
+    App-->>Operator: 200 ready + capability metadata
+  end
+```
+
+The alternate path is part of the design: denial, stale state, malformed input, timeout, cancellation, or dependency error produces a stable bounded result/evidence rather than invented success.
+
+## Class and dependency view
+
+```mermaid
+classDiagram
+  class Route
+  class CoreService
+  class Repository
+  class PolicyBoundary
+  class EventSink
+  Route --> CoreService
+  CoreService --> Repository
+  CoreService --> PolicyBoundary
+  CoreService --> EventSink
+```
+
+The implementation favors dependency injection and composition. The arrows show use, not inheritance.
+
+## State and lifecycle
+
+```mermaid
+stateDiagram-v2
+  [*] --> Configured
+  Configured --> DependenciesHealthy
+  DependenciesHealthy --> Migrated
+  Migrated --> Ready
+  Ready --> Degraded: DB/Redis/configured OTEL failure
+  Degraded --> Ready: dependency recovers
+  Ready --> BackedUp: checksummed dump
+  BackedUp --> Restored: clean target + checksum + exact checks
+  Restored --> Ready
+```
+
+Only source-defined statuses/events are evidence. A transient UI state must not overwrite a durable terminal state.
+
+## Source walkthrough
+
+| Order | Source symbol | Why inspect it | Implementation status/boundary |
+|---:|---|---|---|
+| 1 | [`docker-compose.local.yml:services`](../../../../docker-compose.local.yml) | Digest pins, loopback gateway, health ordering and persistent volumes. | `implemented` within stated boundary |
+| 2 | [`backend/app/main.py:lifespan / healthz / readyz`](../../../../backend/app/main.py) | Startup validation and dependency-aware readiness. | `implemented` within stated boundary |
+| 3 | [`backend/alembic/versions/20260826_08_mcp_inventory.py:upgrade`](../../../../backend/alembic/versions/20260826_08_mcp_inventory.py) | Latest observed schema revision content. | `implemented` within stated boundary |
+| 4 | [`.github/workflows/ci.yml:backend-quality / frontend-quality / backend-image`](../../../../.github/workflows/ci.yml) | Clean-worker gates and image smoke. | `implemented` within stated boundary |
+| 5 | [`scripts/local-deploy-smoke.sh:local deployment smoke`](../../../../scripts/local-deploy-smoke.sh) | Auth, metrics, migration and OTEL local checks. | `implemented` within stated boundary |
+| 6 | [`scripts/local-backup.sh:backup flow`](../../../../scripts/local-backup.sh) | Secure env, custom dump, atomic move, checksum/metadata. | `implemented` within stated boundary |
+| 7 | [`scripts/local-restore.sh:restore flow`](../../../../scripts/local-restore.sh) | Checksum and clean-target guard. | `implemented` within stated boundary |
+| 8 | [`scripts/local-dr-smoke.sh:end-to-end DR drill`](../../../../scripts/local-dr-smoke.sh) | Destroy, restore, authenticate, exact evidence and timings. | `implemented` within stated boundary |
+
+### Tests to inspect
+
+| Test | Contract proved | What it does not prove |
+|---|---|---|
+| [`backend/tests/unit/test_health.py`](../../../../backend/tests/unit/test_health.py) | liveness/readiness dependency semantics. | Does not prove public deployment, external-provider parity, or production scale. |
+| [`backend/tests/unit/test_local_deployment.py`](../../../../backend/tests/unit/test_local_deployment.py) | Compose and smoke-script security contracts. | Does not prove public deployment, external-provider parity, or production scale. |
+| [`backend/tests/integration/test_mcp_inventory_migration.py`](../../../../backend/tests/integration/test_mcp_inventory_migration.py) | real migration schema contract. | Does not prove public deployment, external-provider parity, or production scale. |
+| [`backend/tests/unit/test_verify_script.py`](../../../../backend/tests/unit/test_verify_script.py) | verification orchestration. | Does not prove public deployment, external-provider parity, or production scale. |
+| [`backend/tests/unit/test_local_dr.py`](../../../../backend/tests/unit/test_local_dr.py) | backup/restore guard and report contracts. | Does not prove public deployment, external-provider parity, or production scale. |
+
+## Try it: bounded exercise
+
+### Goal
+
+Run the focused contract set and turn each passing test into one precise claim plus one limitation.
+
+### Safety and setup
+
+- Working directory starts at repository root; backend dependencies must be installed with `uv`.
+- The focused set uses fixtures/local state. Do not insert real credentials or point fixtures at external services.
+- Side effects are test databases/processes cleaned by fixtures; if interrupted, remove only resources you created.
+
+### Steps
+
+```bash
+cd backend
+uv run pytest -q tests/unit/test_health.py tests/unit/test_local_deployment.py tests/unit/test_local_dr.py tests/integration/test_mcp_inventory_migration.py
+cd ..
+python3 -m json.tool docs/evidence/local-dr-report.json >/dev/null
+```
+
+Create a two-column note: **proved invariant** and **not proved**. Include at least one security invariant, one failure path, and one evidence path.
+
+### Done criteria
+
+- [ ] Every focused test passes, or a real environment blocker is recorded without fabricating output.
+- [ ] At least three results are tied to exact symbols and assertions.
+- [ ] The learner states the local/provider/deployment boundary aloud.
+- [ ] Temporary resources are absent or explicitly cleaned.
+
+## Security and failure modes
+
+| Threat or failure | Boundary/control | Failure behavior | Residual risk |
+|---|---|---|---|
+| World-readable secrets/backup | Mode-0600 env/dump checks; never print env | Script refuses | Host security and off-site encryption remain operator work. |
+| Wrong/corrupt dump | SHA-256 sidecar and metadata | Restore refuses mismatch | Checksum is not an authenticity signature. |
+| Overwrite live target | Non-empty target guard | Refuse unless explicit ALLOW_REPLACE=1 | Override is intentionally destructive. |
+| Schema drift | Alembic revision + migration tests | Startup/smoke fails | Zero-downtime downgrade compatibility unverified. |
+| False deployment claim | Loopback bind and evidence dimensions | Deployed remains No | Historical cloud manifests can mislead readers. |
+
+Malformed input, dependency failure, timeout/cancellation, concurrency/idempotency, owner scope, secret/PII handling, and resource limits must be reconsidered whenever this path changes.
+
+## Observability and evidence path
+
+```text
+correlation ID → authenticated owner/project → typed runtime event → redacted log + durable Run Ledger → metric/OTLP span/UI → evaluation
+```
+
+| Evidence | Link or command | Claim supported | Scope/limit |
+|---|---|---|---|
+| Canonical status | [Implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md) | Separates exists/wired/tested/observed/UI/deployed. | Mutable evidence; inspect revision. |
+| Architecture | [Architecture diagrams](../../../ARCHITECTURE-DIAGRAMS.md) | Wider component and trust boundaries. | Diagram is not runtime observation. |
+| Focused tests | command above | Deterministic contracts and failure paths. | Fixture/local scope. |
+
+Never expose credentials, raw provider exceptions, tool payloads, personal data, or hidden chain-of-thought as “evidence.”
+
+## Lab vs production
+
+| Dimension | Demonstrated in repository/lab | Required or unverified for production |
+|---|---|---|
+| Deployment | Local/test paths and artifacts. | Public ingress, multi-host operation, SLO/on-call; public deployment is deferred. |
+| Data and scale | Bounded fixtures and local persistent data. | Capacity, retention, sustained load and multi-replica behavior. |
+| Providers | Deterministic/mock/local dependencies as explicitly linked. | Final external providers were not verified. |
+| Security/operations | Tested ownership, validation, policy and redaction controls. | Independent audit, rotation, production alerting and incident drills. |
+
+The local stack was observed with PostgreSQL, Redis, OTEL, frontend/backend and loopback gateway. The DR report records backup 0.343 s, restore-to-ready 21.586 s and zero changed records at its snapshot boundary on one development Mac with cached images. CI was green in run 33042890654 at 6e3e13f. Public deployment, scheduled/off-site backups, PITR, multi-region failover and production objectives remain deferred.
+
+## Interview answer
+
+### 30-second answer
+
+> Archon has a reproducible local Compose target with digest-pinned dependencies, loopback-only ingress, migrations, dependency-aware readiness, and a real OTEL collector. Recovery uses a mode-0600 PostgreSQL custom dump, checksum/metadata, clean-target guard, full restore and exact API/SQL evidence checks. One drill measured 21.586-second RTO and zero record-level RPO at snapshot, but those are observations, not SLOs. CI run 33042890654 was green at 6e3e13f; no public deployment is claimed.
+
+### Deeper follow-ups
+
+- **Why this design?** It limits authority, makes failure explicit, and produces inspectable evidence.
+- **What fails?** Invalid input, unavailable dependencies, timeouts/cancellation, stale bindings, denied policy, and persistence failure each need distinct handling.
+- **How do you know?** Point to one exact symbol, one exact test, and one revision-scoped observation.
+- **What would production require?** External acceptance, sustained/multi-instance tests, audited controls, hosted operations and explicit SLO/recovery objectives.
+
+## Self-check
+
+1. Why doesn’t /healthz query every dependency?
+2. Why is Redis absent from the durable backup?
+3. What makes the backup procedure safer?
+4. Observed RTO versus objective?
+5. What does green CI prove?
+6. Why is local Compose not production?
+
+<details>
+<summary>Answer guide</summary>
+
+1. Liveness should avoid restart loops caused by downstream failures; readiness handles traffic eligibility.
+2. It stores live rate-limit state, while PostgreSQL is authoritative durable evidence.
+3. Secure env mode, no overwrite, custom dump, atomic move, 0600 output, checksum and metadata.
+4. 21.586 s is one local measured result; an objective is an agreed target backed by repeated production-like drills.
+5. Specified gates passed on a clean GitHub worker at exact run/revision, not deployment or later HEAD.
+6. Loopback single-host operation lacks public ingress, scaling, SLO/on-call, managed recovery and external-provider evidence.
+
+</details>
+
+## Further reading
+
+- Canonical concepts: [liveness-readiness](../../concepts/liveness-readiness.md), [docker-compose](../../concepts/docker-compose.md), [migrations](../../concepts/migrations.md), [ci](../../concepts/ci.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md)
+- [Implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md)
+- [Architecture diagrams](../../../ARCHITECTURE-DIAGRAMS.md)
+- [Next step](../15-capstone/README.md)
+
+## Done criteria
+
+You can draw startup, request, state and evidence flows; name exact source/test boundaries; run the exercise safely; explain security and failures; and distinguish implemented local evidence from deferred production claims.
