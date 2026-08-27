@@ -199,6 +199,21 @@ async def chat_stream_real(
             memory_ids=memory_ids,
             skill_ids=tuple(skill.name for skill in skills),
         )
+        await memory.runs.ensure_run(
+            run_id=run_context.run_id,
+            user_id=user["user_id"],
+            project_id=body.project_id,
+            conversation_id=conv_id,
+            correlation_id=run_context.correlation_id,
+            provider=settings.llm_provider,
+            model=settings.llm_model,
+        )
+        current_message_id = await memory.store(
+            conv_id, "user", body.message, user["user_id"]
+        )
+        if current_message_id is None:
+            raise RuntimeError("context_message_persistence_failed")
+        effective_context = effective_context.with_current_message(current_message_id)
         messages = list(effective_context.messages)
 
         # Auto-compact context if approaching token limit.
@@ -206,8 +221,15 @@ async def chat_stream_real(
         from app.services.auto_compact import auto_compact_context
 
         raw_msgs = [
-            {"role": message.role.value, "content": message.content, "images": list(message.images)}
-            for message in messages
+            {
+                "role": message.role.value,
+                "content": message.content,
+                "images": list(message.images),
+                "_source_message_id": source_id,
+            }
+            for message, source_id in zip(
+                messages, effective_context.source_message_ids, strict=True
+            )
         ]
         raw_msgs, compact_stats = await auto_compact_context(
             raw_msgs,
@@ -225,7 +247,8 @@ async def chat_stream_real(
                 for item in raw_msgs
             ]
             manifest = manifest.after_compaction(
-                summarized_messages=int(compact_stats["summarized_messages"]),
+                selected_message_ids=tuple(compact_stats["selected_message_ids"]),
+                summarized_message_ids=tuple(compact_stats["summarized_message_ids"]),
                 estimated_tokens=int(compact_stats["tokens"]),
             )
         await ContextSnapshotRepository(memory.session_factory).record(manifest)
@@ -245,7 +268,6 @@ async def chat_stream_real(
 
             provider = JsonModeProvider(provider)
 
-        await memory.store(conv_id, "user", body.message, user["user_id"])
         runtime = create_chat_runtime(
             context=run_context,
             provider=provider,

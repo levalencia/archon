@@ -25,7 +25,12 @@ def upgrade() -> None:
         sa.Column("schema_version", sa.Integer(), nullable=False),
         sa.Column("owner_id", sa.String(255), nullable=False),
         sa.Column("project_id", sa.String(255), nullable=False),
-        sa.Column("run_id", sa.String(36), nullable=False),
+        sa.Column(
+            "run_id",
+            sa.String(36),
+            sa.ForeignKey("runs.run_id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("conversation_id", sa.String(255), nullable=False),
         sa.Column("selected_message_ids_json", sa.Text(), nullable=False),
         sa.Column("summarized_message_ids_json", sa.Text(), nullable=False),

@@ -443,9 +443,21 @@ async def chat(
         memory_ids=memory_ids,
         skill_ids=tuple(skill.name for skill in relevant_skills),
     )
+    await memory.runs.ensure_run(
+        run_id=run_context.run_id,
+        user_id=user["user_id"],
+        project_id=body.project_id,
+        conversation_id=conv_id,
+        correlation_id=run_context.correlation_id,
+        provider=settings.llm_provider,
+        model=settings.llm_model,
+    )
+    current_message_id = await memory.store(conv_id, "user", body.message, user["user_id"])
+    if current_message_id is None:
+        raise RuntimeError("context_message_persistence_failed")
+    effective_context = effective_context.with_current_message(current_message_id)
     await ContextSnapshotRepository(memory.session_factory).record(effective_context.manifest)
     messages = list(effective_context.messages)
-    await memory.store(conv_id, "user", body.message, user["user_id"])
     runtime = create_chat_runtime(
         context=run_context,
         provider=provider,

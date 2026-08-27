@@ -13,7 +13,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateTable
 
 from alembic import command
-from app.services.db_store import EffectRow, ModelChargeRow, ProjectBudgetRow, RunRow
+from app.services.db_store import (
+    ContextSnapshotRow,
+    EffectRow,
+    ModelChargeRow,
+    ProjectBudgetRow,
+    RunRow,
+)
 
 
 def _config(database: Path) -> Config:
@@ -112,6 +118,10 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
         "ix_context_snapshots_owner_run",
         "ix_context_snapshots_owner_project_created",
     } <= _names(inspector.get_indexes("context_snapshots"))
+    context_foreign_keys = inspector.get_foreign_keys("context_snapshots")
+    assert len(context_foreign_keys) == 1
+    assert context_foreign_keys[0]["referred_table"] == "runs"
+    assert context_foreign_keys[0]["constrained_columns"] == ["run_id"]
 
     with engine.begin() as connection, pytest.raises(IntegrityError):
         connection.execute(

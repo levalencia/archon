@@ -100,8 +100,8 @@ class ConversationRepository:
 
     async def store(
         self, conversation_id: str, role: str, content: str, user_id: str = "default"
-    ) -> None:
-        await self._store.store_message(
+    ) -> int | None:
+        return await self._store.store_message(
             conversation_id, role, self._redactor.redact_text(content).text, user_id
         )
 

@@ -18,7 +18,10 @@ _CONTEXT_NAMESPACE = uuid.UUID("8b8456c5-c42a-4a44-8e10-81bb742a35ec")
 
 
 def _text(value: str, label: str, maximum: int) -> str:
-    if not isinstance(value, str) or not value or len(value) > maximum:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label} must be a bounded non-empty string")
+    value = unicodedata.normalize("NFC", value)
+    if len(value) > maximum:
         raise ValueError(f"{label} must be a bounded non-empty string")
     try:
         value.encode("utf-8")
@@ -127,14 +130,24 @@ class EffectiveContextManifest:
         ).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()
 
+    def with_current_message(self, message_id: int) -> EffectiveContextManifest:
+        validated = _message_ids((message_id,), "current_message_id")[0]
+        if validated in self.selected_message_ids or validated in self.summarized_message_ids:
+            raise ValueError("current message ID must be unique")
+        return replace(self, selected_message_ids=(*self.selected_message_ids, validated))
+
     def after_compaction(
-        self, *, summarized_messages: int, estimated_tokens: int
+        self,
+        *,
+        selected_message_ids: tuple[int, ...],
+        summarized_message_ids: tuple[int, ...],
+        estimated_tokens: int,
     ) -> EffectiveContextManifest:
-        if type(summarized_messages) is not int or summarized_messages < 0:
-            raise ValueError("summarized_messages must be a non-negative integer")
-        count = min(summarized_messages, len(self.selected_message_ids))
-        summarized = self.selected_message_ids[:count]
-        selected = self.selected_message_ids[count:]
+        selected = _message_ids(selected_message_ids, "selected_message_ids")
+        summarized = _message_ids(summarized_message_ids, "summarized_message_ids")
+        before = set(self.selected_message_ids)
+        if set(selected) & set(summarized) or set(selected) | set(summarized) != before:
+            raise ValueError("compaction lineage must partition selected message IDs")
         return replace(
             self,
             selected_message_ids=selected,
@@ -148,4 +161,22 @@ class EffectiveContextManifest:
 @dataclass(frozen=True, slots=True)
 class EffectiveContext:
     messages: tuple[Message, ...]
+    source_message_ids: tuple[int | None, ...]
     manifest: EffectiveContextManifest
+
+    def __post_init__(self) -> None:
+        if len(self.messages) != len(self.source_message_ids):
+            raise ValueError("context messages and source IDs must align")
+        for source_id in self.source_message_ids:
+            if source_id is not None:
+                _message_ids((source_id,), "source_message_id")
+
+    def with_current_message(self, message_id: int) -> EffectiveContext:
+        if not self.messages or self.messages[-1].role.value != "user":
+            raise ValueError("current user message is unavailable")
+        source_ids = (*self.source_message_ids[:-1], message_id)
+        return replace(
+            self,
+            source_message_ids=source_ids,
+            manifest=self.manifest.with_current_message(message_id),
+        )

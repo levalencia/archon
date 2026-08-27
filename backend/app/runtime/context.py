@@ -23,7 +23,7 @@ async def _assemble_messages(
     images: list[str] | None,
     user_id: str,
     persistent_memory_text: str,
-) -> tuple[tuple[Message, ...], tuple[int, ...]]:
+) -> tuple[tuple[Message, ...], tuple[int | None, ...]]:
     descriptions = (
         json.dumps(tools.list_tools(), indent=2) if tools.list_tools() else "None configured"
     )
@@ -51,7 +51,7 @@ async def _assemble_messages(
         prompt += system_prompt_extra
 
     result = [Message(Role.SYSTEM, prompt)]
-    selected_ids: list[int] = []
+    source_ids: list[int | None] = [None]
     if memory:
         metadata_reader = getattr(memory, "retrieve_with_metadata", None)
         if callable(metadata_reader):
@@ -63,10 +63,10 @@ async def _assemble_messages(
             role = Role(item["role"])
             result.append(Message(role, item["content"]))
             source_id = item.get("id")
-            if type(source_id) is int and source_id > 0:
-                selected_ids.append(source_id)
+            source_ids.append(source_id if type(source_id) is int and source_id > 0 else None)
     result.append(Message(Role.USER, user_input, images=tuple(images or ())))
-    return tuple(result), tuple(selected_ids)
+    source_ids.append(None)
+    return tuple(result), tuple(source_ids)
 
 
 def _estimated_tokens(messages: tuple[Message, ...]) -> int:
@@ -88,7 +88,7 @@ async def build_effective_context(
     memory_ids: tuple[str, ...] = (),
     skill_ids: tuple[str, ...] = (),
 ) -> EffectiveContext:
-    messages, selected_ids = await _assemble_messages(
+    messages, source_ids = await _assemble_messages(
         user_input,
         conversation_id,
         memory,
@@ -100,12 +100,15 @@ async def build_effective_context(
     )
     return EffectiveContext(
         messages=messages,
+        source_message_ids=source_ids,
         manifest=EffectiveContextManifest(
             owner_id=user_id,
             project_id=project_id,
             run_id=run_id,
             conversation_id=conversation_id,
-            selected_message_ids=selected_ids,
+            selected_message_ids=tuple(
+                source_id for source_id in source_ids if source_id is not None
+            ),
             memory_ids=memory_ids,
             skill_ids=skill_ids,
             estimated_tokens=_estimated_tokens(messages),

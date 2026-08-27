@@ -8,8 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.runtime.context import build_effective_context
 from app.runtime.context_provenance import EffectiveContextManifest
+from app.security.persistence_redactor import PersistenceRedactor
 from app.services.context_snapshots import ContextSnapshotConflictError, ContextSnapshotRepository
 from app.services.db_store import Base, ContextSnapshotRow
+from app.services.run_ledger import RunRepository
+from app.services.auto_compact import auto_compact_context
 
 
 class Tools:
@@ -69,14 +72,49 @@ def test_compaction_moves_only_source_ids_and_hash_is_deterministic() -> None:
         skill_ids=("skill-1",),
         estimated_tokens=100,
     )
-    compacted = manifest.after_compaction(summarized_messages=2, estimated_tokens=40)
+    compacted = manifest.after_compaction(
+        selected_message_ids=(1, 4),
+        summarized_message_ids=(2, 3),
+        estimated_tokens=40,
+    )
 
-    assert compacted.selected_message_ids == (3, 4)
-    assert compacted.summarized_message_ids == (1, 2)
+    assert compacted.selected_message_ids == (1, 4)
+    assert compacted.summarized_message_ids == (2, 3)
     assert compacted.summary_version == "auto-compact-v1"
     assert compacted.truncation_reason == "token_threshold"
     assert compacted.manifest_hash == compacted.manifest_hash
     assert compacted.manifest_hash != manifest.manifest_hash
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_compactor_returns_exact_source_ids_with_historical_system_messages() -> None:
+    messages = [
+        {"role": "system", "content": "root", "_source_message_id": None},
+        {"role": "system", "content": "historic system", "_source_message_id": 10},
+        {"role": "user", "content": "old user", "_source_message_id": 11},
+        {"role": "assistant", "content": "old assistant", "_source_message_id": 12},
+        {"role": "user", "content": "current", "_source_message_id": 13},
+    ]
+    _, stats = await auto_compact_context(
+        messages, max_tokens=1, threshold=0, keep_recent=1
+    )
+
+    assert stats["compacted"] is True
+    assert stats["summarized_message_ids"] == [11, 12]
+    assert stats["selected_message_ids"] == [10, 13]
+
+
+@pytest.mark.unit
+def test_current_message_id_is_added_to_manifest_and_aligned_context() -> None:
+    manifest = EffectiveContextManifest(
+        owner_id="alice",
+        project_id="project",
+        run_id="run-1",
+        conversation_id="conversation-1",
+        selected_message_ids=(11,),
+    )
+    assert manifest.with_current_message(12).selected_message_ids == (11, 12)
 
 
 @pytest.mark.unit
@@ -87,6 +125,15 @@ async def test_repository_is_idempotent_scoped_and_stores_no_content(tmp_path) -
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     repository = ContextSnapshotRepository(sessions)
+    await RunRepository(sessions, PersistenceRedactor()).ensure_run(
+        run_id="run-1",
+        user_id="alice",
+        project_id="project",
+        conversation_id="conversation-1",
+        correlation_id="correlation-1",
+        provider="mock",
+        model="mock-model",
+    )
     manifest = EffectiveContextManifest(
         owner_id="alice",
         project_id="project",

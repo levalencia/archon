@@ -246,7 +246,9 @@ class ContextSnapshotRow(Base):
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
     project_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("runs.run_id", ondelete="CASCADE"), nullable=False
+    )
     conversation_id: Mapped[str] = mapped_column(String(255), nullable=False)
     selected_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     summarized_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
@@ -739,7 +741,7 @@ class DatabaseStore:
 
     async def store_message(
         self, conversation_id: str, role: str, content: str, user_id: str = "default"
-    ) -> None:
+    ) -> int | None:
         """Store a message and ensure its conversation metadata exists."""
         async with self._session_factory() as session:
             conversation = await session.get(ConversationRow, conversation_id)
@@ -761,7 +763,10 @@ class DatabaseStore:
                 created_at=now,
             )
             session.add(row)
+            await session.flush()
+            message_id = int(row.id)
             await session.commit()
+            return message_id
 
     async def retrieve(
         self, conversation_id: str, limit: int = 50, user_id: str | None = None
