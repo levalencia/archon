@@ -27,7 +27,7 @@ _REVIEW_DISPOSITIONS = frozenset(
 )
 
 
-class EffectReviewConflict(RuntimeError):
+class EffectReviewConflictError(RuntimeError):
     def __init__(self) -> None:
         super().__init__("effect_review_conflict")
         self.code = "effect_review_conflict"
@@ -284,11 +284,11 @@ class EffectRepository:
             )
             if result.rowcount != 1:
                 await session.rollback()
-                raise EffectReviewConflict
+                raise EffectReviewConflictError
             await session.commit()
         record = await self.get(effect_id, owner_id=owner_id, project_id=project_id, run_id=run_id)
         if record is None:  # pragma: no cover - committed scoped update guarantees visibility
-            raise EffectReviewConflict
+            raise EffectReviewConflictError
         return record
 
     async def get(

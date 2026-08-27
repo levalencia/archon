@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from app.runtime.run_models import RunEventRecord
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
-from app.services.effect_ledger import EffectRepository, EffectReviewConflict
+from app.services.effect_ledger import EffectRepository, EffectReviewConflictError
 from app.services.monetary_budget import MonetaryBudgetRepository
 from app.services.run_ledger import LedgerDataError, RunRepository
 
@@ -237,7 +237,7 @@ async def review_run_effect(
             disposition=body.disposition,
             reviewed_by=user["user_id"],
         )
-    except EffectReviewConflict as exc:
+    except EffectReviewConflictError as exc:
         raise HTTPException(status_code=409, detail="Effect is not reviewable") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Invalid effect review") from exc
