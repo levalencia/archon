@@ -4,9 +4,9 @@
 
 ## Baseline
 
-- **Current accepted candidate:** `2f77877` on local `feature/s8-capstone-completion` (2026-08-27 Europe/Brussels).
-- **S8.1 provider-contract acceptance:** full local verification passed; provider/model live acceptance remains a separate S8.9 gate.
-- **Previous integrated S7.5 baseline:** `60a8d6a` on local `feature/s7-local`.
+- **Current accepted candidate:** `ec45585` on local `feature/s8-capstone-completion` (2026-08-27 Europe/Brussels).
+- **S8.2 effect/budget acceptance:** full local verification passed; durable at-most-once effects and nUSD budgets remain opt-in, with live PostgreSQL/provider/downstream evidence pending.
+- **Previous S8.1 provider-contract candidate:** `2f77877`; provider/model live acceptance remains a separate S8.9 gate.
 - **Remote status:** the S8 branch is local and unpushed; historical GitHub Actions [run #33042478912](https://github.com/levalencia/archon/actions/runs/33042478912) passed at `9696ad8`.
 - **Deployment status:** production-like **local** target observed; no non-local/public deployment. Every `Deployed` value remains **No**.
 
@@ -28,13 +28,13 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 
 ## Quality gates
 
-### S8.1 full local acceptance at `2f77877`
+### S8.2 full local acceptance at `ec45585`
 
 | Gate | Result |
 |---|---|
 | Capability manifest | 16 entries validated |
 | Course documentation validator | Pass |
-| Backend tests | 1,220 passed |
+| Backend tests | 1,278 passed |
 | Coverage | 86.88% aggregate |
 | Ruff check / format | Pass |
 | Bandit `-ll` | Pass; no medium/high findings |
