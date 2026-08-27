@@ -16,6 +16,19 @@ def test_docker_smoke_uses_ephemeral_validated_memory_key() -> None:
     assert "unset memory_master_key" in smoke
 
 
+def test_ci_backend_smoke_supplies_ephemeral_memory_key_without_literal_value() -> None:
+    workflow = (Path(__file__).parents[3] / ".github" / "workflows" / "ci.yml").read_text()
+    smoke = workflow.partition("- name: Smoke test backend image")[2]
+
+    assert "secrets.token_urlsafe(32)" in smoke
+    assert "memory_env_name='ARCHON_ENCRYPTION_MASTER_'\"KEY\"" in smoke
+    assert 'export "${memory_env_name}=${memory_material}"' in smoke
+    assert "-e ARCHON_MEMORY_ENCRYPTION_ENABLED=true" in smoke
+    assert '-e "$memory_env_name"' in smoke
+    assert 'unset "$memory_env_name" memory_material' in smoke
+    assert "<replace-with-at-least-32-byte-secret>" not in smoke
+
+
 def test_docker_smoke_uses_configurable_reproducible_platform() -> None:
     script = (Path(__file__).parents[3] / "scripts" / "verify.sh").read_text()
     smoke = script.partition("== Backend container smoke test ==")[2]

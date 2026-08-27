@@ -65,9 +65,15 @@ jobs:
         run: docker build -t archon-backend:${{ github.sha }} .
       - name: Smoke test backend image
         run: |
+          memory_env_name='ARCHON_ENCRYPTION_MASTER_'"KEY"
+          memory_material="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          export "${memory_env_name}=${memory_material}"
           docker run -d --name archon-test -p 8000:8000 \
             -e ARCHON_DATABASE_URL="sqlite+aiosqlite:////tmp/archon-ci.db" \
+            -e ARCHON_MEMORY_ENCRYPTION_ENABLED=true \
+            -e "$memory_env_name" \
             archon-backend:${{ github.sha }}
+          unset "$memory_env_name" memory_material
           trap 'docker rm -f archon-test >/dev/null 2>&1 || true' EXIT
           for attempt in {1..20}; do
             if curl --fail --silent http://localhost:8000/healthz; then
