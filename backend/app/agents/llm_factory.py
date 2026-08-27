@@ -60,6 +60,7 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
             base_url=settings.llm_base_url or "http://localhost:11434",
             native_tools_enabled=settings.ollama_native_tools_enabled,
             vision_model=settings.ollama_vision_model or None,
+            vision_native_tools_enabled=settings.ollama_vision_native_tools_enabled,
             json_mode_enabled=settings.ollama_json_mode_enabled,
             json_schema_enabled=settings.ollama_json_schema_enabled,
         )

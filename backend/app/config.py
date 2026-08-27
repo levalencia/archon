@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # Ollama features vary by installed model/version and are opt-in.
     ollama_native_tools_enabled: bool = False
     ollama_vision_model: str = ""
+    # Tool support on the text model does not imply support on the vision model.
+    ollama_vision_native_tools_enabled: bool = False
     ollama_json_mode_enabled: bool = False
     ollama_json_schema_enabled: bool = False
 

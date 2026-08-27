@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import copy
 import hashlib
 import json
@@ -21,18 +23,19 @@ from app.runtime.structured_output import ResponseContract
 logger = structlog.get_logger()
 
 _MODEL_IDENTITY_RE = re.compile(r"[A-Za-z0-9._:/-]{1,128}\Z")
-_DATA_IMAGE_RE = re.compile(r"\Adata:image/[A-Za-z0-9.+-]+;base64,(.*)\Z", re.DOTALL)
-OllamaAdapterErrorCode = Literal["invalid_response", "invalid_tool_arguments"]
+_DATA_IMAGE_RE = re.compile(r"\Adata:image/(?:png|jpeg|jpg|webp|gif);base64,(.*)\Z", re.DOTALL)
+OllamaAdapterErrorCode = Literal["invalid_response", "invalid_tool_arguments", "invalid_image"]
 
 
 class OllamaAdapterError(ValueError):
-    """A stable, sanitized failure to decode an Ollama response."""
+    """A stable, sanitized Ollama boundary validation failure."""
 
     def __init__(self, code: OllamaAdapterErrorCode) -> None:
         self.code = code
         message = {
             "invalid_response": "Invalid Ollama response",
             "invalid_tool_arguments": "Invalid Ollama tool arguments",
+            "invalid_image": "Invalid Ollama image",
         }[code]
         super().__init__(message)
 
@@ -71,7 +74,7 @@ def _plain_json(value: Any, *, seen: frozenset[int] = frozenset()) -> Any:
     raise TypeError("unsupported JSON value")
 
 
-def _canonical_json(value: Mapping[str, Any]) -> str:
+def _canonical_json(value: Any) -> str:
     return json.dumps(
         _plain_json(value),
         ensure_ascii=False,
@@ -82,8 +85,21 @@ def _canonical_json(value: Mapping[str, Any]) -> str:
 
 
 def _image_data(image: str) -> str:
+    if type(image) is not str:
+        raise OllamaAdapterError("invalid_image")
     match = _DATA_IMAGE_RE.fullmatch(image)
-    return match.group(1) if match is not None else image
+    encoded = match.group(1) if match is not None else image
+    if image.startswith("data:") and match is None:
+        raise OllamaAdapterError("invalid_image")
+    if not encoded:
+        raise OllamaAdapterError("invalid_image")
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise OllamaAdapterError("invalid_image") from None
+    if base64.b64encode(decoded).decode("ascii") != encoded:
+        raise OllamaAdapterError("invalid_image")
+    return encoded
 
 
 def _tool_payload(tool: ToolDefinition) -> dict[str, Any]:
@@ -106,6 +122,14 @@ def _typed_messages(messages: Sequence[Message]) -> tuple[list[dict[str, Any]], 
     for message in messages:
         if message.images and message.role is not Role.USER:
             raise ValueError("Ollama images are only supported on user messages")
+        if message.tool_calls and message.role is not Role.ASSISTANT:
+            raise ValueError("Ollama tool_calls are only supported on assistant messages")
+        if message.tool_call_id is not None and message.role is not Role.TOOL:
+            raise ValueError("Ollama tool_call_id is only supported on tool messages")
+        if message.role is Role.TOOL and (
+            type(message.tool_call_id) is not str or not message.tool_call_id.strip()
+        ):
+            raise ValueError("Ollama tool results require a tool_call_id")
 
         payload: dict[str, Any] = {"role": message.role.value, "content": message.content}
         if message.images:
@@ -115,6 +139,10 @@ def _typed_messages(messages: Sequence[Message]) -> tuple[list[dict[str, Any]], 
         if message.role is Role.ASSISTANT and message.tool_calls:
             calls: list[dict[str, Any]] = []
             for call in message.tool_calls:
+                if type(call.id) is not str or not call.id.strip():
+                    raise ValueError("Ollama tool call IDs must not be blank")
+                if not call.name.strip():
+                    raise ValueError("Ollama tool call names must not be blank")
                 if call.id in historical_tools:
                     raise ValueError("Ollama tool call history contains duplicate IDs")
                 historical_tools[call.id] = call.name
@@ -163,12 +191,20 @@ def _tool_arguments(value: object) -> dict[str, Any]:
         raise OllamaAdapterError("invalid_tool_arguments") from None
 
 
-def _generated_call_id(name: str, arguments: Mapping[str, Any], index: int) -> str:
+def _request_namespace(messages: Sequence[Mapping[str, Any]]) -> str:
+    canonical_history = _canonical_json(list(messages))
+    return hashlib.sha256(canonical_history.encode()).hexdigest()[:16]
+
+
+def _generated_call_id(
+    name: str, arguments: Mapping[str, Any], index: int, *, request_namespace: str
+) -> str:
     source = f"{index}\0{name}\0{_canonical_json(arguments)}"
-    return f"ollama_call_{hashlib.sha256(source.encode()).hexdigest()[:20]}"
+    digest = hashlib.sha256(source.encode()).hexdigest()[:20]
+    return f"ollama_call_{request_namespace}_{digest}"
 
 
-def _parse_tool_calls(payload: object) -> tuple[ToolCall, ...]:
+def _parse_tool_calls(payload: object, *, request_namespace: str) -> tuple[ToolCall, ...]:
     if payload is None:
         return ()
     if type(payload) is not list:
@@ -185,7 +221,7 @@ def _parse_tool_calls(payload: object) -> tuple[ToolCall, ...]:
         if type(function) is not dict:
             raise _invalid_response()
         name = function.get("name")
-        if type(name) is not str or not name:
+        if type(name) is not str or not name.strip():
             raise _invalid_response()
         arguments = _tool_arguments(function.get("arguments"))
 
@@ -195,7 +231,9 @@ def _parse_tool_calls(payload: object) -> tuple[ToolCall, ...]:
                 raise _invalid_response()
             call_id = supplied_id
         else:
-            call_id = _generated_call_id(name, arguments, index)
+            call_id = _generated_call_id(
+                name, arguments, index, request_namespace=request_namespace
+            )
             suffix = 1
             base_id = call_id
             while call_id in call_ids:
@@ -208,7 +246,7 @@ def _parse_tool_calls(payload: object) -> tuple[ToolCall, ...]:
     return tuple(calls)
 
 
-def _parse_response(data: object, *, selected_model: str) -> ModelResponse:
+def _parse_response(data: object, *, selected_model: str, request_namespace: str) -> ModelResponse:
     try:
         if type(data) is not dict:
             raise _invalid_response()
@@ -218,7 +256,9 @@ def _parse_response(data: object, *, selected_model: str) -> ModelResponse:
         content = message.get("content")
         if content is not None and type(content) is not str:
             raise _invalid_response()
-        tool_calls = _parse_tool_calls(message.get("tool_calls"))
+        tool_calls = _parse_tool_calls(
+            message.get("tool_calls"), request_namespace=request_namespace
+        )
         if content is None and not tool_calls:
             raise _invalid_response()
         done_reason = data.get("done_reason")
@@ -244,8 +284,9 @@ class OllamaAdapter:
     """Typed Ollama adapter with explicit, model-dependent capability opt-ins.
 
     Ollama's current chat request can carry both ``tools`` and user-message
-    ``images``. This adapter therefore sends that combination faithfully when
-    both capabilities are explicitly configured; it never drops either field.
+    ``images``. The adapter sends that combination only when text tools, a
+    vision model, and vision-model native tools are all explicitly enabled.
+    It never infers combined support from text-model tool support.
     """
 
     def __init__(
@@ -255,12 +296,14 @@ class OllamaAdapter:
         *,
         native_tools_enabled: bool = False,
         vision_model: str | None = None,
+        vision_native_tools_enabled: bool = False,
         json_mode_enabled: bool = False,
         json_schema_enabled: bool = False,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.vision_model = vision_model.strip() if vision_model and vision_model.strip() else None
+        self.vision_native_tools_enabled = vision_native_tools_enabled
         self.capabilities = ProviderCapabilities(
             native_tools=native_tools_enabled,
             images=self.vision_model is not None,
@@ -277,6 +320,7 @@ class OllamaAdapter:
             "ollama_adapter_init",
             model=_model_identity(model),
             vision_configured=self.vision_model is not None,
+            vision_native_tools_enabled=self.vision_native_tools_enabled,
             **safe_value_metadata("base_url", self.base_url),
         )
 
@@ -308,11 +352,18 @@ class OllamaAdapter:
         if response_contract is not None and response_format is not None:
             raise ValueError("response_contract and response_format are mutually exclusive")
 
-        converted_messages, has_images = _typed_messages(messages)
-        if tools:
+        uses_native_tools = bool(tools) or any(
+            message.tool_calls or message.role is Role.TOOL or message.tool_call_id is not None
+            for message in messages
+        )
+        if uses_native_tools:
             self._require("native_tools", self.capabilities.native_tools)
-        if has_images:
+        has_images_requested = any(message.images for message in messages)
+        if has_images_requested:
             self._require("images", self.capabilities.images)
+        converted_messages, has_images = _typed_messages(messages)
+        if has_images and uses_native_tools:
+            self._require("vision_native_tools", self.vision_native_tools_enabled)
         if response_contract is not None:
             self._require("json_schema", self.capabilities.json_schema)
         elif response_format is not None:
@@ -334,7 +385,14 @@ class OllamaAdapter:
         elif response_format is not None:
             payload["format"] = "json"
 
-        result = _parse_response(await self._send(payload), selected_model=selected_model)
+        request_namespace = _request_namespace(converted_messages)
+        result = _parse_response(
+            await self._send(payload),
+            selected_model=selected_model,
+            request_namespace=request_namespace,
+        )
+        if result.tool_calls:
+            self._require("native_tools", self.capabilities.native_tools)
         logger.info(
             "ollama_complete",
             model=result.actual_model,
@@ -353,6 +411,14 @@ class OllamaAdapter:
     ) -> str:
         """Preserve the legacy dict/string API without mutating caller messages."""
         converted = copy.deepcopy(messages)
+        uses_native_tools = bool(tools) or any(
+            message.get("tool_calls")
+            or message.get("role") == "tool"
+            or message.get("tool_call_id") is not None
+            for message in converted
+        )
+        if uses_native_tools:
+            self._require("native_tools", self.capabilities.native_tools)
         has_images = bool(images) or any(bool(message.get("images")) for message in converted)
         if has_images and self.vision_model is None:
             raise UnsupportedProviderCapability("ollama", ("images",))
@@ -373,6 +439,8 @@ class OllamaAdapter:
         selected_model = self.vision_model if has_images else self.model
         if selected_model is None:
             raise UnsupportedProviderCapability("ollama", ("images",))
+        if has_images and uses_native_tools:
+            self._require("vision_native_tools", self.vision_native_tools_enabled)
         payload: dict[str, Any] = {
             "model": selected_model,
             "messages": converted,
@@ -392,7 +460,13 @@ class OllamaAdapter:
                 for tool in tools
             ]
 
-        result = _parse_response(await self._send(payload), selected_model=selected_model)
+        result = _parse_response(
+            await self._send(payload),
+            selected_model=selected_model,
+            request_namespace=_request_namespace(converted),
+        )
+        if result.tool_calls:
+            self._require("native_tools", self.capabilities.native_tools)
         if result.tool_calls:
             return json.dumps(
                 {

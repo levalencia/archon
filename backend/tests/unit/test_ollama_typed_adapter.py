@@ -161,25 +161,149 @@ async def test_missing_tool_call_ids_are_deterministic_unique_and_safe() -> None
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_images_use_only_explicit_vision_model_strip_data_url_and_support_tools() -> None:
+async def test_generated_tool_ids_are_namespaced_across_accumulated_history() -> None:
+    requests: list[httpx.Request] = []
+    repeated_call = [{"function": {"name": "weather", "arguments": {"city": "Ghent"}}}]
+    adapter = adapter_with_response(
+        response(message={"role": "assistant", "content": "", "tool_calls": repeated_call}),
+        requests,
+        native_tools_enabled=True,
+    )
+    history = [Message(Role.USER, "weather?")]
+
+    first = await adapter.complete(history)
+    history.extend(
+        [
+            Message(Role.ASSISTANT, "", tool_calls=first.tool_calls),
+            Message(Role.TOOL, '{"temp":20}', tool_call_id=first.tool_calls[0].id),
+            Message(Role.USER, "weather?"),
+        ]
+    )
+    second = await adapter.complete(history)
+
+    assert first.tool_calls[0].id != second.tool_calls[0].id
+    assert json.loads(requests[1].content)["messages"][2]["tool_name"] == "weather"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_images_use_explicit_vision_model_and_validated_base64() -> None:
     requests: list[httpx.Request] = []
     adapter = adapter_with_response(
         response(),
         requests,
         native_tools_enabled=True,
         vision_model="llava:7b",
+        vision_native_tools_enabled=True,
     )
     await adapter.complete(
-        [Message(Role.USER, "Describe", images=("data:image/png;base64,abc", "raw-base64"))],
+        [Message(Role.USER, "Describe", images=("data:image/png;base64,YWJj", "cmF3"))],
         [ToolDefinition("inspect", input_schema={"type": "object"})],
     )
 
     payload = json.loads(requests[0].content)
     assert payload["model"] == "llava:7b"
     assert payload["messages"] == [
-        {"role": "user", "content": "Describe", "images": ["abc", "raw-base64"]}
+        {"role": "user", "content": "Describe", "images": ["YWJj", "cmF3"]}
     ]
     assert payload["tools"][0]["function"]["name"] == "inspect"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "image",
+    [
+        "",
+        "not-base64!",
+        "YWJj=",
+        "data:image/png;base64,",
+        "data:image/png;base64,YWJj!",
+        "data:image/svg+xml;base64,YWJj",
+        "data:text/plain;base64,YWJj",
+        "data:image/png,YWJj",
+    ],
+)
+async def test_invalid_or_unsupported_images_fail_safely_before_network(image: str) -> None:
+    requests: list[httpx.Request] = []
+    adapter = adapter_with_response(response(), requests, vision_model="llava")
+
+    with pytest.raises(OllamaAdapterError) as raised:
+        await adapter.complete([Message(Role.USER, "secret", images=(image,))])
+
+    assert raised.value.code == "invalid_image"
+    assert str(raised.value) == "Invalid Ollama image"
+    if image:
+        assert image not in str(raised.value)
+    assert requests == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_native_tool_protocol_requires_opt_in_even_without_tools_argument() -> None:
+    requests: list[httpx.Request] = []
+    adapter = adapter_with_response(response(), requests)
+    call = ToolCall("call-1", "weather", {})
+
+    cases = (
+        ([Message(Role.USER, "request")], [ToolDefinition("weather")]),
+        ([Message(Role.ASSISTANT, "", tool_calls=(call,))], []),
+        ([Message(Role.TOOL, "result", tool_call_id="call-1")], []),
+        ([Message(Role.USER, "bad", tool_call_id="call-1")], []),
+    )
+    for history, tools in cases:
+        with pytest.raises(UnsupportedProviderCapability) as raised:
+            await adapter.complete(history, tools)
+        assert raised.value.missing_capabilities == ("native_tools",)
+    assert requests == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_vision_tools_require_independent_combined_opt_in() -> None:
+    requests: list[httpx.Request] = []
+    image_message = Message(Role.USER, "describe", images=("YWJj",))
+    adapter = adapter_with_response(
+        response(), requests, vision_model="llava", native_tools_enabled=True
+    )
+
+    with pytest.raises(UnsupportedProviderCapability) as raised:
+        await adapter.complete([image_message], [ToolDefinition("inspect")])
+    assert raised.value.missing_capabilities == ("vision_native_tools",)
+
+    historical_call = ToolCall("call-1", "inspect", {})
+    with pytest.raises(UnsupportedProviderCapability) as history_raised:
+        await adapter.complete(
+            [
+                Message(Role.ASSISTANT, "", tool_calls=(historical_call,)),
+                Message(Role.TOOL, "done", tool_call_id="call-1"),
+                image_message,
+            ]
+        )
+    assert history_raised.value.missing_capabilities == ("vision_native_tools",)
+    assert requests == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message",
+    [
+        Message(Role.USER, "bad", tool_calls=(ToolCall("call-1", "tool", {}),)),
+        Message(Role.ASSISTANT, "bad", tool_call_id="call-1"),
+        Message(Role.ASSISTANT, "", tool_calls=(ToolCall("   ", "tool", {}),)),
+        Message(Role.TOOL, "bad"),
+        Message(Role.TOOL, "bad", tool_call_id="   "),
+        Message(Role.TOOL, "bad", tool_call_id="call-1", tool_calls=(ToolCall("x", "tool", {}),)),
+    ],
+)
+async def test_invalid_typed_tool_field_roles_fail_before_network(message: Message) -> None:
+    requests: list[httpx.Request] = []
+    adapter = adapter_with_response(response(), requests, native_tools_enabled=True)
+
+    with pytest.raises(ValueError, match="Ollama tool"):
+        await adapter.complete([message])
+    assert requests == []
 
 
 @pytest.mark.unit
@@ -294,6 +418,24 @@ async def test_supplied_duplicate_or_blank_tool_ids_are_rejected(second_id: str)
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_blank_response_tool_name_is_rejected() -> None:
+    adapter = adapter_with_response(
+        response(
+            message={
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"function": {"name": "   ", "arguments": {}}}],
+            }
+        ),
+        [],
+        native_tools_enabled=True,
+    )
+    with pytest.raises(OllamaAdapterError, match="Invalid Ollama response"):
+        await adapter.complete([Message(Role.USER, "hi")])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_actual_model_is_sanitized_and_bounded() -> None:
     adapter = adapter_with_response(response(model="unsafe model\nsecret"), [])
     result = await adapter.complete([Message(Role.USER, "hi")])
@@ -316,12 +458,14 @@ def test_capabilities_default_and_opt_ins_are_conservative() -> None:
     enabled = OllamaAdapter(
         native_tools_enabled=True,
         vision_model=" llava:7b ",
+        vision_native_tools_enabled=True,
         json_schema_enabled=True,
     )
     assert enabled.capabilities.native_tools is True
     assert enabled.capabilities.images is True
     assert enabled.capabilities.json_schema is True
     assert enabled.capabilities.json_mode is True
+    assert enabled.vision_native_tools_enabled is True
 
 
 @pytest.mark.unit
@@ -330,6 +474,7 @@ def test_factory_forwards_only_ollama_opt_ins() -> None:
         llm_provider="ollama",
         ollama_native_tools_enabled=True,
         ollama_vision_model="llava:7b",
+        ollama_vision_native_tools_enabled=True,
         ollama_json_schema_enabled=True,
     )
     assert settings.ollama_json_mode_enabled is True
@@ -340,26 +485,33 @@ def test_factory_forwards_only_ollama_opt_ins() -> None:
     assert adapter.capabilities.images is True
     assert adapter.capabilities.json_mode is True
     assert adapter.capabilities.json_schema is True
+    assert adapter.vision_native_tools_enabled is True
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_legacy_chat_keeps_tools_images_and_does_not_mutate_messages() -> None:
     requests: list[httpx.Request] = []
-    adapter = adapter_with_response(response(), requests, vision_model="llava")
+    adapter = adapter_with_response(
+        response(),
+        requests,
+        vision_model="llava",
+        native_tools_enabled=True,
+        vision_native_tools_enabled=True,
+    )
     messages = [{"role": "user", "content": "describe"}]
     original = json.loads(json.dumps(messages))
     result = await adapter.chat(
         messages,
         max_tokens=123,
         tools=[{"name": "inspect", "parameters": {"type": "object"}}],
-        images=["data:image/jpeg;base64,abc"],
+        images=["data:image/jpeg;base64,YWJj"],
     )
 
     assert result == "ok"
     assert messages == original
     payload = json.loads(requests[0].content)
     assert payload["model"] == "llava"
-    assert payload["messages"][0]["images"] == ["abc"]
+    assert payload["messages"][0]["images"] == ["YWJj"]
     assert payload["tools"][0]["function"]["name"] == "inspect"
     assert payload["options"] == {"num_predict": 123}
