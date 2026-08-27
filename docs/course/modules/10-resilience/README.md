@@ -13,7 +13,7 @@ Async tasks/exceptions, side effects, transactions, distributed state, monotonic
 
 ## Learning outcomes
 
-You can choose safe retry boundaries, propagate cancellation, explain breaker transitions/races, assess fallback capability loss, distinguish local from Redis limits, and run a deterministic failure drill.
+You can choose safe retry boundaries, propagate cancellation, explain breaker transitions/races, verify typed fallback contract preservation, distinguish local from Redis limits, and run a deterministic failure drill.
 
 ## Problem and mental model
 
@@ -48,7 +48,7 @@ sequenceDiagram
   App->>Redis: readiness ping when configured
   App->>CB: construct app-scoped breaker
   App->>Provider: wrap typed provider
-  Note over App: fallback chain is legacy LLMClient text interface
+  Note over App: fallback chain exposes typed complete plus legacy chat compatibility
 ```
 
 ## Failure request sequence
@@ -93,7 +93,7 @@ stateDiagram-v2
 
 - `backend/app/security/circuit_breaker.py`: `CircuitBreaker.call`, `_abandon_probe`, `CircuitBreakingProvider.complete`.
 - `backend/app/security/rate_limiter.py`: `RateLimiter.check`, `_check_redis`, `_check_redis_transaction`, `_check_local`.
-- `backend/app/agents/fallback_chain.py`: `FallbackLLMChain.chat`.
+- `backend/app/agents/fallback_chain.py`: `FallbackLLMChain.complete`, capability filtering, typed exhaustion, and legacy-compatible `chat`.
 - `backend/app/agents/resilient_coordinator.py`: `ResilientCoordinator._execute_with_fallback` (bounded attempts/timeout, but unsafe validation fallback and unenforced pre-call token budget).
 - `backend/app/services/grounded_rag.py`: cancellation shielding and terminal finalization.
 - `backend/app/services/run_ledger.py`: idempotent `ensure_run`, guarded terminal update, fork checkpoint identity.
@@ -125,7 +125,7 @@ For each passing test, write the protected invariant and the residual risk. Exam
 - Retry only transient, side-effect-safe operations; retry counts are budgets, not guarantees. There is no universal retry wrapper.
 - Timeout must cover the operation and cleanup; cancellation must be re-raised after shielded terminal cleanup.
 - Breaker errors are sanitized. Its state is process-local and not a distributed health oracle.
-- `FallbackLLMChain` uses the legacy text `LLMClient`; it can lose typed tools/images/usage/stop reasons and returns an error string when all fail.
+- `FallbackLLMChain` preserves typed requirements and metadata only when one candidate supports the full contract; it raises typed errors instead of silently degrading to text.
 - `ResilientCoordinator`’s validation fallback says approved and its token budget records after calls; treat it as a prototype, not a security boundary.
 - Redis limiter is shared/atomic; local mode is process-local. Redis failures do not silently fall back locally.
 
@@ -135,18 +135,18 @@ Inspect `circuit_breaker_opened/rejected/reset`, `llm_adapter_failed`, `llm_fall
 
 ## Lab versus production
 
-The deterministic benchmark proves state transitions and secondary selection under injected failures. It does not show recovery against a real provider, multi-instance breaker state, production traffic fairness, or an SLO. Redis-backed limiting is the multi-process target; local mode is for development. Fallback capability parity and safe all-fail API semantics remain partial.
+The deterministic benchmark proves state transitions and secondary selection under injected failures. It does not show recovery against a real provider, multi-instance breaker state, production traffic fairness, or an SLO. Redis-backed limiting is the multi-process target; local mode is for development. Typed fallback contract preservation is tested, while live cross-provider semantic parity remains partial.
 
 ## Interview answer
 
-“Archon layers admission control, deadlines/cancellation, selective retries, an app-scoped circuit breaker, and fallback. The breaker is lock-protected, admits one half-open probe, ignores stale success after a concurrent open, and sanitizes provider errors. Redis sliding windows are atomic and hash identifiers; local mode is process-local. Cancellation writes a terminal ledger event under `shield` then re-raises. I would not claim universal resilience: retries are path-specific and the legacy fallback loses typed capabilities.”
+“Archon layers admission control, deadlines/cancellation, selective retries, an app-scoped circuit breaker, and typed fallback. The breaker is lock-protected, admits one half-open probe, ignores stale success after a concurrent open, and sanitizes provider errors. The fallback chain requires one candidate to preserve the complete tools/images/JSON contract and raises typed errors rather than returning outage text. Redis sliding windows are atomic and hash identifiers; local mode is process-local. I still would not claim live provider parity or universal resilience.”
 
 ## Self-check
 
 1. Why can retrying a write be unsafe without idempotency?
 2. How does cancellation differ from timeout?
 3. Why admit only one half-open probe?
-4. What capabilities can legacy fallback lose?
+4. Why must one fallback candidate satisfy the complete tools/images/JSON contract?
 5. Why must Redis failure not silently use a local limiter?
 
 ## Done criteria

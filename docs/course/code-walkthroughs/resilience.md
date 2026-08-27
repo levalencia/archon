@@ -9,7 +9,7 @@ Exercise admission control, circuit transitions, fallback, timeout/cancellation,
 2. **Deadline:** `SecureToolRegistry.execute` uses `asyncio.wait_for`; embedding DNS/HTTP and specialist calls have separate limits. There is no universal end-to-end deadline wrapper.
 3. **Cancellation:** `GroundedDocumentWorkflow.run` catches `CancelledError`, shields `_stop(... reason="cancelled")`, then re-raises. `CircuitBreaker` releases a cancelled half-open probe.
 4. **Breaker:** `CircuitBreaker.call` lock-protects admission and uses epoch/generation/probe tokens so one half-open probe runs and stale successes cannot close a newly opened circuit.
-5. **Fallback:** `FallbackLLMChain.chat` tries legacy text adapters sequentially. Secondary success is observable; all-fail returns text, not a typed failure.
+5. **Fallback:** `FallbackLLMChain.complete` derives tools/images/JSON requirements, skips incompatible candidates, preserves typed response metadata, and raises safe typed errors when no provider can satisfy or complete the request.
 6. **Idempotency:** `RunRepository.ensure_run` conflict-safely creates stable run IDs; terminal status guards prevent overwrite/late append. This does not make tool side effects idempotent.
 
 ```mermaid
@@ -47,4 +47,4 @@ uv run pytest -q \
 Use breaker stats/state events, hashed limiter counters and `retry_after`, sanitized provider/fallback logs, timeout audit records, and terminal Run Ledger status. Never log raw exception/provider payloads to prove failure.
 
 ## Production cautions
-Breaker/local limiter state is process-local; fallback loses typed capabilities; retries are path-specific and may lack backoff/jitter; all-fail fallback text is weak API semantics; deterministic injected failures do not prove real provider SLOs or multi-instance behavior.
+Breaker/local limiter state is process-local; typed fallback preserves requested tools/images/JSON only when one candidate supports the complete contract; retries are path-specific and may lack backoff/jitter; deterministic injected failures do not prove real provider SLOs or multi-instance behavior.

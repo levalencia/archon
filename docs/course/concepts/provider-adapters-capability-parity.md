@@ -1,8 +1,8 @@
 # Provider adapters and capability parity
 
 > **Implementation status:** `partial`
-> **Status boundary:** Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback.
-> **Reviewed revision:** `6e3e13f`
+> **Status boundary:** Archon now declares capabilities, enforces image/JSON requirements, validates structured terminal output locally, and preserves typed contracts through fallback. Full parity remains partial because OpenAI/Ollama are legacy text adapters in the typed path, native-tool enforcement is not yet automatic, cache accounting is incomplete, and live cross-provider evidence is absent.
+> **Reviewed revision:** current S8 provider-contract branch
 > **Used by module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
 > **Catalog ID:** `provider-adapters-capability-parity`
 
@@ -24,37 +24,44 @@ flowchart LR
     Contract --> OpenAI
     Contract --> Ollama
     Anthropic & Foundry & OpenAI & Ollama --> Response[Typed response]
-    Matrix[Missing: negotiated capability matrix] -. guards .-> Contract
+    Matrix[ProviderCapabilities + request requirements] --> Contract
+    Matrix --> Fallback[capability-aware fallback]
+    Fallback --> Response
 ```
 
 ## Startup and request sequence
 
 ```mermaid
 sequenceDiagram
-    Caller->>Adapter: messages + requested capabilities
+    Caller->>Adapter: messages + typed request requirements
+    Adapter->>Adapter: fail before call if capability missing
     Adapter->>Provider: vendor request
     Provider-->>Adapter: response / usage / stop reason
-    Adapter-->>Caller: normalized response
-    Note over Caller,Adapter: Today parity is adapter-specific, not negotiated
+    Adapter-->>Caller: validated normalized response
+    Note over Caller,Adapter: Live parity remains adapter-specific and evidence-bounded
 ```
 
 ## Archon implementation and source walkthrough
 
-At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics.
+The mapped symbols now implement explicit `ProviderCapabilities`, immutable `ResponseContract`, runtime fail-before-call for images/JSON/explicit requirements, local terminal validation, normalized stop reasons, and capability-aware typed fallback. The remaining boundary is adapter parity and live evidence, not absence of negotiation.
 
 ### Source symbols
 
 | Source symbol | Role and boundary |
 |---|---|
-| [`backend/app/runtime/ports.py:ModelProvider`](../../../backend/app/runtime/ports.py) | Typed runtime-facing contract. |
-| [`backend/app/agents/llm_factory.py:create_llm_client`](../../../backend/app/agents/llm_factory.py) | Selects configured adapters and legacy fallback. |
+| [`backend/app/runtime/capabilities.py:ProviderCapabilities`](../../../backend/app/runtime/capabilities.py) | Explicit capability declaration and missing-capability calculation. |
+| [`backend/app/runtime/structured_output.py:ResponseContract`](../../../backend/app/runtime/structured_output.py) | Strict JSON parsing plus mandatory local validation. |
+| [`backend/app/runtime/engine.py:AgentRuntime.run`](../../../backend/app/runtime/engine.py) | Request requirement enforcement and terminal stop normalization. |
+| [`backend/app/agents/fallback_chain.py:FallbackLLMChain.complete`](../../../backend/app/agents/fallback_chain.py) | Selects one compatible typed candidate and preserves response metadata. |
+| [`backend/app/agents/llm_factory.py:create_llm_client`](../../../backend/app/agents/llm_factory.py) | Selects configured adapters and fallback order. |
 
 ### Tests
 
 | Test | Contract proved and limit |
 |---|---|
-| [`backend/tests/unit/test_adapters.py::TestAdapterProtocolCompliance`](../../../backend/tests/unit/test_adapters.py) | Adapters satisfy the declared protocol and deterministic transports parse representative replies. |
-| [`backend/tests/unit/test_fallback_wire.py::test_factory_returns_fallback_chain_with_fallbacks`](../../../backend/tests/unit/test_fallback_wire.py) | Factory fallback wiring exists. |
+| [`backend/tests/unit/test_provider_capabilities.py`](../../../backend/tests/unit/test_provider_capabilities.py) | Capability declarations, strict values, wrappers, and usage semantics. |
+| [`backend/tests/unit/test_runtime_provider_contracts.py`](../../../backend/tests/unit/test_runtime_provider_contracts.py) | Fail-before-call, structured validation, cache propagation, and stop reasons. |
+| [`backend/tests/unit/test_fallback_wire.py`](../../../backend/tests/unit/test_fallback_wire.py) | One-candidate requirement matching, typed exhaustion, metadata preservation, and legacy compatibility. |
 
 ### Evidence boundary
 
@@ -62,7 +69,7 @@ Current implementation dimensions are centralized in [Implementation Evidence](.
 
 ## Try it: bounded study exercise
 
-From the repository root, inspect the mapped source and test, then run the named focused test with the project test environment if available. Confirm both the passing contract and this gap: No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics.
+From the repository root, inspect the mapped source and run the focused tests. Confirm both the passing contract and the remaining gap: typed negotiation/fallback exists, while OpenAI/Ollama typed parity, complete cache accounting, and live cross-provider evidence remain incomplete.
 
 **Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
 
@@ -71,17 +78,17 @@ From the repository root, inspect the mapped source and test, then run the named
 | Topic | Assessment |
 |---|---|
 | Principal risk | Silent capability loss can turn a safe typed-tool workflow into unstructured text. |
-| Current gap/failure | No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics. |
+| Current gap/failure | OpenAI/Ollama still enter the typed runtime as text-only compatibility adapters; complete cache pricing and real cross-provider acceptance remain unproved. |
 | Trade-off | One lowest-common-denominator contract is simple but wastes provider features; capability negotiation is safer but adds branching and tests. |
 | Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
 
 ## Lab vs production
 
-The status remains **partial** at `6e3e13f`. Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **partial**. Typed capability negotiation, local structured validation, stop normalization, and fallback contract preservation are implemented and unit-tested. Unit tests do not prove live external-provider parity, cache billing semantics, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 
-> A provider adapter translates Archon’s model request into one vendor’s API and translates the reply back. Capability parity means changing providers does not silently remove a feature. A shared method name alone is not parity: a text-only fallback cannot safely replace a request that requires typed tools. In Archon the honest status is **partial**: Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback.
+> A provider adapter translates Archon’s typed request into one vendor API and translates the reply back. Capability parity means changing providers cannot silently remove required tools, images, or structured output. Archon now declares and enforces capabilities and preserves typed contracts through fallback, but parity remains **partial** because OpenAI/Ollama compatibility, cache accounting, and live cross-provider evidence are incomplete.
 
 ## Self-check
 
