@@ -21,6 +21,7 @@ _EFFECT_ID = re.compile(r"^eff_v1_[0-9a-f]{64}$")
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 _SAFE_CODE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _MAX_PAGE = 200
+_MAX_BIGINT = 2**63 - 1
 
 
 class EffectStateConflict(RuntimeError):  # noqa: N818 - public domain terminology
@@ -107,7 +108,6 @@ class EffectRepository:
             "state": EffectState.RESERVED.value,
             "reserved_at": reserved_at,
         }
-        inserted = False
         async with self._sessions() as session:
             dialect = session.get_bind().dialect.name
             if dialect in {"postgresql", "sqlite"}:
@@ -120,11 +120,13 @@ class EffectRepository:
                 )
                 inserted = (await session.execute(statement)).scalar_one_or_none() is not None
                 await session.commit()
+                if inserted:
+                    return EffectReservation(effect_id, EffectState.RESERVED, True)
             else:
                 session.add(EffectRow(**values))
                 try:
                     await session.commit()
-                    inserted = True
+                    return EffectReservation(effect_id, EffectState.RESERVED, True)
                 except IntegrityError:
                     await session.rollback()
 
@@ -134,12 +136,12 @@ class EffectRepository:
             state_value = result.scalar_one_or_none()
         if state_value is None:
             raise RuntimeError("effect_reservation_unavailable")
-        return EffectReservation(effect_id, EffectState(state_value), inserted)
+        return EffectReservation(effect_id, EffectState(state_value), False)
 
     async def commit(self, effect_id: str, output_hash: str, output_size: int) -> None:
         output_hash = _digest(output_hash, "output_hash")
-        if type(output_size) is not int or output_size < 0:
-            raise ValueError("output_size must be a non-negative integer")
+        if type(output_size) is not int or not 0 <= output_size <= _MAX_BIGINT:
+            raise ValueError("output_size must be an integer within the BIGINT range")
         await self._transition(
             effect_id,
             EffectState.COMMITTED,
