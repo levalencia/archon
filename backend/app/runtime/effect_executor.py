@@ -15,7 +15,7 @@ from app.services.effect_ledger import EffectRepository
 from app.tools.registry import SecureToolRegistry
 
 
-class IndeterminateToolEffect(RuntimeError):
+class IndeterminateToolEffectError(RuntimeError):
     code = "indeterminate_tool_effect"
 
     def __init__(self) -> None:
@@ -41,9 +41,9 @@ def _output_evidence(output: dict[str, object]) -> tuple[dict[str, object], str,
             default=lambda value: f"<{type(value).__name__}>",
         ).encode("utf-8")
     except (TypeError, ValueError, UnicodeEncodeError, RecursionError):
-        raise IndeterminateToolEffect from None
+        raise IndeterminateToolEffectError from None
     if len(encoded) > 1_048_576:
-        raise IndeterminateToolEffect from None
+        raise IndeterminateToolEffectError from None
     return snapshot, hashlib.sha256(encoded).hexdigest(), len(encoded)
 
 
@@ -119,7 +119,7 @@ class DurableEffectToolExecutor:
                     self._repository.fail(binding.effect_id, "dispatch_cancelled")
                 )
                 if released.error is not None:
-                    raise IndeterminateToolEffect from None
+                    raise IndeterminateToolEffectError from None
             raise reservation_outcome.cancellation
         if not reservation.should_execute:
             return {
@@ -139,8 +139,8 @@ class DurableEffectToolExecutor:
                     self._mark_indeterminate(binding.effect_id, "commit_failed")
                 )
                 if cleanup.error is not None:
-                    raise IndeterminateToolEffect from None
-                raise IndeterminateToolEffect from None
+                    raise IndeterminateToolEffectError from None
+                raise IndeterminateToolEffectError from None
             if committed.cancellation is not None:
                 raise committed.cancellation
             return snapshot
@@ -149,14 +149,14 @@ class DurableEffectToolExecutor:
                 self._repository.fail(binding.effect_id, "permission_denied")
             )
             if failed.error is not None:
-                raise IndeterminateToolEffect from None
+                raise IndeterminateToolEffectError from None
             raise
         except BaseException as error:
             cleanup = await _cancellation_resistant(
                 self._mark_indeterminate(binding.effect_id, "dispatch_interrupted")
             )
             if cleanup.error is not None:
-                raise IndeterminateToolEffect from None
+                raise IndeterminateToolEffectError from None
             if isinstance(error, asyncio.CancelledError):
                 raise error
             if cleanup.cancellation is not None:
