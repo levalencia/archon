@@ -1,6 +1,6 @@
 # Module 12 — Governed MCP discovery and execution
 
-> **Content status:** current
+> **Documentation status:** Draft
 > **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 110 minutes
 > **Canonical concepts:** [mcp](../../concepts/mcp.md), [mcp-transports-inventory](../../concepts/mcp-transports-inventory.md), [authorization-ownership](../../concepts/authorization-ownership.md)
@@ -11,24 +11,24 @@ MCP makes tools portable, but portability is not trust. This module follows an a
 
 ## Beginner explanation
 
-A production-oriented agent is more than a model response: it must limit authority, preserve ownership, make failures explicit, and leave evidence that another person can inspect. This module introduces those ideas in plain language before tracing their concrete Archon implementation. The diagrams are maps of verified boundaries, not claims that every dependency is production deployed.
+MCP standardizes tool discovery and calls; it does not confer trust. Archon supports one concrete path: deployment-owned stdio profiles become scoped inventory, then immutable runtime bindings that still cross schema, policy, approval and timeout controls.
 
 ## Prerequisites and vocabulary
 
 ### Learn first
 
-- [Module 05: policy and approvals](../05-policy-and-approvals/README.md) — trust and exact authorization.
+- [Module 04: tools and schemas](../04-tools-and-schemas/README.md) — validated tool contracts.
+- [Module 05: policy and approvals](../05-policy-and-approvals/README.md) — action authorization.
 - [Module 07: Run Ledger](../07-run-ledger/README.md) — durable event evidence and lineage.
-- [Module 10: resilience](../10-resilience/README.md) — timeout, cancellation and bounded failure.
 
 ### Vocabulary
 
 | Term | Beginner definition | Canonical source |
 |---|---|---|
 | MCP | Protocol for discovering and invoking contextual capabilities. | [mcp](../../concepts/mcp.md) |
-| stdio transport | Protocol messages over a child process standard input/output. | [mcp](../../concepts/mcp.md) |
+| stdio transport | Protocol messages over child-process standard input/output. | [MCP transports and inventory](../../concepts/mcp-transports-inventory.md) |
 | profile | Deployment-owned command, arguments, environment and limits. | [mcp](../../concepts/mcp.md) |
-| inventory | Persisted safe server/tool metadata. | [mcp](../../concepts/mcp.md) |
+| inventory | Persisted scoped server/tool metadata from bounded discovery. | [MCP transports and inventory](../../concepts/mcp-transports-inventory.md) |
 | binding | Immutable request-scoped closure joining inventory to owner/project/profile. | [mcp](../../concepts/mcp.md) |
 
 ## Learning outcomes
@@ -65,10 +65,10 @@ flowchart LR
 
 | Component | Responsibility | Must not be assumed |
 |---|---|---|
-| API/UI boundary | Validate identity, shape and request scope. | UI visibility is not authorization. |
-| Core service/runtime | Enforce typed bounds and coordinate dependencies. | A class existing means every route uses it. |
-| Persistence | Store owner-scoped state/evidence atomically where required. | Evidence means semantic truth or tamper-proof WORM audit. |
-| Observability | Emit redacted, correlatable signals. | Telemetry is durable delivery or chain-of-thought. |
+| Stdio client | Bound protocol lifecycle, pagination, bytes, schemas and cleanup. | A local process is benign. |
+| Inventory service/repository | Resolve profiles and atomically persist scoped metadata/health. | Discovery grants execution authority. |
+| Runtime provider | Select enabled healthy tools and revalidate immutable bindings. | Stored health proves current reachability. |
+| Secure registry | Apply schema, policy, approval, timeout and evidence controls. | MCP bypasses native-tool governance. |
 
 ## Startup sequence
 
@@ -84,7 +84,7 @@ sequenceDiagram
   Note over App: API reveals labels, never command/env/secrets
 ```
 
-Startup validates deployment-owned settings, constructs dependencies, and fails closed when a required security or persistence dependency is unavailable. Optional capabilities remain visibly disabled rather than silently simulated.
+Startup copies deployment-owned profiles into inventory/runtime services and initializes their repository. Public profile responses expose labels and IDs, never command arguments, environment values or secrets.
 
 ## Per-request sequence
 
@@ -117,15 +117,15 @@ The alternate path is part of the design: denial, stale state, malformed input, 
 
 ```mermaid
 classDiagram
-  class Route
-  class CoreService
-  class Repository
-  class PolicyBoundary
-  class EventSink
-  Route --> CoreService
-  CoreService --> Repository
-  CoreService --> PolicyBoundary
-  CoreService --> EventSink
+  class MCPInventoryService
+  class MCPRepository
+  class StdioMCPClient
+  class MCPRuntimeToolProvider
+  class SecureToolRegistry
+  MCPInventoryService --> StdioMCPClient
+  MCPInventoryService --> MCPRepository
+  MCPRuntimeToolProvider --> MCPRepository
+  MCPRuntimeToolProvider --> SecureToolRegistry
 ```
 
 The implementation favors dependency injection and composition. The arrows show use, not inheritance.
@@ -204,7 +204,7 @@ Create a two-column note: **proved invariant** and **not proved**. Include at le
 | Inventory changes after model selection | Re-read server/tool/profile/schema before call | mcp_binding_changed | Race with remote server behavior still possible. |
 | Cross-owner access | All repository calls bind owner/project | Scoped miss | New queries require scope review. |
 
-Malformed input, dependency failure, timeout/cancellation, concurrency/idempotency, owner scope, secret/PII handling, and resource limits must be reconsidered whenever this path changes.
+Also review discovery/update races, cursor loops, process cleanup, schema normalization and argument/result byte caps whenever this path changes.
 
 ## Observability and evidence path
 
@@ -239,10 +239,10 @@ MCP 2.1.1 stdio was verified locally against the fixture server, including pagin
 
 ### Deeper follow-ups
 
-- **Why this design?** It limits authority, makes failure explicit, and produces inspectable evidence.
-- **What fails?** Invalid input, unavailable dependencies, timeouts/cancellation, stale bindings, denied policy, and persistence failure each need distinct handling.
-- **How do you know?** Point to one exact symbol, one exact test, and one revision-scoped observation.
-- **What would production require?** External acceptance, sustained/multi-instance tests, audited controls, hosted operations and explicit SLO/recovery objectives.
+- **Why profiles, not commands?** User-provided commands would turn configuration into process authority.
+- **Why inventory?** It makes normalized metadata durable and scoped while remaining separate from authorization.
+- **Why revalidate?** To reject profile, schema, risk or enablement changes after model selection.
+- **What remains?** HTTP/OAuth, secret brokering, server attestation, multi-instance tests and production operations.
 
 ## Self-check
 

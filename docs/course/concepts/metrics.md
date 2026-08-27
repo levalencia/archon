@@ -1,239 +1,38 @@
-# Concept: Metrics
+# Metrics
 
-> **Implementation status:** `implemented`
-> **Status boundary:** Process-local counters and latency samples are exposed in Prometheus text; aggregation, durable retention, alerting, and SLOs remain unverified.
-> **Reviewed revision:** `3577b00` (documentation review; runtime evidence links may name their own revision)
-> **Used by modules:** [Module 13](../modules/13-auth-ui-observability/README.md)
-> **Catalog ID:** `metrics`
+> **Documentation status:** Draft
+> **Concept status:** `implemented`
+> **Status boundary:** Prometheus samples are generated from a process-local registry. No durable multi-replica aggregation, alerting, or SLO evidence is implemented.
+> **Used by:** [Module 13](../modules/13-auth-ui-observability/README.md)
 
-## Beginner explanation
+## What metrics answer
 
-Metrics compress many events into numeric time-series such as run count, error count, and latency. **It is not:** A local counter is not a production SLO or cross-replica aggregate.
+Metrics aggregate behavior across events: counts, current values, and latency distributions. Unlike [structured logs](structured-logging.md), they intentionally discard per-request detail. Unlike [traces](tracing-opentelemetry.md), they do not preserve a request path.
 
-## Prerequisites and vocabulary
+Archon maps typed runtime events into bounded metric names and labels, then exposes Prometheus text. Labels avoid user IDs, run IDs, prompts, URLs, and arbitrary error text because unbounded cardinality and sensitive dimensions make metrics unsafe and expensive.
 
-### Learn first
-
-- [Agent anatomy](agent-anatomy.md) — separates runtime decisions from tools and evidence.
-- [Policy engine](policy-engine.md) — explains fail-closed action control.
-- [Run Ledger](run-ledger.md) — explains durable evidence versus transient signals.
-
-### Vocabulary
-
-| Term | Plain-English meaning | Related concept |
-|---|---|---|
-| boundary | The point where input is validated and authority is limited. | [Policy engine](policy-engine.md) |
-| scope | Identity/project/resource dimensions that constrain an operation. | [Authorization and ownership](authorization-ownership.md) |
-| evidence | Inspectable record supporting a specific, bounded claim. | [Run Ledger](run-ledger.md) |
-
-## Problem and mental model
-
-They are the dashboard gauges, not the flight recorder: labels must stay bounded and payloads do not belong in them. Inputs cross a validation boundary; outputs are bounded outcomes plus evidence. Important invariants are explicit scope, finite resources, sanitized failures, and no authority inferred from untrusted payloads.
-
-## Architecture and components
+## Signal flow
 
 ```mermaid
 flowchart LR
-  Caller --> V[Validate identity, scope, schema]
-  V --> C[Metrics boundary]
-  C --> E[(redacted evidence)]
-  C -. bounded failure .-> E
+  E[AgentEvent] --> A[RuntimeMetricsAdapter]
+  A --> C[counters]
+  A --> H[latency observations]
+  C --> P[/metrics Prometheus text]
+  H --> P
 ```
 
-| Component | Role | Out of scope |
-|---|---|---|
-| API/runtime boundary | Validates request and binds trusted context. | Trusting caller-supplied ownership. |
-| `get_prometheus_text` | Implements the central contract. | Production guarantees beyond its wired path. |
-| Evidence path | Records safe status and identifiers. | Raw secrets, prompts, or chain-of-thought. |
+CI and disaster-recovery measurements are not emitted as authenticated agent-runtime metrics. They come from workflow/script artifacts and have their own evidence boundaries.
 
-## Startup sequence
+## Source and tests
 
-```mermaid
-sequenceDiagram
-  participant Config
-  participant App
-  participant Component
-  participant Dependency
-  Config->>App: validated settings
-  App->>Component: construct/inject
-  Component->>Dependency: initialize or health-check
-  alt required dependency fails
-    Dependency-->>App: fail startup/readiness
-  else ready
-    Dependency-->>App: bounded capability
-  end
-```
-
-Configuration and dependencies become authority only through application construction; user payloads cannot create deployment-owned capabilities.
-
-## Per-request sequence
-
-```mermaid
-sequenceDiagram
-  participant Caller
-  participant Boundary
-  participant Core as get_prometheus_text
-  participant Evidence
-  Caller->>Boundary: authenticated, bounded request
-  Boundary->>Core: owner-bound validated input
-  alt accepted
-    Core->>Evidence: safe event/status/measurement
-    Core-->>Caller: typed result
-  else denied, invalid, timeout, or dependency failure
-    Core->>Evidence: stable sanitized failure
-    Core-->>Caller: bounded error
-  end
-```
-
-## Class and dependency view
-
-```mermaid
-classDiagram
-  class Boundary
-  class Core {
-    +get_prometheus_text()
-  }
-  class EvidenceSink
-  Boundary --> Core
-  Core --> EvidenceSink
-```
-
-Archon uses composition and injected dependencies; this diagram does not imply inheritance.
-
-## State and lifecycle
-
-```mermaid
-stateDiagram-v2
-  [*] --> Configured
-  Configured --> Active: validated request
-  Active --> Complete: bounded success
-  Active --> Failed: denied/invalid/timeout/dependency error
-  Complete --> [*]
-  Failed --> [*]
-```
-
-Persistent state, when applicable, is owner-scoped; transient telemetry never silently becomes authorization state.
-
-## Archon implementation and source walkthrough
-
-### Source symbols
-
-| Source symbol | Role | Status boundary |
-|---|---|---|
-| [`backend/app/observability/metrics.py:get_prometheus_text`](../../../backend/app/observability/metrics.py) | Central implemented behavior. | Inspect call sites before extending the claim. |
-| [`app.main:lifespan`](../../../backend/app/main.py) | Constructs application-scoped services and readiness dependencies. | Presence at startup is not public deployment. |
-
-### Tests
-
-| Test | Contract proved | Not proved |
-|---|---|---|
-| [`backend/tests/unit/test_runtime_observability.py`](../../../backend/tests/unit/test_runtime_observability.py) | Deterministic contract for the listed implementation. | External-provider parity, load, public deployment, or SLOs. |
-
-### Runtime evidence
-
-| Evidence | Claim supported | Revision/environment/limit |
-|---|---|---|
-| [Implementation evidence](../../IMPLEMENTATION-EVIDENCE.md) | Separates exists, wired, tested, observed, UI, and deployed. | Local/test evidence; mutable status source. |
-| [Architecture diagrams](../../ARCHITECTURE-DIAGRAMS.md) | Current wider system context. | Read with the evidence matrix. |
-
-## Try it: command or bounded exercise
-
-### Goal
-
-Confirm the contract without external credentials.
-
-### Setup and safety
-
-From repository root; `uv` and backend dependencies are required. Tests use fixtures/local dependencies and should not receive real secrets.
-
-### Steps
-
-```bash
-cd backend
-uv run pytest -q tests/unit/test_runtime_observability.py
-```
-
-Then locate `get_prometheus_text` in `backend/app/observability/metrics.py` and write one sentence naming what the test proves and one sentence naming what it cannot prove.
-
-### Done criteria
-
-- [ ] The focused test passes and its assertion is identified.
-- [ ] The result is tied to `get_prometheus_text`, not merely to a file.
-- [ ] No external credential, service, or persistent lab data was introduced.
-
-## Security and failure modes
-
-| Threat/failure | Control or boundary | Failure behavior | Residual risk |
-|---|---|---|---|
-| Malformed/unbounded input | Typed validation, schema and finite budgets | Reject or stable bounded error | New formats require new validation. |
-| Dependency timeout/cancellation | Deadline and explicit cleanup path where wired | Failure is observable; no invented success | End-to-end deadlines are path-specific. |
-| Cross-owner access/concurrency | Authenticated scope and atomic/idempotent storage where applicable | Owner-scoped miss/denial or guarded update | Audit all new queries and side effects. |
-| Secret/PII leakage | Redaction before operational persistence/log rendering | Sanitized metadata, not raw exception text | Redaction is defense-in-depth, not certification. |
-| Resource exhaustion | Count/byte/time limits and rate limits | Fail closed or stop with evidence | Local measurements do not establish capacity. |
-
-## Observability and evidence path
-
-```text
-authenticated input → scoped decision/state → redacted runtime event → Run Ledger/log → metric/trace/UI → evaluation
-```
-
-Use correlation ID and run ID, stable reason codes, counters and spans. Never log raw credentials, provider exceptions, hidden reasoning, or tool payloads merely to make debugging easier.
-
-## Alternatives and trade-offs
-
-| Alternative | Benefit | Cost/risk | Decision |
-|---|---|---|---|
-| Implicit/unbounded behavior | Less setup | Authority and failures become unauditable | Rejected. |
-| Deterministic local contract tests | Fast and reproducible | Cannot establish provider or production behavior | Used for contract proof. |
-| Managed production service | Scale/operations features | Cost, external trust and deployment work | Deferred unless directly evidenced. |
-
-## Lab vs production
-
-| Dimension | Demonstrated | Unverified, partial, or deferred |
-|---|---|---|
-| Wiring | Real repository path invokes the listed symbol. | Every historical/alternate path and future change. |
-| Testing/observation | Focused automated test and linked local evidence. | External providers, sustained traffic, multi-host scale. |
-| Security | Scope, validation, bounded failures and redaction. | Independent audit, rotation program and threat-model signoff. |
-| Operations | Reproducible local target where relevant. | Public deployment, hosted SLOs and on-call operation. |
-
-Status is **implemented** within the stated boundary. Local Compose is not deployment; one verifier child is not a swarm; runtime feedback is not generic self-reflection.
+- [`backend/app/observability/metrics.py`](../../../backend/app/observability/metrics.py) defines the registry and `get_prometheus_text`.
+- [`CompositeEventSink.emit`](../../../backend/app/observability/runtime_events.py) sends typed events to adapters.
+- [`create_app`](../../../backend/app/main.py) exposes the metrics endpoint and application wiring.
+- [`test_exact_event_to_metric_span_and_correlation_mapping`](../../../backend/tests/unit/test_runtime_observability.py) checks event-to-signal mapping.
+- [`test_error_timeout_event_marks_metrics_and_spans`](../../../backend/tests/unit/test_runtime_observability.py) checks failure accounting.
+- Evidence: [implementation evidence](../../IMPLEMENTATION-EVIDENCE.md).
 
 ## Interview answer
 
-### 30-second answer
-
-> Metrics compress many events into numeric time-series such as run count, error count, and latency. In Archon the boundary is `get_prometheus_text`; `backend/tests/unit/test_runtime_observability.py` exercises its contract. The honest limit is: Process-local counters and latency samples are exposed in Prometheus text; aggregation, durable retention, alerting, and SLOs remain unverified.
-
-### Follow-up prompts
-
-- Why is this boundary safer than trusting caller/model output?
-- Which identifier or budget prevents authority from expanding?
-- What failure is recorded and where?
-- What would need direct evidence before claiming production readiness?
-
-## Self-check
-
-1. Define Metrics without naming an Archon class.
-2. What nearby concept must not be conflated with it?
-3. Trace configuration and one request through the diagram.
-4. Which symbol and test provide the strongest contract evidence?
-5. How are malformed input, ownership, secrets, and exhaustion handled?
-6. What is demonstrated locally and what remains unverified?
-
-<details>
-<summary>Answer guide</summary>
-
-1. Metrics compress many events into numeric time-series such as run count, error count, and latency.
-2. A local counter is not a production SLO or cross-replica aggregate.
-3. Settings construct the component; authenticated scoped input is validated; success or a stable failure emits safe evidence.
-4. `backend/app/observability/metrics.py:get_prometheus_text` and `backend/tests/unit/test_runtime_observability.py`.
-5. Typed bounds, owner scope, redaction, deadlines/rate limits, and fail-closed errors; new paths still need review.
-6. The source/test/local evidence establish the stated boundary, not public deployment, provider parity, scale, or an SLO.
-
-</details>
-
-## Related concepts and modules
-
-- **Prerequisites:** [Policy engine](policy-engine.md), [Run Ledger](run-ledger.md)
-- **Module:** [Module 13](../modules/13-auth-ui-observability/README.md)
-- **Evidence:** [Implementation evidence](../../IMPLEMENTATION-EVIDENCE.md)
+“Metrics provide low-cardinality aggregate health and behavior from runtime events. The current registry is process-local, so it proves instrumentation shape in tested/local paths—not fleet-wide aggregation, alert delivery, or an SLO.”

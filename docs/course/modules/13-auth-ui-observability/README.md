@@ -1,6 +1,6 @@
 # Module 13 — Authentication, ownership, SSE, UI, and observability
 
-> **Content status:** current
+> **Documentation status:** Draft
 > **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 120 minutes
 > **Canonical concepts:** [authentication](../../concepts/authentication.md), [authorization-ownership](../../concepts/authorization-ownership.md), [sse](../../concepts/sse.md), [structured-logging](../../concepts/structured-logging.md), [metrics](../../concepts/metrics.md), [tracing-opentelemetry](../../concepts/tracing-opentelemetry.md)
@@ -11,7 +11,7 @@ A reliable agent request must be attributable, scoped, inspectable, and stream p
 
 ## Beginner explanation
 
-A production-oriented agent is more than a model response: it must limit authority, preserve ownership, make failures explicit, and leave evidence that another person can inspect. This module introduces those ideas in plain language before tracing their concrete Archon implementation. The diagrams are maps of verified boundaries, not claims that every dependency is production deployed.
+One request crosses several different boundaries: credentials establish identity, owner/project scopes data, policy governs actions, SSE projects progress, and observability emits safe operational signals. None substitutes for another. SSE is transient; durable run and evaluation records have separate persistence contracts.
 
 ## Prerequisites and vocabulary
 
@@ -20,17 +20,18 @@ A production-oriented agent is more than a model response: it must limit authori
 - [Module 05: policy and approvals](../05-policy-and-approvals/README.md) — trust and exact authorization.
 - [Module 07: Run Ledger](../07-run-ledger/README.md) — durable event evidence and lineage.
 - [Module 10: resilience](../10-resilience/README.md) — timeout, cancellation and bounded failure.
+- [Module 12: governed MCP](../12-governed-mcp/README.md) — request-scoped external tool bindings.
 
 ### Vocabulary
 
 | Term | Beginner definition | Canonical source |
 |---|---|---|
 | authentication | Resolving credentials to a current identity. | [authentication](../../concepts/authentication.md) |
-| authorization | Deciding whether that identity may act on a resource. | [authentication](../../concepts/authentication.md) |
-| SSE | One-way named events over a streaming HTTP response. | [authentication](../../concepts/authentication.md) |
-| correlation ID | Request identifier shared by logs and response headers. | [authentication](../../concepts/authentication.md) |
-| span | Timed unit of work in a trace. | [authentication](../../concepts/authentication.md) |
-| metric | Numeric aggregate over events. | [authentication](../../concepts/authentication.md) |
+| authorization | Deciding whether that identity may access data or act. | [authorization and ownership](../../concepts/authorization-ownership.md) |
+| SSE | One-way named events over a streaming HTTP response. | [SSE](../../concepts/sse.md) |
+| structured log | Stable event name plus bounded redacted fields. | [structured logging](../../concepts/structured-logging.md) |
+| span | Timed unit of work in a trace. | [tracing](../../concepts/tracing-opentelemetry.md) |
+| metric | Low-cardinality numeric aggregate over events. | [metrics](../../concepts/metrics.md) |
 
 ## Learning outcomes
 
@@ -66,10 +67,10 @@ flowchart LR
 
 | Component | Responsibility | Must not be assumed |
 |---|---|---|
-| API/UI boundary | Validate identity, shape and request scope. | UI visibility is not authorization. |
-| Core service/runtime | Enforce typed bounds and coordinate dependencies. | A class existing means every route uses it. |
-| Persistence | Store owner-scoped state/evidence atomically where required. | Evidence means semantic truth or tamper-proof WORM audit. |
-| Observability | Emit redacted, correlatable signals. | Telemetry is durable delivery or chain-of-thought. |
+| Auth dependency | Resolve credential and reload the current durable user. | Authentication grants resource ownership. |
+| Stream route | Scope conversation/memory/MCP, adapt events and clean up disconnects. | SSE is durable replay. |
+| Composite event sink | Fan typed events to ledger/log/metric/span adapters. | Every signal has identical retention semantics. |
+| Frontend parser/UI | Incrementally render named bounded events. | Rendering grants authority or acknowledges delivery. |
 
 ## Startup sequence
 
@@ -88,7 +89,7 @@ sequenceDiagram
   Note over App: readiness fails if configured OTEL is inactive
 ```
 
-Startup validates deployment-owned settings, constructs dependencies, and fails closed when a required security or persistence dependency is unavailable. Optional capabilities remain visibly disabled rather than silently simulated.
+Startup configures redaction before rendering logs, initializes durable auth and scoped repositories, and constructs OTLP only when configured. Readiness reports configured telemetry that is inactive instead of silently claiming success.
 
 ## Per-request sequence
 
@@ -111,25 +112,27 @@ sequenceDiagram
     Stream->>Runtime: cancel task
     Stream->>Stream: cancel pending approvals
   else complete
-    Stream-->>UI: done then post-run eval event
+    Stream-->>UI: done then transient inline heuristic eval event
   end
 ```
 
-The alternate path is part of the design: denial, stale state, malformed input, timeout, cancellation, or dependency error produces a stable bounded result/evidence rather than invented success.
+The `eval` event emitted by `stream.py` is transient UI feedback computed inline. It is not a durable `EvaluationService` recorded-run evaluation, which validates a versioned dataset/run mapping and persists results separately.
 
 ## Class and dependency view
 
 ```mermaid
 classDiagram
-  class Route
-  class CoreService
-  class Repository
-  class PolicyBoundary
-  class EventSink
-  Route --> CoreService
-  CoreService --> Repository
-  CoreService --> PolicyBoundary
-  CoreService --> EventSink
+  class AuthRepository
+  class chat_stream_real
+  class AgentRuntime
+  class CompositeEventSink
+  class QueueEventSink
+  class SSEParser
+  chat_stream_real --> AuthRepository
+  chat_stream_real --> AgentRuntime
+  AgentRuntime --> CompositeEventSink
+  CompositeEventSink --> QueueEventSink
+  QueueEventSink --> SSEParser
 ```
 
 The implementation favors dependency injection and composition. The arrows show use, not inheritance.
@@ -151,7 +154,7 @@ stateDiagram-v2
   Failed --> [*]
 ```
 
-Only source-defined statuses/events are evidence. A transient UI state must not overwrite a durable terminal state.
+This is a teaching view composed from auth, stream, approval and runtime behavior—not one persisted state machine. Durable run status comes from the Run Ledger; UI state cannot overwrite it.
 
 ## Source walkthrough
 
@@ -215,7 +218,7 @@ Create a two-column note: **proved invariant** and **not proved**. Include at le
 | SSE disconnect/slow client | Per-request queue, heartbeat, task cancellation, approval cleanup | Cancelled run path | No durable delivery acknowledgement. |
 | Telemetry leakage/cardinality | Recursive redaction, safe hashes, bounded labels | Sanitized metadata | Redaction is not a complete privacy audit. |
 
-Malformed input, dependency failure, timeout/cancellation, concurrency/idempotency, owner scope, secret/PII handling, and resource limits must be reconsidered whenever this path changes.
+Also review credential precedence, CSRF mode, cross-stream queue isolation, disconnect races, telemetry cardinality and redaction whenever this path changes.
 
 ## Observability and evidence path
 
@@ -250,10 +253,10 @@ Auth and ownership are enforced on tested product paths. OTEL SDK exported agent
 
 ### Deeper follow-ups
 
-- **Why this design?** It limits authority, makes failure explicit, and produces inspectable evidence.
-- **What fails?** Invalid input, unavailable dependencies, timeouts/cancellation, stale bindings, denied policy, and persistence failure each need distinct handling.
-- **How do you know?** Point to one exact symbol, one exact test, and one revision-scoped observation.
-- **What would production require?** External acceptance, sustained/multi-instance tests, audited controls, hosted operations and explicit SLO/recovery objectives.
+- **Why separate identity and ownership?** A valid user may still be foreign to a resource.
+- **Why is SSE not evidence storage?** Delivery is transient and unacknowledged; the ledger persists ordered safe events.
+- **What is the inline eval?** A transient heuristic event, not `EvaluationService` recorded-run evaluation.
+- **What remains?** External IdP/rotation, hosted telemetry, aggregation/alerts, retention policy and multi-replica tests.
 
 ## Self-check
 

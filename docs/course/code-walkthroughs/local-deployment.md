@@ -76,7 +76,7 @@ Run it only with Docker/Compose capacity and review cleanup first. `KEEP=1` reta
 
 ## Evidence interpretation
 
-The recorded development-Mac run measured backup 0.343 s, restore-to-ready RTO 21.586 s, and zero changed records at the snapshot boundary. These are measurements, not objectives or guarantees. CI run `33042890654` was green at `6e3e13f`; CI proves its listed gates at that revision, not deployment.
+The recorded development-machine drill contains measured backup, restore-to-ready, and snapshot-boundary record-difference values. These are observations, not objectives or guarantees. Exact values and CI run/revision evidence are maintained in [Implementation evidence](../../IMPLEMENTATION-EVIDENCE.md), which also states what each artifact cannot prove.
 
 Missing production evidence includes scheduled/off-site encrypted backups, retention, PITR/WAL, key rotation, repeated load-sized recovery, public ingress, multi-host failover, SLO/on-call operations, and final external-provider acceptance.
 

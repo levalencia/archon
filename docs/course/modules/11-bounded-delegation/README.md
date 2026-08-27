@@ -1,6 +1,6 @@
 # Module 11 — Bounded verifier delegation
 
-> **Content status:** current
+> **Documentation status:** Draft
 > **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 90 minutes
 > **Canonical concepts:** [bounded-delegation](../../concepts/bounded-delegation.md), [verifier-child](../../concepts/verifier-child.md), [parent-child-lineage](../../concepts/parent-child-lineage.md)
@@ -11,23 +11,22 @@ A second model can add cost and authority without adding trust. This module show
 
 ## Beginner explanation
 
-A production-oriented agent is more than a model response: it must limit authority, preserve ownership, make failures explicit, and leave evidence that another person can inspect. This module introduces those ideas in plain language before tracing their concrete Archon implementation. The diagrams are maps of verified boundaries, not claims that every dependency is production deployed.
+Archon delegates only evidence review, not open-ended work. The child sees a sealed claim/evidence packet and has no tools. Code deterministically validates that boundary and output schema; the verdict inside it is model-generated and can still be wrong.
 
 ## Prerequisites and vocabulary
 
 ### Learn first
 
-- [Module 05: policy and approvals](../05-policy-and-approvals/README.md) — trust and exact authorization.
-- [Module 07: Run Ledger](../07-run-ledger/README.md) — durable event evidence and lineage.
-- [Module 10: resilience](../10-resilience/README.md) — timeout, cancellation and bounded failure.
+- [Module 08: grounded RAG](../08-rag-grounding/README.md) — claims, evidence and deterministic grounding.
+- [Module 09: evaluation](../09-evaluation-harness/README.md) — versioned measurement and honest quality claims.
 
 ### Vocabulary
 
 | Term | Beginner definition | Canonical source |
 |---|---|---|
 | delegation | A parent assigns a finite task to a child. | [bounded-delegation](../../concepts/bounded-delegation.md) |
-| verdict | A typed supported, unsupported, or escalate result for one claim. | [bounded-delegation](../../concepts/bounded-delegation.md) |
-| lineage | A durable parent_run_id edge between run records. | [bounded-delegation](../../concepts/bounded-delegation.md) |
+| verdict | A typed supported, rejected, or escalate result for one claim. | [verifier-child](../../concepts/verifier-child.md) |
+| lineage | A durable `parent_run_id` edge between run records. | [parent-child-lineage](../../concepts/parent-child-lineage.md) |
 | budget | An enforced maximum for input/output tokens, time, and retries. | [bounded-delegation](../../concepts/bounded-delegation.md) |
 
 ## Learning outcomes
@@ -61,10 +60,10 @@ flowchart LR
 
 | Component | Responsibility | Must not be assumed |
 |---|---|---|
-| API/UI boundary | Validate identity, shape and request scope. | UI visibility is not authorization. |
-| Core service/runtime | Enforce typed bounds and coordinate dependencies. | A class existing means every route uses it. |
-| Persistence | Store owner-scoped state/evidence atomically where required. | Evidence means semantic truth or tamper-proof WORM audit. |
-| Observability | Emit redacted, correlatable signals. | Telemetry is durable delivery or chain-of-thought. |
+| Grounded workflow | Select claims/evidence and consume verdicts conservatively. | A child verdict replaces deterministic grounding. |
+| Verifier specialist | Call one model with no tools and enforce budgets/schema. | The model judgment is deterministic. |
+| Run repository | Create scoped child lineage and ordered lifecycle events. | Lineage proves benefit or causality. |
+| Measurement fixture | Compare a versioned baseline and child result. | Fixture performance generalizes to production. |
 
 ## Startup sequence
 
@@ -81,7 +80,7 @@ sequenceDiagram
   Note over App: no dynamic specialist registry
 ```
 
-Startup validates deployment-owned settings, constructs dependencies, and fails closed when a required security or persistence dependency is unavailable. Optional capabilities remain visibly disabled rather than silently simulated.
+Verifier startup validates finite settings, reuses the app-scoped circuit-broken provider and run repository, and injects either one `EvidenceVerifierSpecialist` or `None`. Disabled mode remains explicit.
 
 ## Per-request sequence
 
@@ -110,15 +109,15 @@ The alternate path is part of the design: denial, stale state, malformed input, 
 
 ```mermaid
 classDiagram
-  class Route
-  class CoreService
-  class Repository
-  class PolicyBoundary
-  class EventSink
-  Route --> CoreService
-  CoreService --> Repository
-  CoreService --> PolicyBoundary
-  CoreService --> EventSink
+  class GroundedDocumentWorkflow
+  class EvidenceVerifierSpecialist
+  class ModelProvider
+  class RunRepository
+  class ChildVerificationRequest
+  GroundedDocumentWorkflow --> EvidenceVerifierSpecialist
+  EvidenceVerifierSpecialist --> ChildVerificationRequest
+  EvidenceVerifierSpecialist --> ModelProvider
+  EvidenceVerifierSpecialist --> RunRepository
 ```
 
 The implementation favors dependency injection and composition. The arrows show use, not inheritance.
@@ -197,7 +196,7 @@ Create a two-column note: **proved invariant** and **not proved**. Include at le
 | Timeout/provider failure | Finite timeout and at most one configured retry | Terminal child evidence and conservative parent handling | External provider behavior was not finally verified. |
 | Cross-owner lineage | Parent/child carry user and project | Scoped ledger reads/writes | Database privileges still matter. |
 
-Malformed input, dependency failure, timeout/cancellation, concurrency/idempotency, owner scope, secret/PII handling, and resource limits must be reconsidered whenever this path changes.
+Also review concurrent child creation, terminal-event races, claim-text redaction, and false-rejection cost whenever this path changes.
 
 ## Observability and evidence path
 
@@ -232,10 +231,10 @@ Contract, integration, benchmark fixture, and local UI evidence establish one ch
 
 ### Deeper follow-ups
 
-- **Why this design?** It limits authority, makes failure explicit, and produces inspectable evidence.
-- **What fails?** Invalid input, unavailable dependencies, timeouts/cancellation, stale bindings, denied policy, and persistence failure each need distinct handling.
-- **How do you know?** Point to one exact symbol, one exact test, and one revision-scoped observation.
-- **What would production require?** External acceptance, sustained/multi-instance tests, audited controls, hosted operations and explicit SLO/recovery objectives.
+- **Why no tools?** Evidence review needs no new facts or side effects; tools would expand authority.
+- **What is deterministic?** Request/result validation, budget enforcement and fail-closed handling—not model judgment.
+- **How is benefit shown?** A versioned fixture compares outcomes and lineage without claiming universal quality.
+- **What remains?** External-provider acceptance, representative quality sets, cost/latency objectives and multi-instance tests.
 
 ## Self-check
 

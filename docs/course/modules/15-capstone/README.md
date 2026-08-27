@@ -1,6 +1,6 @@
 # Module 15 — Capstone: evidence-first demo and interview defense
 
-> **Content status:** current
+> **Documentation status:** Draft
 > **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 180 minutes
 > **Canonical concepts:** [bounded-delegation](../../concepts/bounded-delegation.md), [mcp](../../concepts/mcp.md), [authentication](../../concepts/authentication.md), [tracing-opentelemetry](../../concepts/tracing-opentelemetry.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md)
@@ -11,24 +11,25 @@ The capstone is not another feature. It is a disciplined claim-to-evidence narra
 
 ## Beginner explanation
 
-A production-oriented agent is more than a model response: it must limit authority, preserve ownership, make failures explicit, and leave evidence that another person can inspect. This module introduces those ideas in plain language before tracing their concrete Archon implementation. The diagrams are maps of verified boundaries, not claims that every dependency is production deployed.
+The capstone is claim control: say exactly what exists, how it is wired, what tests establish, what was observed, and what remains unverified. A persuasive demo does not merge distinct proof paths or turn local evidence into production claims.
 
 ## Prerequisites and vocabulary
 
 ### Learn first
 
-- [Module 05: policy and approvals](../05-policy-and-approvals/README.md) — trust and exact authorization.
-- [Module 07: Run Ledger](../07-run-ledger/README.md) — durable event evidence and lineage.
-- [Module 10: resilience](../10-resilience/README.md) — timeout, cancellation and bounded failure.
+- [Module 11: bounded verifier](../11-bounded-delegation/README.md) — model review inside a deterministic boundary.
+- [Module 12: governed MCP](../12-governed-mcp/README.md) — external tool governance.
+- [Module 13: auth and observability](../13-auth-ui-observability/README.md) — request identity and signals.
+- [Module 14: local operations](../14-local-operations/README.md) — startup, CI and recovery evidence.
 
 ### Vocabulary
 
 | Term | Beginner definition | Canonical source |
 |---|---|---|
-| claim ladder | Exists, wired, tested, observed, UI, deployed assessed independently. | [bounded-delegation](../../concepts/bounded-delegation.md) |
-| demo invariant | A behavior stated so an observer can tell pass from fail. | [bounded-delegation](../../concepts/bounded-delegation.md) |
-| evidence packet | Revision, command, environment, artifacts, limits, and source/test links. | [bounded-delegation](../../concepts/bounded-delegation.md) |
-| deferred | Intentionally not claimed or delivered in current scope. | [bounded-delegation](../../concepts/bounded-delegation.md) |
+| claim ladder | Exists, wired, tested, observed, UI and deployed assessed independently. | [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md) |
+| replay | Read-only reconstruction of persisted ordered events; no model/tool call. | [replay, fork and compare](../../concepts/replay-fork-compare.md) |
+| grounding | Rule-based claim/evidence support check. | [groundedness](../../concepts/groundedness.md) |
+| recorded evaluation | Dataset-versioned scoring of already persisted runs. | [evaluation harness](../../concepts/evaluation-harness.md) |
 
 ## Learning outcomes
 
@@ -58,7 +59,10 @@ flowchart LR
   A --> P[Policy/approval]
   P --> X[Native or governed MCP tool]
   X --> R[(Run Ledger)]
-  R --> V[grounding/verifier/evaluation]
+  R --> RP[read-only replay]
+  G[retrieved evidence] --> GR[deterministic grounding]
+  GR --> V[optional bounded verifier]
+  R --> EV[durable recorded-run evaluation]
   R --> OBS[logs/metrics/traces/UI]
   R --> DR[backup/restore]
 ```
@@ -67,10 +71,10 @@ flowchart LR
 
 | Component | Responsibility | Must not be assumed |
 |---|---|---|
-| API/UI boundary | Validate identity, shape and request scope. | UI visibility is not authorization. |
-| Core service/runtime | Enforce typed bounds and coordinate dependencies. | A class existing means every route uses it. |
-| Persistence | Store owner-scoped state/evidence atomically where required. | Evidence means semantic truth or tamper-proof WORM audit. |
-| Observability | Emit redacted, correlatable signals. | Telemetry is durable delivery or chain-of-thought. |
+| Claim ledger | Pair each statement with source, test, observation and limitation. | One artifact proves every evidence dimension. |
+| Demo controller | Select a synthetic scenario and fallback evidence before presenting. | A live provider is required for truthful proof. |
+| Runtime proof | Show policy/approval/tool and ordered run events. | Replay calls the model or repeats side effects. |
+| Quality proof | Show grounding, optional verifier and recorded evaluation separately. | These are one linear ledger-triggered operation. |
 
 ## Startup sequence
 
@@ -88,7 +92,7 @@ sequenceDiagram
   Note over Presenter: final external providers are not verified
 ```
 
-Startup validates deployment-owned settings, constructs dependencies, and fails closed when a required security or persistence dependency is unavailable. Optional capabilities remain visibly disabled rather than silently simulated.
+Demo preparation pins the revision and claim set before starting the local stack. A failed readiness or optional provider check triggers the predeclared recorded-evidence fallback, never a simulated live success.
 
 ## Per-request sequence
 
@@ -100,7 +104,10 @@ sequenceDiagram
   participant Policy
   participant Tool
   participant Ledger
-  participant Eval
+  participant Replay
+  participant Grounding
+  participant Verifier
+  participant EvalService
   User->>UI: authenticated bounded task
   UI->>Runtime: SSE request + owner/project
   Runtime->>Policy: typed tool/MCP proposal
@@ -112,28 +119,21 @@ sequenceDiagram
   end
   Policy->>Tool: one bounded execution if authorized
   Tool->>Ledger: result metadata/events
-  Ledger->>Eval: replay/grounding/verifier evaluation
-  Eval-->>UI: evidence, metrics, limits
+  User->>Replay: inspect persisted events (read-only)
+  Tool-->>Grounding: retrieved evidence for claims
+  Grounding->>Verifier: optional sealed evidence review
+  User->>EvalService: map versioned cases to terminal run IDs
+  EvalService-->>UI: durable evaluation record
 ```
 
-The alternate path is part of the design: denial, stale state, malformed input, timeout, cancellation, or dependency error produces a stable bounded result/evidence rather than invented success.
+Each arrow is optional and separately evidenced. A denied tool never reaches execution; replay is read-only; grounding belongs to the grounded workflow; verifier review is model-generated; recorded evaluation is a later durable operation.
 
-## Class and dependency view
+## Four proof paths—do not conflate them
 
-```mermaid
-classDiagram
-  class Route
-  class CoreService
-  class Repository
-  class PolicyBoundary
-  class EventSink
-  Route --> CoreService
-  CoreService --> Repository
-  CoreService --> PolicyBoundary
-  CoreService --> EventSink
-```
-
-The implementation favors dependency injection and composition. The arrows show use, not inheritance.
+1. **Ledger → replay:** reconstructs stored ordered events and calls neither model nor tools.
+2. **Retrieval → grounding:** deterministic rules compare claims with retrieved evidence during the grounded workflow.
+3. **Grounding → verifier:** an optional model-generated evidence review runs inside a deterministic schema-validated no-tools boundary.
+4. **Ledger → `EvaluationService`:** a separate post-run operation maps versioned dataset cases to successful terminal runs and persists scores.
 
 ## State and lifecycle
 
@@ -148,7 +148,7 @@ stateDiagram-v2
   Complete --> Reviewed: questions + artifact checklist
 ```
 
-Only source-defined statuses/events are evidence. A transient UI state must not overwrite a durable terminal state.
+These are presentation checkpoints, not product run statuses. The presenter must label live output, deterministic tests and recorded artifacts differently throughout the demo.
 
 ## Source walkthrough
 
@@ -156,7 +156,7 @@ Only source-defined statuses/events are evidence. A transient UI state must not 
 |---:|---|---|---|
 | 1 | [`docs/IMPLEMENTATION-EVIDENCE.md:capability matrix`](../../../../docs/IMPLEMENTATION-EVIDENCE.md) | Canonical mutable claim/evidence boundaries. | `implemented` within stated boundary |
 | 2 | [`backend/app/runtime/engine.py:AgentRuntime.run`](../../../../backend/app/runtime/engine.py) | Bounded runtime spine. | `implemented` within stated boundary |
-| 3 | [`backend/app/security/policy.py:PolicyEngine.evaluate`](../../../../backend/app/security/policy.py) | Deterministic tool decision boundary. | `implemented` within stated boundary |
+| 3 | [`backend/app/security/policy.py:RulePolicyEngine.evaluate`](../../../../backend/app/security/policy.py) | Deterministic tool decision boundary. | `implemented` within stated boundary |
 | 4 | [`backend/app/services/run_ledger.py:RunRepository`](../../../../backend/app/services/run_ledger.py) | Durable event/evidence spine. | `implemented` within stated boundary |
 | 5 | [`backend/app/delegation/service.py:EvidenceVerifierSpecialist`](../../../../backend/app/delegation/service.py) | One evidence-only child. | `implemented` within stated boundary |
 | 6 | [`backend/app/mcp/runtime.py:MCPRuntimeToolProvider`](../../../../backend/app/mcp/runtime.py) | Governed external tool binding. | `implemented` within stated boundary |
@@ -212,7 +212,7 @@ Create a two-column note: **proved invariant** and **not proved**. Include at le
 | Destructive tool/restore | Use fixtures, exact approval, isolated clean target | Policy denial/guard refusal | Operator error remains possible. |
 | Stale evidence | Record SHA, run ID, command, timestamp/environment | Do not apply evidence to a different revision | Docs and runtime may drift. |
 
-Malformed input, dependency failure, timeout/cancellation, concurrency/idempotency, owner scope, secret/PII handling, and resource limits must be reconsidered whenever this path changes.
+Preflight stale revisions, missing artifacts, provider outages, sensitive display data, destructive fixtures and time-boxed fallback transitions before every demonstration.
 
 ## Observability and evidence path
 
@@ -237,7 +237,7 @@ Never expose credentials, raw provider exceptions, tool payloads, personal data,
 | Providers | Deterministic/mock/local dependencies as explicitly linked. | Final external providers were not verified. |
 | Security/operations | Tested ownership, validation, policy and redaction controls. | Independent audit, rotation, production alerting and incident drills. |
 
-The defensible product is an evidence-rich local Agent Reliability Workbench. Remote CI was green at run 33042890654 on 6e3e13f; local OTEL and DR were observed; MCP stdio was verified. Public deployment is deferred and all Deployed values remain No. Final external-provider behavior, provider quality, production traffic, indexed vector serving and SLOs are unverified.
+The defensible product is an evidence-rich local Agent Reliability Workbench. Exact CI revision/run evidence and local OTEL/DR observations are maintained in [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md), not duplicated here. Public deployment remains deferred. Final external-provider behavior, production traffic, indexed vector serving and SLOs are unverified.
 
 ## Interview answer
 
@@ -247,10 +247,10 @@ The defensible product is an evidence-rich local Agent Reliability Workbench. Re
 
 ### Deeper follow-ups
 
-- **Why this design?** It limits authority, makes failure explicit, and produces inspectable evidence.
-- **What fails?** Invalid input, unavailable dependencies, timeouts/cancellation, stale bindings, denied policy, and persistence failure each need distinct handling.
-- **How do you know?** Point to one exact symbol, one exact test, and one revision-scoped observation.
-- **What would production require?** External acceptance, sustained/multi-instance tests, audited controls, hosted operations and explicit SLO/recovery objectives.
+- **How do you avoid overclaiming?** Separate existence, wiring, tests, observations, UI and deployment for every claim.
+- **Why four proof paths?** Replay, grounding, model review and recorded evaluation answer different questions and run at different times.
+- **What if live output fails?** Switch to clearly labeled deterministic tests or recorded artifacts; never fabricate provider output.
+- **What remains?** External acceptance, threat/audit work, hosted operations, representative scale and adopted SLO/recovery objectives.
 
 ## Self-check
 

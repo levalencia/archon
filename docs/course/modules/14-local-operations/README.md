@@ -1,6 +1,6 @@
 # Module 14 — Local operations: Compose, health, migrations, CI, and recovery
 
-> **Content status:** current
+> **Documentation status:** Draft
 > **Reviewed revision:** `3577b00` documentation review
 > **Estimated time:** 150 minutes
 > **Canonical concepts:** [liveness-readiness](../../concepts/liveness-readiness.md), [docker-compose](../../concepts/docker-compose.md), [migrations](../../concepts/migrations.md), [ci](../../concepts/ci.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md)
@@ -11,15 +11,15 @@ Code is not operable until it starts reproducibly, reports dependency health, mi
 
 ## Beginner explanation
 
-A production-oriented agent is more than a model response: it must limit authority, preserve ownership, make failures explicit, and leave evidence that another person can inspect. This module introduces those ideas in plain language before tracing their concrete Archon implementation. The diagrams are maps of verified boundaries, not claims that every dependency is production deployed.
+Operations asks whether a specific build can start, become ready, preserve schema, pass clean-worker gates, and recover durable state. Compose files and scripts are recipes; only revision- and environment-scoped executions are observations.
 
 ## Prerequisites and vocabulary
 
 ### Learn first
 
-- [Module 05: policy and approvals](../05-policy-and-approvals/README.md) — trust and exact authorization.
-- [Module 07: Run Ledger](../07-run-ledger/README.md) — durable event evidence and lineage.
+- [Module 09: evaluation](../09-evaluation-harness/README.md) — evidence and regression semantics.
 - [Module 10: resilience](../10-resilience/README.md) — timeout, cancellation and bounded failure.
+- [Module 13: auth and observability](../13-auth-ui-observability/README.md) — readiness and inspectability dependencies.
 
 ### Vocabulary
 
@@ -27,11 +27,10 @@ A production-oriented agent is more than a model response: it must limit authori
 |---|---|---|
 | liveness | Whether the process should be restarted. | [liveness-readiness](../../concepts/liveness-readiness.md) |
 | readiness | Whether required dependencies permit traffic. | [liveness-readiness](../../concepts/liveness-readiness.md) |
-| migration | Versioned durable schema transition. | [liveness-readiness](../../concepts/liveness-readiness.md) |
-| backup | Protected recoverable copy of authoritative data. | [liveness-readiness](../../concepts/liveness-readiness.md) |
-| RTO | Time from disaster to ready service. | [liveness-readiness](../../concepts/liveness-readiness.md) |
-| RPO | Amount of data lost relative to recovery point. | [liveness-readiness](../../concepts/liveness-readiness.md) |
-| CI | Automated clean-worker quality gates. | [liveness-readiness](../../concepts/liveness-readiness.md) |
+| migration | Versioned durable schema transition. | [migrations](../../concepts/migrations.md) |
+| backup | Protected recoverable copy of authoritative data. | [backup and restore](../../concepts/backup-restore.md) |
+| RTO/RPO | Objectives, distinct from observed recovery values. | [RTO and RPO](../../concepts/rto-rpo.md) |
+| CI | Automated clean-worker quality gates. | [CI](../../concepts/ci.md) |
 
 ## Learning outcomes
 
@@ -41,7 +40,7 @@ After this module, the learner can:
 2. distinguish health, readiness, and end-to-end smoke;
 3. trace Alembic migration before app readiness;
 4. execute focused operations tests and read the DR report;
-5. quote CI and RTO/RPO with revision/environment limits;
+5. report CI and measured recovery observations with revision/environment limits, without calling them RTO/RPO objectives;
 
 ## Problem and mental model
 
@@ -68,10 +67,10 @@ flowchart LR
 
 | Component | Responsibility | Must not be assumed |
 |---|---|---|
-| API/UI boundary | Validate identity, shape and request scope. | UI visibility is not authorization. |
-| Core service/runtime | Enforce typed bounds and coordinate dependencies. | A class existing means every route uses it. |
-| Persistence | Store owner-scoped state/evidence atomically where required. | Evidence means semantic truth or tamper-proof WORM audit. |
-| Observability | Emit redacted, correlatable signals. | Telemetry is durable delivery or chain-of-thought. |
+| Compose target | Order internal services, migration and loopback ingress. | A manifest proves a deployment ran. |
+| Health endpoints | Separate shallow liveness from dependency readiness. | Readiness is an end-to-end SLO. |
+| CI workflow | Run declared checks on a clean revision. | Green CI proves deployment or later HEAD. |
+| DR scripts | Dump, checksum, clean-restore and compare PostgreSQL state. | One drill defines business objectives. |
 
 ## Startup sequence
 
@@ -94,7 +93,7 @@ sequenceDiagram
   Gateway->>Backend: /readyz before routing
 ```
 
-Startup validates deployment-owned settings, constructs dependencies, and fails closed when a required security or persistence dependency is unavailable. Optional capabilities remain visibly disabled rather than silently simulated.
+Compose waits for PostgreSQL/Redis/collector health, runs Alembic to head, then starts the backend and gateway. Migration or required dependency failure prevents readiness; it is not converted to a simulated healthy mode.
 
 ## Per-request sequence
 
@@ -120,24 +119,11 @@ sequenceDiagram
   end
 ```
 
-The alternate path is part of the design: denial, stale state, malformed input, timeout, cancellation, or dependency error produces a stable bounded result/evidence rather than invented success.
+These probes are ordinary operational HTTP endpoints, not authenticated Run Ledger jobs. Dependency failure produces a safe degraded response; CI and recovery remain separate workflows and evidence artifacts.
 
-## Class and dependency view
+## Operational boundaries
 
-```mermaid
-classDiagram
-  class Route
-  class CoreService
-  class Repository
-  class PolicyBoundary
-  class EventSink
-  Route --> CoreService
-  CoreService --> Repository
-  CoreService --> PolicyBoundary
-  CoreService --> EventSink
-```
-
-The implementation favors dependency injection and composition. The arrows show use, not inheritance.
+There is no useful application class diagram for CI, Compose, or disaster recovery. These are workflow and infrastructure boundaries: CI executes repository gates; Compose orders services; Alembic owns schema transition; backup/restore scripts operate directly on PostgreSQL and produce files/reports outside the authenticated agent request API.
 
 ## State and lifecycle
 
@@ -154,7 +140,7 @@ stateDiagram-v2
   Restored --> Ready
 ```
 
-Only source-defined statuses/events are evidence. A transient UI state must not overwrite a durable terminal state.
+This is an operational dependency model, not an application entity state machine. Readiness responses, migration exits, checksums and restore reports provide different evidence and must retain their own scope.
 
 ## Source walkthrough
 
@@ -219,7 +205,7 @@ Create a two-column note: **proved invariant** and **not proved**. Include at le
 | Schema drift | Alembic revision + migration tests | Startup/smoke fails | Zero-downtime downgrade compatibility unverified. |
 | False deployment claim | Loopback bind and evidence dimensions | Deployed remains No | Historical cloud manifests can mislead readers. |
 
-Malformed input, dependency failure, timeout/cancellation, concurrency/idempotency, owner scope, secret/PII handling, and resource limits must be reconsidered whenever this path changes.
+Also review interrupted dumps, disk exhaustion, key continuity, partial migrations, stale images, destructive overrides and restore verification whenever this path changes.
 
 ## Observability and evidence path
 
@@ -244,20 +230,20 @@ Never expose credentials, raw provider exceptions, tool payloads, personal data,
 | Providers | Deterministic/mock/local dependencies as explicitly linked. | Final external providers were not verified. |
 | Security/operations | Tested ownership, validation, policy and redaction controls. | Independent audit, rotation, production alerting and incident drills. |
 
-The local stack was observed with PostgreSQL, Redis, OTEL, frontend/backend and loopback gateway. The DR report records backup 0.343 s, restore-to-ready 21.586 s and zero changed records at its snapshot boundary on one development Mac with cached images. CI was green in run 33042890654 at 6e3e13f. Public deployment, scheduled/off-site backups, PITR, multi-region failover and production objectives remain deferred.
+The local stack and DR drill have revision-scoped observations. Their recovery values are measurements, not objectives. Exact CI run/revision and DR environment values live only in [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md). Public deployment, scheduled/off-site backups, PITR, multi-region failover and production objectives remain deferred.
 
 ## Interview answer
 
 ### 30-second answer
 
-> Archon has a reproducible local Compose target with digest-pinned dependencies, loopback-only ingress, migrations, dependency-aware readiness, and a real OTEL collector. Recovery uses a mode-0600 PostgreSQL custom dump, checksum/metadata, clean-target guard, full restore and exact API/SQL evidence checks. One drill measured 21.586-second RTO and zero record-level RPO at snapshot, but those are observations, not SLOs. CI run 33042890654 was green at 6e3e13f; no public deployment is claimed.
+> Archon has a reproducible local Compose target with loopback-only ingress, migrations and dependency-aware readiness. Recovery uses a private PostgreSQL custom dump, checksum/metadata, clean-target guard and exact checks. The canonical evidence page records one drill's recovery observations and one revision's CI result; neither is an objective, SLO, or public deployment claim.
 
 ### Deeper follow-ups
 
-- **Why this design?** It limits authority, makes failure explicit, and produces inspectable evidence.
-- **What fails?** Invalid input, unavailable dependencies, timeouts/cancellation, stale bindings, denied policy, and persistence failure each need distinct handling.
-- **How do you know?** Point to one exact symbol, one exact test, and one revision-scoped observation.
-- **What would production require?** External acceptance, sustained/multi-instance tests, audited controls, hosted operations and explicit SLO/recovery objectives.
+- **Why separate liveness/readiness?** Dependency outages should remove traffic without forcing restart loops.
+- **Why restore to a clean target?** It avoids concealing missing data behind pre-existing rows.
+- **Observation versus objective?** A timed drill reports what happened; an objective is an agreed target tested repeatedly.
+- **What remains?** Scheduled off-site encrypted backups, PITR, representative drills, alerting/on-call and public deployment.
 
 ## Self-check
 
@@ -274,7 +260,7 @@ The local stack was observed with PostgreSQL, Redis, OTEL, frontend/backend and 
 1. Liveness should avoid restart loops caused by downstream failures; readiness handles traffic eligibility.
 2. It stores live rate-limit state, while PostgreSQL is authoritative durable evidence.
 3. Secure env mode, no overwrite, custom dump, atomic move, 0600 output, checksum and metadata.
-4. 21.586 s is one local measured result; an objective is an agreed target backed by repeated production-like drills.
+4. The canonical report's elapsed time is one local measured result; an objective is an agreed target backed by repeated production-like drills.
 5. Specified gates passed on a clean GitHub worker at exact run/revision, not deployment or later HEAD.
 6. Loopback single-host operation lacks public ingress, scaling, SLO/on-call, managed recovery and external-provider evidence.
 
