@@ -67,6 +67,42 @@ async def test_active_writes_previous_reads_and_rotation_resumes_in_batches(tmp_
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_interrupted_batch_rolls_back_and_retry_resumes(tmp_path, monkeypatch) -> None:
+    store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'rollback.db'}")
+    await store.initialize()
+    redactor = PersistenceRedactor()
+    legacy = ScopedEncryptedMemoryRepository(store.session_factory, KEY_V1, redactor=redactor)
+    for content in ("one", "two"):
+        await legacy.add("alice", "project", content, provenance={})
+    rotating = ScopedEncryptedMemoryRepository(
+        store.session_factory,
+        MemoryKeyring(2, {1: RAW_V1, 2: RAW_V2}),
+        redactor=redactor,
+    )
+    original_encrypt = rotating._encrypt
+    calls = 0
+
+    def interrupted_encrypt(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("synthetic interruption")
+        return original_encrypt(**kwargs)
+
+    monkeypatch.setattr(rotating, "_encrypt", interrupted_encrypt)
+    with pytest.raises(RuntimeError, match="synthetic interruption"):
+        await rotating.rotate_batch("alice", "project", batch_size=2)
+    assert await rotating.key_version_counts("alice", "project") == {1: 2}
+
+    monkeypatch.setattr(rotating, "_encrypt", original_encrypt)
+    resumed = await rotating.rotate_batch("alice", "project", batch_size=2)
+    assert resumed.complete and resumed.version_counts == {2: 2}
+    assert [fact.content for fact in await rotating.list("alice", "project")] == ["one", "two"]
+    await store.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_retirement_and_missing_previous_key_fail_closed(tmp_path) -> None:
     store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'missing.db'}")
     await store.initialize()

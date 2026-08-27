@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 
 from app.memory.checkpoints import CheckpointManager
 from app.memory.scoped import MemoryFact, ScopedEncryptedMemoryRepository
@@ -22,7 +22,7 @@ _checkpoint_mgr = CheckpointManager()
 
 
 class RotationRequest(BaseModel):
-    batch_size: int = Field(default=100, ge=1, le=1000)
+    batch_size: StrictInt = Field(default=100, ge=1, le=1000)
 
 
 def _rotation_service(request: Request) -> MemoryKeyRotationService:
