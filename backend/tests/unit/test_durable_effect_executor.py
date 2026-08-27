@@ -195,7 +195,13 @@ async def test_unsupported_output_is_sanitized_and_indeterminate(tmp_path) -> No
         return {"unsafe": object()}
 
     registry = SecureToolRegistry()
-    registry.register("unsafe", unsafe, input_schema=schema(), effectful=True)
+    registry.register(
+        "unsafe",
+        unsafe,
+        input_schema=schema(),
+        effectful=True,
+        risk_classes=frozenset({RiskClass.WRITE}),
+    )
     wrapped, repository, engine = await executor(tmp_path, registry)
 
     with pytest.raises(IndeterminateToolEffectError, match="^indeterminate_tool_effect$"):
