@@ -499,14 +499,18 @@ async def test_external_cancellation_is_not_converted_by_timeout_scope(tmp_path:
 
     repo.mark_indeterminate = delayed_mark  # type: ignore[method-assign]
 
+    timeout_scope: dict[str, asyncio.Timeout] = {}
+
     async def bounded_call() -> None:
-        async with asyncio.timeout(0.02):
+        async with asyncio.timeout(None) as timeout:
+            timeout_scope["value"] = timeout
             await wrapper(WaitingProvider(), repo).complete([Message(Role.USER, "x")])
 
     task = asyncio.create_task(bounded_call())
     await provider_started.wait()
     task.cancel("external-first")
     await cleanup_started.wait()
+    timeout_scope["value"].reschedule(asyncio.get_running_loop().time() + 0.02)
     await asyncio.sleep(0.04)
     finish_cleanup.set()
 
