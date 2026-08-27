@@ -24,7 +24,9 @@ logger = structlog.get_logger()
 
 _MODEL_IDENTITY_RE = re.compile(r"[A-Za-z0-9._:/-]{1,128}\Z")
 _DATA_IMAGE_RE = re.compile(r"\Adata:image/(?:png|jpeg|jpg|webp|gif);base64,(.*)\Z", re.DOTALL)
-OllamaAdapterErrorCode = Literal["invalid_response", "invalid_tool_arguments", "invalid_image"]
+OllamaAdapterErrorCode = Literal[
+    "invalid_response", "invalid_tool_arguments", "invalid_image", "invalid_tool_definition"
+]
 
 
 class OllamaAdapterError(ValueError):
@@ -103,12 +105,32 @@ def _image_data(image: str) -> str:
 
 
 def _tool_payload(tool: ToolDefinition) -> dict[str, Any]:
+    if type(tool.name) is not str or not tool.name.strip():
+        raise OllamaAdapterError("invalid_tool_definition")
     return {
         "type": "function",
         "function": {
             "name": tool.name,
             "description": tool.description,
             "parameters": _plain_json(tool.input_schema),
+        },
+    }
+
+
+def _legacy_tool_payload(tool: object) -> dict[str, Any]:
+    if not isinstance(tool, Mapping):
+        raise OllamaAdapterError("invalid_tool_definition")
+    name = tool.get("name")
+    if type(name) is not str or not name.strip():
+        raise OllamaAdapterError("invalid_tool_definition")
+    description = tool.get("description", "")
+    parameters = tool.get("parameters", {"type": "object", "properties": {}})
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description if isinstance(description, str) else "",
+            "parameters": _plain_json(parameters),
         },
     }
 
@@ -448,17 +470,7 @@ class OllamaAdapter:
             "options": {"num_predict": max_tokens},
         }
         if tools:
-            payload["tools"] = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": tool["name"],
-                        "description": tool.get("description", ""),
-                        "parameters": tool.get("parameters", {"type": "object", "properties": {}}),
-                    },
-                }
-                for tool in tools
-            ]
+            payload["tools"] = [_legacy_tool_payload(tool) for tool in tools]
 
         result = _parse_response(
             await self._send(payload),

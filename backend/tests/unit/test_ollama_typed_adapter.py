@@ -161,6 +161,26 @@ async def test_missing_tool_call_ids_are_deterministic_unique_and_safe() -> None
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["", "   "])
+async def test_blank_tool_definition_names_fail_before_network(name: str) -> None:
+    requests: list[httpx.Request] = []
+    adapter = adapter_with_response(response(), requests, native_tools_enabled=True)
+
+    with pytest.raises(OllamaAdapterError) as typed_error:
+        await adapter.complete([Message(Role.USER, "go")], [ToolDefinition(name)])
+    with pytest.raises(OllamaAdapterError) as legacy_error:
+        await adapter.chat(
+            [{"role": "user", "content": "go"}],
+            tools=[{"name": name, "parameters": {"type": "object"}}],
+        )
+
+    assert typed_error.value.code == "invalid_tool_definition"
+    assert legacy_error.value.code == "invalid_tool_definition"
+    assert requests == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_generated_tool_ids_are_namespaced_across_accumulated_history() -> None:
     requests: list[httpx.Request] = []
     repeated_call = [{"function": {"name": "weather", "arguments": {"city": "Ghent"}}}]
