@@ -12,7 +12,7 @@ from app.observability.cost_tracker import UnknownModelPricing
 from app.observability.log_buffer import OwnerLogBuffer
 from app.runtime import AgentEventKind, AgentRuntime, Message, RecordingEventSink, Role, StopReason
 from app.runtime.factory import RunContext, _pricing_candidates, create_chat_runtime
-from app.runtime.models import ModelResponse
+from app.runtime.models import ModelResponse, TokenUsage
 from app.runtime.monetary_budget import (
     DuplicateModelCharge,
     DurableBudgetedProvider,
@@ -21,6 +21,8 @@ from app.runtime.monetary_budget import (
     usd_limit_to_nusd,
 )
 from app.security.persistence_redactor import PersistenceRedactor
+from app.services.conversations import ConversationRepository
+from app.services.monetary_budget import MonetaryBudgetRepository
 
 
 class TextProvider:
@@ -142,3 +144,73 @@ async def test_runtime_maps_budget_errors_to_safe_terminal_events(
     assert result.error == error.code  # type: ignore[attr-defined]
     blocked = next(event for event in events.events if event.kind is AgentEventKind.BUDGET_BLOCKED)
     assert blocked.data == {"code": error.code, "stop_reason": reason.value}  # type: ignore[attr-defined]
+
+
+class MeteredProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def complete(
+        self,
+        messages,
+        tools=(),
+        *,
+        max_tokens=4096,
+        response_contract=None,
+        response_format=None,
+    ):
+        del messages, tools, max_tokens, response_contract, response_format
+        self.calls += 1
+        return ModelResponse(
+            content="ok",
+            usage=TokenUsage(10, 5),
+            actual_provider="openai",
+            actual_model="gpt-4o",
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_live_factory_budget_blocks_and_reconciles_with_real_run_repository(tmp_path) -> None:
+    redactor = PersistenceRedactor()
+    memory = ConversationRepository(f"sqlite+aiosqlite:///{tmp_path / 'live.db'}", redactor)
+    await memory.initialize()
+
+    async def execute(run_id: str, run_limit: Decimal):
+        provider = MeteredProvider()
+        context = RunContext("alice", "conversation", run_id, f"correlation-{run_id}", "project")
+        runtime = create_chat_runtime(
+            context=context,
+            provider=provider,
+            tools=NoTools(),  # type: ignore[arg-type]
+            settings=Settings(
+                llm_provider="openai",
+                llm_model="gpt-4o",
+                durable_monetary_budget_enabled=True,
+                agent_run_budget_usd=run_limit,
+                agent_project_budget_usd=Decimal("2"),
+                agent_model_input_reservation_tokens=10,
+            ),
+            repository=memory,
+            exporter=None,
+            redactor=redactor,
+            log_buffer=OwnerLogBuffer(),
+        )
+        result = await runtime.run([Message(Role.USER, "go")])
+        summary = await MonetaryBudgetRepository(memory.session_factory).summary(
+            owner_id="alice", project_id="project", run_id=run_id
+        )
+        return provider, result, summary
+
+    blocked_provider, blocked, blocked_summary = await execute("run-blocked", Decimal("0"))
+    assert blocked.stop_reason is StopReason.MONETARY_BUDGET_EXHAUSTED
+    assert blocked_provider.calls == 0
+    assert blocked_summary is not None and blocked_summary.run_spent_nusd == 0
+
+    provider, result, summary = await execute("run-success", Decimal("1"))
+    assert result.stop_reason is StopReason.COMPLETED
+    assert provider.calls == 1
+    assert summary is not None
+    assert summary.run_spent_nusd == 75_000
+    assert summary.run_reserved_nusd == 0
+    await memory.close()

@@ -28,6 +28,7 @@ from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
 from app.security.policy import RiskClass
 from app.services.artifacts import Artifact, detect_artifact_in_response
+from app.services.monetary_budget import MonetaryBudgetRepository
 from app.services.conversations import ConversationRepository
 from app.services.task_queue import get_task_queue
 from app.tools.builtin import calculator_tool, datetime_tool, read_file_tool, write_file_tool
@@ -450,8 +451,21 @@ async def chat(
     result = await runtime.run(messages)
 
     elapsed_ms = (time.monotonic() - start_time) * 1000
+    cost_usd: float | None = None
+    if settings.durable_monetary_budget_enabled:
+        summary = await MonetaryBudgetRepository(memory.session_factory).summary(
+            owner_id=user["user_id"],
+            project_id=run_context.project_id,
+            run_id=run_context.run_id,
+        )
+        if summary is not None:
+            cost_usd = round(summary.run_spent_nusd / 1_000_000_000, 9)
     await memory.runs.finalize_metadata(
-        user["user_id"], str(run_context.run_id), answer=result.content, latency_ms=elapsed_ms
+        user["user_id"],
+        str(run_context.run_id),
+        answer=result.content,
+        cost_usd=cost_usd,
+        latency_ms=elapsed_ms,
     )
 
     thinking_steps = [

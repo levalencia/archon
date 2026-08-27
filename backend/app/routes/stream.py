@@ -35,6 +35,7 @@ from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
 from app.security.live_approvals import ApprovalBroker
 from app.services.artifacts import Artifact, detect_artifact_in_response
+from app.services.monetary_budget import MonetaryBudgetRepository
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -313,6 +314,25 @@ async def chat_stream_real(
             yield _sse("sources", sources)
 
         cost_info = cost_sink.totals
+        budget_payload: dict[str, float] = {}
+        if settings.durable_monetary_budget_enabled:
+            summary = await MonetaryBudgetRepository(memory.session_factory).summary(
+                owner_id=user["user_id"],
+                project_id=run_context.project_id,
+                run_id=run_context.run_id,
+            )
+            if summary is not None:
+                cost_info["cost_usd"] = round(summary.run_spent_nusd / 1_000_000_000, 9)
+                budget_payload = {
+                    "budget_limit_usd": summary.run_limit_nusd / 1_000_000_000,
+                    "budget_reserved_usd": summary.run_reserved_nusd / 1_000_000_000,
+                    "budget_remaining_usd": (
+                        summary.run_limit_nusd
+                        - summary.run_spent_nusd
+                        - summary.run_reserved_nusd
+                    )
+                    / 1_000_000_000,
+                }
 
         elapsed_ms = (time.monotonic() - started) * 1000
         await memory.runs.finalize_metadata(
@@ -335,6 +355,7 @@ async def chat_stream_real(
             "cost_usd": cost_info["cost_usd"],
             "error": result.error,
         }
+        done_payload.update(budget_payload)
         for field in (
             "cache_read_input_tokens",
             "cache_write_input_tokens",
