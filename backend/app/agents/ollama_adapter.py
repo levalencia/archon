@@ -38,6 +38,7 @@ class OllamaAdapterError(ValueError):
             "invalid_response": "Invalid Ollama response",
             "invalid_tool_arguments": "Invalid Ollama tool arguments",
             "invalid_image": "Invalid Ollama image",
+            "invalid_tool_definition": "Invalid Ollama tool definition",
         }[code]
         super().__init__(message)
 
