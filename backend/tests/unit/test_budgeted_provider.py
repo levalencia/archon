@@ -13,11 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.observability.cost_tracker import quote_model_call_nusd
 from app.runtime.capabilities import ProviderCapabilities
-from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolDefinition
+from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall, ToolDefinition
 from app.runtime.monetary_budget import (
     BudgetRunContext,
     DuplicateModelCharge,
     DurableBudgetedProvider,
+    DurableModelChargeStateError,
     IndeterminateModelCharge,
     ModelBudgetExhausted,
     PricingCandidate,
@@ -311,4 +312,167 @@ async def test_concurrent_calls_get_unique_ordinals_and_accounting(tmp_path: Pat
     assert [charge.ordinal for charge in charges] == list(range(10))
     assert len({charge.charge_id for charge in charges}) == 10
     assert all(charge.state is ChargeState.RECONCILED for charge in charges)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_base_exception_and_invalid_usage_fail_closed(tmp_path: Path) -> None:
+    class FatalProviderError(BaseException):
+        pass
+
+    for run_id, delegate, expected in (
+        ("fatal", RaisingProvider(FatalProviderError()), FatalProviderError),
+        (
+            "usage",
+            FakeProvider(
+                [
+                    ModelResponse(
+                        "bad",
+                        usage=TokenUsage(1, 1),
+                        actual_provider="openai",
+                        actual_model="gpt-4o",
+                    )
+                ]
+            ),
+            IndeterminateModelCharge,
+        ),
+    ):
+        repo, engine = await repository(tmp_path / f"{run_id}.db", run_id)
+        if run_id == "usage":
+            object.__setattr__(delegate.responses[0].usage, "input_tokens", None)
+        with pytest.raises(expected):
+            await wrapper(delegate, repo, run_id=run_id).complete([Message(Role.USER, "x")])
+        charge = (await repo.list(owner_id="alice", project_id="project", run_id=run_id))[0]
+        assert charge.state is ChargeState.INDETERMINATE
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_response_is_fully_snapshotted_before_reconcile(tmp_path: Path) -> None:
+    repo, engine = await repository(tmp_path / "snapshot.db")
+    arguments = {"nested": ["original"]}
+    structured = {"items": ["original"]}
+    response = ModelResponse(
+        tool_calls=(ToolCall("id", "tool", arguments),),
+        usage=TokenUsage(11, 3),
+        structured_output=structured,
+        actual_provider="openai",
+        actual_model="gpt-4o",
+    )
+    original_reconcile = repo.reconcile
+
+    async def mutate_then_reconcile(*args, **kwargs):
+        object.__setattr__(response.usage, "input_tokens", 999)
+        arguments["nested"].append("mutated")
+        structured["items"].append("mutated")
+        return await original_reconcile(*args, **kwargs)
+
+    repo.reconcile = mutate_then_reconcile  # type: ignore[method-assign]
+    result = await wrapper(FakeProvider([response]), repo).complete([Message(Role.USER, "x")])
+    assert result.usage.input_tokens == 11
+    assert result.tool_calls[0].arguments == {"nested": ["original"]}
+    assert result.structured_output == {"items": ["original"]}
+    charge = (await repo.list(owner_id="alice", project_id="project", run_id="run-1"))[0]
+    assert charge.input_tokens == 11
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_successful_reserve_releases_without_dispatch(
+    tmp_path: Path,
+) -> None:
+    repo, engine = await repository(tmp_path / "reserve-cancel.db")
+    original_reserve = repo.reserve_call
+    committed = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def delayed_return(*args, **kwargs):
+        result = await original_reserve(*args, **kwargs)
+        committed.set()
+        await finish.wait()
+        return result
+
+    repo.reserve_call = delayed_return  # type: ignore[method-assign]
+    delegate = FakeProvider()
+    task = asyncio.create_task(wrapper(delegate, repo).complete([Message(Role.USER, "x")]))
+    await committed.wait()
+    task.cancel("reserve-cancel")
+    finish.set()
+    with pytest.raises(asyncio.CancelledError, match="reserve-cancel"):
+        await task
+    charge = (await repo.list(owner_id="alice", project_id="project", run_id="run-1"))[0]
+    assert charge.state is ChargeState.RELEASED
+    assert not delegate.calls
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_commit_then_error_preserves_reconciled(tmp_path: Path) -> None:
+    repo, engine = await repository(tmp_path / "commit-error.db")
+    original_reconcile = repo.reconcile
+
+    async def commit_then_error(*args, **kwargs):
+        await original_reconcile(*args, **kwargs)
+        raise RuntimeError("after commit")
+
+    repo.reconcile = commit_then_error  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="after commit"):
+        await wrapper(FakeProvider(), repo).complete([Message(Role.USER, "x")])
+    charge = (await repo.list(owner_id="alice", project_id="project", run_id="run-1"))[0]
+    assert charge.state is ChargeState.RECONCILED
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_repository_failure_is_stable(tmp_path: Path) -> None:
+    repo, engine = await repository(tmp_path / "cleanup-error.db")
+
+    async def unsafe_get(*args, **kwargs):
+        raise RuntimeError("secret raw input")
+
+    repo.get = unsafe_get  # type: ignore[method-assign]
+    with pytest.raises(DurableModelChargeStateError) as caught:
+        await wrapper(RaisingProvider(RuntimeError("delegate")), repo).complete(
+            [Message(Role.USER, "secret")]
+        )
+    assert str(caught.value) == "durable_model_charge_state_error"
+    assert str(caught.value.__cause__) == "indeterminate_model_charge"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_repeated_cleanup_cancellation_waits_and_preserves_first_identity(
+    tmp_path: Path,
+) -> None:
+    repo, engine = await repository(tmp_path / "repeat-cancel.db")
+    provider_started = asyncio.Event()
+    cleanup_started = asyncio.Event()
+    finish_cleanup = asyncio.Event()
+    original_mark = repo.mark_indeterminate
+
+    class WaitingProvider(FakeProvider):
+        async def complete(self, messages, tools=(), **kwargs):
+            provider_started.set()
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    async def delayed_mark(*args, **kwargs):
+        cleanup_started.set()
+        await finish_cleanup.wait()
+        return await original_mark(*args, **kwargs)
+
+    repo.mark_indeterminate = delayed_mark  # type: ignore[method-assign]
+    task = asyncio.create_task(wrapper(WaitingProvider(), repo).complete([Message(Role.USER, "x")]))
+    await provider_started.wait()
+    task.cancel("first-cancellation")
+    await cleanup_started.wait()
+    task.cancel("second-cancellation")
+    await asyncio.sleep(0)
+    task.cancel("third-cancellation")
+    await asyncio.sleep(0)
+    finish_cleanup.set()
+    with pytest.raises(asyncio.CancelledError, match="first-cancellation"):
+        await task
+    charge = (await repo.list(owner_id="alice", project_id="project", run_id="run-1"))[0]
+    assert charge.state is ChargeState.INDETERMINATE
     await engine.dispose()

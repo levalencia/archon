@@ -7,13 +7,13 @@ arguments, response content, and response contracts never cross this boundary.
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import inspect
 import re
 from collections.abc import Awaitable, Sequence
-from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 from app.observability.cost_tracker import (
     price_model_usage_nusd,
@@ -21,7 +21,7 @@ from app.observability.cost_tracker import (
     validated_pricing_pair,
 )
 from app.runtime.capabilities import ProviderCapabilities, get_provider_capabilities
-from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
+from app.runtime.models import Message, ModelResponse, TokenUsage, ToolCall, ToolDefinition
 from app.runtime.ports import ModelProvider
 from app.runtime.structured_output import ResponseContract
 from app.services.monetary_budget import (
@@ -104,6 +104,12 @@ class IndeterminateModelCharge(BudgetedProviderError):  # noqa: N818 - domain co
     code = "indeterminate_model_charge"
 
 
+class DurableModelChargeStateError(BudgetedProviderError):  # noqa: N818
+    """The wrapper could not establish a safe durable terminal charge state."""
+
+    code = "durable_model_charge_state_error"
+
+
 # Descriptive aliases keep the stable boundary discoverable without multiplying behavior.
 BudgetExhaustedError = ModelBudgetExhausted
 DuplicateChargeError = DuplicateModelCharge
@@ -117,16 +123,94 @@ def _charge_id(run_id: str, ordinal: int) -> str:
     return f"model_v1_{digest}"
 
 
-async def _cancellation_resistant(operation: Awaitable[_T]) -> _T:
-    """Finish one durable transition before allowing caller cancellation to propagate."""
+@dataclass(frozen=True, slots=True)
+class _DurableOutcome(Generic[_T]):
+    value: _T | None
+    error: BaseException | None
+    cancellation: asyncio.CancelledError | None
+
+
+async def _cancellation_resistant(operation: Awaitable[_T]) -> _DurableOutcome[_T]:
+    """Run an awaitable to terminal state despite repeated caller cancellation."""
 
     task = asyncio.ensure_future(operation)
+    cancellation: asyncio.CancelledError | None = None
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError as error:
+            current = asyncio.current_task()
+            if current is not None:
+                current.uncancel()
+            if cancellation is None:
+                cancellation = error
+        except BaseException:
+            # A child failure is read below without another cancellation point.
+            break
     try:
-        return await asyncio.shield(task)
-    except asyncio.CancelledError:
-        # shield keeps the transition alive. Once the delivered cancellation has
-        # been caught, awaiting its task ensures persistence before we re-raise.
-        return await task
+        return _DurableOutcome(task.result(), None, cancellation)
+    except BaseException as error:
+        return _DurableOutcome(None, error, cancellation)
+
+
+def _stable_cleanup_failure() -> DurableModelChargeStateError:
+    """Build a stable error which contains no repository detail."""
+
+    return DurableModelChargeStateError()
+
+
+def _snapshot_response(response: object) -> ModelResponse:
+    """Detach accounting and returned values from delegate-owned state."""
+
+    if type(response) is not ModelResponse:
+        raise IndeterminateModelCharge
+    usage = response.usage
+    if type(usage) is not TokenUsage:
+        raise IndeterminateModelCharge
+    counts = (
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.cache_read_input_tokens,
+        usage.cache_write_input_tokens,
+    )
+    if (
+        type(counts[0]) is not int
+        or type(counts[1]) is not int
+        or any(count is not None and type(count) is not int for count in counts[2:])
+        or any(count is not None and not 0 <= count <= _MAX_BIGINT for count in counts)
+        or (counts[2] or 0) + (counts[3] or 0) > counts[0]
+    ):
+        raise IndeterminateModelCharge
+    scalar_values = (
+        response.content,
+        response.provider_stop_reason,
+        response.actual_provider,
+        response.actual_model,
+    )
+    if any(value is not None and type(value) is not str for value in scalar_values):
+        raise IndeterminateModelCharge
+    if type(response.tool_calls) is not tuple:
+        raise IndeterminateModelCharge
+
+    try:
+        copied_calls: list[ToolCall] = []
+        for call in response.tool_calls:
+            if type(call) is not ToolCall or type(call.id) is not str or type(call.name) is not str:
+                raise IndeterminateModelCharge
+            copied_calls.append(ToolCall(call.id, call.name, copy.deepcopy(dict(call.arguments))))
+        return ModelResponse(
+            content=response.content,
+            tool_calls=tuple(copied_calls),
+            usage=TokenUsage(*counts),
+            provider_stop_reason=response.provider_stop_reason,
+            structured_output=copy.deepcopy(response.structured_output),
+            actual_provider=response.actual_provider,
+            actual_model=response.actual_model,
+        )
+    except IndeterminateModelCharge:
+        raise
+    except Exception:
+        raise IndeterminateModelCharge from None
 
 
 class DurableBudgetedProvider:
@@ -236,20 +320,8 @@ class DurableBudgetedProvider:
         )
         return quote, quoted
 
-    async def _mark_indeterminate(self, charge_id: str, reason: str) -> None:
-        context = self._context
-        await _cancellation_resistant(
-            self._repository.mark_indeterminate(
-                charge_id,
-                context.owner_id,
-                context.project_id,
-                context.run_id,
-                reason,
-            )
-        )
-
-    async def _recover_failed_dispatch(self, charge_id: str) -> None:
-        """Resolve only a durably observed pre-dispatch state; otherwise fail closed."""
+    async def _mark_indeterminate_if_active(self, charge_id: str, reason: str) -> None:
+        """Inspect first and preserve every already-terminal durable state."""
 
         context = self._context
         charge = await self._repository.get(
@@ -259,7 +331,40 @@ class DurableBudgetedProvider:
             run_id=context.run_id,
         )
         if charge is None:
+            raise ChargeStateConflict
+        if charge.state not in (ChargeState.RESERVED, ChargeState.DISPATCHED):
             return
+        try:
+            await self._repository.mark_indeterminate(
+                charge_id,
+                context.owner_id,
+                context.project_id,
+                context.run_id,
+                reason,
+            )
+        except ChargeStateConflict:
+            # A terminal transition may have won after the inspection. Verify it.
+            charge = await self._repository.get(
+                charge_id,
+                owner_id=context.owner_id,
+                project_id=context.project_id,
+                run_id=context.run_id,
+            )
+            if charge is None or charge.state in (ChargeState.RESERVED, ChargeState.DISPATCHED):
+                raise
+
+    async def _recover_failed_dispatch(self, charge_id: str) -> None:
+        """Release proven pre-dispatch work and fail closed for an ambiguous commit."""
+
+        context = self._context
+        charge = await self._repository.get(
+            charge_id,
+            owner_id=context.owner_id,
+            project_id=context.project_id,
+            run_id=context.run_id,
+        )
+        if charge is None:
+            raise ChargeStateConflict
         if charge.state is ChargeState.RESERVED:
             await self._repository.release(
                 charge_id,
@@ -305,8 +410,8 @@ class DurableBudgetedProvider:
         ordinal = await self._allocate_ordinal()
         charge_id = _charge_id(self._context.run_id, ordinal)
         context = self._context
-        try:
-            reservation = await self._repository.reserve_call(
+        reserve_outcome = await _cancellation_resistant(
+            self._repository.reserve_call(
                 charge_id,
                 context.owner_id,
                 context.project_id,
@@ -316,107 +421,115 @@ class DurableBudgetedProvider:
                 quoted_candidate.provider,
                 quoted_candidate.model,
             )
-        except (ProjectBudgetExceeded, RunBudgetExceeded):
-            raise ModelBudgetExhausted from None
+        )
+        if reserve_outcome.error is not None:
+            if reserve_outcome.cancellation is not None:
+                raise reserve_outcome.cancellation
+            if isinstance(reserve_outcome.error, (ProjectBudgetExceeded, RunBudgetExceeded)):
+                raise ModelBudgetExhausted from None
+            raise reserve_outcome.error
+        reservation = reserve_outcome.value
+        assert reservation is not None
+        if reserve_outcome.cancellation is not None:
+            if reservation.should_dispatch:
+                release_outcome = await _cancellation_resistant(
+                    self._repository.release(
+                        charge_id,
+                        context.owner_id,
+                        context.project_id,
+                        context.run_id,
+                    )
+                )
+                if release_outcome.error is not None:
+                    raise _stable_cleanup_failure() from IndeterminateModelCharge()
+            raise reserve_outcome.cancellation
         if not reservation.should_dispatch:
             raise DuplicateModelCharge
 
-        # This durable transition is intentionally the final operation before the provider await.
-        try:
-            await self._repository.mark_dispatched(
+        # This transition is the final operation before dispatch. Any failure or
+        # caller cancellation is recovered without ever invoking the delegate.
+        dispatch_outcome = await _cancellation_resistant(
+            self._repository.mark_dispatched(
                 charge_id,
                 context.owner_id,
                 context.project_id,
                 context.run_id,
             )
-        except BaseException:
-            # Inspect persisted state rather than guessing whether an interrupted
-            # database await committed. Only a proven reservation is released.
-            with suppress(Exception):
-                await _cancellation_resistant(self._recover_failed_dispatch(charge_id))
-            raise
+        )
+        dispatch_failure = dispatch_outcome.cancellation or dispatch_outcome.error
+        if dispatch_failure is not None:
+            recovery = await _cancellation_resistant(self._recover_failed_dispatch(charge_id))
+            if recovery.error is not None:
+                raise _stable_cleanup_failure() from IndeterminateModelCharge()
+            if isinstance(dispatch_failure, asyncio.CancelledError):
+                raise dispatch_failure
+            if recovery.cancellation is not None:
+                raise recovery.cancellation
+            raise dispatch_failure
+
         try:
             response = await self._delegate.complete(messages, tools, **kwargs)
-        except asyncio.CancelledError:
-            # Accounting trouble must not replace the provider's established exception boundary.
-            with suppress(Exception):
-                await self._mark_indeterminate(charge_id, "provider_cancelled")
-            raise
-        except Exception:
-            # Accounting trouble must not replace the provider's established exception boundary.
-            with suppress(Exception):
-                await self._mark_indeterminate(charge_id, "provider_error")
-            raise
+            snapshot = _snapshot_response(response)
 
-        if not isinstance(response, ModelResponse):
-            await self._mark_indeterminate(charge_id, "invalid_response")
-            raise IndeterminateModelCharge
+            actual_provider = snapshot.actual_provider
+            actual_model = snapshot.actual_model
+            if actual_provider is None or actual_model is None:
+                if (
+                    len(self._pricing_candidates) != 1
+                    or actual_provider is not None
+                    or actual_model is not None
+                ):
+                    raise IndeterminateModelCharge
+                fallback = self._pricing_candidates[0]
+                actual_provider = fallback.provider
+                actual_model = fallback.model
 
-        actual_provider = response.actual_provider
-        actual_model = response.actual_model
-        if actual_provider is None or actual_model is None:
-            if (
-                len(self._pricing_candidates) != 1
-                or actual_provider is not None
-                or actual_model is not None
-            ):
-                await self._mark_indeterminate(charge_id, "missing_actual_identity")
+            try:
+                actual_pair = validated_pricing_pair(actual_model, actual_provider)
+            except (TypeError, ValueError):
+                raise IndeterminateModelCharge from None
+            if actual_pair not in self._allowed_pairs:
                 raise IndeterminateModelCharge
-            fallback = self._pricing_candidates[0]
-            actual_provider = fallback.provider
-            actual_model = fallback.model
 
-        try:
-            actual_pair = validated_pricing_pair(actual_model, actual_provider)
-        except (TypeError, ValueError):
-            await self._mark_indeterminate(charge_id, "invalid_actual_identity")
-            raise IndeterminateModelCharge from None
-        if actual_pair not in self._allowed_pairs:
-            await self._mark_indeterminate(charge_id, "unexpected_actual_identity")
-            raise IndeterminateModelCharge
-
-        usage = response.usage
-        if not isinstance(usage, TokenUsage):
-            await self._mark_indeterminate(charge_id, "invalid_usage")
-            raise IndeterminateModelCharge
-        counts = (
-            usage.input_tokens,
-            usage.output_tokens,
-            usage.cache_read_input_tokens,
-            usage.cache_write_input_tokens,
-        )
-        if any(
-            count is not None and (type(count) is not int or not 0 <= count <= _MAX_BIGINT)
-            for count in counts
-        ) or (usage.cache_read_input_tokens or 0) + (usage.cache_write_input_tokens or 0) > (
-            usage.input_tokens
-        ):
-            await self._mark_indeterminate(charge_id, "invalid_usage")
-            raise IndeterminateModelCharge
-        try:
-            await self._repository.reconcile(
-                charge_id,
-                context.owner_id,
-                context.project_id,
-                context.run_id,
-                None,
-                usage.input_tokens,
-                usage.output_tokens,
-                usage.cache_read_input_tokens,
-                usage.cache_write_input_tokens,
-                provider=actual_pair[0],
-                model=actual_pair[1],
+            usage = snapshot.usage
+            reconcile_outcome = await _cancellation_resistant(
+                self._repository.reconcile(
+                    charge_id,
+                    context.owner_id,
+                    context.project_id,
+                    context.run_id,
+                    None,
+                    usage.input_tokens,
+                    usage.output_tokens,
+                    usage.cache_read_input_tokens,
+                    usage.cache_write_input_tokens,
+                    provider=actual_pair[0],
+                    model=actual_pair[1],
+                )
             )
-        except QuoteExceeded:
-            # The repository has already durably made this charge indeterminate.
-            raise IndeterminateModelCharge from None
-        except ChargeStateConflict:
-            # A conflicting durable terminal state cannot safely be rewritten.
-            raise IndeterminateModelCharge from None
-        except ValueError:
-            await self._mark_indeterminate(charge_id, "reconcile_failed")
-            raise IndeterminateModelCharge from None
-        return response
+            if reconcile_outcome.cancellation is not None:
+                raise reconcile_outcome.cancellation
+            if reconcile_outcome.error is not None:
+                if isinstance(
+                    reconcile_outcome.error, (QuoteExceeded, ChargeStateConflict, ValueError)
+                ):
+                    raise IndeterminateModelCharge from None
+                raise reconcile_outcome.error
+            return snapshot
+        except BaseException as original:
+            reason = (
+                "call_cancelled" if isinstance(original, asyncio.CancelledError) else "call_failed"
+            )
+            cleanup = await _cancellation_resistant(
+                self._mark_indeterminate_if_active(charge_id, reason)
+            )
+            if cleanup.error is not None:
+                raise _stable_cleanup_failure() from IndeterminateModelCharge()
+            if isinstance(original, asyncio.CancelledError):
+                raise original
+            if cleanup.cancellation is not None:
+                raise cleanup.cancellation from None
+            raise
 
 
 # Alternate explicit names used by callers discussing calls rather than charges.
