@@ -8,14 +8,14 @@ from typing import Any
 import pytest
 
 from app.config import Settings
-from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.cost_tracker import UnknownModelPricing
+from app.observability.log_buffer import OwnerLogBuffer
 from app.runtime import AgentEventKind, AgentRuntime, Message, RecordingEventSink, Role, StopReason
 from app.runtime.factory import RunContext, _pricing_candidates, create_chat_runtime
 from app.runtime.models import ModelResponse
 from app.runtime.monetary_budget import (
-    DurableBudgetedProvider,
     DuplicateModelCharge,
+    DurableBudgetedProvider,
     IndeterminateModelCharge,
     ModelBudgetExhausted,
     usd_limit_to_nusd,
@@ -78,9 +78,7 @@ def test_pricing_candidates_are_deduplicated_and_fail_closed() -> None:
     assert [(item.provider, item.model) for item in candidates] == [("mock", "mock-model")]
 
     with pytest.raises(UnknownModelPricing):
-        _pricing_candidates(
-            Settings(llm_provider="openai", llm_model="unpriced-model")
-        )
+        _pricing_candidates(Settings(llm_provider="openai", llm_model="unpriced-model"))
 
 
 @pytest.mark.unit

@@ -23,16 +23,13 @@ from app.security.persistence_redactor import PersistenceRedactor
 from app.services.monetary_budget import MonetaryBudgetRepository
 from app.tools.registry import SecureToolRegistry
 
-
 _SUPPORTED_PRICING_PROVIDERS = frozenset({"mock", "openai", "anthropic", "foundry", "ollama"})
 
 
 def _pricing_candidates(settings: Any) -> tuple[PricingCandidate, ...]:
     names = [settings.llm_provider]
     names.extend(
-        name.strip()
-        for name in settings.llm_fallback_providers.split(",")
-        if name.strip()
+        name.strip() for name in settings.llm_fallback_providers.split(",") if name.strip()
     )
     candidates: list[PricingCandidate] = []
     seen: set[tuple[str, str]] = set()
