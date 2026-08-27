@@ -327,9 +327,7 @@ async def chat_stream_real(
                     "budget_limit_usd": summary.run_limit_nusd / 1_000_000_000,
                     "budget_reserved_usd": summary.run_reserved_nusd / 1_000_000_000,
                     "budget_remaining_usd": (
-                        summary.run_limit_nusd
-                        - summary.run_spent_nusd
-                        - summary.run_reserved_nusd
+                        summary.run_limit_nusd - summary.run_spent_nusd - summary.run_reserved_nusd
                     )
                     / 1_000_000_000,
                 }
