@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from app.tools.sandbox import is_immutable_image_reference
@@ -146,6 +146,15 @@ class Settings(BaseSettings):
     agent_run_budget_usd: Decimal = Field(default=Decimal("1.00"), ge=0, le=1_000_000)
     agent_project_budget_usd: Decimal = Field(default=Decimal("10.00"), ge=0, le=1_000_000)
     agent_model_input_reservation_tokens: int = Field(default=64_000, ge=1, le=10_000_000)
+
+    @field_validator("agent_run_budget_usd", "agent_project_budget_usd")
+    @classmethod
+    def validate_budget_decimal_scale(cls, value: Decimal) -> Decimal:
+        scaled = value * Decimal(1_000_000_000)
+        if scaled != scaled.to_integral_value():
+            raise ValueError("budget USD values support at most nine decimal places")
+        return value
+
     approval_timeout_seconds: float = Field(default=30.0, gt=0)
     approval_poll_interval_seconds: float = Field(default=0.05, gt=0)
     context_length: int = 200000  # Claude Opus: 200K, Sonnet: 200K, llama3.1: 128K

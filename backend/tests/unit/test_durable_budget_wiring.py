@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.observability.cost_tracker import UnknownModelPricing
@@ -67,6 +68,21 @@ def test_usd_limit_conversion_is_exact_and_bounded() -> None:
     assert usd_limit_to_nusd(Decimal("0")) == 0
     with pytest.raises(ValueError, match="nine decimal"):
         usd_limit_to_nusd(Decimal("0.0000000001"))
+
+
+@pytest.mark.unit
+def test_budget_settings_fail_fast_on_fractional_nusd() -> None:
+    with pytest.raises(ValidationError, match="nine decimal"):
+        Settings(agent_run_budget_usd=Decimal("0.0000000001"))
+
+
+@pytest.mark.unit
+def test_budget_environment_uses_archon_prefix(monkeypatch) -> None:
+    monkeypatch.setenv("ARCHON_DURABLE_MONETARY_BUDGET_ENABLED", "true")
+    monkeypatch.setenv("ARCHON_AGENT_RUN_BUDGET_USD", "0.25")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.durable_monetary_budget_enabled is True
+    assert settings.agent_run_budget_usd == Decimal("0.25")
 
 
 @pytest.mark.unit
