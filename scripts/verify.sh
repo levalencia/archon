@@ -13,6 +13,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+printf '\n== Capability acceptance manifest ==\n'
+(
+  cd "$ROOT/backend"
+  uv run python -m app.capabilities.acceptance \
+    ../docs/implementation/CAPABILITY-ACCEPTANCE.yaml
+)
+
 printf '\n== Backend lint ==\n'
 (
   cd "$ROOT/backend"

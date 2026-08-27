@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "capabilities": [
+    {
+      "id": "generic-self-reflection",
+      "owner_module": "docs/course/modules/03-react-loop/README.md",
+      "status": "not-implemented",
+      "dimensions": {"exists": "no", "wired": "no", "tested": "no", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": [],
+      "tests": [],
+      "evidence": ["docs/course/concepts/generic-self-reflection.md"],
+      "limitation": "Tool-error feedback, deterministic verification, verifier delegation, and post-run evaluation do not provide a general critique/revision memory or measured reflection policy."
+    },
+    {
+      "id": "run-export-share",
+      "owner_module": "docs/course/modules/07-run-ledger/README.md",
+      "status": "not-implemented",
+      "dimensions": {"exists": "no", "wired": "no", "tested": "no", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": [],
+      "tests": [],
+      "evidence": ["docs/course/concepts/export-share-redaction.md"],
+      "limitation": "Owner-scoped run reads and persistence redaction are not an export bundle or sharing model; recipient policy, revocation, expiry, and export-specific secret scanning are absent."
+    },
+    {
+      "id": "learning-optimization-drift",
+      "owner_module": "docs/course/modules/09-evaluation-harness/README.md",
+      "status": "not-implemented",
+      "dimensions": {"exists": "no", "wired": "no", "tested": "no", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": [],
+      "tests": [],
+      "evidence": ["docs/course/concepts/learning-optimization-drift.md"],
+      "limitation": "Recorded-run evaluation does not implement a feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization."
+    },
+    {
+      "id": "provider-capability-parity",
+      "owner_module": "docs/course/modules/02-typed-runtime/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "na", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/runtime/ports.py", "backend/app/agents/llm_factory.py"],
+      "tests": ["backend/tests/unit/test_adapters.py", "backend/tests/unit/test_fallback_wire.py"],
+      "evidence": ["docs/course/concepts/provider-adapters-capability-parity.md"],
+      "limitation": "Adapters do not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly; no live-provider parity run is recorded."
+    },
+    {
+      "id": "validated-structured-output",
+      "owner_module": "docs/course/modules/02-typed-runtime/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "partial", "wired": "partial", "tested": "yes", "observed": "no", "ui": "na", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/runtime/anthropic.py", "backend/app/runtime/support.py"],
+      "tests": ["backend/tests/unit/test_json_mode_and_caching.py"],
+      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md"],
+      "limitation": "JSON prompting and prefill exist, but responses are not schema-validated and there is no parser/retry contract or cross-provider acceptance."
+    },
+    {
+      "id": "prompt-cache-accounting",
+      "owner_module": "docs/course/modules/02-typed-runtime/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "partial", "wired": "partial", "tested": "yes", "observed": "no", "ui": "no", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/runtime/anthropic.py", "backend/app/runtime/support.py"],
+      "tests": ["backend/tests/unit/test_json_mode_and_caching.py"],
+      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md"],
+      "limitation": "Ephemeral Anthropic cache control is constructed, but cache-read tokens, hit rates, and savings are not captured or observed with a live provider."
+    },
+    {
+      "id": "effect-idempotency",
+      "owner_module": "docs/course/modules/05-policy-and-approvals/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/runtime/engine.py", "backend/app/security/approval_repository.py"],
+      "tests": ["backend/tests/unit/test_runtime_policy.py", "backend/tests/unit/test_durable_live_approvals.py"],
+      "evidence": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/concepts/idempotency.md"],
+      "limitation": "Local duplicate blocking and atomic one-shot approval consumption do not guarantee exactly-once external effects across failures or replicas."
+    },
+    {
+      "id": "context-provenance",
+      "owner_module": "docs/course/modules/06-context-and-memory/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "partial", "wired": "partial", "tested": "yes", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/runtime/context.py", "backend/app/services/auto_compact.py"],
+      "tests": ["backend/tests/unit/test_conversations.py", "backend/tests/unit/test_memory_startup.py"],
+      "evidence": ["docs/course/concepts/context-windows.md"],
+      "limitation": "Context selection exists, but effective-context provenance, immutable skill versions, precedence, token guarantees, and an inspector are not established."
+    },
+    {
+      "id": "online-key-rotation",
+      "owner_module": "docs/course/modules/06-context-and-memory/README.md",
+      "status": "not-implemented",
+      "dimensions": {"exists": "no", "wired": "no", "tested": "no", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": [],
+      "tests": [],
+      "evidence": ["docs/course/concepts/encrypted-memory.md"],
+      "limitation": "Encrypted memory uses a startup key, but online rotation, re-encryption orchestration, automatic expiry, and external KMS integration are absent."
+    },
+    {
+      "id": "durable-monetary-budgets",
+      "owner_module": "docs/course/modules/07-run-ledger/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "partial", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/observability/cost_tracker.py", "backend/app/routes/stream.py", "backend/app/eval/service.py"],
+      "tests": ["backend/tests/unit/test_eval_wire.py", "backend/tests/unit/test_recorded_evaluations.py"],
+      "evidence": ["docs/course/concepts/cost-usage-budgets.md"],
+      "limitation": "Runs record estimated costs, but there is no persistent price version, reservation, atomic counter, hard spend limit, or cross-replica enforcement."
+    },
+    {
+      "id": "multimodal-e2e",
+      "owner_module": "docs/course/modules/13-auth-ui-observability/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "partial", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/runtime/models.py", "backend/app/runtime/anthropic.py", "backend/app/services/artifacts.py"],
+      "tests": ["backend/tests/unit/test_wiring_gaps.py", "backend/tests/security/test_resource_security.py"],
+      "evidence": ["docs/course/concepts/multimodal-and-artifacts.md"],
+      "limitation": "Image data reaches request builders and private artifacts exist, but no real-provider multimodal end-to-end observation or durable artifact backend is established."
+    },
+    {
+      "id": "durable-background-jobs",
+      "owner_module": "docs/course/modules/10-resilience/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/services/task_queue.py", "backend/app/routes/tasks.py"],
+      "tests": ["backend/tests/unit/test_streaming_and_tasks.py"],
+      "evidence": ["docs/course/concepts/background-jobs-scheduling.md"],
+      "limitation": "The authenticated in-process lifecycle runs placeholder work and loses records on restart; owner scoping, durable broker, leases, retries, recovery, and scheduling are absent."
+    },
+    {
+      "id": "mandatory-compliance",
+      "owner_module": "docs/course/modules/09-evaluation-harness/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "no", "tested": "yes", "observed": "no", "ui": "partial", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/security/compliance.py", "backend/app/routes/red_team.py"],
+      "tests": ["backend/tests/unit/test_compliance.py", "backend/tests/security/test_resource_security.py"],
+      "evidence": ["docs/course/concepts/compliance-red-teaming.md"],
+      "limitation": "Rule checks and admin probes exist, but compliance is not mandatory on both chat paths and probes do not execute full agent trajectories."
+    },
+    {
+      "id": "signed-agent-communication",
+      "owner_module": "docs/course/modules/11-bounded-delegation/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "no", "tested": "yes", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/agents/secure_channel.py", "backend/app/agents/agent_auth.py"],
+      "tests": ["backend/tests/unit/test_secure_channel.py", "backend/tests/unit/test_agent_auth.py"],
+      "evidence": ["docs/course/concepts/agent-communication-security.md"],
+      "limitation": "HMAC freshness and scoped-token primitives are isolated; active delegation does not require them and has no nonce store, key rotation, encryption, or durable receipt."
+    },
+    {
+      "id": "isolated-sandbox-live-target",
+      "owner_module": "docs/course/modules/05-policy-and-approvals/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/tools/sandbox.py", "backend/app/tools/terminal.py", "scripts/sandbox_smoke.py"],
+      "tests": ["backend/tests/unit/test_docker_sandbox.py", "backend/tests/unit/test_sandbox_wire.py"],
+      "evidence": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/concepts/execution-isolation-sandbox.md"],
+      "limitation": "The Docker-only path has a local containment smoke but is optional and disabled in the verified local target; it is not VM-grade or multi-tenant certification."
+    },
+    {
+      "id": "live-embedding-provider",
+      "owner_module": "docs/course/modules/08-rag-grounding/README.md",
+      "status": "partial",
+      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "partial", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/services/chunker.py"],
+      "tests": ["backend/tests/unit/test_embedding_hardening.py", "backend/tests/unit/test_embedding_config.py"],
+      "evidence": ["docs/course/concepts/embeddings.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "A hardened external endpoint path exists, but final acceptance used deterministic mock embeddings and no live semantic-quality acceptance was observed."
+    }
+  ]
+}

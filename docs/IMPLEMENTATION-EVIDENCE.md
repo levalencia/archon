@@ -11,6 +11,9 @@
 
 This document separates code presence, wiring, tests, direct observation, UI, and deployment. Local tests, mocks, Docker smokes, and manifests are not public-production evidence.
 
+The executable [capability acceptance manifest](implementation/CAPABILITY-ACCEPTANCE.yaml)
+provides the validated, machine-readable baseline for capstone gap status and evidence pointers.
+
 ## Evidence dimensions
 
 - **Exists:** meaningful code/artifact exists.
