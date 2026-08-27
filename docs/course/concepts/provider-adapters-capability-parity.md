@@ -1,7 +1,7 @@
 # Provider adapters and capability parity
 
 > **Implementation status:** `partial`
-> **Status boundary:** Archon now declares capabilities, enforces image/JSON requirements, validates structured terminal output locally, and preserves typed contracts through fallback. Full parity remains partial because OpenAI/Ollama are legacy text adapters in the typed path, native-tool enforcement is not yet automatic, cache accounting is incomplete, and live cross-provider evidence is absent.
+> **Status boundary:** Archon now declares capabilities, automatically enforces native tools/images/JSON requirements, validates structured terminal output locally, and preserves typed contracts through fallback. Full parity remains partial because OpenAI/Ollama are legacy text adapters in the typed path, cache accounting is incomplete, and live cross-provider evidence is absent.
 > **Reviewed revision:** current S8 provider-contract branch
 > **Used by module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
 > **Catalog ID:** `provider-adapters-capability-parity`
