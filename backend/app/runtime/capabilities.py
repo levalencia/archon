@@ -20,6 +20,11 @@ class ProviderCapabilities:
     stop_reason: bool = False
     streaming: bool = False
 
+    def __post_init__(self) -> None:
+        for item in fields(self):
+            if type(getattr(self, item.name)) is not bool:
+                raise TypeError(f"{item.name} must be bool")
+
     def missing(self, required: ProviderCapabilities) -> tuple[str, ...]:
         """Return required capabilities not supplied by this declaration."""
         return tuple(

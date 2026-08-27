@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import replace
 from typing import Any, cast
 
 from app.runtime.capabilities import TEXT_ONLY_CAPABILITIES, get_provider_capabilities
@@ -18,7 +17,7 @@ class JsonModeProvider:
 
     def __init__(self, delegate: Any) -> None:
         self._delegate = delegate
-        self.capabilities = replace(get_provider_capabilities(delegate), json_mode=True)
+        self.capabilities = get_provider_capabilities(delegate)
 
     async def complete(
         self,

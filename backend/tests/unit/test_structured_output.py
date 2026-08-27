@@ -64,6 +64,33 @@ def test_contract_identifiers_must_be_nonblank(field: str) -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("value", [bytearray(b"mutable"), {"not-json"}])
+def test_schema_rejects_mutable_or_non_json_leaf_values(value: object) -> None:
+    with pytest.raises(TypeError, match="unsupported value type"):
+        ResponseContract("answer", "1", {"value": value}, lambda item: item)
+
+
+@pytest.mark.unit
+def test_schema_rejects_cycles() -> None:
+    cyclic: dict[str, object] = {}
+    cyclic["self"] = cyclic
+
+    with pytest.raises(TypeError, match="cycles"):
+        ResponseContract("answer", "1", cyclic, lambda item: item)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("text", ["NaN", "Infinity", "-Infinity"])
+def test_non_standard_json_constants_are_malformed(text: str) -> None:
+    contract = ResponseContract("answer", "1", {}, lambda value: value)
+
+    with pytest.raises(StructuredOutputError) as raised:
+        contract.parse_and_validate(text)
+
+    assert raised.value.code == "malformed_json"
+
+
+@pytest.mark.unit
 def test_contract_and_schema_are_immutable_detached_copies() -> None:
     source = {"properties": {"answer": {"type": "string"}}, "required": ["answer"]}
     contract = ResponseContract("answer", "1", source, lambda value: value)

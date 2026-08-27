@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -19,14 +20,31 @@ class StructuredOutputError(ValueError):
         super().__init__(message)
 
 
-def _immutable_copy(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        return MappingProxyType({key: _immutable_copy(item) for key, item in value.items()})
-    if isinstance(value, (list, tuple)):
-        return tuple(_immutable_copy(item) for item in value)
-    if isinstance(value, set):
-        return frozenset(_immutable_copy(item) for item in value)
-    return value
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def _immutable_copy(value: Any, *, seen: frozenset[int] = frozenset()) -> Any:
+    """Copy JSON-compatible values into immutable containers and reject cycles/leaves."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise TypeError("json_schema numbers must be finite")
+        return value
+    if isinstance(value, (Mapping, list, tuple)):
+        identity = id(value)
+        if identity in seen:
+            raise TypeError("json_schema must not contain cycles")
+        nested_seen = seen | {identity}
+        if isinstance(value, Mapping):
+            if any(not isinstance(key, str) for key in value):
+                raise TypeError("json_schema mapping keys must be strings")
+            return MappingProxyType(
+                {key: _immutable_copy(item, seen=nested_seen) for key, item in value.items()}
+            )
+        return tuple(_immutable_copy(item, seen=nested_seen) for item in value)
+    raise TypeError(f"json_schema contains unsupported value type: {type(value).__name__}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,8 +70,8 @@ class ResponseContract:
     def parse_and_validate(self, text: str) -> Any:
         """Parse JSON and return only the validator's successful result."""
         try:
-            parsed = json.loads(text)
-        except (json.JSONDecodeError, TypeError) as exc:
+            parsed = json.loads(text, parse_constant=_reject_json_constant)
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
             raise StructuredOutputError("malformed_json", "Response is not valid JSON") from exc
 
         try:

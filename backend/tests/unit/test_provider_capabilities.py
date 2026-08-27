@@ -31,6 +31,12 @@ def test_missing_capabilities_are_stable_and_ordered() -> None:
 
 
 @pytest.mark.unit
+def test_capability_values_must_be_strict_booleans() -> None:
+    with pytest.raises(TypeError, match="images must be bool"):
+        ProviderCapabilities(images="yes")  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
 def test_undeclared_provider_is_conservatively_text_only_without_invocation() -> None:
     class Undeclared:
         calls = 0
@@ -77,6 +83,18 @@ def test_wrappers_preserve_or_explicitly_extend_capabilities() -> None:
     assert get_provider_capabilities(breaker_wrapper) == get_provider_capabilities(delegate)
     assert get_provider_capabilities(json_wrapper).json_mode
     assert get_provider_capabilities(json_wrapper).native_tools
+
+
+@pytest.mark.unit
+def test_json_wrapper_does_not_invent_delegate_capability() -> None:
+    class LegacyClient:
+        async def chat(self, messages: object, *, max_tokens: int) -> str:
+            del messages, max_tokens
+            return "plain text"
+
+    wrapped = JsonModeProvider(TextOnlyProvider(LegacyClient()))
+
+    assert not get_provider_capabilities(wrapped).json_mode
 
 
 @pytest.mark.unit
