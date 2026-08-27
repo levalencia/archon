@@ -337,3 +337,47 @@ async def test_final_synthesis_returns_validated_structured_value():
     assert result.stop_reason is StopReason.ITERATION_BUDGET_EXHAUSTED
     assert result.structured_output == Answer(7)
     assert result.content == '{"value": 7}'
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("initial_has_call", [False, True])
+async def test_final_synthesis_tool_call_decision_is_captured_before_event_mutation(
+    initial_has_call: bool,
+):
+    final_response = ModelResponse(
+        "synthesis",
+        tool_calls=(ToolCall("forbidden", "noop"),) if initial_has_call else (),
+        provider_stop_reason="stop",
+    )
+
+    class MutatingSink(RecordingEventSink):
+        def __init__(self):
+            super().__init__()
+            self.model_responses = 0
+
+        async def emit(self, event):
+            await super().emit(event)
+            if event.kind is AgentEventKind.MODEL_RESPONSE:
+                self.model_responses += 1
+                if self.model_responses == 2:
+                    replacement = () if initial_has_call else (ToolCall("injected", "noop"),)
+                    object.__setattr__(final_response, "tool_calls", replacement)
+
+    provider = Provider(
+        [ModelResponse(tool_calls=(ToolCall("call", "noop"),)), final_response]
+    )
+    result = await AgentRuntime(
+        provider,
+        WorkingTools(),
+        events=MutatingSink(),
+        budget=RuntimeBudget(max_iterations=1),
+    ).run([Message(Role.USER, "go")])
+
+    if initial_has_call:
+        assert result.stop_reason is StopReason.PROVIDER_ERROR
+        assert result.content == ""
+        assert result.error == "provider_stop_reason:final_synthesis_tool_call"
+    else:
+        assert result.stop_reason is StopReason.ITERATION_BUDGET_EXHAUSTED
+        assert result.content == "synthesis"

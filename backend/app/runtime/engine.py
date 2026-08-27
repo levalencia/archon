@@ -1386,6 +1386,7 @@ class AgentRuntime:
                 started_at,
             )
             response_content = response.content if isinstance(response.content, str) else None
+            has_final_tool_calls = bool(response.tool_calls)
             raw_stop_reason = response.provider_stop_reason
             provider_stop_reason = raw_stop_reason if isinstance(raw_stop_reason, str) else None
             response_usage = TokenUsage(
@@ -1422,7 +1423,7 @@ class AgentRuntime:
                     usage,
                     f"provider_stop_reason:{provider_reason.value}",
                 )
-            if response.tool_calls:
+            if has_final_tool_calls:
                 return await self._stop(
                     StopReason.PROVIDER_ERROR,
                     content,
