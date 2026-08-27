@@ -165,9 +165,9 @@ async def get_run_context(
     run = await _repository(request).get(user["user_id"], run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    snapshot = await ContextSnapshotRepository(
-        request.app.state.conversations.session_factory
-    ).get(owner_id=user["user_id"], project_id=run.project_id, run_id=run_id)
+    snapshot = await ContextSnapshotRepository(request.app.state.conversations.session_factory).get(
+        owner_id=user["user_id"], project_id=run.project_id, run_id=run_id
+    )
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Context snapshot not found")
     return {
