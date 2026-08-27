@@ -139,9 +139,6 @@ async def _cancellation_resistant(operation: Awaitable[_T]) -> _DurableOutcome[_
         try:
             await asyncio.shield(task)
         except asyncio.CancelledError as error:
-            current = asyncio.current_task()
-            if current is not None:
-                current.uncancel()
             if cancellation is None:
                 cancellation = error
         except BaseException:

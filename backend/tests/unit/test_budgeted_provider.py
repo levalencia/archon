@@ -476,3 +476,43 @@ async def test_repeated_cleanup_cancellation_waits_and_preserves_first_identity(
     charge = (await repo.list(owner_id="alice", project_id="project", run_id="run-1"))[0]
     assert charge.state is ChargeState.INDETERMINATE
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_external_cancellation_is_not_converted_by_timeout_scope(tmp_path: Path) -> None:
+    repo, engine = await repository(tmp_path / "timeout-cancel.db")
+    provider_started = asyncio.Event()
+    cleanup_started = asyncio.Event()
+    finish_cleanup = asyncio.Event()
+    original_mark = repo.mark_indeterminate
+
+    class WaitingProvider(FakeProvider):
+        async def complete(self, messages, tools=(), **kwargs):
+            provider_started.set()
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    async def delayed_mark(*args, **kwargs):
+        cleanup_started.set()
+        await finish_cleanup.wait()
+        return await original_mark(*args, **kwargs)
+
+    repo.mark_indeterminate = delayed_mark  # type: ignore[method-assign]
+
+    async def bounded_call() -> None:
+        async with asyncio.timeout(0.02):
+            await wrapper(WaitingProvider(), repo).complete([Message(Role.USER, "x")])
+
+    task = asyncio.create_task(bounded_call())
+    await provider_started.wait()
+    task.cancel("external-first")
+    await cleanup_started.wait()
+    await asyncio.sleep(0.04)
+    finish_cleanup.set()
+
+    with pytest.raises(asyncio.CancelledError, match="external-first"):
+        await task
+    assert task.cancelled()
+    charge = (await repo.list(owner_id="alice", project_id="project", run_id="run-1"))[0]
+    assert charge.state is ChargeState.INDETERMINATE
+    await engine.dispose()
