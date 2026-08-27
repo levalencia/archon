@@ -30,11 +30,12 @@ from app.routes.chat import (
 )
 from app.runtime import AgentEvent, AgentEventKind, EventSink
 from app.runtime.factory import RunContext, create_chat_runtime
-from app.runtime.support import prepare_messages
+from app.runtime.support import prepare_effective_context
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
 from app.security.live_approvals import ApprovalBroker
 from app.services.artifacts import Artifact, detect_artifact_in_response
+from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -177,12 +178,14 @@ async def chat_stream_real(
         for skill in skills_used:
             yield _sse("skill", skill)
 
-        persistent_memory_text = (
-            await scoped_memory.context_text(user["user_id"], body.project_id)
-            if scoped_memory is not None
-            else ""
-        )
-        messages = await prepare_messages(
+        if scoped_memory is not None:
+            memory_bundle = await scoped_memory.context_bundle(user["user_id"], body.project_id)
+            persistent_memory_text = memory_bundle.text
+            memory_ids = memory_bundle.fact_ids
+        else:
+            persistent_memory_text = ""
+            memory_ids = ()
+        effective_context = await prepare_effective_context(
             user_message,
             conv_id,
             memory,
@@ -191,13 +194,21 @@ async def chat_stream_real(
             [body.image] if body.image else None,
             user["user_id"],
             persistent_memory_text,
+            project_id=body.project_id,
+            run_id=run_context.run_id,
+            memory_ids=memory_ids,
+            skill_ids=tuple(skill.name for skill in skills),
         )
+        messages = list(effective_context.messages)
 
-        # Auto-compact context if approaching token limit
+        # Auto-compact context if approaching token limit.
         from app.runtime.models import Role as MRole
         from app.services.auto_compact import auto_compact_context
 
-        raw_msgs = [{"role": m.role.value, "content": m.content} for m in messages]
+        raw_msgs = [
+            {"role": message.role.value, "content": message.content, "images": list(message.images)}
+            for message in messages
+        ]
         raw_msgs, compact_stats = await auto_compact_context(
             raw_msgs,
             llm_chat_fn=None,
@@ -205,11 +216,19 @@ async def chat_stream_real(
         )
         yield _sse("context", compact_stats)
 
+        manifest = effective_context.manifest
         if compact_stats.get("compacted"):
-            # Rebuild typed messages from compacted raw messages
             from app.runtime.models import Message as MMsg
 
-            messages = [MMsg(MRole(m["role"]), m["content"]) for m in raw_msgs]
+            messages = [
+                MMsg(MRole(item["role"]), item["content"], images=tuple(item.get("images", ())))
+                for item in raw_msgs
+            ]
+            manifest = manifest.after_compaction(
+                summarized_messages=int(compact_stats["summarized_messages"]),
+                estimated_tokens=int(compact_stats["tokens"]),
+            )
+        await ContextSnapshotRepository(memory.session_factory).record(manifest)
 
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
         cost_sink = ResponseCostEventSink(

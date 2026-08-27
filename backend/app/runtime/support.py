@@ -11,7 +11,8 @@ from app.runtime.capabilities import (
     ProviderCapabilities,
     get_provider_capabilities,
 )
-from app.runtime.context import build_messages
+from app.runtime.context import build_effective_context, build_messages
+from app.runtime.context_provenance import EffectiveContext
 from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
 from app.runtime.ports import ModelProvider
 from app.runtime.structured_output import ResponseContract
@@ -82,6 +83,37 @@ def as_model_provider(client: Any) -> ModelProvider:
     if callable(getattr(client, "complete", None)):
         return cast(ModelProvider, client)
     return TextOnlyProvider(client)
+
+
+async def prepare_effective_context(
+    user_input: str,
+    conversation_id: str,
+    memory: Any,
+    tools: Any,
+    skills_context: str,
+    images: list[str] | None = None,
+    user_id: str = "default",
+    persistent_memory_text: str = "",
+    *,
+    project_id: str,
+    run_id: str,
+    memory_ids: tuple[str, ...] = (),
+    skill_ids: tuple[str, ...] = (),
+) -> EffectiveContext:
+    return await build_effective_context(
+        user_input,
+        conversation_id,
+        memory,
+        tools,
+        skills_context,
+        images,
+        user_id,
+        persistent_memory_text,
+        project_id=project_id,
+        run_id=run_id,
+        memory_ids=memory_ids,
+        skill_ids=skill_ids,
+    )
 
 
 async def prepare_messages(

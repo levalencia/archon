@@ -110,6 +110,11 @@ class ConversationRepository:
     ) -> builtins.list[dict[str, Any]]:
         return await self._store.retrieve(conversation_id, limit, user_id)
 
+    async def retrieve_with_metadata(
+        self, conversation_id: str, limit: int = 50, user_id: str = "default"
+    ) -> builtins.list[dict[str, Any]]:
+        return await self._store.retrieve_with_metadata(conversation_id, limit, user_id)
+
     async def retrieve_through(
         self,
         conversation_id: str,

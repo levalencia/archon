@@ -34,7 +34,7 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
     database = tmp_path / "effect-budget.db"
     config = _config(database)
-    assert ScriptDirectory.from_config(config).get_heads() == ["20260827_09"]
+    assert ScriptDirectory.from_config(config).get_heads() == ["20260827_10"]
 
     command.upgrade(config, "20260826_08")
     engine = create_engine(f"sqlite:///{database}")
@@ -53,7 +53,9 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     engine.dispose()
     engine = create_engine(f"sqlite:///{database}")
     inspector = inspect(engine)
-    assert {"effects", "project_budgets", "model_charges"} <= set(inspector.get_table_names())
+    assert {"effects", "project_budgets", "model_charges", "context_snapshots"} <= set(
+        inspector.get_table_names()
+    )
     assert {
         "budget_limit_nusd",
         "budget_spent_nusd",
@@ -99,6 +101,17 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
         "ck_runs_budget_amounts_nonnegative",
         "ck_runs_budget_within_limit",
     } <= _names(inspector.get_check_constraints("runs"))
+    assert _names(inspector.get_check_constraints("context_snapshots")) == {
+        "ck_context_snapshots_schema_version",
+        "ck_context_snapshots_tokens_nonnegative",
+    }
+    assert "uq_context_snapshots_run" in _names(
+        inspector.get_unique_constraints("context_snapshots")
+    )
+    assert {
+        "ix_context_snapshots_owner_run",
+        "ix_context_snapshots_owner_project_created",
+    } <= _names(inspector.get_indexes("context_snapshots"))
 
     with engine.begin() as connection, pytest.raises(IntegrityError):
         connection.execute(
@@ -113,7 +126,10 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     engine.dispose()
     engine = create_engine(f"sqlite:///{database}")
     downgraded = inspect(engine)
-    assert not ({"effects", "project_budgets", "model_charges"} & set(downgraded.get_table_names()))
+    assert not (
+        {"effects", "project_budgets", "model_charges", "context_snapshots"}
+        & set(downgraded.get_table_names())
+    )
     assert not {
         "budget_limit_nusd",
         "budget_spent_nusd",
@@ -124,7 +140,9 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     command.upgrade(config, "head")
     engine.dispose()
     engine = create_engine(f"sqlite:///{database}")
-    assert {"effects", "project_budgets", "model_charges"} <= set(inspect(engine).get_table_names())
+    assert {"effects", "project_budgets", "model_charges", "context_snapshots"} <= set(
+        inspect(engine).get_table_names()
+    )
     engine.dispose()
 
 

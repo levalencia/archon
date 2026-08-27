@@ -40,6 +40,12 @@ class MemoryLimitError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class MemoryContextBundle:
+    text: str
+    fact_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryFact:
     id: str
     content: str
@@ -329,6 +335,12 @@ class ScopedEncryptedMemoryRepository:
     async def export(self, user_id: str, project_id: str) -> tuple[MemoryFact, ...]:
         return await self.list(user_id, project_id)
 
-    async def context_text(self, user_id: str, project_id: str) -> str:
+    async def context_bundle(self, user_id: str, project_id: str) -> MemoryContextBundle:
         facts = await self.list(user_id, project_id)
-        return "\n".join(f"- {fact.content}" for fact in facts)
+        return MemoryContextBundle(
+            text="\n".join(f"- {fact.content}" for fact in facts),
+            fact_ids=tuple(fact.id for fact in facts),
+        )
+
+    async def context_text(self, user_id: str, project_id: str) -> str:
+        return (await self.context_bundle(user_id, project_id)).text

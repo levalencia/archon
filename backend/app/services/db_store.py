@@ -225,6 +225,40 @@ class RunRow(Base):
     budget_opened_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class ContextSnapshotRow(Base):
+    """Redacted effective-context lineage; never stores prompt or source content."""
+
+    __tablename__ = "context_snapshots"
+    __table_args__ = (
+        CheckConstraint("schema_version = 1", name="ck_context_snapshots_schema_version"),
+        CheckConstraint("estimated_tokens >= 0", name="ck_context_snapshots_tokens_nonnegative"),
+        UniqueConstraint("run_id", name="uq_context_snapshots_run"),
+        Index("ix_context_snapshots_owner_run", "owner_id", "run_id"),
+        Index(
+            "ix_context_snapshots_owner_project_created",
+            "owner_id",
+            "project_id",
+            "created_at",
+        ),
+    )
+
+    snapshot_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    conversation_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    selected_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    summarized_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    memory_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    skill_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    summary_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    estimated_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    truncation_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class EffectRow(Base):
     """Durable effect tombstone containing hashes and lifecycle metadata only."""
 
@@ -742,6 +776,27 @@ class DatabaseStore:
             result = await session.execute(query.order_by(MessageRow.id).limit(limit))
             rows = result.scalars().all()
             return [{"role": r.role, "content": r.content} for r in rows]
+
+    async def retrieve_with_metadata(
+        self, conversation_id: str, limit: int = 50, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Retrieve message content plus stable source IDs for context provenance."""
+        async with self._session_factory() as session:
+            query = select(MessageRow).where(MessageRow.conversation_id == conversation_id)
+            if user_id is not None:
+                query = query.join(
+                    ConversationRow, ConversationRow.id == MessageRow.conversation_id
+                ).where(ConversationRow.user_id == user_id)
+            rows = (await session.scalars(query.order_by(MessageRow.id).limit(limit))).all()
+            return [
+                {
+                    "id": row.id,
+                    "role": row.role,
+                    "content": row.content,
+                    "created_at": row.created_at,
+                }
+                for row in rows
+            ]
 
     async def retrieve_through(
         self,
