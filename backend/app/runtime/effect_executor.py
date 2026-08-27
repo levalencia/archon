@@ -125,9 +125,7 @@ class DurableEffectToolExecutor:
         self._repository = repository
         self._context = context
         self._identity_secret = bytes(identity_secret)
-        self._approved_resources: dict[
-            tuple[str, str, str], tuple[ResourcePattern, ...]
-        ] = {}
+        self._approved_resources: dict[tuple[str, str, str], tuple[ResourcePattern, ...]] = {}
 
     @staticmethod
     def _call_key(call: ToolCall) -> tuple[str, str, str]:

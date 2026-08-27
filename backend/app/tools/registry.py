@@ -198,12 +198,10 @@ class ToolDefinition:
             signature = inspect.signature(self.handler)
             declared = signature.parameters.get(parameter)
             accepts_named_key = (
-                declared is not None
-                and declared.kind is not inspect.Parameter.POSITIONAL_ONLY
+                declared is not None and declared.kind is not inspect.Parameter.POSITIONAL_ONLY
             )
             accepts_key = accepts_named_key or any(
-                item.kind is inspect.Parameter.VAR_KEYWORD
-                for item in signature.parameters.values()
+                item.kind is inspect.Parameter.VAR_KEYWORD for item in signature.parameters.values()
             )
             if not accepts_key:
                 raise ValueError("handler does not accept the idempotency key parameter")
