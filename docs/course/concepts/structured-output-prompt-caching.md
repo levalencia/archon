@@ -1,103 +1,181 @@
 # Structured output and prompt caching
 
-> **Implementation status:** `partial`
-> **Status boundary:** Anthropic request construction supports JSON prompting/prefill and ephemeral system-prompt cache control, but JSON is not schema-validated and cache hits or savings are not measured; parity across providers is absent.
-> **Reviewed revision:** `6e3e13f`
+> **Implementation status:** structured output `implemented`; prompt-cache accounting `partial`
+> **Status boundary:** Archon validates terminal structured output locally and fails closed. Anthropic/Foundry cache counters, per-response pricing, events, and SSE reporting are wired and tested. Provider-native schema features remain explicit opt-ins, and no real-provider schema/cache-hit or billing comparison has been recorded.
+> **Reviewed revision:** current S8 provider-contract branch
 > **Used by module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
 > **Catalog ID:** `structured-output-prompt-caching`
 
 ## Beginner explanation
 
-Structured output constrains a reply to a machine-readable shape. Prompt caching lets a provider reuse stable prompt prefixes. Asking for JSON is weaker than validating a schema, and adding a cache marker is weaker than proving a cache hit.
+Structured output is a contract: the model response must parse as strict JSON and satisfy an application validator before Archon treats it as a successful answer. A provider's JSON hint or native schema improves generation but does not replace local validation.
+
+Prompt caching is separately observable accounting. A cache marker merely requests reuse; only provider-reported cache-read or cache-write counters prove what the provider reported for that call. Local tests prove normalization and arithmetic, not a real cache hit.
 
 ## Problem and mental model
 
-Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.
+Keep these layers distinct:
+
+1. **Requested format:** JSON mode or provider-native JSON Schema.
+2. **Transport response:** provider text, tool calls, usage, and stop reason.
+3. **Local trust boundary:** strict JSON parse and application validation.
+4. **Cache request:** an eligible stable prompt prefix is marked.
+5. **Cache evidence:** provider-reported counters are normalized and priced per response.
+
+A response is not trusted merely because the provider says it used a schema. Cache savings are not inferred from a request marker.
 
 ## Architecture and components
 
 ```mermaid
 flowchart LR
-    Messages --> Builder[Anthropic request builder]
-    Schema[Desired schema] -. currently instruction only .-> Builder
-    Builder --> Cache[cache_control prefix]
-    Builder --> Provider
-    Provider --> Validator[Schema validator: absent]
+    Caller[Caller + ResponseContract] --> Negotiate[Provider capability negotiation]
+    Negotiate --> Adapter[Typed provider adapter]
+    Adapter --> Provider[Provider API]
+    Provider --> Response[Text + usage + stop reason]
+    Response --> Parse[Strict JSON parse]
+    Parse --> Validate[Local schema/application validator]
+    Validate -->|valid| Result[Typed structured_output]
+    Parse -->|invalid| Reject[structured_output_invalid]
+    Validate -->|invalid| Reject
 ```
 
-## Startup and request sequence
+```mermaid
+flowchart LR
+    Prefix[Stable prompt prefix] --> Marker[Provider cache marker]
+    Marker --> Provider
+    Provider --> Usage[Provider-reported usage]
+    Usage --> Normalize[Total input + cache read/write]
+    Normalize --> Event[MODEL_RESPONSE evidence]
+    Event --> Cost[Per-response provider/model pricing]
+    Cost --> SSE[Run cost + cache counters/savings]
+```
+
+## Request and validation sequence
 
 ```mermaid
 sequenceDiagram
-    Caller->>Builder: messages + json/cache flags
-    Builder->>Provider: JSON instruction + prefill + cache marker
-    Provider-->>Caller: text and usage
-    Note over Provider,Caller: no guaranteed parse/schema or cache-hit evidence
+    participant R as AgentRuntime
+    participant A as Typed adapter
+    participant P as Provider
+    participant V as ResponseContract
+    R->>A: messages + tools + response contract
+    A->>P: provider-native JSON/schema request when enabled
+    P-->>A: content + usage + stop reason
+    A-->>R: typed ModelResponse
+    R->>V: parse_and_validate(content)
+    alt valid
+        V-->>R: validated object
+        R-->>R: emit/persist accepted terminal result
+    else malformed or schema mismatch
+        V-->>R: typed sanitized failure
+        R-->>R: do not emit or persist invalid terminal text
+    end
 ```
 
 ## Archon implementation and source walkthrough
 
-At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No response schema, parser/retry contract, provider matrix, cache-read token capture, or savings evidence.
-
-### Source symbols
+### Structured-output boundary
 
 | Source symbol | Role and boundary |
 |---|---|
-| [`backend/app/runtime/anthropic.py:anthropic_request`](../../../backend/app/runtime/anthropic.py) | Builds JSON-mode and cache-control request structures. |
-| [`backend/app/runtime/support.py:JsonModeProvider`](../../../backend/app/runtime/support.py) | Forwards a JSON response-format hint. |
+| [`backend/app/runtime/structured_output.py::ResponseContract`](../../../backend/app/runtime/structured_output.py) | Immutable JSON-compatible schema, strict parse, and mandatory validator. |
+| [`backend/app/runtime/engine.py::AgentRuntime.run`](../../../backend/app/runtime/engine.py) | Capability fail-before-call, terminal local validation, typed result, and sanitized rejection. |
+| [`backend/app/agents/openai_adapter.py::OpenAIAdapter.complete`](../../../backend/app/agents/openai_adapter.py) | Opt-in OpenAI JSON mode/schema request plus typed tools/images/usage response. |
+| [`backend/app/agents/ollama_adapter.py::OllamaAdapter.complete`](../../../backend/app/agents/ollama_adapter.py) | Opt-in Ollama JSON/schema request with strict typed response normalization. |
+| [`backend/app/agents/fallback_chain.py::FallbackLLMChain.complete`](../../../backend/app/agents/fallback_chain.py) | Preserves the complete contract and selects one compatible provider candidate. |
 
-### Tests
+### Cache accounting boundary
 
-| Test | Contract proved and limit |
+| Source symbol | Role and boundary |
 |---|---|
-| [`backend/tests/unit/test_json_mode_and_caching.py::test_json_mode_adds_system_instruction_and_prefill`](../../../backend/tests/unit/test_json_mode_and_caching.py) | Proves request shaping for JSON mode. |
-| [`backend/tests/unit/test_json_mode_and_caching.py::test_caching_enabled_adds_cache_control`](../../../backend/tests/unit/test_json_mode_and_caching.py) | Proves cache-control emission. |
+| [`backend/app/runtime/anthropic.py::normalize_anthropic_usage`](../../../backend/app/runtime/anthropic.py) | Distinguishes absent, zero, cache-read, and cache-write counters; computes total input. |
+| [`backend/app/observability/cost_tracker.py::CostTracker.record`](../../../backend/app/observability/cost_tracker.py) | Applies explicit cache-aware pricing without assuming discounts for unknown providers. |
+| [`backend/app/observability/runtime_events.py::CompositeEventSink.emit`](../../../backend/app/observability/runtime_events.py) | Emits bounded cache usage into logs, traces, and durable event payloads. |
+| [`backend/app/routes/stream.py::QueueEventSink`](../../../backend/app/routes/stream.py) | Prices each MODEL_RESPONSE using its actual provider/model and accumulates run totals. |
 
-### Evidence boundary
+## Tests
 
-Current implementation dimensions are centralized in [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md). Source/tests below are repository evidence; they are not public-deployment or production-certification evidence.
-
-## Try it: bounded study exercise
-
-From the repository root, inspect the mapped source and test, then run the named focused test with the project test environment if available. Confirm both the passing contract and this gap: No response schema, parser/retry contract, provider matrix, cache-read token capture, or savings evidence.
-
-**Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
-
-## Risks, failures, and trade-offs
-
-| Topic | Assessment |
+| Test | Contract proved |
 |---|---|
-| Principal risk | Malformed JSON can reach callers; unstable prefixes reduce cache value; sensitive prompts may be cached under provider terms. |
-| Current gap/failure | No response schema, parser/retry contract, provider matrix, cache-read token capture, or savings evidence. |
-| Trade-off | Prompt hints are portable and cheap; strict schemas improve reliability but require provider-specific handling and validation. |
-| Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
+| [`test_structured_output.py`](../../../backend/tests/unit/test_structured_output.py) | Immutable schemas, strict finite JSON, parse and validation errors. |
+| [`test_runtime_provider_contracts.py`](../../../backend/tests/unit/test_runtime_provider_contracts.py) | Fail-before-call, local terminal validation, stop semantics, and no invalid-text emission. |
+| [`test_openai_typed_adapter.py`](../../../backend/tests/unit/test_openai_typed_adapter.py) | Opt-in native schema, strict tools/images, cache usage, and sanitized identity. |
+| [`test_ollama_typed_adapter.py`](../../../backend/tests/unit/test_ollama_typed_adapter.py) | Opt-in JSON/schema plus strict tools, vision, IDs, and usage. |
+| [`test_prompt_cache_accounting.py`](../../../backend/tests/unit/test_prompt_cache_accounting.py) | Cache normalization, pricing, actual fallback identity, accumulation, and isolation. |
+| [`test_runtime_observability.py`](../../../backend/tests/unit/test_runtime_observability.py) | Cache counters in bounded event and trace evidence. |
+| [`test_runtime_sse.py`](../../../backend/tests/unit/test_runtime_sse.py) | Conditional SSE cache counters and savings. |
+
+## Evidence boundary
+
+The executable [capability acceptance manifest](../../implementation/CAPABILITY-ACCEPTANCE.yaml) is canonical for dimensions and limitations. Deterministic tests prove local code, wiring, and arithmetic. They do **not** prove:
+
+- a real provider honored JSON Schema;
+- a real cache hit occurred;
+- provider invoices match local estimated prices;
+- every configured OpenAI-compatible or Ollama model supports enabled capabilities;
+- public deployment or production SLOs.
+
+## Failure and security analysis
+
+| Risk | Control |
+|---|---|
+| Malformed/non-finite JSON | Strict parsing rejects `NaN`, infinities, malformed JSON, and schema mismatch. |
+| Provider-native schema overclaim | Model/endpoint-dependent capabilities are conservative opt-ins. |
+| Invalid structured text leaked as answer | Validation occurs before terminal text emission and persistence. |
+| Fallback drops contract | Composite fallback routes the full conjunctive requirement set to one candidate. |
+| Cache counters fabricated locally | Counters remain `None` unless reported by the provider. |
+| Wrong fallback model pricing | Every MODEL_RESPONSE is priced using safe actual provider/model identity. |
+| Prompt or tool secrets in evidence | Events expose counters and bounded metadata, not prompts or raw arguments. |
+
+## Trade-offs
+
+- Local validation is provider-independent but cannot improve model generation by itself.
+- Native schemas reduce malformed responses but differ by endpoint/model and require explicit opt-in.
+- Cache writes can temporarily cost more than uncached input; savings may therefore be negative.
+- Per-response costing is more accurate for fallback runs than aggregate run pricing, but remains an estimate until compared with provider billing.
+
+## Try it: bounded exercise
+
+1. Create a `ResponseContract` backed by a Pydantic validator.
+2. Run a valid response, malformed JSON, and schema-mismatched JSON.
+3. Verify invalid terminal text is absent from `TEXT_DELTA` and persisted results.
+4. Feed explicit cache read/write counters to the cost tracker.
+5. Compare baseline input cost with cache-aware cost.
+
+**Done criteria:** tests prove typed success, fail-closed rejection, `None` versus zero cache semantics, and per-response fallback pricing without claiming live provider evidence.
 
 ## Lab vs production
 
-The status remains **partial** at `6e3e13f`. Anthropic request construction supports JSON prompting/prefill and ephemeral system-prompt cache control, but JSON is not schema-validated and cache hits or savings are not measured; parity across providers is absent. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+Structured validation is implemented and observed under local deterministic tests. Cache accounting is partial because the collection, pricing, event, and SSE paths are wired and tested, but no real-provider cache hit or invoice comparison is recorded. Neither capability has deployment evidence.
 
-## Interview answer
+## 30-second interview answer
 
-> Structured output constrains a reply to a machine-readable shape. Prompt caching lets a provider reuse stable prompt prefixes. Asking for JSON is weaker than validating a schema, and adding a cache marker is weaker than proving a cache hit. In Archon the honest status is **partial**: Anthropic request construction supports JSON prompting/prefill and ephemeral system-prompt cache control, but JSON is not schema-validated and cache hits or savings are not measured; parity across providers is absent.
+> Archon treats provider JSON features as generation aids, not trust. A typed `ResponseContract` is routed only to a compatible provider, then the terminal text is parsed and validated locally before emission or persistence. Cache accounting is separate: Anthropic-style counters preserve absent versus zero values, every model response is priced using its actual fallback winner, and unknown providers receive no assumed discount. The local contracts are tested; live schema/cache and billing evidence remain explicit gaps.
 
 ## Self-check
 
-1. What problem does this concept solve, and what nearby concept is it not?
-2. Trace the diagram’s trust boundary and failure path.
-3. Which mapped symbol/test proves current behavior, or why are the lists empty?
-4. What exact gap prevents a stronger status?
-5. Which risk would you test first before production use?
+1. Why does provider-native JSON Schema not replace local validation?
+2. At what point is invalid structured text prevented from reaching persistence?
+3. Why must fallback select one provider satisfying the complete requirement set?
+4. What is the difference between an absent cache counter and an explicit zero?
+5. Why is cache cost calculated per MODEL_RESPONSE instead of from aggregate run usage?
+6. Which claims still require live-provider evidence?
 
 <details>
 <summary>Answer guide</summary>
 
-A good answer names the contract in the beginner explanation, follows the sequence, cites the exact table entry (or the explicit absence), repeats the status boundary, and chooses a risk from the table rather than claiming unrecorded behavior.
+1. Provider behavior and endpoint support can differ; the application owns the final trust boundary.
+2. The runtime validates terminal content before text emission and result recording.
+3. A union of separate provider capabilities does not prove any one provider can execute the request.
+4. Absent means unreported; zero means explicitly reported no cached tokens.
+5. Different fallback iterations can use different providers/models and prices.
+6. Native schema compliance, real cache hits, invoice parity, and deployment remain unproved.
 
 </details>
 
 ## Related concepts and modules
 
 - **Module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
+- **Provider parity:** [Provider adapters and capability parity](provider-adapters-capability-parity.md)
 - **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
 - **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)

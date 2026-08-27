@@ -35,31 +35,31 @@
       "id": "provider-capability-parity",
       "owner_module": "docs/course/modules/02-typed-runtime/README.md",
       "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "na", "live_provider": "no", "deployed": "no"},
-      "sources": ["backend/app/runtime/ports.py", "backend/app/agents/llm_factory.py"],
-      "tests": ["backend/tests/unit/test_adapters.py", "backend/tests/unit/test_fallback_wire.py"],
-      "evidence": ["docs/course/concepts/provider-adapters-capability-parity.md"],
-      "limitation": "Adapters do not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly; no live-provider parity run is recorded."
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "na", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/runtime/capabilities.py", "backend/app/agents/fallback_chain.py", "backend/app/agents/openai_adapter.py", "backend/app/agents/ollama_adapter.py"],
+      "tests": ["backend/tests/unit/test_provider_capabilities.py", "backend/tests/unit/test_fallback_wire.py", "backend/tests/unit/test_openai_typed_adapter.py", "backend/tests/unit/test_ollama_typed_adapter.py"],
+      "evidence": ["docs/course/concepts/provider-adapters-capability-parity.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "Typed negotiation, fail-before-call, contract-preserving fallback, and conservative provider opt-ins are tested locally; no real-provider parity run or deployment evidence is recorded."
     },
     {
       "id": "validated-structured-output",
       "owner_module": "docs/course/modules/02-typed-runtime/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "partial", "wired": "partial", "tested": "yes", "observed": "no", "ui": "na", "live_provider": "no", "deployed": "no"},
-      "sources": ["backend/app/runtime/anthropic.py", "backend/app/runtime/support.py"],
-      "tests": ["backend/tests/unit/test_json_mode_and_caching.py"],
-      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md"],
-      "limitation": "JSON prompting and prefill exist, but responses are not schema-validated and there is no parser/retry contract or cross-provider acceptance."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "na", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/runtime/structured_output.py", "backend/app/runtime/engine.py", "backend/app/agents/openai_adapter.py", "backend/app/agents/ollama_adapter.py"],
+      "tests": ["backend/tests/unit/test_structured_output.py", "backend/tests/unit/test_runtime_provider_contracts.py", "backend/tests/unit/test_openai_typed_adapter.py", "backend/tests/unit/test_ollama_typed_adapter.py"],
+      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "Terminal output is parsed and schema-validated locally with fail-closed errors; provider-native schema support is opt-in and has no recorded live-provider acceptance."
     },
     {
       "id": "prompt-cache-accounting",
       "owner_module": "docs/course/modules/02-typed-runtime/README.md",
       "status": "partial",
-      "dimensions": {"exists": "partial", "wired": "partial", "tested": "yes", "observed": "no", "ui": "no", "live_provider": "no", "deployed": "no"},
-      "sources": ["backend/app/runtime/anthropic.py", "backend/app/runtime/support.py"],
-      "tests": ["backend/tests/unit/test_json_mode_and_caching.py"],
-      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md"],
-      "limitation": "Ephemeral Anthropic cache control is constructed, but cache-read tokens, hit rates, and savings are not captured or observed with a live provider."
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/runtime/anthropic.py", "backend/app/observability/cost_tracker.py", "backend/app/observability/runtime_events.py", "backend/app/routes/stream.py"],
+      "tests": ["backend/tests/unit/test_prompt_cache_accounting.py", "backend/tests/unit/test_runtime_observability.py", "backend/tests/unit/test_runtime_sse.py"],
+      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "Provider-reported cache counters, per-response pricing, savings, events, and SSE output are tested locally; no real-provider cache hit or billing comparison is recorded."
     },
     {
       "id": "effect-idempotency",
