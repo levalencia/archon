@@ -207,9 +207,7 @@ class AgentRuntime:
                 iterations += 1
                 await self._emit(AgentEventKind.ITERATION_STARTED, iterations)
                 remaining_tokens = max(1, self._budget.max_tokens - usage.total_tokens)
-                provider_kwargs: dict[str, Any] = {
-                    "max_tokens": min(4096, remaining_tokens)
-                }
+                provider_kwargs: dict[str, Any] = {"max_tokens": min(4096, remaining_tokens)}
                 if response_contract is not None:
                     provider_kwargs["response_contract"] = response_contract
                 try:
@@ -1376,9 +1374,7 @@ class AgentRuntime:
                 missing_capabilities, content, iterations, calls, usage
             )
         try:
-            provider_kwargs: dict[str, Any] = {
-                "max_tokens": self._budget.final_synthesis_tokens
-            }
+            provider_kwargs: dict[str, Any] = {"max_tokens": self._budget.final_synthesis_tokens}
             if response_contract is not None:
                 provider_kwargs["response_contract"] = response_contract
             response = await self._within_deadline(
@@ -1438,9 +1434,7 @@ class AgentRuntime:
             structured_output: object | None = None
             if response_contract is not None:
                 try:
-                    structured_output = response_contract.parse_and_validate(
-                        response_content or ""
-                    )
+                    structured_output = response_contract.parse_and_validate(response_content or "")
                 except StructuredOutputError as error:
                     await self._emit(
                         AgentEventKind.STRUCTURED_OUTPUT_REJECTED,
