@@ -22,13 +22,21 @@ from app.runtime.models import TokenUsage
     [
         ({"input_tokens": 11, "output_tokens": 3}, TokenUsage(11, 3)),
         (
-            {"input_tokens": 11, "output_tokens": 3, "cache_creation_input_tokens": 0,
-             "cache_read_input_tokens": 0},
+            {
+                "input_tokens": 11,
+                "output_tokens": 3,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+            },
             TokenUsage(11, 3, cache_read_input_tokens=0, cache_write_input_tokens=0),
         ),
         (
-            SimpleNamespace(input_tokens=11, output_tokens=3,
-                            cache_creation_input_tokens=5, cache_read_input_tokens=7),
+            SimpleNamespace(
+                input_tokens=11,
+                output_tokens=3,
+                cache_creation_input_tokens=5,
+                cache_read_input_tokens=7,
+            ),
             TokenUsage(23, 3, cache_read_input_tokens=7, cache_write_input_tokens=5),
         ),
     ],
@@ -89,12 +97,24 @@ def test_cost_tracker_distinguishes_unknown_zero_read_write_and_accumulates() ->
     tracker = CostTracker()
     unknown = tracker.record("c", "u", "claude-sonnet-4-20250514", 1000, 0)
     zero = tracker.record(
-        "c", "u", "claude-sonnet-4-20250514", 1000, 0,
-        cache_read_input_tokens=0, cache_write_input_tokens=0, provider="anthropic",
+        "c",
+        "u",
+        "claude-sonnet-4-20250514",
+        1000,
+        0,
+        cache_read_input_tokens=0,
+        cache_write_input_tokens=0,
+        provider="anthropic",
     )
     cached = tracker.record(
-        "c", "u", "claude-sonnet-4-20250514", 1000, 0,
-        cache_read_input_tokens=800, cache_write_input_tokens=100, provider="anthropic",
+        "c",
+        "u",
+        "claude-sonnet-4-20250514",
+        1000,
+        0,
+        cache_read_input_tokens=800,
+        cache_write_input_tokens=100,
+        provider="anthropic",
     )
 
     assert unknown["cache_read_input_tokens"] is None
@@ -114,12 +134,23 @@ def test_cost_tracker_distinguishes_unknown_zero_read_write_and_accumulates() ->
 def test_unknown_model_assumes_no_cache_discount_and_invalid_subsets_fail() -> None:
     tracker = CostTracker()
     info = tracker.record(
-        "c", "u", "unknown", 100, 0,
-        cache_read_input_tokens=100, cache_write_input_tokens=0, provider="other",
+        "c",
+        "u",
+        "unknown",
+        100,
+        0,
+        cache_read_input_tokens=100,
+        cache_write_input_tokens=0,
+        provider="other",
     )
     assert info["cache_savings_usd"] == 0
     with pytest.raises(ValueError, match="cannot exceed total input"):
         tracker.record(
-            "c", "u", "unknown", 10, 0,
-            cache_read_input_tokens=8, cache_write_input_tokens=3,
+            "c",
+            "u",
+            "unknown",
+            10,
+            0,
+            cache_read_input_tokens=8,
+            cache_write_input_tokens=3,
         )
