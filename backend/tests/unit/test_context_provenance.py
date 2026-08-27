@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.runtime.context import build_effective_context
 from app.runtime.context_provenance import EffectiveContextManifest
 from app.security.persistence_redactor import PersistenceRedactor
+from app.services.auto_compact import auto_compact_context
 from app.services.context_snapshots import ContextSnapshotConflictError, ContextSnapshotRepository
 from app.services.db_store import Base, ContextSnapshotRow
 from app.services.run_ledger import RunRepository
-from app.services.auto_compact import auto_compact_context
 
 
 class Tools:
@@ -96,9 +96,7 @@ async def test_compactor_returns_exact_source_ids_with_historical_system_message
         {"role": "assistant", "content": "old assistant", "_source_message_id": 12},
         {"role": "user", "content": "current", "_source_message_id": 13},
     ]
-    _, stats = await auto_compact_context(
-        messages, max_tokens=1, threshold=0, keep_recent=1
-    )
+    _, stats = await auto_compact_context(messages, max_tokens=1, threshold=0, keep_recent=1)
 
     assert stats["compacted"] is True
     assert stats["summarized_message_ids"] == [11, 12]

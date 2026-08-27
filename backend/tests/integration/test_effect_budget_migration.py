@@ -14,7 +14,6 @@ from sqlalchemy.schema import CreateTable
 
 from alembic import command
 from app.services.db_store import (
-    ContextSnapshotRow,
     EffectRow,
     ModelChargeRow,
     ProjectBudgetRow,
