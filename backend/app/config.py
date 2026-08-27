@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from app.tools.sandbox import is_immutable_image_reference
@@ -143,6 +143,8 @@ class Settings(BaseSettings):
     agent_max_iterations: int = 5
     agent_token_budget: int = 64_000
     durable_monetary_budget_enabled: bool = False
+    durable_effect_ledger_enabled: bool = False
+    effect_identity_secret: SecretStr = SecretStr("")
     agent_run_budget_usd: Decimal = Field(default=Decimal("1.00"), ge=0, le=1_000_000)
     agent_project_budget_usd: Decimal = Field(default=Decimal("10.00"), ge=0, le=1_000_000)
     agent_model_input_reservation_tokens: int = Field(default=64_000, ge=1, le=10_000_000)
@@ -154,6 +156,14 @@ class Settings(BaseSettings):
         if scaled != scaled.to_integral_value():
             raise ValueError("budget USD values support at most nine decimal places")
         return value
+
+    @model_validator(mode="after")
+    def validate_effect_identity_secret(self) -> Settings:
+        if self.durable_effect_ledger_enabled:
+            secret = self.effect_identity_secret.get_secret_value().encode("utf-8")
+            if len(secret) < 32:
+                raise ValueError("effect identity secret must contain at least 32 UTF-8 bytes")
+        return self
 
     approval_timeout_seconds: float = Field(default=30.0, gt=0)
     approval_poll_interval_seconds: float = Field(default=0.05, gt=0)

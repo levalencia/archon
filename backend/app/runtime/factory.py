@@ -11,6 +11,7 @@ from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.runtime_events import CompositeEventSink
 from app.runtime.engine import AgentRuntime, RuntimeBudget
 from app.runtime.events import EventSink
+from app.runtime.effect_executor import DurableEffectToolExecutor, EffectRunContext
 from app.runtime.monetary_budget import (
     BudgetRunContext,
     DurableBudgetedProvider,
@@ -20,6 +21,7 @@ from app.runtime.monetary_budget import (
 from app.runtime.ports import ModelProvider, ToolAuthorizer
 from app.security.default_policy import default_policy_engine
 from app.security.persistence_redactor import PersistenceRedactor
+from app.services.effect_ledger import EffectRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
 from app.tools.registry import SecureToolRegistry
 
@@ -111,9 +113,21 @@ def create_chat_runtime(
             _pricing_candidates(settings),
         )
 
+    runtime_tools: Any = tools
+    if settings.durable_effect_ledger_enabled:
+        session_factory = getattr(repository, "session_factory", None)
+        if session_factory is None:
+            raise RuntimeError("durable effect ledger requires a repository session factory")
+        runtime_tools = DurableEffectToolExecutor(
+            tools,
+            EffectRepository(session_factory),
+            EffectRunContext(context.user_id, context.project_id, context.run_id),
+            settings.effect_identity_secret.get_secret_value().encode("utf-8"),
+        )
+
     return AgentRuntime(
         provider,
-        tools,
+        runtime_tools,
         events=sink,
         budget=RuntimeBudget(
             max_iterations=settings.agent_max_iterations,

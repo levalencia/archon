@@ -597,30 +597,36 @@ class AgentRuntime:
                     serialized = json.dumps(
                         output, sort_keys=True, separators=(",", ":"), default=str
                     )
+                    execution_status = (
+                        "duplicate"
+                        if output.get("status") == "duplicate_effect_blocked"
+                        else "success"
+                    )
                     if policy_binding is None:
                         record = {
                             "tool": call.name,
                             "parameters": dict(call.arguments),
                             "result": dict(output),
-                            "status": "success",
+                            "status": execution_status,
                         }
                         completed_data = {
                             "id": call.id,
                             "name": call.name,
                             "arguments": dict(call.arguments),
                             "output": dict(output),
+                            "status": execution_status,
                         }
                     else:
                         record = {
                             "tool": policy_binding.tool_name,
                             "parameters": self._policy_binding_arguments(policy_binding),
                             "result": dict(output),
-                            "status": "success",
+                            "status": execution_status,
                         }
                         completed_data = self._policy_tool_result_data(
                             policy_binding,
                             serialized,
-                            "success",
+                            execution_status,
                         )
                     calls.append(record)
                     await self._emit(

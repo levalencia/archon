@@ -45,6 +45,9 @@ DEFAULT_TOOL_TIMEOUT = 30
 
 ResourceResolver = Callable[[Mapping[str, Any]], tuple[ResourcePattern, ...]]
 _SUPPORTED_PROPERTY_TYPES = frozenset({"string", "integer", "number", "boolean", "object", "array"})
+_EFFECTFUL_RISKS = frozenset(
+    {RiskClass.WRITE, RiskClass.EXECUTE, RiskClass.EXTERNAL_SIDE_EFFECT}
+)
 
 
 def _value_matches_type(value: Any, declared_type: str) -> bool:
@@ -174,6 +177,8 @@ class ToolDefinition:
     requires_approval: bool = False
     risk_classes: frozenset[RiskClass] = dataclass_field(default_factory=frozenset)
     resource_resolver: ResourceResolver | None = None
+    effectful: bool = False
+    idempotency_key_parameter: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.risk_classes, frozenset) or not all(
@@ -183,9 +188,35 @@ class ToolDefinition:
         if self.resource_resolver is not None and not callable(self.resource_resolver):
             raise TypeError("resource_resolver must be callable")
         schema = {} if self.input_schema is None else _validate_input_schema(self.input_schema)
+        effectful = self.effectful or bool(self.risk_classes & _EFFECTFUL_RISKS)
+        if type(effectful) is not bool:
+            raise TypeError("effectful must be boolean")
+        parameter = self.idempotency_key_parameter
+        if parameter is not None:
+            if not isinstance(parameter, str) or not parameter.isidentifier():
+                raise ValueError("idempotency key parameter must be a safe identifier")
+            if parameter in schema.get("properties", {}) or parameter in schema.get("required", ()):
+                raise ValueError("idempotency key parameter must remain hidden from input schema")
+            signature = inspect.signature(self.handler)
+            accepts_key = parameter in signature.parameters or any(
+                item.kind is inspect.Parameter.VAR_KEYWORD
+                for item in signature.parameters.values()
+            )
+            if not accepts_key:
+                raise ValueError("handler does not accept the idempotency key parameter")
+            effectful = True
+        object.__setattr__(self, "effectful", effectful)
         object.__setattr__(self, "name", canonical_tool_name(self.name))
         object.__setattr__(self, "required_permissions", tuple(self.required_permissions or ()))
         object.__setattr__(self, "input_schema", _deep_freeze(schema))
+
+
+@dataclass(frozen=True, slots=True)
+class ToolEffectSpec:
+    effectful: bool
+    input_schema: Mapping[str, Any]
+    resources: tuple[ResourcePattern, ...]
+    idempotency_key_parameter: str | None
 
 
 class SecureToolRegistry:
@@ -216,6 +247,8 @@ class SecureToolRegistry:
         requires_approval: bool = False,
         risk_classes: frozenset[RiskClass] = frozenset(),
         resource_resolver: ResourceResolver | None = None,
+        effectful: bool = False,
+        idempotency_key_parameter: str | None = None,
     ) -> None:
         """Register a tool."""
         canonical_name = canonical_tool_name(name)
@@ -231,6 +264,8 @@ class SecureToolRegistry:
             requires_approval=requires_approval,
             risk_classes=risk_classes,
             resource_resolver=resource_resolver,
+            effectful=effectful,
+            idempotency_key_parameter=idempotency_key_parameter,
         )
         logger.info("tool_registered", name=canonical_name, description=description)
 
@@ -274,6 +309,84 @@ class SecureToolRegistry:
 
         return copy.deepcopy(dict(arguments))
 
+    async def _execute_registered(
+        self,
+        tool_name: str,
+        tool: ToolDefinition,
+        handler_parameters: dict[str, Any],
+        audit_parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        correlation_id = get_correlation_id()
+        if self._permissions and tool.required_permissions:
+            for permission in tool.required_permissions:
+                allowed = await self._permissions.check(
+                    agent_id="archon",
+                    resource=tool_name,
+                    action=permission,
+                    **audit_parameters,
+                )
+                if not allowed:
+                    if self._audit:
+                        await self._audit.log(
+                            agent_id="archon",
+                            action="permission_denied",
+                            resource=tool_name,
+                            parameters=audit_parameters,
+                            result="denied",
+                            correlation_id=correlation_id,
+                            security_level="warning",
+                        )
+                    raise PermissionError(f"Permission denied for {permission} on {tool_name}")
+        try:
+            if inspect.iscoroutinefunction(tool.handler):
+                result = await asyncio.wait_for(
+                    tool.handler(**handler_parameters), timeout=tool.timeout
+                )
+            else:
+                result = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, lambda: tool.handler(**handler_parameters)
+                    ),
+                    timeout=tool.timeout,
+                )
+        except TimeoutError:
+            logger.error(
+                "tool_timeout",
+                tool=tool_name,
+                timeout=tool.timeout,
+                correlation_id=correlation_id,
+            )
+            if self._audit:
+                await self._audit.log(
+                    agent_id="archon",
+                    action="tool_timeout",
+                    resource=tool_name,
+                    parameters=audit_parameters,
+                    result="timeout",
+                    correlation_id=correlation_id,
+                    security_level="error",
+                )
+            raise TimeoutError(f"Tool '{tool_name}' timed out after {tool.timeout}s") from None
+        except Exception as error:
+            logger.error(
+                "tool_error",
+                tool=tool_name,
+                **safe_exception_metadata(error, "tool_execution_failed"),
+                correlation_id=correlation_id,
+            )
+            raise
+        if self._audit:
+            await self._audit.log(
+                agent_id="archon",
+                action="tool_executed",
+                resource=tool_name,
+                parameters=audit_parameters,
+                result="success",
+                correlation_id=correlation_id,
+            )
+        logger.info("tool_executed", tool=tool_name, correlation_id=correlation_id)
+        return result if isinstance(result, dict) else {"result": result}
+
     async def execute(
         self, call: ToolCall | str, parameters: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -296,6 +409,7 @@ class SecureToolRegistry:
 
         # 2. Input validation. This must precede every permission or execution hook.
         parameters = self._validate_arguments(tool, parameters)
+        return await self._execute_registered(tool_name, tool, parameters, parameters)
 
         # 3. Permission check
         if self._permissions and tool.required_permissions:
@@ -381,6 +495,33 @@ class SecureToolRegistry:
         if isinstance(result, dict):
             return result
         return {"result": result}
+
+    def effect_spec(self, call: ToolCall) -> ToolEffectSpec:
+        tool_name = canonical_tool_name(call.name)
+        tool = self._tools.get(tool_name)
+        if tool is None:
+            raise PolicyMetadataError(f"Unknown tool: {tool_name}")
+        parameters = self._validate_arguments(tool, call.arguments)
+        request = self.policy_request(ToolCall(call.id, tool_name, parameters))
+        return ToolEffectSpec(
+            effectful=tool.effectful,
+            input_schema=cast(Mapping[str, Any], tool.input_schema),
+            resources=request.resources,
+            idempotency_key_parameter=tool.idempotency_key_parameter,
+        )
+
+    async def execute_effect(self, call: ToolCall, *, effect_id: str) -> dict[str, Any]:
+        tool_name = canonical_tool_name(call.name)
+        tool = self._tools.get(tool_name)
+        if tool is None:
+            raise ValueError(f"Unknown tool: {tool_name}")
+        audit_parameters = self._validate_arguments(tool, call.arguments)
+        handler_parameters = copy.deepcopy(audit_parameters)
+        if tool.idempotency_key_parameter is not None:
+            handler_parameters[tool.idempotency_key_parameter] = effect_id
+        return await self._execute_registered(
+            tool_name, tool, handler_parameters, audit_parameters
+        )
 
     def list_tools(self) -> list[dict[str, Any]]:
         """List all registered tools with their schemas."""
