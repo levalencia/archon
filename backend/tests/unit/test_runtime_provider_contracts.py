@@ -13,6 +13,7 @@ from app.runtime import (
     ModelResponse,
     RecordingEventSink,
     Role,
+    RuntimeBudget,
     StopReason,
     TokenUsage,
     ToolCall,
@@ -228,3 +229,111 @@ async def test_tool_use_reason_with_calls_remains_allowed():
 
     assert result.stop_reason is StopReason.COMPLETED
     assert len(provider.calls) == 2
+
+
+class WorkingTools:
+    def definitions(self):
+        return ()
+
+    async def execute(self, call):
+        return {"ok": True}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_legacy_provider_without_optional_contract_keyword_still_runs():
+    class LegacyProvider:
+        calls = 0
+
+        async def complete(self, messages, tools=(), *, max_tokens=4096):
+            del messages, tools, max_tokens
+            self.calls += 1
+            return ModelResponse("done", provider_stop_reason="stop")
+
+    provider = LegacyProvider()
+    result = await AgentRuntime(provider, NoTools()).run(  # type: ignore[arg-type]
+        [Message(Role.USER, "go")]
+    )
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert provider.calls == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_final_synthesis_rejects_invalid_structured_output_before_emission():
+    sink = RecordingEventSink()
+    recorded: list[str] = []
+
+    async def record(content: str) -> None:
+        recorded.append(content)
+
+    provider = Provider(
+        [
+            ModelResponse(tool_calls=(ToolCall("call", "noop"),)),
+            ModelResponse("NOT JSON", provider_stop_reason="stop"),
+        ],
+        ProviderCapabilities(json_mode=True),
+    )
+    result = await AgentRuntime(
+        provider,
+        WorkingTools(),
+        events=sink,
+        budget=RuntimeBudget(max_iterations=1),
+        result_recorder=record,
+    ).run([Message(Role.USER, "go")], response_contract=contract())
+
+    assert result.stop_reason is StopReason.STRUCTURED_OUTPUT_INVALID
+    assert result.content == ""
+    assert "NOT JSON" not in recorded
+    assert all(
+        not (event.kind is AgentEventKind.TEXT_DELTA and event.data.get("text") == "NOT JSON")
+        for event in sink.events
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_final_synthesis_does_not_hide_provider_length_stop():
+    sink = RecordingEventSink()
+    provider = Provider(
+        [
+            ModelResponse(tool_calls=(ToolCall("call", "noop"),)),
+            ModelResponse("partial", provider_stop_reason="max_tokens"),
+        ]
+    )
+    result = await AgentRuntime(
+        provider,
+        WorkingTools(),
+        events=sink,
+        budget=RuntimeBudget(max_iterations=1),
+    ).run([Message(Role.USER, "go")])
+
+    assert result.stop_reason is StopReason.PROVIDER_LENGTH_LIMIT
+    assert result.content == ""
+    assert all(
+        not (event.kind is AgentEventKind.TEXT_DELTA and event.data.get("text") == "partial")
+        for event in sink.events
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_final_synthesis_returns_validated_structured_value():
+    provider = Provider(
+        [
+            ModelResponse(tool_calls=(ToolCall("call", "noop"),)),
+            ModelResponse('{"value": 7}', provider_stop_reason="stop"),
+        ],
+        ProviderCapabilities(json_mode=True),
+    )
+    response_contract = contract(lambda value: Answer(value=int(value["value"])))
+    result = await AgentRuntime(
+        provider,
+        WorkingTools(),
+        budget=RuntimeBudget(max_iterations=1),
+    ).run([Message(Role.USER, "go")], response_contract=response_contract)
+
+    assert result.stop_reason is StopReason.ITERATION_BUDGET_EXHAUSTED
+    assert result.structured_output == Answer(7)
+    assert result.content == '{"value": 7}'

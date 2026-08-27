@@ -207,13 +207,17 @@ class AgentRuntime:
                 iterations += 1
                 await self._emit(AgentEventKind.ITERATION_STARTED, iterations)
                 remaining_tokens = max(1, self._budget.max_tokens - usage.total_tokens)
+                provider_kwargs: dict[str, Any] = {
+                    "max_tokens": min(4096, remaining_tokens)
+                }
+                if response_contract is not None:
+                    provider_kwargs["response_contract"] = response_contract
                 try:
                     response = await self._within_deadline(
                         self._model.complete(
                             self._snapshot_history(history),
                             self._tools.definitions(),
-                            max_tokens=min(4096, remaining_tokens),
-                            response_contract=response_contract,
+                            **provider_kwargs,
                         ),
                         started_at,
                     )
@@ -1372,19 +1376,96 @@ class AgentRuntime:
                 missing_capabilities, content, iterations, calls, usage
             )
         try:
+            provider_kwargs: dict[str, Any] = {
+                "max_tokens": self._budget.final_synthesis_tokens
+            }
+            if response_contract is not None:
+                provider_kwargs["response_contract"] = response_contract
             response = await self._within_deadline(
                 self._model.complete(
                     self._snapshot_history(history),
                     (),
-                    max_tokens=self._budget.final_synthesis_tokens,
-                    response_contract=response_contract,
+                    **provider_kwargs,
                 ),
                 started_at,
             )
-            usage += response.usage
-            if response.content:
-                content = response.content
+            response_content = response.content if isinstance(response.content, str) else None
+            raw_stop_reason = response.provider_stop_reason
+            provider_stop_reason = raw_stop_reason if isinstance(raw_stop_reason, str) else None
+            response_usage = TokenUsage(
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+                response.usage.cache_read_input_tokens,
+                response.usage.cache_write_input_tokens,
+            )
+            usage += response_usage
+            response_event_data: dict[str, Any] = {}
+            if provider_stop_reason is not None:
+                response_event_data["provider_stop_reason"] = provider_stop_reason
+            raw_actual_provider = getattr(response, "actual_provider", None)
+            if isinstance(raw_actual_provider, str):
+                response_event_data["actual_provider"] = raw_actual_provider
+            raw_actual_model = getattr(response, "actual_model", None)
+            if isinstance(raw_actual_model, str):
+                response_event_data["actual_model"] = raw_actual_model
+            await self._emit(
+                AgentEventKind.MODEL_RESPONSE,
+                iterations,
+                response_event_data,
+                response_usage,
+            )
+            provider_reason = self._normalize_provider_stop_reason(
+                provider_stop_reason, has_tool_calls=False
+            )
+            if provider_reason not in (None, StopReason.COMPLETED):
+                return await self._stop(
+                    provider_reason,
+                    content,
+                    iterations,
+                    calls,
+                    usage,
+                    f"provider_stop_reason:{provider_reason.value}",
+                )
+            if response.tool_calls:
+                return await self._stop(
+                    StopReason.PROVIDER_ERROR,
+                    content,
+                    iterations,
+                    calls,
+                    usage,
+                    "provider_stop_reason:final_synthesis_tool_call",
+                )
+            structured_output: object | None = None
+            if response_contract is not None:
+                try:
+                    structured_output = response_contract.parse_and_validate(
+                        response_content or ""
+                    )
+                except StructuredOutputError as error:
+                    await self._emit(
+                        AgentEventKind.STRUCTURED_OUTPUT_REJECTED,
+                        iterations,
+                        {"code": error.code},
+                    )
+                    return await self._stop(
+                        StopReason.STRUCTURED_OUTPUT_INVALID,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        f"structured_output_invalid:{error.code}",
+                    )
+            if response_content:
+                content = response_content
                 await self._emit(AgentEventKind.TEXT_DELTA, iterations, {"text": content})
+            return await self._stop(
+                reason,
+                content,
+                iterations,
+                calls,
+                usage,
+                structured_output=structured_output,
+            )
         except _RuntimeDeadlineExceededError:
             return await self._stop(
                 StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
