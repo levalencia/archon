@@ -32,7 +32,9 @@ def _rotation_service(request: Request) -> MemoryKeyRotationService:
     return service
 
 
-def _rotation_payload(active_version: int, counts: dict[int, int], remaining: int) -> dict[str, Any]:
+def _rotation_payload(
+    active_version: int, counts: dict[int, int], remaining: int
+) -> dict[str, Any]:
     return {
         "active_version": active_version,
         "version_counts": {str(version): count for version, count in sorted(counts.items())},

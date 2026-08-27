@@ -17,7 +17,9 @@ class MemoryRotationStatus:
     @property
     def remaining(self) -> int:
         return sum(
-            count for version, count in self.version_counts.items() if version != self.active_version
+            count
+            for version, count in self.version_counts.items()
+            if version != self.active_version
         )
 
     @property
