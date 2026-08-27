@@ -90,9 +90,7 @@ class EffectiveContextManifest:
             self, "memory_ids", _unique_text(tuple(self.memory_ids), "memory_ids", 1000)
         )
         object.__setattr__(self, "skill_ids", _unique_text(tuple(self.skill_ids), "skill_ids", 100))
-        asset_hashes = _unique_text(
-            tuple(self.input_asset_hashes), "input_asset_hashes", 16
-        )
+        asset_hashes = _unique_text(tuple(self.input_asset_hashes), "input_asset_hashes", 16)
         if any(
             len(value) != 64 or any(char not in "0123456789abcdef" for char in value)
             for value in asset_hashes

@@ -129,9 +129,7 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
         "ck_memory_key_state_active",
         "ck_memory_key_state_generation",
     }
-    assert "ck_memory_facts_key_version" in _names(
-        inspector.get_check_constraints("memory_facts")
-    )
+    assert "ck_memory_facts_key_version" in _names(inspector.get_check_constraints("memory_facts"))
 
     with engine.begin() as connection, pytest.raises(IntegrityError):
         connection.execute(

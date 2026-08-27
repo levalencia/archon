@@ -194,9 +194,7 @@ async def chat_stream_real(
             provider=settings.llm_provider,
             model=settings.llm_model,
         )
-        current_message_id = await memory.store(
-            conv_id, "user", user_message, user["user_id"]
-        )
+        current_message_id = await memory.store(conv_id, "user", user_message, user["user_id"])
         if current_message_id is None:
             raise RuntimeError("context_message_persistence_failed")
         effective_context = await prepare_effective_context(

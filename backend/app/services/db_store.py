@@ -528,9 +528,7 @@ class MemoryFactRow(Base):
 
     __tablename__ = "memory_facts"
     __table_args__ = (
-        CheckConstraint(
-            "key_version BETWEEN 1 AND 255", name="ck_memory_facts_key_version"
-        ),
+        CheckConstraint("key_version BETWEEN 1 AND 255", name="ck_memory_facts_key_version"),
         Index("ix_memory_facts_owner_project", "user_id", "project_id"),
         Index("ix_memory_facts_owner", "user_id"),
     )
@@ -813,11 +811,7 @@ class DatabaseStore:
                 ).where(ConversationRow.user_id == user_id)
             rows = list(
                 reversed(
-                    (
-                        await session.scalars(
-                            query.order_by(MessageRow.id.desc()).limit(limit)
-                        )
-                    ).all()
+                    (await session.scalars(query.order_by(MessageRow.id.desc()).limit(limit))).all()
                 )
             )
             return [
