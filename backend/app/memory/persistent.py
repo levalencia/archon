@@ -204,10 +204,16 @@ def get_persistent_memory() -> PersistentMemory:
             from app.config import get_settings
 
             settings = get_settings()
-            if settings.memory_encryption_enabled and settings.encryption_master_key:
+            configured_key = settings.encryption_master_key
+            master_key: str = (
+                configured_key.get_secret_value()
+                if hasattr(configured_key, "get_secret_value")
+                else str(configured_key)
+            )
+            if settings.memory_encryption_enabled and master_key:
                 from app.memory.encrypted_memory import EncryptedMemoryStore
 
-                _encrypted_store = EncryptedMemoryStore(settings.encryption_master_key)
+                _encrypted_store = EncryptedMemoryStore(master_key)
                 _persistent_memory._encrypted_store = _encrypted_store
                 logger.info("persistent_memory_encryption_enabled")
         except Exception:

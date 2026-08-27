@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
@@ -23,6 +24,7 @@ async def _assemble_messages(
     images: list[str] | None,
     user_id: str,
     persistent_memory_text: str,
+    current_message_id: int | None = None,
 ) -> tuple[tuple[Message, ...], tuple[int | None, ...]]:
     descriptions = (
         json.dumps(tools.list_tools(), indent=2) if tools.list_tools() else "None configured"
@@ -52,6 +54,7 @@ async def _assemble_messages(
 
     result = [Message(Role.SYSTEM, prompt)]
     source_ids: list[int | None] = [None]
+    found_current = False
     if memory:
         metadata_reader = getattr(memory, "retrieve_with_metadata", None)
         if callable(metadata_reader):
@@ -61,11 +64,24 @@ async def _assemble_messages(
             history = await memory.retrieve(conversation_id, limit=20, user_id=user_id)
         for item in history:
             role = Role(item["role"])
-            result.append(Message(role, item["content"]))
             source_id = item.get("id")
+            is_current = current_message_id is not None and source_id == current_message_id
+            if is_current and role is not Role.USER:
+                raise ValueError("current context message must have user role")
+            result.append(
+                Message(
+                    role,
+                    item["content"],
+                    images=tuple(images or ()) if is_current else (),
+                )
+            )
             source_ids.append(source_id if type(source_id) is int and source_id > 0 else None)
-    result.append(Message(Role.USER, user_input, images=tuple(images or ())))
-    source_ids.append(None)
+            found_current = found_current or is_current
+    if current_message_id is not None and not found_current:
+        raise ValueError("current context message is unavailable")
+    if current_message_id is None:
+        result.append(Message(Role.USER, user_input, images=tuple(images or ())))
+        source_ids.append(None)
     return tuple(result), tuple(source_ids)
 
 
@@ -87,6 +103,7 @@ async def build_effective_context(
     run_id: str,
     memory_ids: tuple[str, ...] = (),
     skill_ids: tuple[str, ...] = (),
+    current_message_id: int | None = None,
 ) -> EffectiveContext:
     messages, source_ids = await _assemble_messages(
         user_input,
@@ -97,6 +114,7 @@ async def build_effective_context(
         images,
         user_id,
         persistent_memory_text,
+        current_message_id,
     )
     return EffectiveContext(
         messages=messages,
@@ -111,6 +129,9 @@ async def build_effective_context(
             ),
             memory_ids=memory_ids,
             skill_ids=skill_ids,
+            input_asset_hashes=tuple(
+                hashlib.sha256(image.encode("utf-8")).hexdigest() for image in images or ()
+            ),
             estimated_tokens=_estimated_tokens(messages),
         ),
     )

@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             memory_keyring = load_memory_keyring(
                 settings.memory_keyring_json.get_secret_value(),
                 active_version=settings.memory_active_key_version,
-                legacy_master_key=settings.encryption_master_key,
+                legacy_master_key=settings.encryption_master_key.get_secret_value(),
             )
         except ValueError:
             raise RuntimeError("Encrypted memory startup configuration is invalid") from None
@@ -172,6 +172,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.scoped_memory = ScopedEncryptedMemoryRepository(
             auth_store.session_factory, memory_keyring, redactor=redactor
         )
+        await app.state.scoped_memory.activate_key_version()
         await app.state.scoped_memory.validate_key_versions()
         app.state.memory_key_rotation = MemoryKeyRotationService(app.state.scoped_memory)
     else:

@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.memory.keys import MemoryKeyring, decode_memory_master_key
 from app.security.persistence_redactor import PersistenceRedactor
-from app.services.db_store import MemoryFactRow, MemoryScopeRow
+from app.services.db_store import MemoryFactRow, MemoryKeyStateRow, MemoryScopeRow
 
 MAX_MEMORY_CHARS = 2000
 _NONCE_BYTES = 12
@@ -36,6 +36,11 @@ class MemoryEncryptionError(RuntimeError):
 
 class MemoryLimitError(ValueError):
     """The scoped decrypted-memory character limit would be exceeded."""
+
+
+class MemoryKeyGenerationMismatchError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("memory_key_generation_mismatch")
 
 
 class MemoryKeyRetirementBlockedError(RuntimeError):
@@ -220,10 +225,75 @@ class ScopedEncryptedMemoryRepository:
         async with self._sessions() as session:
             return await self._version_counts(session, user_id=user_id, project_id=project_id)
 
+    async def activate_key_version(self) -> int:
+        """Atomically publish this process' active generation after validating forward rotation."""
+        async with self._sessions() as session, session.begin():
+            await self._ensure_key_state(session)
+            state = (
+                await session.execute(
+                    update(MemoryKeyStateRow)
+                    .where(MemoryKeyStateRow.singleton_id == "global")
+                    .values(generation=MemoryKeyStateRow.generation)
+                    .returning(MemoryKeyStateRow)
+                )
+            ).scalar_one()
+            configured = self._keyring.active_version
+            if state.active_version == configured:
+                return int(state.generation)
+            if configured < state.active_version or state.active_version not in self._keyring.keys:
+                raise MemoryKeyGenerationMismatchError
+            state.active_version = configured
+            state.generation += 1
+            state.updated_at = datetime.now(tz=UTC)
+            await session.flush()
+            return int(state.generation)
+
+    async def _ensure_key_state(self, session: AsyncSession) -> None:
+        values = {
+            "singleton_id": "global",
+            "active_version": self._keyring.active_version,
+            "generation": 1,
+            "updated_at": datetime.now(tz=UTC),
+        }
+        dialect = session.get_bind().dialect.name
+        if dialect == "sqlite":
+            await session.execute(
+                sqlite_insert(MemoryKeyStateRow).values(**values).on_conflict_do_nothing()
+            )
+        elif dialect == "postgresql":
+            await session.execute(
+                postgresql_insert(MemoryKeyStateRow).values(**values).on_conflict_do_nothing()
+            )
+        else:
+            try:
+                async with session.begin_nested():
+                    session.add(MemoryKeyStateRow(**values))
+                    await session.flush()
+            except IntegrityError:
+                pass
+
+    async def _lock_key_state(self, session: AsyncSession) -> MemoryKeyStateRow:
+        await self._ensure_key_state(session)
+        state = (
+            await session.execute(
+                update(MemoryKeyStateRow)
+                .where(
+                    MemoryKeyStateRow.singleton_id == "global",
+                    MemoryKeyStateRow.active_version == self._keyring.active_version,
+                )
+                .values(generation=MemoryKeyStateRow.generation)
+                .returning(MemoryKeyStateRow)
+            )
+        ).scalar_one_or_none()
+        if state is None:
+            raise MemoryKeyGenerationMismatchError
+        return state
+
     async def _lock_scope(
         self, session: AsyncSession, user_id: str, project_id: str
     ) -> MemoryScopeRow:
-        """Create if needed and take the scope's transaction-duration write lock."""
+        """Lock global key generation, then one owner/project scope for the transaction."""
+        await self._lock_key_state(session)
         values = {"user_id": user_id, "project_id": project_id, "chars_used": 0, "version": 0}
         bind = session.get_bind()
         dialect = bind.dialect.name
@@ -305,7 +375,8 @@ class ScopedEncryptedMemoryRepository:
             raise ValueError("memory key version must be between 1 and 255")
         if version == self._keyring.active_version:
             raise MemoryKeyRetirementBlockedError
-        async with self._sessions() as session:
+        async with self._sessions() as session, session.begin():
+            await self._lock_key_state(session)
             referenced = await session.scalar(
                 select(func.count(MemoryFactRow.id)).where(MemoryFactRow.key_version == version)
             )

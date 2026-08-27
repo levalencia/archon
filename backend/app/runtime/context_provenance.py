@@ -61,6 +61,7 @@ class EffectiveContextManifest:
     summarized_message_ids: tuple[int, ...] = ()
     memory_ids: tuple[str, ...] = ()
     skill_ids: tuple[str, ...] = ()
+    input_asset_hashes: tuple[str, ...] = ()
     estimated_tokens: int = 0
     summary_version: str | None = None
     truncation_reason: str | None = None
@@ -89,6 +90,15 @@ class EffectiveContextManifest:
             self, "memory_ids", _unique_text(tuple(self.memory_ids), "memory_ids", 1000)
         )
         object.__setattr__(self, "skill_ids", _unique_text(tuple(self.skill_ids), "skill_ids", 100))
+        asset_hashes = _unique_text(
+            tuple(self.input_asset_hashes), "input_asset_hashes", 16
+        )
+        if any(
+            len(value) != 64 or any(char not in "0123456789abcdef" for char in value)
+            for value in asset_hashes
+        ):
+            raise ValueError("input_asset_hashes must contain canonical SHA-256 values")
+        object.__setattr__(self, "input_asset_hashes", asset_hashes)
         if type(self.estimated_tokens) is not int or not 0 <= self.estimated_tokens <= _MAX_BIGINT:
             raise ValueError("estimated_tokens must be a non-negative integer")
         if self.summary_version is not None:
@@ -118,6 +128,7 @@ class EffectiveContextManifest:
             "summarized_message_ids": list(self.summarized_message_ids),
             "memory_ids": list(self.memory_ids),
             "skill_ids": list(self.skill_ids),
+            "input_asset_hashes": list(self.input_asset_hashes),
             "estimated_tokens": self.estimated_tokens,
             "summary_version": self.summary_version,
             "truncation_reason": self.truncation_reason,

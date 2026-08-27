@@ -185,6 +185,20 @@ async def chat_stream_real(
         else:
             persistent_memory_text = ""
             memory_ids = ()
+        await memory.runs.ensure_run(
+            run_id=run_context.run_id,
+            user_id=user["user_id"],
+            project_id=body.project_id,
+            conversation_id=conv_id,
+            correlation_id=run_context.correlation_id,
+            provider=settings.llm_provider,
+            model=settings.llm_model,
+        )
+        current_message_id = await memory.store(
+            conv_id, "user", user_message, user["user_id"]
+        )
+        if current_message_id is None:
+            raise RuntimeError("context_message_persistence_failed")
         effective_context = await prepare_effective_context(
             user_message,
             conv_id,
@@ -198,20 +212,8 @@ async def chat_stream_real(
             run_id=run_context.run_id,
             memory_ids=memory_ids,
             skill_ids=tuple(skill.name for skill in skills),
+            current_message_id=current_message_id,
         )
-        await memory.runs.ensure_run(
-            run_id=run_context.run_id,
-            user_id=user["user_id"],
-            project_id=body.project_id,
-            conversation_id=conv_id,
-            correlation_id=run_context.correlation_id,
-            provider=settings.llm_provider,
-            model=settings.llm_model,
-        )
-        current_message_id = await memory.store(conv_id, "user", body.message, user["user_id"])
-        if current_message_id is None:
-            raise RuntimeError("context_message_persistence_failed")
-        effective_context = effective_context.with_current_message(current_message_id)
         messages = list(effective_context.messages)
 
         # Auto-compact context if approaching token limit.

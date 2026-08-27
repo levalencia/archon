@@ -58,9 +58,13 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     engine.dispose()
     engine = create_engine(f"sqlite:///{database}")
     inspector = inspect(engine)
-    assert {"effects", "project_budgets", "model_charges", "context_snapshots"} <= set(
-        inspector.get_table_names()
-    )
+    assert {
+        "effects",
+        "project_budgets",
+        "model_charges",
+        "context_snapshots",
+        "memory_key_state",
+    } <= set(inspector.get_table_names())
     assert {
         "budget_limit_nusd",
         "budget_spent_nusd",
@@ -121,6 +125,13 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     assert len(context_foreign_keys) == 1
     assert context_foreign_keys[0]["referred_table"] == "runs"
     assert context_foreign_keys[0]["constrained_columns"] == ["run_id"]
+    assert _names(inspector.get_check_constraints("memory_key_state")) == {
+        "ck_memory_key_state_active",
+        "ck_memory_key_state_generation",
+    }
+    assert "ck_memory_facts_key_version" in _names(
+        inspector.get_check_constraints("memory_facts")
+    )
 
     with engine.begin() as connection, pytest.raises(IntegrityError):
         connection.execute(
@@ -136,7 +147,13 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     engine = create_engine(f"sqlite:///{database}")
     downgraded = inspect(engine)
     assert not (
-        {"effects", "project_budgets", "model_charges", "context_snapshots"}
+        {
+            "effects",
+            "project_budgets",
+            "model_charges",
+            "context_snapshots",
+            "memory_key_state",
+        }
         & set(downgraded.get_table_names())
     )
     assert not {
@@ -145,13 +162,20 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
         "budget_reserved_nusd",
         "budget_opened_at",
     } & _names(downgraded.get_columns("runs"))
+    assert "ck_memory_facts_key_version" not in _names(
+        downgraded.get_check_constraints("memory_facts")
+    )
 
     command.upgrade(config, "head")
     engine.dispose()
     engine = create_engine(f"sqlite:///{database}")
-    assert {"effects", "project_budgets", "model_charges", "context_snapshots"} <= set(
-        inspect(engine).get_table_names()
-    )
+    assert {
+        "effects",
+        "project_budgets",
+        "model_charges",
+        "context_snapshots",
+        "memory_key_state",
+    } <= set(inspect(engine).get_table_names())
     engine.dispose()
 
 

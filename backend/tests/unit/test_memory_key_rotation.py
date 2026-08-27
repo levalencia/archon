@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app.memory.keys import MemoryKeyring
 from app.memory.scoped import (
     MemoryEncryptionError,
+    MemoryKeyGenerationMismatchError,
     MemoryKeyRetirementBlockedError,
     ScopedEncryptedMemoryRepository,
 )
@@ -39,7 +40,10 @@ async def test_active_writes_previous_reads_and_rotation_resumes_in_batches(tmp_
         MemoryKeyring(2, {1: RAW_V1, 2: RAW_V2}),
         redactor=redactor,
     )
+    await rotating.activate_key_version()
     await rotating.validate_key_versions()
+    with pytest.raises(MemoryKeyGenerationMismatchError):
+        await legacy.add("bob", "other", "stale writer", provenance={})
     assert [fact.content for fact in await rotating.list("alice", "project")] == [
         "first secret",
         "second secret",
@@ -79,6 +83,7 @@ async def test_interrupted_batch_rolls_back_and_retry_resumes(tmp_path, monkeypa
         MemoryKeyring(2, {1: RAW_V1, 2: RAW_V2}),
         redactor=redactor,
     )
+    await rotating.activate_key_version()
     original_encrypt = rotating._encrypt
     calls = 0
 
@@ -123,6 +128,7 @@ async def test_retirement_and_missing_previous_key_fail_closed(tmp_path) -> None
         MemoryKeyring(2, {1: RAW_V1, 2: RAW_V2}),
         redactor=redactor,
     )
+    await full.activate_key_version()
     with pytest.raises(MemoryKeyRetirementBlockedError):
         await full.assert_key_retirable(1)
     with pytest.raises(MemoryKeyRetirementBlockedError):
@@ -146,6 +152,7 @@ async def test_concurrent_rotation_workers_remain_idempotent(tmp_path) -> None:
     second = ScopedEncryptedMemoryRepository(
         second_store.session_factory, keyring, redactor=redactor
     )
+    await first.activate_key_version()
 
     await asyncio.gather(
         first.rotate_batch("alice", "project", batch_size=3),

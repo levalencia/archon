@@ -86,7 +86,7 @@ class Settings(BaseSettings):
 
     # Security
     secret_key: str = "dev-secret-change-in-production"
-    encryption_master_key: str = ""
+    encryption_master_key: SecretStr = SecretStr("")
     memory_keyring_json: SecretStr = SecretStr("")
     memory_active_key_version: int = Field(default=1, ge=1, le=255)
     memory_encryption_enabled: bool = True

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -27,6 +29,12 @@ class Memory:
             {"id": 11, "role": "user", "content": "old secret one"},
             {"id": 12, "role": "assistant", "content": "old secret two"},
         ]
+
+
+class CurrentMemory:
+    async def retrieve_with_metadata(self, conversation_id, limit=20, user_id="default"):
+        del conversation_id, limit, user_id
+        return [{"id": 21, "role": "user", "content": "[REDACTED] visible"}]
 
 
 @pytest.mark.unit
@@ -58,6 +66,32 @@ async def test_builder_returns_messages_and_metadata_only_manifest() -> None:
     assert "current secret" not in encoded
     assert "old secret" not in encoded
     assert "memory secret" not in encoded
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_persisted_current_message_and_image_fingerprint_match_provider_context() -> None:
+    image = "data:image/png;base64,AAAA"
+    context = await build_effective_context(
+        "raw secret input",
+        "conversation-1",
+        CurrentMemory(),
+        Tools(),
+        images=[image],
+        user_id="alice",
+        project_id="project",
+        run_id="run-1",
+        current_message_id=21,
+    )
+
+    assert context.messages[-1].content == "[REDACTED] visible"
+    assert context.messages[-1].images == (image,)
+    assert context.source_message_ids[-1] == 21
+    assert context.manifest.selected_message_ids == (21,)
+    assert context.manifest.input_asset_hashes == (
+        hashlib.sha256(image.encode("utf-8")).hexdigest(),
+    )
+    assert "raw secret input" not in str(context.manifest.semantic_document())
 
 
 @pytest.mark.unit

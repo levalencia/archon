@@ -254,6 +254,7 @@ class ContextSnapshotRow(Base):
     summarized_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     memory_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     skill_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    input_asset_hashes_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     summary_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     estimated_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
     truncation_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -507,11 +508,29 @@ class MemoryScopeRow(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class MemoryKeyStateRow(Base):
+    """Global active encryption generation; never stores key material."""
+
+    __tablename__ = "memory_key_state"
+    __table_args__ = (
+        CheckConstraint("active_version BETWEEN 1 AND 255", name="ck_memory_key_state_active"),
+        CheckConstraint("generation >= 1", name="ck_memory_key_state_generation"),
+    )
+
+    singleton_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    active_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class MemoryFactRow(Base):
     """Encrypted memory fact; content and provenance exist only inside ciphertext."""
 
     __tablename__ = "memory_facts"
     __table_args__ = (
+        CheckConstraint(
+            "key_version BETWEEN 1 AND 255", name="ck_memory_facts_key_version"
+        ),
         Index("ix_memory_facts_owner_project", "user_id", "project_id"),
         Index("ix_memory_facts_owner", "user_id"),
     )
@@ -792,7 +811,15 @@ class DatabaseStore:
                 query = query.join(
                     ConversationRow, ConversationRow.id == MessageRow.conversation_id
                 ).where(ConversationRow.user_id == user_id)
-            rows = (await session.scalars(query.order_by(MessageRow.id).limit(limit))).all()
+            rows = list(
+                reversed(
+                    (
+                        await session.scalars(
+                            query.order_by(MessageRow.id.desc()).limit(limit)
+                        )
+                    ).all()
+                )
+            )
             return [
                 {
                     "id": row.id,

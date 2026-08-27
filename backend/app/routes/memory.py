@@ -116,6 +116,7 @@ async def memory_rotation_status(
     project_id: str = Depends(_project_id),
     user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> dict[str, Any]:
+    await enforce_rate_limit(request, user, "memory_read")
     service = _rotation_service(request)
     status = await service.status(user["user_id"], project_id)
     return {
