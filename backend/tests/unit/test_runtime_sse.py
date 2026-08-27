@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.routes.stream import _project_web_search_sources
-from app.runtime import ModelResponse, ToolCall
+from app.runtime import ModelResponse, TokenUsage, ToolCall
 
 
 @pytest.fixture(autouse=True)
@@ -79,6 +79,23 @@ def test_sse_receives_native_runtime_events_and_stop_reason() -> None:
     assert "event: tool_call" in response.text
     assert "event: token\ndata: The answer is 4." in response.text
     assert done_payload(response.text)["stop_reason"] == "completed"
+
+
+def test_sse_done_reports_cache_usage_and_savings_without_prompts() -> None:
+    from app.agents.mock_llm import MockLLM
+
+    provider = MockLLM([ModelResponse("cached", usage=TokenUsage(1000, 10, 800, 100))])
+    with client(provider) as api:
+        conversation_id = api.post("/api/conversations", json={}).json()["id"]
+        response = api.post(
+            "/api/chat/stream",
+            json={"message": "private prompt", "conversation_id": conversation_id},
+        )
+    payload = done_payload(response.text)
+    assert payload["cache_read_input_tokens"] == 800
+    assert payload["cache_write_input_tokens"] == 100
+    assert "cache_savings_usd" in payload
+    assert "private prompt" not in json.dumps(payload)
 
 
 def test_concurrent_sse_streams_do_not_cross_talk() -> None:

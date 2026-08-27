@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall, ToolDefinition
@@ -115,9 +115,44 @@ def anthropic_response(response: Any) -> ModelResponse:
     return ModelResponse(
         content="".join(text) or None,
         tool_calls=tuple(calls),
-        usage=TokenUsage(
-            getattr(response.usage, "input_tokens", 0),
-            getattr(response.usage, "output_tokens", 0),
-        ),
+        usage=normalize_anthropic_usage(response.usage),
         provider_stop_reason=getattr(response, "stop_reason", None),
+    )
+
+
+_MISSING = object()
+
+
+def normalize_anthropic_usage(usage: object) -> TokenUsage:
+    """Normalize Anthropic usage while preserving absent cache counters.
+
+    Anthropic's ``input_tokens`` excludes cache reads and cache creation, while
+    the runtime's input count is total input consumed by the request.
+    """
+
+    def raw(name: str) -> object:
+        if isinstance(usage, Mapping):
+            return usage.get(name, _MISSING)
+        return getattr(usage, name, _MISSING)
+
+    def count(name: str, *, required: bool) -> int | None:
+        value = raw(name)
+        if value is _MISSING:
+            return 0 if required else None
+        if type(value) is not int:
+            raise TypeError(f"Anthropic usage {name} must be an int")
+        if value < 0:
+            raise ValueError(f"Anthropic usage {name} cannot be negative")
+        return value
+
+    uncached = count("input_tokens", required=True)
+    output = count("output_tokens", required=True)
+    cache_write = count("cache_creation_input_tokens", required=False)
+    cache_read = count("cache_read_input_tokens", required=False)
+    assert uncached is not None and output is not None
+    return TokenUsage(
+        input_tokens=uncached + (cache_write or 0) + (cache_read or 0),
+        output_tokens=output,
+        cache_read_input_tokens=cache_read,
+        cache_write_input_tokens=cache_write,
     )

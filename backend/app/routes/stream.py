@@ -249,6 +249,9 @@ async def chat_stream_real(
             model=settings.llm_model,
             input_tokens=result.usage.input_tokens,
             output_tokens=result.usage.output_tokens,
+            cache_read_input_tokens=result.usage.cache_read_input_tokens,
+            cache_write_input_tokens=result.usage.cache_write_input_tokens,
+            provider=settings.llm_provider,
         )
 
         elapsed_ms = (time.monotonic() - started) * 1000
@@ -260,21 +263,26 @@ async def chat_stream_real(
             latency_ms=elapsed_ms,
         )
 
-        yield _sse(
-            "done",
-            {
-                "iterations": result.iterations,
-                "tools_used": len(result.tool_calls),
-                "skills_used": skills_used,
-                "artifacts": artifacts,
-                "elapsed_ms": round(elapsed_ms, 2),
-                "conversation_id": conv_id,
-                "stop_reason": result.stop_reason.value,
-                "tokens_used": result.usage.total_tokens,
-                "cost_usd": cost_info["cost_usd"],
-                "error": result.error,
-            },
-        )
+        done_payload = {
+            "iterations": result.iterations,
+            "tools_used": len(result.tool_calls),
+            "skills_used": skills_used,
+            "artifacts": artifacts,
+            "elapsed_ms": round(elapsed_ms, 2),
+            "conversation_id": conv_id,
+            "stop_reason": result.stop_reason.value,
+            "tokens_used": result.usage.total_tokens,
+            "cost_usd": cost_info["cost_usd"],
+            "error": result.error,
+        }
+        for field in (
+            "cache_read_input_tokens",
+            "cache_write_input_tokens",
+            "cache_savings_usd",
+        ):
+            if cost_info[field] is not None:
+                done_payload[field] = cost_info[field]
+        yield _sse("done", done_payload)
 
         # Auto-evaluate response quality
         from app.eval.evaluators import (

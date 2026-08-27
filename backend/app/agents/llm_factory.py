@@ -34,6 +34,7 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
         return AnthropicAdapter(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
+            prompt_caching_enabled=settings.prompt_caching_enabled,
         )
 
     if provider == "foundry":
@@ -43,6 +44,7 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
             api_key=settings.llm_api_key,
             base_url=settings.llm_base_url,
             model=settings.llm_model,
+            prompt_caching_enabled=settings.prompt_caching_enabled,
         )
 
     if provider == "ollama":

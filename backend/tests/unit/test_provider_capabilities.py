@@ -162,7 +162,7 @@ def test_anthropic_adapters_declare_only_observed_typed_features() -> None:
         assert capabilities.usage
         assert capabilities.stop_reason
         assert not capabilities.json_schema
-        assert not capabilities.cache_usage
+        assert capabilities.cache_usage
         assert not capabilities.streaming
 
 

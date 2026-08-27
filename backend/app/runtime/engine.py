@@ -1546,7 +1546,14 @@ class AgentRuntime:
         data: dict[str, Any] | None = None,
         usage: TokenUsage | None = None,
     ) -> None:
-        await self._events.emit(AgentEvent(kind, iteration, data or {}, usage or TokenUsage()))
+        event_usage = usage or TokenUsage()
+        event_data = dict(data or {})
+        if kind in (AgentEventKind.MODEL_RESPONSE, AgentEventKind.RUN_STOPPED):
+            if event_usage.cache_read_input_tokens is not None:
+                event_data["cache_read_input_tokens"] = event_usage.cache_read_input_tokens
+            if event_usage.cache_write_input_tokens is not None:
+                event_data["cache_write_input_tokens"] = event_usage.cache_write_input_tokens
+        await self._events.emit(AgentEvent(kind, iteration, event_data, event_usage))
 
     async def _stop(
         self,

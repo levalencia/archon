@@ -32,7 +32,13 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
     AgentEventKind.RUN_STARTED.value: frozenset({"safe"}),
     AgentEventKind.ITERATION_STARTED.value: frozenset(),
     AgentEventKind.MODEL_RESPONSE.value: frozenset(
-        {"provider_stop_reason", "actual_provider", "actual_model"}
+        {
+            "provider_stop_reason",
+            "actual_provider",
+            "actual_model",
+            "cache_read_input_tokens",
+            "cache_write_input_tokens",
+        }
     ),
     AgentEventKind.PROVIDER_CAPABILITY_REJECTED.value: frozenset({"code", "missing_capabilities"}),
     AgentEventKind.STRUCTURED_OUTPUT_REJECTED.value: frozenset({"code"}),
@@ -110,7 +116,9 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
             "total_tokens",
         }
     ),
-    AgentEventKind.RUN_STOPPED.value: frozenset({"reason", "error"}),
+    AgentEventKind.RUN_STOPPED.value: frozenset(
+        {"reason", "error", "cache_read_input_tokens", "cache_write_input_tokens"}
+    ),
 }
 
 

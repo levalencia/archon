@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from app.runtime.anthropic import anthropic_request, anthropic_response
+from app.runtime.anthropic import anthropic_request, anthropic_response, normalize_anthropic_usage
 from app.runtime.capabilities import ProviderCapabilities
 from app.runtime.models import Message, ModelResponse, ToolDefinition
 from app.runtime.structured_output import ResponseContract
@@ -27,6 +27,7 @@ class FoundryAdapter:
             images=True,
             json_mode=True,
             prompt_caching=prompt_caching_enabled,
+            cache_usage=prompt_caching_enabled,
             usage=True,
             stop_reason=True,
         )
@@ -64,15 +65,9 @@ class FoundryAdapter:
             for block in payload.get("content", ())
             if block.get("type") == "text"
         )
-        usage = payload.get("usage", {})
-        from app.runtime.models import TokenUsage
-
         return ModelResponse(
             content=content or None,
-            usage=TokenUsage(
-                usage.get("input_tokens", 0),
-                usage.get("output_tokens", 0),
-            ),
+            usage=normalize_anthropic_usage(payload.get("usage", {})),
             provider_stop_reason=payload.get("stop_reason"),
         )
 

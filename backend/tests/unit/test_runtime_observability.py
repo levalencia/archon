@@ -149,6 +149,46 @@ async def test_error_timeout_event_marks_metrics_and_spans() -> None:
     assert tracer.spans[-1].attributes["error.message"] == "TimeoutError: deadline"
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reported_cache_usage_is_safe_persisted_and_traced_but_absence_is_omitted() -> None:
+    tracer = Tracer()
+    repository = Repository()
+    sink = CompositeEventSink(
+        conversation_id="conversation-1",
+        user_id="user-1",
+        run_id="run-1",
+        model="claude-sonnet-4-20250514",
+        redactor=PersistenceRedactor(),
+        log_buffer=OwnerLogBuffer(),
+        repository=repository,
+        tracer=tracer,
+    )
+    await sink.emit(AgentEvent(AgentEventKind.ITERATION_STARTED, 1))
+    await sink.emit(
+        AgentEvent(
+            AgentEventKind.MODEL_RESPONSE,
+            1,
+            {},
+            TokenUsage(12, 2, cache_read_input_tokens=7, cache_write_input_tokens=0),
+        )
+    )
+    await sink.emit(
+        AgentEvent(AgentEventKind.RUN_STOPPED, 1, {"reason": "completed"}, TokenUsage(12, 2))
+    )
+
+    response = next(event for event in repository.events if event["kind"] == "model_response")
+    stopped = next(event for event in repository.events if event["kind"] == "run_stopped")
+    assert response["data"] == {
+        "cache_read_input_tokens": 7,
+        "cache_write_input_tokens": 0,
+    }
+    assert "cache_read_input_tokens" not in stopped["data"]
+    model_span = next(span for span in tracer.spans if span.name == "gen_ai.chat")
+    assert model_span.attributes["gen_ai.usage.cache_read_input_tokens"] == 7
+    assert model_span.attributes["gen_ai.usage.cache_write_input_tokens"] == 0
+
+
 def test_log_redaction_is_recursive_and_handles_free_form_values() -> None:
     event = redact_event(
         None,
