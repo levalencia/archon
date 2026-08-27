@@ -23,7 +23,7 @@ class ModelPricing:
 
 # Source: provider pricing pages, reviewed Aug 2026. Rates are per 1K tokens.
 MODEL_PRICING: dict[str, ModelPricing] = {
-    "claude-opus-4-6": ModelPricing(0.015, 0.075, 0.0015, 0.01875),
+    "claude-opus-4-6": ModelPricing(0.005, 0.025, 0.0005, 0.00625),
     "claude-sonnet-4-20250514": ModelPricing(0.003, 0.015, 0.0003, 0.00375),
     "claude-haiku-3": ModelPricing(0.00025, 0.00125, 0.000025, 0.0003125),
     "gpt-4o": ModelPricing(0.0025, 0.01),
@@ -52,6 +52,12 @@ def _counter() -> dict:
     }
 
 
+def _supports_cache_pricing(provider: str) -> bool:
+    """Recognize configured provider names and fallback adapter class names."""
+    normalized = "".join(character for character in provider.casefold() if character.isalnum())
+    return normalized in {"anthropic", "anthropicadapter", "foundry", "foundryadapter"}
+
+
 class CostTracker:
     """Track token spend per conversation, per user, per day."""
 
@@ -77,10 +83,9 @@ class CostTracker:
 
         ``input_tokens`` is total input. Cache subsets must fit inside it. An
         absent cache counter stays unknown; explicit zero remains observable.
-        Unknown models use the default input rate for all input classes and
-        therefore never receive an assumed cache discount.
+        Unknown models and providers use the ordinary input rate for all input
+        classes and therefore never receive an assumed cache discount.
         """
-        del provider  # Reserved for provider-specific model-name collisions.
         counts = {
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
@@ -102,8 +107,9 @@ class CostTracker:
 
         known_model = model in MODEL_PRICING
         pricing = MODEL_PRICING.get(model, MODEL_PRICING["default"])
-        cache_read_rate = pricing.cache_read if known_model else None
-        cache_write_rate = pricing.cache_write if known_model else None
+        cache_pricing_supported = provider is not None and _supports_cache_pricing(provider)
+        cache_read_rate = pricing.cache_read if known_model and cache_pricing_supported else None
+        cache_write_rate = pricing.cache_write if known_model and cache_pricing_supported else None
         # No published/known cache rate means no assumed discount or surcharge.
         read_rate = pricing.input if cache_read_rate is None else cache_read_rate
         write_rate = pricing.input if cache_write_rate is None else cache_write_rate

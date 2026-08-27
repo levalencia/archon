@@ -78,7 +78,11 @@ def test_sse_receives_native_runtime_events_and_stop_reason() -> None:
     assert "text/event-stream" in response.headers["content-type"]
     assert "event: tool_call" in response.text
     assert "event: token\ndata: The answer is 4." in response.text
-    assert done_payload(response.text)["stop_reason"] == "completed"
+    payload = done_payload(response.text)
+    assert payload["stop_reason"] == "completed"
+    assert "cache_read_input_tokens" not in payload
+    assert "cache_write_input_tokens" not in payload
+    assert "cache_savings_usd" not in payload
 
 
 def test_sse_done_reports_cache_usage_and_savings_without_prompts() -> None:
@@ -96,6 +100,38 @@ def test_sse_done_reports_cache_usage_and_savings_without_prompts() -> None:
     assert payload["cache_write_input_tokens"] == 100
     assert "cache_savings_usd" in payload
     assert "private prompt" not in json.dumps(payload)
+
+
+def test_sse_prices_each_model_response_using_its_actual_identity() -> None:
+    from app.agents.mock_llm import MockLLM
+
+    provider = MockLLM(
+        [
+            ModelResponse(
+                tool_calls=(ToolCall("t1", "calculator", {"expression": "2+2"}),),
+                usage=TokenUsage(1000, 100, 800, 100),
+                actual_provider="AnthropicAdapter",
+                actual_model="claude-opus-4-6",
+            ),
+            ModelResponse(
+                "The answer is 4.",
+                usage=TokenUsage(1000, 100),
+                actual_provider="OpenAIAdapter",
+                actual_model="gpt-4o",
+            ),
+        ]
+    )
+    with client(provider) as api:
+        conversation_id = api.post("/api/conversations", json={}).json()["id"]
+        response = api.post(
+            "/api/chat/stream", json={"message": "calculate", "conversation_id": conversation_id}
+        )
+
+    payload = done_payload(response.text)
+    assert payload["cost_usd"] == 0.007525
+    assert payload["cache_read_input_tokens"] == 800
+    assert payload["cache_write_input_tokens"] == 100
+    assert payload["cache_savings_usd"] == 0.003475
 
 
 def test_concurrent_sse_streams_do_not_cross_talk() -> None:

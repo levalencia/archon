@@ -11,7 +11,9 @@ from app.agents.anthropic_adapter import AnthropicAdapter
 from app.agents.foundry_adapter import FoundryAdapter
 from app.agents.llm_factory import _create_single_client
 from app.config import Settings
-from app.observability.cost_tracker import CostTracker
+from app.observability.cost_tracker import MODEL_PRICING, CostTracker
+from app.routes.stream import ResponseCostEventSink
+from app.runtime import AgentEvent, AgentEventKind, RecordingEventSink
 from app.runtime.anthropic import normalize_anthropic_usage
 from app.runtime.models import TokenUsage
 
@@ -154,3 +156,128 @@ def test_unknown_model_assumes_no_cache_discount_and_invalid_subsets_fail() -> N
             cache_read_input_tokens=8,
             cache_write_input_tokens=3,
         )
+
+
+@pytest.mark.unit
+def test_opus_46_pricing_uses_current_per_1k_rates() -> None:
+    pricing = MODEL_PRICING["claude-opus-4-6"]
+    assert (pricing.input, pricing.output, pricing.cache_read, pricing.cache_write) == (
+        0.005,
+        0.025,
+        0.0005,
+        0.00625,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "supported_provider", ["anthropic", "AnthropicAdapter", "foundry", "FoundryAdapter"]
+)
+def test_claude_cache_rates_require_anthropic_compatible_provider(
+    supported_provider: str,
+) -> None:
+    tracker = CostTracker()
+    supported = tracker.record(
+        "supported-conversation",
+        "u",
+        "claude-opus-4-6",
+        1000,
+        0,
+        cache_read_input_tokens=1000,
+        provider=f" {supported_provider} ",
+    )
+    unrecognized = tracker.record(
+        "other-conversation",
+        "u",
+        "claude-opus-4-6",
+        1000,
+        0,
+        cache_read_input_tokens=1000,
+        provider="OpenAIAdapter",
+    )
+
+    assert supported["cost_usd"] == 0.0005
+    assert supported["cache_savings_usd"] == 0.0045
+    assert unrecognized["cost_usd"] == 0.005
+    assert unrecognized["cache_savings_usd"] == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_response_cost_sink_prices_each_actual_winner_once_and_forwards_every_event() -> None:
+    downstream = RecordingEventSink()
+    sink = ResponseCostEventSink(
+        conversation_id="c",
+        user_id="u",
+        default_provider="anthropic",
+        default_model="claude-opus-4-6",
+        downstream=downstream,
+    )
+    events = [
+        AgentEvent(AgentEventKind.ITERATION_STARTED, 1),
+        AgentEvent(
+            AgentEventKind.MODEL_RESPONSE,
+            1,
+            {"actual_provider": "AnthropicAdapter", "actual_model": "claude-opus-4-6"},
+            TokenUsage(1000, 100, 800, 100),
+        ),
+        AgentEvent(AgentEventKind.ITERATION_STARTED, 2),
+        AgentEvent(
+            AgentEventKind.MODEL_RESPONSE,
+            2,
+            {"actual_provider": "OpenAIAdapter", "actual_model": "gpt-4o"},
+            TokenUsage(1000, 100),
+        ),
+    ]
+    for event in events:
+        await sink.emit(event)
+
+    assert downstream.events == events
+    assert sink.totals == {
+        "cost_usd": 0.007525,
+        "cache_read_input_tokens": 800,
+        "cache_write_input_tokens": 100,
+        "cache_savings_usd": 0.003475,
+    }
+    assert sink.calls == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_response_cost_sink_falls_back_for_unsafe_blank_actual_identity() -> None:
+    sink = ResponseCostEventSink(
+        conversation_id="c",
+        user_id="u",
+        default_provider="anthropic",
+        default_model="claude-opus-4-6",
+    )
+    await sink.emit(
+        AgentEvent(
+            AgentEventKind.MODEL_RESPONSE,
+            1,
+            {"actual_provider": "  ", "actual_model": "\n"},
+            TokenUsage(1000, 0, 1000, 0),
+        )
+    )
+
+    assert sink.totals["cost_usd"] == 0.0005
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_response_cost_sink_without_model_response_has_zero_unknown_totals() -> None:
+    sink = ResponseCostEventSink(
+        conversation_id="c",
+        user_id="u",
+        default_provider="anthropic",
+        default_model="claude-opus-4-6",
+    )
+    await sink.emit(AgentEvent(AgentEventKind.RUN_STARTED, 0))
+
+    assert sink.calls == 0
+    assert sink.totals == {
+        "cost_usd": 0.0,
+        "cache_read_input_tokens": None,
+        "cache_write_input_tokens": None,
+        "cache_savings_usd": None,
+    }
