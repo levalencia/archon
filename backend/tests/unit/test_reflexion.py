@@ -41,7 +41,16 @@ class _ReflexionModel:
     def __init__(self):
         self.call_count = 0
 
-    async def complete(self, messages, tools=(), *, max_tokens=4096):
+    async def complete(
+        self,
+        messages,
+        tools=(),
+        *,
+        max_tokens=4096,
+        response_contract=None,
+        response_format=None,
+    ):
+        del response_contract, response_format
         self.call_count += 1
         # Check if the last message is a tool error
         has_error = any(m.role == Role.TOOL and "error" in m.content.lower() for m in messages)

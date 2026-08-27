@@ -127,7 +127,9 @@ async def test_invalid_structured_output_is_rejected(content, validator, code):
 
     assert result.stop_reason is StopReason.STRUCTURED_OUTPUT_INVALID
     assert result.error == f"structured_output_invalid:{code}"
+    assert result.content == ""
     assert result.structured_output is None
+    assert all(event.kind is not AgentEventKind.TEXT_DELTA for event in sink.events)
     rejection = next(e for e in sink.events if e.kind is AgentEventKind.STRUCTURED_OUTPUT_REJECTED)
     assert rejection.data == {"code": code}
 

@@ -8,7 +8,7 @@ import pytest
 
 from app.runtime.engine import AgentRuntime, RuntimeBudget
 from app.runtime.events import AgentEventKind, RecordingEventSink
-from app.runtime.models import Message, Role, TokenUsage, ToolCall
+from app.runtime.models import Message, ModelResponse, Role, ToolCall
 from app.services.task_queue import TaskQueue
 
 # ---------- TASK 2: Streaming tool progress ----------
@@ -21,27 +21,28 @@ class _FakeProvider:
         self._call_count = 0
         self._tool_output = tool_output
 
-    async def complete(self, messages, tools, max_tokens=4096):
+    async def complete(
+        self,
+        messages,
+        tools=(),
+        *,
+        max_tokens=4096,
+        response_contract=None,
+        response_format=None,
+    ):
+        del response_contract, response_format
         self._call_count += 1
         if self._call_count == 1:
             # First call: request a tool
-            return _FakeResponse(
+            return ModelResponse(
                 content="",
-                tool_calls=[ToolCall(id="tc1", name="big_tool", arguments={"x": 1})],
+                tool_calls=(ToolCall(id="tc1", name="big_tool", arguments={"x": 1}),),
             )
         # Second call: produce final text
-        return _FakeResponse(content="done", tool_calls=[])
+        return ModelResponse(content="done")
 
     def definitions(self):
         return ()
-
-
-class _FakeResponse:
-    def __init__(self, content, tool_calls=None):
-        self.content = content
-        self.tool_calls = tool_calls or []
-        self.usage = TokenUsage(input_tokens=10, output_tokens=10)
-        self.provider_stop_reason = "stop"
 
 
 class _FakeToolExecutor:

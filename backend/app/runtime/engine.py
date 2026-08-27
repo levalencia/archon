@@ -256,16 +256,14 @@ class AgentRuntime:
                     response.usage.cache_read_input_tokens,
                     response.usage.cache_write_input_tokens,
                 )
+                raw_actual_provider = getattr(response, "actual_provider", None)
                 actual_provider = (
-                    response.actual_provider if isinstance(response.actual_provider, str) else None
+                    raw_actual_provider if isinstance(raw_actual_provider, str) else None
                 )
-                actual_model = (
-                    response.actual_model if isinstance(response.actual_model, str) else None
-                )
+                raw_actual_model = getattr(response, "actual_model", None)
+                actual_model = raw_actual_model if isinstance(raw_actual_model, str) else None
                 has_tool_calls = bool(tool_calls) or snapshot_error is not None
                 usage += response_usage
-                if response_content:
-                    content = response_content
                 response_event_data = {}
                 if provider_stop_reason is not None:
                     response_event_data["provider_stop_reason"] = provider_stop_reason
@@ -279,14 +277,6 @@ class AgentRuntime:
                     response_event_data,
                     response_usage,
                 )
-                if response_content:
-                    # Text accompanying tool calls is progress, not the final answer.
-                    event_kind = (
-                        AgentEventKind.MODEL_PROGRESS
-                        if has_tool_calls
-                        else AgentEventKind.TEXT_DELTA
-                    )
-                    await self._emit(event_kind, iterations, {"text": response_content})
                 if snapshot_error is not None:
                     failed_call = ToolCall(snapshot_error.tool_call_id, snapshot_error.tool_name)
                     await self._emit(
@@ -334,6 +324,15 @@ class AgentRuntime:
                             usage,
                             f"structured_output_invalid:{error.code}",
                         )
+                if response_content:
+                    content = response_content
+                    # Text accompanying tool calls is progress, not the final answer.
+                    event_kind = (
+                        AgentEventKind.MODEL_PROGRESS
+                        if has_tool_calls
+                        else AgentEventKind.TEXT_DELTA
+                    )
+                    await self._emit(event_kind, iterations, {"text": response_content})
                 if usage.total_tokens > self._budget.max_tokens:
                     return await self._finalize(
                         StopReason.TOKEN_BUDGET_EXHAUSTED,
