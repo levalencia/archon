@@ -1,6 +1,6 @@
 # Archon Course
 
-The canonical learning home for Archon. This course teaches the system from agent fundamentals to an evidence-backed capstone while keeping one canonical page per concept. Modules sequence the learning; future audience tracks will link back to the same modules and concepts rather than copy explanations.
+The canonical learning home for Archon. This course teaches the system from agent fundamentals to an evidence-backed capstone while keeping one canonical page per concept. Modules sequence the learning; audience tracks link back to the same modules and concepts rather than copy explanations.
 
 Archon is a local Agent Reliability Workbench, not a publicly deployed production service. For current implementation facts, use the [canonical evidence matrix](../IMPLEMENTATION-EVIDENCE.md); for system views, use the existing [architecture diagrams](../ARCHITECTURE-DIAGRAMS.md). This course does not replace either source.
 
@@ -39,18 +39,18 @@ flowchart TD
     Workshops --> Capstone[Capstone artifacts]
 ```
 
-The `modules`, `concepts`, `code-walkthroughs`, `tracks`, `reference`, and `workshops` areas are added in later plan tasks. Planned links below are intentionally labeled so they are not mistaken for missing current documentation.
+The `modules`, `concepts`, and `code-walkthroughs` hold teaching content. The `tracks`, `reference`, and `workshops` areas are navigation and delivery aids; they do not create alternate concept explanations.
 
 ## Learning routes
 
 | Route | Use it when | Path |
 |---|---|---|
-| Zero-to-capstone | You are new to agent systems | Read the [syllabus](syllabus.md), then modules 00–15 in order. |
-| Interview preparation | You need a defensible short or deep explanation | Modules 00–03 → 05 → 07–11 → 13–15; use each module's interview answer and evidence links. Future index: `tracks/interview.md` (**planned**). |
-| Coworker workshop | You need a shared vocabulary and hands-on reliability exercise | Modules 00 → 03–05 → 07 → 09–10, then one capstone scenario. Future index: `tracks/workshops.md` (**planned**). |
-| Technical reference | You already know the system and need implementation detail | Start at the [concept map](concept-map.md), then follow future concept catalog, code walkthrough, source, test, and evidence links. Future index: `tracks/operations.md` (**planned**). |
+| Zero-to-capstone | You are new to agent systems | Follow [Learn from zero](tracks/learn-from-zero.md) and use the [glossary](reference/glossary.md). |
+| Interview preparation | You need a defensible short or deep explanation | Use the [2/15/45-minute interview route](tracks/interview-preparation.md) and [exact code bookmarks](reference/code-bookmarks.md). |
+| Coworker workshop | You need shared vocabulary and hands-on reliability practice | Run the [eight-workshop company route](tracks/company-workshops.md) with the [instructor](workshops/instructor-guide.md) and [student](workshops/student-guide.md) guides. |
+| Operations and reference | You need to diagnose or inspect implementation detail | Start with [operations and reliability](tracks/operations-and-reliability.md), then use the [API](reference/api-map.md), [events](reference/event-catalog.md), [stop reasons](reference/stop-reasons.md), [schema](reference/database-schema.md), and [test map](reference/test-map.md). |
 
-All current routes reach every module directly from this page; future track indexes are navigation views, not alternate concept sources.
+Tracks are navigation views, not alternate concept sources. Workshop exercises and solutions point back to the same modules, concepts, source, and tests.
 
 ## Modules
 
@@ -67,11 +67,11 @@ All current routes reach every module directly from this page; future track inde
 | 08 | [Documents, embeddings, RAG, grounding, and faithfulness](modules/08-rag-grounding/README.md) | Cited grounded answer | **Planned** |
 | 09 | [Evaluation harness and regression](modules/09-evaluation-harness/README.md) | Recorded-run evaluation | **Planned** |
 | 10 | [Reliability and resilience](modules/10-resilience/README.md) | Failure drill | **Planned** |
-| 11 | [Bounded verifier delegation](modules/11-bounded-delegation/README.md) | Parent-child evidence graph | **Planned** |
-| 12 | [Governed MCP](modules/12-governed-mcp/README.md) | Discovered and approved tool call | **Planned** |
-| 13 | [Auth, UI, SSE, logs, metrics, and traces](modules/13-auth-ui-observability/README.md) | Observable request walkthrough | **Planned** |
-| 14 | [Docker, CI, migrations, and recovery](modules/14-local-operations/README.md) | Recovery report | **Planned** |
-| 15 | [Capstone demo and interviews](modules/15-capstone/README.md) | 2/15/45-minute walkthroughs | **Planned** |
+| 11 | Bounded verifier delegation | Parent-child evidence graph | **Planned** — page not present at this revision |
+| 12 | Governed MCP | Discovered and approved tool call | **Planned** — page not present at this revision |
+| 13 | Auth, UI, SSE, logs, metrics, and traces | Observable request walkthrough | **Planned** — page not present at this revision |
+| 14 | Docker, CI, migrations, and recovery | Recovery report | **Planned** — page not present at this revision |
+| 15 | Capstone demo and interviews | 2/15/45-minute walkthroughs | **Planned** — page not present at this revision |
 
 ## Canonical-source rule
 
