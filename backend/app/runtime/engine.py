@@ -688,7 +688,12 @@ class AgentRuntime:
 
     async def _stop_for_budget_error(
         self,
-        error: ModelBudgetExhausted | DuplicateModelCharge | IndeterminateModelCharge | DurableModelChargeStateError,
+        error: (
+            ModelBudgetExhausted
+            | DuplicateModelCharge
+            | IndeterminateModelCharge
+            | DurableModelChargeStateError
+        ),
         *,
         content: str,
         iterations: int,
