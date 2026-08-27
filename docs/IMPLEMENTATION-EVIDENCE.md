@@ -4,9 +4,10 @@
 
 ## Baseline
 
-- **Current accepted candidate:** `60a8d6a` on local `feature/s7-local` (2026-08-27 Europe/Brussels).
-- **Final integrated S7.5 acceptance:** passed at `60a8d6a`; the follow-up evidence-only commit changes no runtime code.
-- **Remote status:** `main` pushed; GitHub Actions [run #33042478912](https://github.com/levalencia/archon/actions/runs/33042478912) passed at `9696ad8`.
+- **Current accepted candidate:** `2f77877` on local `feature/s8-capstone-completion` (2026-08-27 Europe/Brussels).
+- **S8.1 provider-contract acceptance:** full local verification passed; provider/model live acceptance remains a separate S8.9 gate.
+- **Previous integrated S7.5 baseline:** `60a8d6a` on local `feature/s7-local`.
+- **Remote status:** the S8 branch is local and unpushed; historical GitHub Actions [run #33042478912](https://github.com/levalencia/archon/actions/runs/33042478912) passed at `9696ad8`.
 - **Deployment status:** production-like **local** target observed; no non-local/public deployment. Every `Deployed` value remains **No**.
 
 This document separates code presence, wiring, tests, direct observation, UI, and deployment. Local tests, mocks, Docker smokes, and manifests are not public-production evidence.
@@ -27,12 +28,14 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 
 ## Quality gates
 
-### Final full acceptance at `60a8d6a`
+### S8.1 full local acceptance at `2f77877`
 
 | Gate | Result |
 |---|---|
-| Backend tests | 1,034 passed |
-| Coverage | 86.27% aggregate |
+| Capability manifest | 16 entries validated |
+| Course documentation validator | Pass |
+| Backend tests | 1,220 passed |
+| Coverage | 86.88% aggregate |
 | Ruff check / format | Pass |
 | Bandit `-ll` | Pass; no medium/high findings |
 | Svelte check | 0 errors, 0 warnings |
@@ -41,6 +44,10 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 | Playwright | 21 passed |
 | Docker sandbox containment | Pass |
 | Backend image health | Pass |
+
+The provider-contract slice adds typed capability negotiation, fail-before-call enforcement, local structured-output validation, capability-preserving fallback, provider-reported cache accounting, per-response fallback pricing, and conservative OpenAI/Ollama opt-ins. These are local deterministic and container acceptance results, not real-provider or public-deployment evidence.
+
+### Previous S7.5 full acceptance at `60a8d6a`
 
 ### Additional S7 evidence after that acceptance
 
@@ -64,6 +71,9 @@ Evidence files:
 | Capability | Exists | Wired | Tested | Observed | UI | Deployed | Evidence and limits |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|---|
 | Typed budgeted runtime | Yes | Yes | Yes | Yes | Yes | No | Native tool calls, explicit stop reasons, iteration/tool/token/time budgets on sync and SSE paths. |
+| Provider capability negotiation | Yes | Yes | Yes | Yes | N/A | No | Conjunctive requirements, fail-before-call, typed fallback, and conservative OpenAI/Ollama opt-ins. No real-provider parity run. |
+| Validated structured output | Yes | Yes | Yes | Yes | N/A | No | Immutable response contracts and local strict parse/schema validation before terminal emission or persistence. Native provider schema acceptance remains unobserved live. |
+| Prompt-cache accounting | Yes | Yes | Yes | Yes | Partial | No | Provider-reported counters, per-response actual-provider pricing, events, tracing and SSE are locally tested. No real cache-hit or invoice comparison. |
 | Policy matching | Yes | Yes | Yes | Yes | Partial | No | Deterministic allow/ask/deny rules; unknown side effects fail closed. Decisions visible in run evidence. |
 | Durable approvals | Yes | Yes | Yes | Yes | Yes | No | Exact user/run/tool-call/name/argument-hash binding, expiry, cancellation, atomic one-shot decisions. |
 | Tool registry contracts | Yes | Yes | Yes | Yes | Yes | No | Validated schemas, risk/resource metadata, permissions, bounded execution and sanitized errors. |
