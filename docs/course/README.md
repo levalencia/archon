@@ -56,26 +56,26 @@ Tracks are navigation views, not alternate concept sources. Workshop exercises a
 
 | # | Module | Primary artifact | Availability |
 |---:|---|---|---|
-| 00 | [Agent anatomy](modules/00-agent-anatomy/README.md) | Lifecycle map | **Planned** |
-| 01 | [Python architecture: OOP, Protocols, DI, async](modules/01-python-architecture/README.md) | Dependency diagram | **Planned** |
-| 02 | [Typed runtime and state machine](modules/02-typed-runtime/README.md) | Minimal runtime trace | **Planned** |
-| 03 | [ReAct loop, budgets, and stop reasons](modules/03-react-loop/README.md) | Bounded-loop exercise | **Planned** |
-| 04 | [Tool contracts and schemas](modules/04-tools-and-schemas/README.md) | Registered typed tool | **Planned** |
-| 05 | [Policy and durable approvals](modules/05-policy-and-approvals/README.md) | Deny/ask/allow probe | **Planned** |
-| 06 | [Context, conversation, and encrypted memory](modules/06-context-and-memory/README.md) | Context-boundary note | **Planned** |
-| 07 | [Durable Run Ledger, replay, fork, and compare](modules/07-run-ledger/README.md) | Event timeline | **Planned** |
-| 08 | [Documents, embeddings, RAG, grounding, and faithfulness](modules/08-rag-grounding/README.md) | Cited grounded answer | **Planned** |
-| 09 | [Evaluation harness and regression](modules/09-evaluation-harness/README.md) | Recorded-run evaluation | **Planned** |
-| 10 | [Reliability and resilience](modules/10-resilience/README.md) | Failure drill | **Planned** |
-| 11 | Bounded verifier delegation | Parent-child evidence graph | **Planned** — page not present at this revision |
-| 12 | Governed MCP | Discovered and approved tool call | **Planned** — page not present at this revision |
-| 13 | Auth, UI, SSE, logs, metrics, and traces | Observable request walkthrough | **Planned** — page not present at this revision |
-| 14 | Docker, CI, migrations, and recovery | Recovery report | **Planned** — page not present at this revision |
-| 15 | Capstone demo and interviews | 2/15/45-minute walkthroughs | **Planned** — page not present at this revision |
+| 00 | [Agent anatomy](modules/00-agent-anatomy/README.md) | Lifecycle map | **Draft** |
+| 01 | [Python architecture: OOP, Protocols, DI, async](modules/01-python-architecture/README.md) | Dependency diagram | **Draft** |
+| 02 | [Typed runtime and state machine](modules/02-typed-runtime/README.md) | Minimal runtime trace | **Draft** |
+| 03 | [ReAct loop, budgets, and stop reasons](modules/03-react-loop/README.md) | Bounded-loop exercise | **Draft** |
+| 04 | [Tool contracts and schemas](modules/04-tools-and-schemas/README.md) | Registered typed tool | **Draft** |
+| 05 | [Policy and durable approvals](modules/05-policy-and-approvals/README.md) | Deny/ask/allow probe | **Draft** |
+| 06 | [Context, conversation, and encrypted memory](modules/06-context-and-memory/README.md) | Context-boundary note | **Draft** |
+| 07 | [Durable Run Ledger, replay, fork, and compare](modules/07-run-ledger/README.md) | Event timeline | **Draft** |
+| 08 | [Documents, embeddings, RAG, grounding, and faithfulness](modules/08-rag-grounding/README.md) | Cited grounded answer | **Draft** |
+| 09 | [Evaluation harness and regression](modules/09-evaluation-harness/README.md) | Recorded-run evaluation | **Draft** |
+| 10 | [Reliability and resilience](modules/10-resilience/README.md) | Failure drill | **Draft** |
+| 11 | [Bounded verifier delegation](modules/11-bounded-delegation/README.md) | Parent-child evidence graph | **Draft** |
+| 12 | [Governed MCP](modules/12-governed-mcp/README.md) | Discovered and approved tool call | **Draft** |
+| 13 | [Auth, UI, SSE, logs, metrics, and traces](modules/13-auth-ui-observability/README.md) | Observable request walkthrough | **Draft** |
+| 14 | [Docker, CI, migrations, and recovery](modules/14-local-operations/README.md) | Recovery report | **Draft** |
+| 15 | [Capstone demo and interviews](modules/15-capstone/README.md) | 2/15/45-minute walkthroughs | **Draft** |
 
 ## Canonical-source rule
 
-1. A concept has one canonical explanation under the future `concepts/` directory.
+1. A concept has one canonical explanation under the `concepts/` directory.
 2. Modules teach a sequence and link to concepts; tracks curate modules and never fork their explanations.
 3. Code walkthroughs explain source flow and link back to concepts.
 4. Implementation claims defer to the [evidence matrix](../IMPLEMENTATION-EVIDENCE.md), rather than restating mutable test counts or deployment results.

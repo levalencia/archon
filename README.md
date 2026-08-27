@@ -174,6 +174,7 @@ OpenAPI is available at `/docs` while the backend is running.
 
 ## Documentation
 
+- **[Capstone course and interview study system](docs/course/README.md)** — 16 modules from agent anatomy through RAG, evaluation, MCP, observability, DR, and interview walkthroughs
 - [Canonical implementation evidence](docs/IMPLEMENTATION-EVIDENCE.md)
 - [Architecture diagrams](docs/ARCHITECTURE-DIAGRAMS.md)
 - [Local deployment ADR](docs/adr/0001-local-production-like-deployment.md)
