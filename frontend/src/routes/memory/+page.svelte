@@ -238,7 +238,7 @@
           disabled={rotationBusy || rotation.complete}
           class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-primary)] transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
         >
-          <RotateCcw size={15} class:animate-spin={rotationBusy} />
+          <RotateCcw size={15} class={rotationBusy ? 'animate-spin' : ''} />
           {rotationBusy ? 'Rotating…' : rotation.complete ? 'No rotation needed' : 'Rotate next 100 rows'}
         </button>
       </div>
