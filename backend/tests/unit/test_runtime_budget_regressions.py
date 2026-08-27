@@ -190,7 +190,7 @@ async def test_runtime_deadline_detaches_cancellation_resistant_provider_excepti
         def __init__(self) -> None:
             self.late_finished = asyncio.Event()
 
-        async def complete(self, messages, tools=(), *, max_tokens=4096):
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_contract=None):
             try:
                 await asyncio.sleep(10)
             except asyncio.CancelledError:

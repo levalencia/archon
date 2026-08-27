@@ -106,7 +106,8 @@ async def test_explicit_budget_stop_reasons(budget, response, reason, calls) -> 
 @pytest.mark.asyncio
 async def test_timeout_stop_reason() -> None:
     class Slow:
-        async def complete(self, messages, tools=(), *, max_tokens=4096):
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_contract=None):
+            del response_contract
             await asyncio.sleep(0.1)
             return ModelResponse("late")
 

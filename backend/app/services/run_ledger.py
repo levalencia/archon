@@ -31,7 +31,11 @@ _TERMINAL_RUN_STATUSES = ("completed", "failed", "cancelled")
 _SAFE_FIELDS: dict[str, frozenset[str]] = {
     AgentEventKind.RUN_STARTED.value: frozenset({"safe"}),
     AgentEventKind.ITERATION_STARTED.value: frozenset(),
-    AgentEventKind.MODEL_RESPONSE.value: frozenset({"provider_stop_reason"}),
+    AgentEventKind.MODEL_RESPONSE.value: frozenset(
+        {"provider_stop_reason", "actual_provider", "actual_model"}
+    ),
+    AgentEventKind.PROVIDER_CAPABILITY_REJECTED.value: frozenset({"code", "missing_capabilities"}),
+    AgentEventKind.STRUCTURED_OUTPUT_REJECTED.value: frozenset({"code"}),
     AgentEventKind.MODEL_PROGRESS.value: frozenset(),
     AgentEventKind.TEXT_DELTA.value: frozenset(),
     AgentEventKind.TOOL_CALL_REQUESTED.value: frozenset({"id", "name", "arguments_hash"}),

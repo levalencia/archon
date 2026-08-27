@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, TypeVar
 
+from app.runtime.capabilities import ProviderCapabilities, get_provider_capabilities
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
 from app.runtime.models import Message, Role, TokenUsage, ToolCall
 from app.runtime.ports import (
@@ -23,6 +24,7 @@ from app.runtime.ports import (
     ToolAuthorizer,
     ToolExecutor,
 )
+from app.runtime.structured_output import ResponseContract, StructuredOutputError
 from app.security.approvals import AuthorizationOutcome, AuthorizationRequest
 from app.security.policy import (
     PolicyAction,
@@ -52,6 +54,12 @@ class StopReason(StrEnum):
     POLICY_DENIED = "policy_denied"
     APPROVAL_TIMEOUT = "approval_timeout"
     APPROVAL_UNAVAILABLE = "approval_unavailable"
+    PROVIDER_CAPABILITY_UNSUPPORTED = "provider_capability_unsupported"
+    STRUCTURED_OUTPUT_INVALID = "structured_output_invalid"
+    PROVIDER_LENGTH_LIMIT = "provider_length_limit"
+    PROVIDER_REFUSAL = "provider_refusal"
+    PROVIDER_CONTENT_FILTER = "provider_content_filter"
+    PROVIDER_ERROR = "provider_error"
     ERROR = "error"
 
 
@@ -79,6 +87,7 @@ class AgentResult:
     tool_calls: tuple[dict[str, Any], ...]
     usage: TokenUsage
     error: str | None = None
+    structured_output: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,7 +174,13 @@ class AgentRuntime:
         self._approval_timeout_seconds = approval_timeout_seconds
         self._result_recorder = result_recorder
 
-    async def run(self, messages: Sequence[Message]) -> AgentResult:
+    async def run(
+        self,
+        messages: Sequence[Message],
+        *,
+        response_contract: ResponseContract | None = None,
+        required_capabilities: ProviderCapabilities | None = None,
+    ) -> AgentResult:
         history = list(self._snapshot_history(messages))
         started_at = self._clock()
         iterations = 0
@@ -173,6 +188,10 @@ class AgentRuntime:
         seen_calls: set[str] = set()
         usage = TokenUsage()
         content = ""
+        structured_output: object | None = None
+        requirements = self._provider_requirements(
+            history, response_contract, required_capabilities
+        )
         await self._emit(AgentEventKind.RUN_STARTED, 0)
         try:
             while iterations < self._budget.max_iterations:
@@ -180,17 +199,35 @@ class AgentRuntime:
                     return await self._stop(
                         StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
                     )
+                missing_capabilities = get_provider_capabilities(self._model).missing(requirements)
+                if missing_capabilities:
+                    return await self._reject_provider_capabilities(
+                        missing_capabilities, content, iterations, calls, usage
+                    )
                 iterations += 1
                 await self._emit(AgentEventKind.ITERATION_STARTED, iterations)
                 remaining_tokens = max(1, self._budget.max_tokens - usage.total_tokens)
-                response = await self._within_deadline(
-                    self._model.complete(
-                        self._snapshot_history(history),
-                        self._tools.definitions(),
-                        max_tokens=min(4096, remaining_tokens),
-                    ),
-                    started_at,
-                )
+                try:
+                    response = await self._within_deadline(
+                        self._model.complete(
+                            self._snapshot_history(history),
+                            self._tools.definitions(),
+                            max_tokens=min(4096, remaining_tokens),
+                            response_contract=response_contract,
+                        ),
+                        started_at,
+                    )
+                except _RuntimeDeadlineExceededError:
+                    raise
+                except Exception:
+                    return await self._stop(
+                        StopReason.PROVIDER_ERROR,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        "provider_call_failed",
+                    )
                 # This must be the first work after the provider returns: no clock, event sink,
                 # history append, or other collaborator may observe provider-owned calls before
                 # scalar bindings and independent history/execution copies have been captured.
@@ -214,16 +251,32 @@ class AgentRuntime:
                 raw_stop_reason = response.provider_stop_reason
                 provider_stop_reason = raw_stop_reason if isinstance(raw_stop_reason, str) else None
                 response_usage = TokenUsage(
-                    response.usage.input_tokens, response.usage.output_tokens
+                    response.usage.input_tokens,
+                    response.usage.output_tokens,
+                    response.usage.cache_read_input_tokens,
+                    response.usage.cache_write_input_tokens,
+                )
+                actual_provider = (
+                    response.actual_provider if isinstance(response.actual_provider, str) else None
+                )
+                actual_model = (
+                    response.actual_model if isinstance(response.actual_model, str) else None
                 )
                 has_tool_calls = bool(tool_calls) or snapshot_error is not None
                 usage += response_usage
                 if response_content:
                     content = response_content
+                response_event_data = {}
+                if provider_stop_reason is not None:
+                    response_event_data["provider_stop_reason"] = provider_stop_reason
+                if actual_provider is not None:
+                    response_event_data["actual_provider"] = actual_provider
+                if actual_model is not None:
+                    response_event_data["actual_model"] = actual_model
                 await self._emit(
                     AgentEventKind.MODEL_RESPONSE,
                     iterations,
-                    {"provider_stop_reason": provider_stop_reason},
+                    response_event_data,
                     response_usage,
                 )
                 if response_content:
@@ -250,6 +303,37 @@ class AgentRuntime:
                     return await self._stop(
                         StopReason.POLICY_DENIED, content, iterations, calls, usage
                     )
+                provider_reason = self._normalize_provider_stop_reason(
+                    provider_stop_reason, bool(tool_calls)
+                )
+                if provider_reason not in (None, StopReason.COMPLETED):
+                    return await self._stop(
+                        provider_reason,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        f"provider_stop_reason:{provider_reason.value}",
+                    )
+                if not tool_calls and response_contract is not None:
+                    try:
+                        structured_output = response_contract.parse_and_validate(
+                            response_content or ""
+                        )
+                    except StructuredOutputError as error:
+                        await self._emit(
+                            AgentEventKind.STRUCTURED_OUTPUT_REJECTED,
+                            iterations,
+                            {"code": error.code},
+                        )
+                        return await self._stop(
+                            StopReason.STRUCTURED_OUTPUT_INVALID,
+                            content,
+                            iterations,
+                            calls,
+                            usage,
+                            f"structured_output_invalid:{error.code}",
+                        )
                 if usage.total_tokens > self._budget.max_tokens:
                     return await self._finalize(
                         StopReason.TOKEN_BUDGET_EXHAUSTED,
@@ -259,9 +343,18 @@ class AgentRuntime:
                         calls,
                         usage,
                         started_at,
+                        response_contract,
+                        requirements,
                     )
                 if not tool_calls:
-                    return await self._stop(StopReason.COMPLETED, content, iterations, calls, usage)
+                    return await self._stop(
+                        StopReason.COMPLETED,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        structured_output=structured_output,
+                    )
 
                 history.append(
                     Message(Role.ASSISTANT, response_content or "", tool_calls=history_tool_calls)
@@ -293,6 +386,8 @@ class AgentRuntime:
                             calls,
                             usage,
                             started_at,
+                            response_contract,
+                            requirements,
                         )
                     preparation = await self._prepare_policy_batch(
                         tool_calls,
@@ -323,6 +418,8 @@ class AgentRuntime:
                                 calls,
                                 usage,
                                 started_at,
+                                response_contract,
+                                requirements,
                             )
                         call_key = json.dumps(
                             [call.name, dict(call.arguments)],
@@ -530,6 +627,8 @@ class AgentRuntime:
                 calls,
                 usage,
                 started_at,
+                response_contract,
+                requirements,
             )
         except (TimeoutError, _RuntimeDeadlineExceededError):
             return await self._stop(
@@ -542,8 +641,69 @@ class AgentRuntime:
                 iterations,
                 calls,
                 usage,
-                f"{type(error).__name__}: {error}",
+                f"runtime_error:{type(error).__name__}",
             )
+
+    @staticmethod
+    def _provider_requirements(
+        messages: Sequence[Message],
+        response_contract: ResponseContract | None,
+        explicit: ProviderCapabilities | None,
+    ) -> ProviderCapabilities:
+        explicit = explicit or ProviderCapabilities()
+        return ProviderCapabilities(
+            native_tools=explicit.native_tools,
+            images=explicit.images or any(message.images for message in messages),
+            json_mode=explicit.json_mode or response_contract is not None,
+            json_schema=explicit.json_schema,
+            prompt_caching=explicit.prompt_caching,
+            cache_usage=explicit.cache_usage,
+            usage=explicit.usage,
+            stop_reason=explicit.stop_reason,
+            streaming=explicit.streaming,
+        )
+
+    @staticmethod
+    def _normalize_provider_stop_reason(
+        reason: str | None, has_tool_calls: bool
+    ) -> StopReason | None:
+        normalized = reason.strip().lower() if reason else ""
+        if normalized in {"tool_use", "tool_calls"}:
+            return None if has_tool_calls else StopReason.PROVIDER_ERROR
+        if normalized in {"", "stop", "end_turn", "stop_sequence", "completed"}:
+            return StopReason.COMPLETED
+        if normalized in {"max_tokens", "length", "max_output_tokens"}:
+            return StopReason.PROVIDER_LENGTH_LIMIT
+        if normalized == "refusal":
+            return StopReason.PROVIDER_REFUSAL
+        if normalized in {"content_filter", "safety", "blocked"}:
+            return StopReason.PROVIDER_CONTENT_FILTER
+        return StopReason.PROVIDER_ERROR
+
+    async def _reject_provider_capabilities(
+        self,
+        missing: tuple[str, ...],
+        content: str,
+        iterations: int,
+        calls: list[dict[str, Any]],
+        usage: TokenUsage,
+    ) -> AgentResult:
+        await self._emit(
+            AgentEventKind.PROVIDER_CAPABILITY_REJECTED,
+            iterations,
+            {
+                "code": "provider_capability_unsupported",
+                "missing_capabilities": missing,
+            },
+        )
+        return await self._stop(
+            StopReason.PROVIDER_CAPABILITY_UNSUPPORTED,
+            content,
+            iterations,
+            calls,
+            usage,
+            f"provider_capability_unsupported:{','.join(missing)}",
+        )
 
     @staticmethod
     def _snapshot_history(messages: Sequence[Message]) -> tuple[Message, ...]:
@@ -1194,6 +1354,8 @@ class AgentRuntime:
         calls: list[dict[str, Any]],
         usage: TokenUsage,
         started_at: float,
+        response_contract: ResponseContract | None,
+        requirements: ProviderCapabilities,
     ) -> AgentResult:
         """Make one bounded, tool-free synthesis attempt before a budget stop."""
         if self._expired(started_at):
@@ -1205,12 +1367,18 @@ class AgentRuntime:
                 "answer now from the evidence already available. State any missing coverage.",
             )
         )
+        missing_capabilities = get_provider_capabilities(self._model).missing(requirements)
+        if missing_capabilities:
+            return await self._reject_provider_capabilities(
+                missing_capabilities, content, iterations, calls, usage
+            )
         try:
             response = await self._within_deadline(
                 self._model.complete(
                     self._snapshot_history(history),
                     (),
                     max_tokens=self._budget.final_synthesis_tokens,
+                    response_contract=response_contract,
                 ),
                 started_at,
             )
@@ -1274,6 +1442,7 @@ class AgentRuntime:
         calls: list[dict[str, Any]],
         usage: TokenUsage,
         error: str | None = None,
+        structured_output: object | None = None,
     ) -> AgentResult:
         # The terminal event finalizes completed_at, so persist the final answer first.
         if self._result_recorder is not None:
@@ -1284,4 +1453,6 @@ class AgentRuntime:
             {"reason": reason.value, "error": error},
             usage,
         )
-        return AgentResult(content, reason, iterations, tuple(calls), usage, error)
+        return AgentResult(
+            content, reason, iterations, tuple(calls), usage, error, structured_output
+        )

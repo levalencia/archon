@@ -201,7 +201,7 @@ async def test_provider_retained_history_cannot_observe_append_or_mutate_executi
                 ModelResponse("done"),
             ]
 
-        async def complete(self, messages, tools=(), *, max_tokens=4096):
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_contract=None):
             self.inputs.append(messages)
             return self.responses.pop(0)
 
@@ -245,7 +245,7 @@ async def test_subsequent_provider_history_mutation_isolated_across_multiple_cal
             self.inputs: list[Sequence[Message]] = []
             self.iteration = 0
 
-        async def complete(self, messages, tools=(), *, max_tokens=4096):
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_contract=None):
             self.inputs.append(messages)
             self.iteration += 1
             if self.iteration == 1:
@@ -1114,7 +1114,7 @@ async def test_policy_executor_mutation_cannot_spoof_results_events_or_history(
                 ModelResponse("done"),
             ]
 
-        async def complete(self, messages, tools=(), *, max_tokens=4096):
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_contract=None):
             self.inputs.append(messages)
             return self.responses.pop(0)
 
