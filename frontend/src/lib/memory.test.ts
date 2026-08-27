@@ -11,19 +11,15 @@ beforeEach(() => fetchMock.mockReset());
 
 describe('memory rotation client', () => {
   it('encodes project scope and posts a bounded batch', async () => {
-    fetchMock.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          project_id: 'project/a',
-          active_version: 2,
-          version_counts: { '1': 1, '2': 3 },
-          remaining: 1,
-          complete: false,
-          retirement_requires_legacy_writer_drain: true,
-        }),
-        { status: 200 },
-      ),
-    );
+    const payload = {
+      project_id: 'project/a',
+      active_version: 2,
+      version_counts: { '1': 1, '2': 3 },
+      remaining: 1,
+      complete: false,
+      retirement_requires_legacy_writer_drain: true,
+    };
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(payload), { status: 200 }));
 
     await getMemoryRotation('project/a');
     await rotateMemoryKeys('project/a', 25);
