@@ -286,9 +286,7 @@ class EffectRepository:
                 await session.rollback()
                 raise EffectReviewConflict
             await session.commit()
-        record = await self.get(
-            effect_id, owner_id=owner_id, project_id=project_id, run_id=run_id
-        )
+        record = await self.get(effect_id, owner_id=owner_id, project_id=project_id, run_id=run_id)
         if record is None:  # pragma: no cover - committed scoped update guarantees visibility
             raise EffectReviewConflict
         return record
@@ -361,9 +359,7 @@ class EffectRepository:
             ),
             review_disposition=row.review_disposition,
             reviewed_by=row.reviewed_by,
-            reviewed_at=(
-                None if row.reviewed_at is None else _utc(row.reviewed_at, "reviewed_at")
-            ),
+            reviewed_at=(None if row.reviewed_at is None else _utc(row.reviewed_at, "reviewed_at")),
         )
 
 

@@ -182,9 +182,7 @@ async def get_run(
                 "spent_usd": _usd_string(budget.run_spent_nusd),
                 "reserved_usd": _usd_string(budget.run_reserved_nusd),
                 "remaining_usd": _usd_string(
-                    budget.run_limit_nusd
-                    - budget.run_spent_nusd
-                    - budget.run_reserved_nusd
+                    budget.run_limit_nusd - budget.run_spent_nusd - budget.run_reserved_nusd
                 ),
                 "project_limit_usd": _usd_string(budget.project_limit_nusd),
                 "project_spent_usd": _usd_string(budget.project_spent_nusd),
