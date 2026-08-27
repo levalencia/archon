@@ -82,8 +82,12 @@ class EffectiveContextManifest:
         )
         if set(self.selected_message_ids) & set(self.summarized_message_ids):
             raise ValueError("selected and summarized message IDs must be disjoint")
-        object.__setattr__(self, "memory_ids", _unique_text(tuple(self.memory_ids), "memory_ids", 1000))
-        object.__setattr__(self, "skill_ids", _unique_text(tuple(self.skill_ids), "skill_ids", 100))
+        object.__setattr__(
+            self, "memory_ids", _unique_text(tuple(self.memory_ids), "memory_ids", 1000)
+        )
+        object.__setattr__(
+            self, "skill_ids", _unique_text(tuple(self.skill_ids), "skill_ids", 100)
+        )
         if type(self.estimated_tokens) is not int or not 0 <= self.estimated_tokens <= _MAX_BIGINT:
             raise ValueError("estimated_tokens must be a non-negative integer")
         if self.summary_version is not None:
@@ -99,7 +103,8 @@ class EffectiveContextManifest:
 
     @property
     def snapshot_id(self) -> str:
-        return str(uuid.uuid5(_CONTEXT_NAMESPACE, f"{self.owner_id}\0{self.project_id}\0{self.run_id}"))
+        identity = f"{self.owner_id}\0{self.project_id}\0{self.run_id}"
+        return str(uuid.uuid5(_CONTEXT_NAMESPACE, identity))
 
     def semantic_document(self) -> dict[str, Any]:
         return {

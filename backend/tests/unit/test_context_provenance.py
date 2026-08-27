@@ -9,7 +9,7 @@ import pytest
 
 from app.runtime.context import build_effective_context
 from app.runtime.context_provenance import EffectiveContextManifest
-from app.services.context_snapshots import ContextSnapshotConflict, ContextSnapshotRepository
+from app.services.context_snapshots import ContextSnapshotConflictError, ContextSnapshotRepository
 from app.services.db_store import Base, ContextSnapshotRow
 
 
@@ -112,7 +112,7 @@ async def test_repository_is_idempotent_scoped_and_stores_no_content(tmp_path) -
         conversation_id="conversation-1",
         estimated_tokens=51,
     )
-    with pytest.raises(ContextSnapshotConflict):
+    with pytest.raises(ContextSnapshotConflictError):
         await repository.record(conflicting)
 
     async with sessions() as session:

@@ -17,7 +17,7 @@ from app.runtime.context_provenance import EffectiveContextManifest
 from app.services.db_store import ContextSnapshotRow
 
 
-class ContextSnapshotConflict(RuntimeError):
+class ContextSnapshotConflictError(RuntimeError):
     def __init__(self) -> None:
         super().__init__("context_snapshot_conflict")
 
@@ -30,14 +30,14 @@ def _decode_ids(raw: str, *, integers: bool) -> tuple[Any, ...]:
     try:
         value = json.loads(raw)
     except json.JSONDecodeError:
-        raise ContextSnapshotConflict from None
+        raise ContextSnapshotConflictError from None
     if not isinstance(value, list):
-        raise ContextSnapshotConflict
+        raise ContextSnapshotConflictError
     if integers:
         if any(type(item) is not int for item in value):
-            raise ContextSnapshotConflict
+            raise ContextSnapshotConflictError
     elif any(not isinstance(item, str) for item in value):
-        raise ContextSnapshotConflict
+        raise ContextSnapshotConflictError
     return tuple(value)
 
 
@@ -98,14 +98,14 @@ class ContextSnapshotRepository:
             )
             if existing is None:
                 if inserted:
-                    raise ContextSnapshotConflict
-                raise ContextSnapshotConflict
+                    raise ContextSnapshotConflictError
+                raise ContextSnapshotConflictError
             if (
                 existing.owner_id != manifest.owner_id
                 or existing.project_id != manifest.project_id
                 or existing.manifest_hash != manifest.manifest_hash
             ):
-                raise ContextSnapshotConflict
+                raise ContextSnapshotConflictError
             return self._manifest(existing)
 
     async def get(
