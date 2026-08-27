@@ -14,6 +14,14 @@ class Answer(BaseModel):
     answer: str
 
 
+class MutableInt(int):
+    pass
+
+
+class MutableStr(str):
+    pass
+
+
 @pytest.mark.unit
 def test_response_contract_parses_and_validates_model() -> None:
     contract = ResponseContract(
@@ -68,6 +76,19 @@ def test_contract_identifiers_must_be_nonblank(field: str) -> None:
 def test_schema_rejects_mutable_or_non_json_leaf_values(value: object) -> None:
     with pytest.raises(TypeError, match="unsupported value type"):
         ResponseContract("answer", "1", {"value": value}, lambda item: item)
+
+
+@pytest.mark.unit
+def test_schema_rejects_mutable_scalar_subclasses() -> None:
+    mutable_int = MutableInt(1)
+    mutable_int.notes = []  # type: ignore[attr-defined]
+    mutable_key = MutableStr("value")
+    mutable_key.notes = []  # type: ignore[attr-defined]
+
+    with pytest.raises(TypeError, match="unsupported value type"):
+        ResponseContract("answer", "1", {"value": mutable_int}, lambda item: item)
+    with pytest.raises(TypeError, match="mapping keys must be strings"):
+        ResponseContract("answer", "1", {mutable_key: "safe"}, lambda item: item)
 
 
 @pytest.mark.unit

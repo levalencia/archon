@@ -26,9 +26,9 @@ def _reject_json_constant(value: str) -> None:
 
 def _immutable_copy(value: Any, *, seen: frozenset[int] = frozenset()) -> Any:
     """Copy JSON-compatible values into immutable containers and reject cycles/leaves."""
-    if value is None or isinstance(value, (str, bool, int)):
+    if value is None or type(value) in {str, bool, int}:
         return value
-    if isinstance(value, float):
+    if type(value) is float:
         if not math.isfinite(value):
             raise TypeError("json_schema numbers must be finite")
         return value
@@ -38,7 +38,7 @@ def _immutable_copy(value: Any, *, seen: frozenset[int] = frozenset()) -> Any:
             raise TypeError("json_schema must not contain cycles")
         nested_seen = seen | {identity}
         if isinstance(value, Mapping):
-            if any(not isinstance(key, str) for key in value):
+            if any(type(key) is not str for key in value):
                 raise TypeError("json_schema mapping keys must be strings")
             return MappingProxyType(
                 {key: _immutable_copy(item, seen=nested_seen) for key, item in value.items()}
