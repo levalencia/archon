@@ -41,9 +41,7 @@ class MemoryKeyRotationService:
     async def rotate_scope(
         self, owner_id: str, project_id: str, *, batch_size: int = 100
     ) -> MemoryRotationBatch:
-        return await self._repository.rotate_batch(
-            owner_id, project_id, batch_size=batch_size
-        )
+        return await self._repository.rotate_batch(owner_id, project_id, batch_size=batch_size)
 
     async def assert_key_retirable(self, version: int) -> None:
         await self._repository.assert_key_retirable(version)

@@ -106,9 +106,7 @@ async def test_concurrent_rotation_workers_remain_idempotent(tmp_path) -> None:
     for index in range(6):
         await legacy.add("alice", "project", f"fact-{index}", provenance={})
     keyring = MemoryKeyring(2, {1: RAW_V1, 2: RAW_V2})
-    first = ScopedEncryptedMemoryRepository(
-        first_store.session_factory, keyring, redactor=redactor
-    )
+    first = ScopedEncryptedMemoryRepository(first_store.session_factory, keyring, redactor=redactor)
     second = ScopedEncryptedMemoryRepository(
         second_store.session_factory, keyring, redactor=redactor
     )

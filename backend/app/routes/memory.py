@@ -120,9 +120,7 @@ async def memory_rotation_status(
     status = await service.status(user["user_id"], project_id)
     return {
         "project_id": project_id,
-        **_rotation_payload(
-            status.active_version, dict(status.version_counts), status.remaining
-        ),
+        **_rotation_payload(status.active_version, dict(status.version_counts), status.remaining),
     }
 
 
@@ -135,15 +133,11 @@ async def rotate_memory_keys(
 ) -> dict[str, Any]:
     await enforce_rate_limit(request, user, "memory_mutation")
     service = _rotation_service(request)
-    result = await service.rotate_scope(
-        user["user_id"], project_id, batch_size=body.batch_size
-    )
+    result = await service.rotate_scope(user["user_id"], project_id, batch_size=body.batch_size)
     return {
         "project_id": project_id,
         "rotated": result.rotated,
-        **_rotation_payload(
-            result.active_version, dict(result.version_counts), result.remaining
-        ),
+        **_rotation_payload(result.active_version, dict(result.version_counts), result.remaining),
     }
 
 

@@ -218,9 +218,7 @@ class ScopedEncryptedMemoryRepository:
 
     async def key_version_counts(self, user_id: str, project_id: str) -> Mapping[int, int]:
         async with self._sessions() as session:
-            return await self._version_counts(
-                session, user_id=user_id, project_id=project_id
-            )
+            return await self._version_counts(session, user_id=user_id, project_id=project_id)
 
     async def _lock_scope(
         self, session: AsyncSession, user_id: str, project_id: str
@@ -293,9 +291,7 @@ class ScopedEncryptedMemoryRepository:
                 )
                 row.key_version = active
             await session.flush()
-            counts = await self._version_counts(
-                session, user_id=user_id, project_id=project_id
-            )
+            counts = await self._version_counts(session, user_id=user_id, project_id=project_id)
             remaining = sum(count for version, count in counts.items() if version != active)
             return MemoryRotationBatch(
                 active_version=active,
