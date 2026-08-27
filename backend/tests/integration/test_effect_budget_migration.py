@@ -60,12 +60,8 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     at_ten = inspect(engine)
     assert "context_snapshots" in at_ten.get_table_names()
     assert "memory_key_state" not in at_ten.get_table_names()
-    assert "input_asset_fingerprints_json" not in _names(
-        at_ten.get_columns("context_snapshots")
-    )
-    assert "ck_memory_facts_key_version" not in _names(
-        at_ten.get_check_constraints("memory_facts")
-    )
+    assert "input_asset_fingerprints_json" not in _names(at_ten.get_columns("context_snapshots"))
+    assert "ck_memory_facts_key_version" not in _names(at_ten.get_check_constraints("memory_facts"))
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -91,16 +87,17 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
         "context_snapshots",
         "memory_key_state",
     } <= set(inspector.get_table_names())
-    assert "input_asset_fingerprints_json" in _names(
-        inspector.get_columns("context_snapshots")
-    )
+    assert "input_asset_fingerprints_json" in _names(inspector.get_columns("context_snapshots"))
     with engine.connect() as connection:
-        assert connection.execute(
-            text(
-                "SELECT input_asset_fingerprints_json FROM context_snapshots "
-                "WHERE snapshot_id='snapshot-existing'"
-            )
-        ).scalar_one() == "[]"
+        assert (
+            connection.execute(
+                text(
+                    "SELECT input_asset_fingerprints_json FROM context_snapshots "
+                    "WHERE snapshot_id='snapshot-existing'"
+                )
+            ).scalar_one()
+            == "[]"
+        )
     assert {
         "budget_limit_nusd",
         "budget_spent_nusd",

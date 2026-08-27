@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260827_11"
@@ -24,9 +25,7 @@ def upgrade() -> None:
         sa.Column("active_version", sa.Integer(), nullable=False),
         sa.Column("generation", sa.Integer(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint(
-            "active_version BETWEEN 1 AND 255", name="ck_memory_key_state_active"
-        ),
+        sa.CheckConstraint("active_version BETWEEN 1 AND 255", name="ck_memory_key_state_active"),
         sa.CheckConstraint("generation >= 1", name="ck_memory_key_state_generation"),
     )
     with op.batch_alter_table("memory_facts") as batch:

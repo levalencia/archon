@@ -89,9 +89,7 @@ class EffectiveContextManifest:
         object.__setattr__(
             self, "memory_ids", _unique_text(tuple(self.memory_ids), "memory_ids", 1000)
         )
-        object.__setattr__(
-            self, "skill_ids", _unique_text(tuple(self.skill_ids), "skill_ids", 100)
-        )
+        object.__setattr__(self, "skill_ids", _unique_text(tuple(self.skill_ids), "skill_ids", 100))
         asset_fingerprints = _unique_text(
             tuple(self.input_asset_fingerprints), "input_asset_fingerprints", 16
         )
