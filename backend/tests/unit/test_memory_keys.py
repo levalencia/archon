@@ -7,7 +7,7 @@ import secrets
 
 import pytest
 
-from app.memory.keys import decode_memory_master_key
+from app.memory.keys import MemoryKeyring, decode_memory_master_key, load_memory_keyring
 
 _RAW_KEY = b"1" * 32
 _CANONICAL_KEY = base64.urlsafe_b64encode(_RAW_KEY).decode().rstrip("=")
@@ -60,3 +60,45 @@ def test_rejects_noncanonical_master_key_strings(invalid_key: str) -> None:
 def test_rejects_raw_keys_that_are_not_exactly_32_bytes(invalid_key: bytes) -> None:
     with pytest.raises(ValueError, match="^memory encryption master key"):
         decode_memory_master_key(invalid_key)
+
+
+def test_legacy_key_loads_as_active_version_one() -> None:
+    keyring = load_memory_keyring("", active_version=1, legacy_master_key=_CANONICAL_KEY)
+    assert keyring.active_version == 1
+    assert keyring.key(1) == _RAW_KEY
+
+
+def test_versioned_keyring_uses_active_and_previous_versions_without_repr_leak() -> None:
+    second_raw = b"2" * 32
+    second = base64.urlsafe_b64encode(second_raw).decode().rstrip("=")
+    serialized = f'{{"1":"{_CANONICAL_KEY}","2":"{second}"}}'
+    keyring = load_memory_keyring(serialized, active_version=2, legacy_master_key="")
+
+    assert keyring.active_version == 2
+    assert keyring.key(1) == _RAW_KEY
+    assert keyring.key(2) == second_raw
+    assert _CANONICAL_KEY not in repr(keyring)
+    assert second not in repr(keyring)
+
+
+@pytest.mark.parametrize(
+    "serialized,active",
+    [
+        ("{}", 1),
+        ('{"1":"not-a-key"}', 1),
+        (f'{{"1":"{_CANONICAL_KEY}"}}', 2),
+        (f'{{"01":"{_CANONICAL_KEY}"}}', 1),
+    ],
+)
+def test_invalid_keyring_configuration_is_sanitized(serialized: str, active: int) -> None:
+    with pytest.raises(ValueError, match="^memory encryption keyring configuration is invalid$"):
+        load_memory_keyring(serialized, active_version=active, legacy_master_key="")
+    assert serialized not in "memory encryption keyring configuration is invalid"
+
+
+def test_keyring_rejects_reused_key_material_and_unknown_version() -> None:
+    with pytest.raises(ValueError, match="keyring configuration"):
+        MemoryKeyring(2, {1: _RAW_KEY, 2: _RAW_KEY})
+    keyring = MemoryKeyring(1, {1: _RAW_KEY})
+    with pytest.raises(ValueError, match="version is unavailable"):
+        keyring.key(2)
