@@ -20,7 +20,7 @@ from app.runtime import (
     ToolCall,
     ToolDefinition,
 )
-from app.runtime.capabilities import ProviderCapabilities
+from app.runtime.capabilities import ProviderCapabilities, UnsupportedProviderCapability
 from app.runtime.structured_output import ResponseContract
 
 
@@ -170,6 +170,66 @@ async def test_runtime_maps_combined_no_compatible_fallback_to_capability_reject
         event for event in sink.events if event.kind is AgentEventKind.PROVIDER_CAPABILITY_REJECTED
     )
     assert rejection.data["missing_capabilities"] == ("native_tools", "images")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_routes_full_explicit_requirements_to_one_fallback_candidate():
+    usage_only = Provider([], ProviderCapabilities(usage=True))
+    stop_reason_only = Provider([], ProviderCapabilities(stop_reason=True))
+    chain = FallbackLLMChain([usage_only, stop_reason_only])
+
+    result = await AgentRuntime(chain, NoTools()).run(
+        [Message(Role.USER, "go")],
+        required_capabilities=ProviderCapabilities(usage=True, stop_reason=True),
+    )
+
+    assert result.stop_reason is StopReason.PROVIDER_CAPABILITY_UNSUPPORTED
+    assert result.error == "provider_capability_unsupported:usage,stop_reason"
+    assert usage_only.calls == stop_reason_only.calls == []
+
+
+class _RejectingRoutedProvider:
+    routes_capabilities = True
+    capabilities = ProviderCapabilities(usage=True)
+
+    def __init__(self, *, reject_after: int = 0) -> None:
+        self.calls = 0
+        self.reject_after = reject_after
+
+    async def complete(self, messages, tools=(), **kwargs):
+        del messages, tools
+        self.calls += 1
+        assert kwargs["required_capabilities"] == ProviderCapabilities(usage=True)
+        if self.calls > self.reject_after:
+            raise UnsupportedProviderCapability("rejecting", ("usage",))
+        return ModelResponse(tool_calls=(ToolCall("call", "noop"),))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_maps_fallback_candidate_typed_rejection_during_normal_call():
+    provider = _RejectingRoutedProvider()
+    result = await AgentRuntime(FallbackLLMChain([provider]), NoTools()).run(
+        [Message(Role.USER, "go")], required_capabilities=ProviderCapabilities(usage=True)
+    )
+
+    assert result.stop_reason is StopReason.PROVIDER_CAPABILITY_UNSUPPORTED
+    assert result.error == "provider_capability_unsupported:usage"
+    assert provider.calls == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_maps_fallback_candidate_typed_rejection_during_final_synthesis():
+    provider = _RejectingRoutedProvider(reject_after=1)
+    result = await AgentRuntime(
+        FallbackLLMChain([provider]), NoTools(), budget=RuntimeBudget(max_iterations=1)
+    ).run([Message(Role.USER, "go")], required_capabilities=ProviderCapabilities(usage=True))
+
+    assert result.stop_reason is StopReason.PROVIDER_CAPABILITY_UNSUPPORTED
+    assert result.error == "provider_capability_unsupported:usage"
+    assert provider.calls == 2
 
 
 @dataclass(frozen=True)

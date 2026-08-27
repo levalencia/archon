@@ -86,6 +86,53 @@ def test_wrappers_preserve_declared_capabilities() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_composite_wrappers_copy_marker_and_forward_explicit_requirements() -> None:
+    required = ProviderCapabilities(usage=True, stop_reason=True)
+
+    class RoutedDelegate:
+        routes_capabilities = True
+        capabilities = required
+
+        def __init__(self) -> None:
+            self.kwargs: dict[str, object] = {}
+
+        async def complete(self, messages, tools=(), **kwargs):
+            del messages, tools
+            self.kwargs = kwargs
+            return ModelResponse("ok")
+
+    delegate = RoutedDelegate()
+    breaker_wrapper = CircuitBreakingProvider(delegate, CircuitBreaker())
+    json_wrapper = JsonModeProvider(breaker_wrapper)
+
+    assert inspect.getattr_static(breaker_wrapper, "routes_capabilities") is True
+    assert inspect.getattr_static(json_wrapper, "routes_capabilities") is True
+    await json_wrapper.complete([Message(Role.USER, "go")], required_capabilities=required)
+    assert delegate.kwargs["required_capabilities"] is required
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_composite_wrappers_do_not_forward_capabilities_to_legacy_delegate() -> None:
+    class LegacyDelegate:
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_format=None):
+            del messages, tools, max_tokens, response_format
+            return ModelResponse("ok")
+
+    breaker_wrapper = CircuitBreakingProvider(LegacyDelegate(), CircuitBreaker())
+    json_wrapper = JsonModeProvider(breaker_wrapper)
+
+    assert inspect.getattr_static(breaker_wrapper, "routes_capabilities") is False
+    assert inspect.getattr_static(json_wrapper, "routes_capabilities") is False
+    assert inspect.getattr_static(TextOnlyProvider(object()), "routes_capabilities") is False
+    await json_wrapper.complete(
+        [Message(Role.USER, "go")],
+        required_capabilities=ProviderCapabilities(usage=True),
+    )
+
+
+@pytest.mark.unit
 def test_json_wrapper_does_not_invent_delegate_capability() -> None:
     class LegacyClient:
         async def chat(self, messages: object, *, max_tokens: int) -> str:

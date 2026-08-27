@@ -11,7 +11,11 @@ from typing import Any, TypeVar
 
 import structlog
 
-from app.runtime.capabilities import get_provider_capabilities
+from app.runtime.capabilities import (
+    ProviderCapabilities,
+    UnsupportedProviderCapability,
+    get_provider_capabilities,
+)
 from app.runtime.models import Message, ModelResponse, ToolDefinition
 from app.runtime.ports import ModelProvider
 from app.runtime.structured_output import ResponseContract
@@ -102,6 +106,10 @@ class CircuitBreaker:
             value = func(*args, **kwargs)
             result = await value if inspect.isawaitable(value) else value
         except asyncio.CancelledError:
+            if is_probe:
+                await self._abandon_probe(probe_token)
+            raise
+        except UnsupportedProviderCapability:
             if is_probe:
                 await self._abandon_probe(probe_token)
             raise
@@ -196,6 +204,9 @@ class CircuitBreakingProvider:
         self.delegate = delegate
         self.breaker = breaker
         self.capabilities = get_provider_capabilities(delegate)
+        self.routes_capabilities = (
+            inspect.getattr_static(delegate, "routes_capabilities", False) is True
+        )
 
     async def complete(
         self,
@@ -205,6 +216,7 @@ class CircuitBreakingProvider:
         max_tokens: int = 4096,
         response_contract: ResponseContract | None = None,
         response_format: str | None = None,
+        required_capabilities: ProviderCapabilities | None = None,
     ) -> ModelResponse:
         if response_contract is not None and response_format is not None:
             raise ValueError("response_contract and response_format are mutually exclusive")
@@ -217,11 +229,15 @@ class CircuitBreakingProvider:
                 kwargs["response_format"] = response_format
             if response_contract is not None:
                 kwargs["response_contract"] = response_contract
+            if self.routes_capabilities and required_capabilities is not None:
+                kwargs["required_capabilities"] = required_capabilities
             return await self.delegate.complete(messages, tools, **kwargs)
 
         try:
             return await self.breaker.call(invoke)
         except CircuitBreakerOpenError as exc:
             raise ProviderUnavailableError("Model provider temporarily unavailable") from exc
+        except UnsupportedProviderCapability:
+            raise
         except Exception as exc:
             raise ProviderUnavailableError("Model provider temporarily unavailable") from exc

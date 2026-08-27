@@ -43,6 +43,7 @@ from app.runtime import (
     TokenUsage,
     ToolCall,
 )
+from app.runtime.capabilities import ProviderCapabilities
 from app.security.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, CircuitState
 from app.security.default_policy import default_policy_engine
 from app.security.persistence_redactor import PersistenceRedactor
@@ -111,6 +112,8 @@ def _event_kinds(sink: RecordingEventSink) -> list[str]:
 
 class _ScriptedToolProvider:
     """Emit exactly one native call, then a final response after successful execution."""
+
+    capabilities = ProviderCapabilities(native_tools=True)
 
     def __init__(self) -> None:
         self.calls = 0

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
+import inspect
 import json
 import re
 import time
@@ -218,6 +219,8 @@ class AgentRuntime:
                 provider_kwargs: dict[str, Any] = {"max_tokens": min(4096, remaining_tokens)}
                 if response_contract is not None:
                     provider_kwargs["response_contract"] = response_contract
+                if inspect.getattr_static(self._model, "routes_capabilities", False) is True:
+                    provider_kwargs["required_capabilities"] = requirements
                 try:
                     response = await self._within_deadline(
                         self._model.complete(
@@ -1403,6 +1406,8 @@ class AgentRuntime:
             provider_kwargs: dict[str, Any] = {"max_tokens": self._budget.final_synthesis_tokens}
             if response_contract is not None:
                 provider_kwargs["response_contract"] = response_contract
+            if inspect.getattr_static(self._model, "routes_capabilities", False) is True:
+                provider_kwargs["required_capabilities"] = requirements
             response = await self._within_deadline(
                 self._model.complete(
                     self._snapshot_history(history),

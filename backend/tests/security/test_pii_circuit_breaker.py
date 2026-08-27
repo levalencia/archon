@@ -6,7 +6,14 @@ import asyncio
 
 import pytest
 
-from app.security.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, CircuitState
+from app.runtime.capabilities import ProviderCapabilities, UnsupportedProviderCapability
+from app.runtime.models import Message, Role
+from app.security.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    CircuitBreakingProvider,
+    CircuitState,
+)
 from app.security.pii_detector import PIIDetector
 
 
@@ -86,6 +93,29 @@ class TestCircuitBreaker:
         result = await cb.call(lambda: "ok")
         assert result == "ok"
         assert cb.state == CircuitState.CLOSED
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_capability_rejection_is_propagated_without_counting_as_failure(self) -> None:
+        class RejectingProvider:
+            routes_capabilities = True
+            capabilities = ProviderCapabilities(usage=True)
+
+            async def complete(self, messages, tools=(), **kwargs):
+                del messages, tools, kwargs
+                raise UnsupportedProviderCapability("delegate", ("usage",))
+
+        breaker = CircuitBreaker(failure_threshold=1)
+        provider = CircuitBreakingProvider(RejectingProvider(), breaker)
+
+        with pytest.raises(UnsupportedProviderCapability):
+            await provider.complete(
+                [Message(Role.USER, "go")],
+                required_capabilities=ProviderCapabilities(usage=True),
+            )
+
+        assert breaker.state is CircuitState.CLOSED
+        assert breaker.get_stats()["failure_count"] == 0
 
     @pytest.mark.unit
     @pytest.mark.asyncio

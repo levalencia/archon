@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Sequence
 from typing import Any, cast
 
-from app.runtime.capabilities import TEXT_ONLY_CAPABILITIES, get_provider_capabilities
+from app.runtime.capabilities import (
+    TEXT_ONLY_CAPABILITIES,
+    ProviderCapabilities,
+    get_provider_capabilities,
+)
 from app.runtime.context import build_messages
 from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
 from app.runtime.ports import ModelProvider
@@ -18,6 +23,9 @@ class JsonModeProvider:
     def __init__(self, delegate: Any) -> None:
         self._delegate = delegate
         self.capabilities = get_provider_capabilities(delegate)
+        self.routes_capabilities = (
+            inspect.getattr_static(delegate, "routes_capabilities", False) is True
+        )
 
     async def complete(
         self,
@@ -27,6 +35,7 @@ class JsonModeProvider:
         max_tokens: int = 4096,
         response_contract: ResponseContract | None = None,
         response_format: str | None = None,
+        required_capabilities: ProviderCapabilities | None = None,
     ) -> ModelResponse:
         if response_contract is not None and response_format is not None:
             raise ValueError("response_contract and response_format are mutually exclusive")
@@ -35,6 +44,8 @@ class JsonModeProvider:
             kwargs["response_contract"] = response_contract
         else:
             kwargs["response_format"] = "json"
+        if self.routes_capabilities and required_capabilities is not None:
+            kwargs["required_capabilities"] = required_capabilities
         response: ModelResponse = await self._delegate.complete(messages, tools, **kwargs)
         return response
 
@@ -43,6 +54,7 @@ class TextOnlyProvider:
     """Non-parsing compatibility adapter for providers without native tool support yet."""
 
     capabilities = TEXT_ONLY_CAPABILITIES
+    routes_capabilities = False
 
     def __init__(self, client: Any) -> None:
         self.client = client

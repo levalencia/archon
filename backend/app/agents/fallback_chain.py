@@ -75,6 +75,20 @@ def _required_capabilities(
     )
 
 
+def _merge_capabilities(
+    first: ProviderCapabilities, second: ProviderCapabilities | None
+) -> ProviderCapabilities:
+    """OR two complete declarations without dropping explicit requirements."""
+    if second is None:
+        return first
+    return ProviderCapabilities(
+        **{
+            item.name: getattr(first, item.name) or getattr(second, item.name)
+            for item in fields(ProviderCapabilities)
+        }
+    )
+
+
 def _enabled_names(capabilities: ProviderCapabilities) -> tuple[str, ...]:
     return tuple(item.name for item in fields(capabilities) if getattr(capabilities, item.name))
 
@@ -103,6 +117,8 @@ def _supports_temperature(adapter: object) -> bool:
 class FallbackLLMChain:
     """Try compatible model providers in order, preserving typed response contracts."""
 
+    routes_capabilities = True
+
     def __init__(self, adapters: Sequence[object]) -> None:
         if not adapters:
             msg = "At least one adapter required"
@@ -122,12 +138,16 @@ class FallbackLLMChain:
         max_tokens: int = 4096,
         response_contract: ResponseContract | None = None,
         response_format: str | None = None,
+        required_capabilities: ProviderCapabilities | None = None,
     ) -> ModelResponse:
         """Return the first successful candidate satisfying every request requirement."""
         if response_contract is not None and response_format is not None:
             raise ValueError("response_contract and response_format are mutually exclusive")
 
-        required = _required_capabilities(messages, tools, response_contract, response_format)
+        required = _merge_capabilities(
+            _required_capabilities(messages, tools, response_contract, response_format),
+            required_capabilities,
+        )
         compatible_indices = [
             index
             for index, candidate in enumerate(self._candidates)
@@ -158,8 +178,12 @@ class FallbackLLMChain:
                 kwargs["response_contract"] = response_contract
             if response_format is not None:
                 kwargs["response_format"] = response_format
+            if inspect.getattr_static(candidate, "routes_capabilities", False) is True:
+                kwargs["required_capabilities"] = required
             try:
                 response = await candidate.complete(messages, tools, **kwargs)
+            except UnsupportedProviderCapability:
+                raise
             except Exception as exc:
                 failed_attempts += 1
                 self._failures[index] = self._failures.get(index, 0) + 1

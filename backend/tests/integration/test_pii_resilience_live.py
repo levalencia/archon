@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from app.agents.mock_llm import MockLLM
 from app.config import Settings
 from app.main import create_app
+from app.runtime.capabilities import ProviderCapabilities
 from app.runtime.models import Message, ModelResponse, ToolDefinition
 
 
@@ -189,6 +190,8 @@ def test_sync_failure_opens_shared_breaker_and_sse_does_not_call_delegate(tmp_pa
     secret = "provider leaked private.user@example.com"
 
     class FailingProvider:
+        capabilities = ProviderCapabilities(native_tools=True)
+
         def __init__(self) -> None:
             self.calls = 0
 
