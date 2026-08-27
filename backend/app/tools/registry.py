@@ -502,7 +502,7 @@ class SecureToolRegistry:
         request = self.policy_request(ToolCall(call.id, tool_name, parameters))
         return ToolEffectSpec(
             effectful=tool.effectful,
-            input_schema=cast(Mapping[str, Any], tool.input_schema),
+            input_schema=cast(Mapping[str, Any], _deep_thaw(tool.input_schema)),
             resources=request.resources,
             idempotency_key_parameter=tool.idempotency_key_parameter,
         )
