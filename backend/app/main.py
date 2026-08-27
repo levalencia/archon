@@ -24,7 +24,7 @@ from app.mcp.inventory import MCPInventoryService
 from app.mcp.models import ServerProfile
 from app.mcp.repository import MCPRepository
 from app.mcp.runtime import MCPRuntimeToolProvider
-from app.memory.keys import decode_memory_master_key
+from app.memory.keys import load_memory_keyring
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
@@ -64,6 +64,7 @@ from app.services.chunker import EmbeddingService
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 from app.services.documents import DocumentRepository
+from app.services.key_rotation import MemoryKeyRotationService
 from app.services.sql_json_vector_store import SqlJsonVectorStore
 from app.tools.sandbox import DockerSandboxConfig, DockerSandboxExecutor, SandboxExecutor
 
@@ -90,11 +91,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Validate before opening databases or initializing any other application resource.
     if settings.memory_encryption_enabled:
         try:
-            memory_master_key = decode_memory_master_key(settings.encryption_master_key)
+            memory_keyring = load_memory_keyring(
+                settings.memory_keyring_json.get_secret_value(),
+                active_version=settings.memory_active_key_version,
+                legacy_master_key=settings.encryption_master_key,
+            )
         except ValueError:
             raise RuntimeError("Encrypted memory startup configuration is invalid") from None
     else:
-        memory_master_key = None
+        memory_keyring = None
 
     app.state.sandbox_executor = None
     if settings.execution_enabled:
@@ -163,12 +168,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     logger.info("vector_store_initialized", backend="sql-json-cosine")
     if settings.memory_encryption_enabled:
-        assert memory_master_key is not None
+        assert memory_keyring is not None
         app.state.scoped_memory = ScopedEncryptedMemoryRepository(
-            auth_store.session_factory, memory_master_key, redactor=redactor
+            auth_store.session_factory, memory_keyring, redactor=redactor
         )
+        await app.state.scoped_memory.validate_key_versions()
+        app.state.memory_key_rotation = MemoryKeyRotationService(app.state.scoped_memory)
     else:
         app.state.scoped_memory = None
+        app.state.memory_key_rotation = None
     app.state.approval_broker = DurableApprovalBroker(
         ApprovalRepository(auth_store.session_factory),
         timeout_seconds=settings.approval_timeout_seconds,
