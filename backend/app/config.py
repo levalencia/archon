@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     openai_json_mode_enabled: bool = False
     openai_json_schema_enabled: bool = False
     openai_cache_usage_enabled: bool = False
+    # Ollama features vary by installed model/version and are opt-in.
+    ollama_native_tools_enabled: bool = False
+    ollama_vision_model: str = ""
+    ollama_json_mode_enabled: bool = False
+    ollama_json_schema_enabled: bool = False
 
     # Isolated evidence verifier (uses the application model provider, without tools)
     verifier_enabled: bool = False
@@ -122,6 +127,13 @@ class Settings(BaseSettings):
         """JSON Schema support also satisfies the less specific JSON-mode capability."""
         if self.openai_json_schema_enabled:
             self.openai_json_mode_enabled = True
+        return self
+
+    @model_validator(mode="after")
+    def validate_ollama_capabilities(self) -> Settings:
+        """JSON Schema support also satisfies Ollama's general JSON mode."""
+        if self.ollama_json_schema_enabled:
+            self.ollama_json_mode_enabled = True
         return self
 
     # Agent
