@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from app.agents.fallback_chain import FallbackLLMChain
 from app.runtime import (
     AgentEventKind,
     AgentRuntime,
@@ -17,6 +18,7 @@ from app.runtime import (
     StopReason,
     TokenUsage,
     ToolCall,
+    ToolDefinition,
 )
 from app.runtime.capabilities import ProviderCapabilities
 from app.runtime.structured_output import ResponseContract
@@ -28,6 +30,19 @@ class NoTools:
 
     async def execute(self, call):
         raise AssertionError(f"unexpected tool call: {call}")
+
+
+class DefinedTools:
+    def __init__(self) -> None:
+        self.definition_calls = 0
+        self.definitions_value = [ToolDefinition("noop")]
+
+    def definitions(self):
+        self.definition_calls += 1
+        return self.definitions_value
+
+    async def execute(self, call):
+        return {"ok": True}
 
 
 class Provider:
@@ -82,6 +97,81 @@ async def test_missing_capability_stops_before_provider_call(
         "code": "provider_capability_unsupported",
         "missing_capabilities": missing,
     }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_registered_tools_automatically_require_native_tool_capability():
+    provider = Provider([ModelResponse("must not run")])
+    tools = DefinedTools()
+
+    result = await AgentRuntime(provider, tools).run([Message(Role.USER, "go")])
+
+    assert result.stop_reason is StopReason.PROVIDER_CAPABILITY_UNSUPPORTED
+    assert result.error == "provider_capability_unsupported:native_tools"
+    assert provider.calls == []
+    assert tools.definition_calls == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_capable_provider_receives_one_detached_definition_tuple_each_iteration():
+    provider = Provider(
+        [
+            ModelResponse(tool_calls=(ToolCall("call", "noop"),)),
+            ModelResponse("done"),
+        ],
+        ProviderCapabilities(native_tools=True),
+    )
+    tools = DefinedTools()
+
+    result = await AgentRuntime(provider, tools).run([Message(Role.USER, "go")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert tools.definition_calls == 1
+    assert len(provider.calls) == 2
+    forwarded = provider.calls[0][1]
+    assert type(forwarded) is tuple
+    assert forwarded == tuple(tools.definitions_value)
+    assert provider.calls[1][1] is forwarded
+    assert forwarded is not tools.definitions_value
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_fallback_skips_text_only_primary_for_registered_tools():
+    primary = Provider([ModelResponse("wrong")])
+    capable = Provider([ModelResponse("done")], ProviderCapabilities(native_tools=True))
+    chain = FallbackLLMChain([primary, capable])
+
+    result = await AgentRuntime(chain, DefinedTools()).run([Message(Role.USER, "go")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert primary.calls == []
+    assert len(capable.calls) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_maps_combined_no_compatible_fallback_to_capability_rejection():
+    tools_only = Provider([], ProviderCapabilities(native_tools=True))
+    images_only = Provider([], ProviderCapabilities(images=True))
+    sink = RecordingEventSink()
+    chain = FallbackLLMChain([tools_only, images_only])
+
+    result = await AgentRuntime(chain, DefinedTools(), events=sink).run(
+        [Message(Role.USER, "inspect", images=("safe-image",))]
+    )
+
+    assert result.stop_reason is StopReason.PROVIDER_CAPABILITY_UNSUPPORTED
+    assert result.error == "provider_capability_unsupported:native_tools,images"
+    assert tools_only.calls == images_only.calls == []
+    rejection = next(
+        event
+        for event in sink.events
+        if event.kind is AgentEventKind.PROVIDER_CAPABILITY_REJECTED
+    )
+    assert rejection.data["missing_capabilities"] == ("native_tools", "images")
 
 
 @dataclass(frozen=True)

@@ -13,9 +13,10 @@ from app.agents.fallback_chain import (
 )
 from app.agents.llm_factory import create_llm_client
 from app.config import Settings
-from app.runtime.capabilities import ProviderCapabilities
+from app.runtime.capabilities import ProviderCapabilities, get_provider_capabilities
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolDefinition
 from app.runtime.structured_output import ResponseContract
+from app.runtime.support import as_model_provider
 
 
 class _TypedClient:
@@ -273,6 +274,17 @@ def test_factory_returns_fallback_chain_with_fallbacks() -> None:
     client = create_llm_client(settings)
     assert isinstance(client, FallbackLLMChain)
     assert len(client.adapters) == 3
+
+
+def test_factory_fallback_chain_remains_typed_and_preserves_union_capabilities() -> None:
+    settings = Settings(llm_provider="mock", llm_fallback_providers="mock,mock")
+    client = create_llm_client(settings)
+
+    provider = as_model_provider(client)
+
+    assert provider is client
+    assert get_provider_capabilities(provider) == get_provider_capabilities(client)
+    assert get_provider_capabilities(provider).native_tools is True
 
 
 def test_fallback_chain_requires_at_least_one_adapter() -> None:

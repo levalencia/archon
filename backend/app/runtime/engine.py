@@ -14,7 +14,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, TypeVar
 
-from app.runtime.capabilities import ProviderCapabilities, get_provider_capabilities
+from app.runtime.capabilities import (
+    ProviderCapabilities,
+    UnsupportedProviderCapability,
+    get_provider_capabilities,
+)
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
 from app.runtime.models import Message, Role, TokenUsage, ToolCall
 from app.runtime.ports import (
@@ -189,8 +193,12 @@ class AgentRuntime:
         usage = TokenUsage()
         content = ""
         structured_output: object | None = None
+        tool_definitions = tuple(self._tools.definitions())
         requirements = self._provider_requirements(
-            history, response_contract, required_capabilities
+            history,
+            response_contract,
+            required_capabilities,
+            native_tools_required=bool(tool_definitions),
         )
         await self._emit(AgentEventKind.RUN_STARTED, 0)
         try:
@@ -214,13 +222,21 @@ class AgentRuntime:
                     response = await self._within_deadline(
                         self._model.complete(
                             self._snapshot_history(history),
-                            self._tools.definitions(),
+                            tool_definitions,
                             **provider_kwargs,
                         ),
                         started_at,
                     )
                 except _RuntimeDeadlineExceededError:
                     raise
+                except UnsupportedProviderCapability as error:
+                    return await self._reject_provider_capabilities(
+                        self._safe_missing_capability_names(error),
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                    )
                 except Exception:
                     return await self._stop(
                         StopReason.PROVIDER_ERROR,
@@ -650,10 +666,12 @@ class AgentRuntime:
         messages: Sequence[Message],
         response_contract: ResponseContract | None,
         explicit: ProviderCapabilities | None,
+        *,
+        native_tools_required: bool = False,
     ) -> ProviderCapabilities:
         explicit = explicit or ProviderCapabilities()
         return ProviderCapabilities(
-            native_tools=explicit.native_tools,
+            native_tools=explicit.native_tools or native_tools_required,
             images=explicit.images or any(message.images for message in messages),
             json_mode=explicit.json_mode or response_contract is not None,
             json_schema=explicit.json_schema,
@@ -662,6 +680,16 @@ class AgentRuntime:
             usage=explicit.usage,
             stop_reason=explicit.stop_reason,
             streaming=explicit.streaming,
+        )
+
+    @staticmethod
+    def _safe_missing_capability_names(
+        error: UnsupportedProviderCapability,
+    ) -> tuple[str, ...]:
+        """Copy only names from the closed capability vocabulary; never expose provider text."""
+        reported = frozenset(error.missing_capabilities)
+        return tuple(
+            name for name in ProviderCapabilities.__dataclass_fields__ if name in reported
         )
 
     @staticmethod
@@ -1464,6 +1492,14 @@ class AgentRuntime:
         except _RuntimeDeadlineExceededError:
             return await self._stop(
                 StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
+            )
+        except UnsupportedProviderCapability as error:
+            return await self._reject_provider_capabilities(
+                self._safe_missing_capability_names(error),
+                content,
+                iterations,
+                calls,
+                usage,
             )
         except Exception:
             # Preserve the best content already produced; stop reason remains explicit.

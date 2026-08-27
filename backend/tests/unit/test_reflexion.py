@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.runtime import AgentRuntime, RuntimeBudget
+from app.runtime.capabilities import ProviderCapabilities
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall, ToolDefinition
 
@@ -37,6 +38,8 @@ class _FailFirstThenSucceedTools:
 
 class _ReflexionModel:
     """Model that calls a tool, gets an error, then retries with adjusted params."""
+
+    capabilities = ProviderCapabilities(native_tools=True)
 
     def __init__(self):
         self.call_count = 0
