@@ -47,6 +47,21 @@ class SandboxRunnerClient:
         response = await self._request({"version": 1, "operation": "health"}, timeout=2.0)
         if response != {"version": 1, "status": "ok"}:
             raise RuntimeError("Sandbox runner health contract failed")
+        probe = await self.execute(
+            "import socket\n"
+            "try: socket.socket(); raise SystemExit(91)\n"
+            "except PermissionError: print('seccomp-ok')",
+            kind="python",
+            timeout=min(1.0, self.config.timeout_seconds),
+        )
+        if (
+            probe.exit_code != 0
+            or probe.stdout != "seccomp-ok\n"
+            or probe.stderr
+            or probe.timed_out
+            or probe.truncated
+        ):
+            raise RuntimeError("Sandbox runner execution boundary failed")
 
     async def execute(
         self, content: str, *, kind: ExecutionKind, timeout: float | None = None

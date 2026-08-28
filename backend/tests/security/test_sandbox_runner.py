@@ -74,6 +74,22 @@ async def test_runner_allowlist_timeout_output_and_safe_errors(tmp_path: Path) -
     )
     assert timed["timed_out"] is True and timed["exit_code"] != 0
 
+    blocked_stdin = await asyncio.wait_for(
+        runner_server.execute(
+            {
+                "version": 1,
+                "operation": "execute",
+                "request_id": "6" * 32,
+                "kind": "shell",
+                "content": "sleep 30\n#" + "x" * 500_000,
+                "timeout_seconds": 0.1,
+                "output_bytes": 1024,
+            }
+        ),
+        timeout=1.0,
+    )
+    assert blocked_stdin["timed_out"] is True
+
     capped = await runner_server.execute(
         {
             "version": 1,
@@ -232,6 +248,8 @@ async def test_runner_child_seccomp_blocks_socket_and_control_file_mutation(tmp_
     runner_server.COMMANDS["python"] = (sys.executable, "-I", "-")
     protected = tmp_path / "protected.sock"
     protected.write_text("control")
+    control_dir = tmp_path / "control"
+    control_dir.mkdir(mode=0o550)
     result = await runner_server.execute(
         {
             "version": 1,
@@ -243,15 +261,21 @@ async def test_runner_child_seccomp_blocks_socket_and_control_file_mutation(tmp_
                 "try: socket.socket(); raise SystemExit('socket-open')\n"
                 "except OSError: print('socket-blocked')\n"
                 f"try: os.unlink({str(protected)!r}); raise SystemExit('unlink-worked')\n"
-                "except OSError: print('unlink-blocked')"
+                "except OSError: print('unlink-blocked')\n"
+                f"try: open({str(control_dir / 'payload')!r},'wb').write(b'x'); "
+                "raise SystemExit('volume-write')\n"
+                "except OSError: print('volume-blocked')\n"
+                f"try: os.chmod({str(control_dir)!r},0o770); raise SystemExit('chmod-worked')\n"
+                "except OSError: print('chmod-blocked')"
             ),
             "timeout_seconds": 1.0,
             "output_bytes": 1024,
         }
     )
     assert result["exit_code"] == 0
-    assert result["stdout"] == "socket-blocked\nunlink-blocked\n"
+    assert result["stdout"] == ("socket-blocked\nunlink-blocked\nvolume-blocked\nchmod-blocked\n")
     assert protected.exists()
+    assert not (control_dir / "payload").exists()
 
 
 @pytest.mark.parametrize(
@@ -281,7 +305,7 @@ async def test_unix_client_contract_has_no_host_fallback(tmp_path: Path) -> None
                 "version": 1,
                 "status": "ok",
                 "request_id": request["request_id"],
-                "stdout": "remote\n",
+                "stdout": ("seccomp-ok\n" if "seccomp-ok" in request["content"] else "remote\n"),
                 "stderr": "",
                 "exit_code": 0,
                 "timed_out": False,
@@ -305,6 +329,32 @@ async def test_unix_client_contract_has_no_host_fallback(tmp_path: Path) -> None
     missing = SandboxRunnerClient(SandboxClientConfig(str(missing_path), 1, 1024))
     with pytest.raises(RuntimeError, match="unavailable"):
         await missing.execute("print('must not run')", kind="python")
+
+
+@pytest.mark.asyncio
+async def test_preflight_rejects_health_only_runner_without_seccomp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = SandboxRunnerClient(SandboxClientConfig("/tmp/unused.sock", 1, 1024))
+
+    async def fake_request(payload: dict, *, timeout: float) -> dict:
+        if payload["operation"] == "health":
+            return {"version": 1, "status": "ok"}
+        return {
+            "version": 1,
+            "status": "ok",
+            "request_id": payload["request_id"],
+            "stdout": "socket-open\n",
+            "stderr": "",
+            "exit_code": 0,
+            "timed_out": False,
+            "truncated": False,
+            "isolation": "runner-container",
+        }
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    with pytest.raises(RuntimeError, match="execution boundary"):
+        await client.preflight()
 
 
 class HealthyRunner:
@@ -347,6 +397,7 @@ def test_authenticated_sandbox_status_is_live_and_metadata_only(tmp_path: Path) 
         "memory_mb": settings.execution_memory_mb,
         "pids_limit": settings.execution_pids_limit,
         "cpus": settings.execution_cpus,
+        "limits_source": "backend-config",
     }
     assert runner.preflights >= 2
     assert "socket" not in response.text and "docker" not in response.text

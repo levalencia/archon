@@ -104,12 +104,12 @@
     {
       "id": "multimodal-e2e",
       "owner_module": "docs/course/modules/13-auth-ui-observability/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "partial", "live_provider": "no", "deployed": "no"},
-      "sources": ["backend/app/runtime/models.py", "backend/app/runtime/anthropic.py", "backend/app/services/artifacts.py"],
-      "tests": ["backend/tests/unit/test_wiring_gaps.py", "backend/tests/security/test_resource_security.py"],
-      "evidence": ["docs/course/concepts/multimodal-and-artifacts.md"],
-      "limitation": "Image data reaches request builders and private artifacts exist, but no real-provider multimodal end-to-end observation or durable artifact backend is established."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/runtime/images.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py", "backend/app/runtime/anthropic.py", "backend/app/agents/openai_adapter.py", "backend/app/agents/ollama_adapter.py", "frontend/src/lib/components/Workbench.svelte"],
+      "tests": ["backend/tests/integration/test_multimodal_contract.py", "backend/tests/unit/test_openai_typed_adapter.py", "backend/tests/unit/test_ollama_typed_adapter.py"],
+      "evidence": ["docs/course/concepts/multimodal-and-artifacts.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "The authenticated sync and SSE paths enforce bounded Data URI, strict base64, byte/MIME/dimension/pixel, metadata-stripping, transient-retention, and sanitized-output limits before persistence/provider execution. OpenAI, Anthropic, and Ollama builders are verified deterministically; no external vision provider call, malware scanner, durable attachment backend, or public deployment is claimed."
     },
     {
       "id": "durable-background-jobs",
@@ -144,12 +144,12 @@
     {
       "id": "isolated-sandbox-live-target",
       "owner_module": "docs/course/modules/05-policy-and-approvals/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "na", "deployed": "no"},
-      "sources": ["backend/app/tools/sandbox.py", "backend/app/tools/terminal.py", "scripts/sandbox_smoke.py"],
-      "tests": ["backend/tests/unit/test_docker_sandbox.py", "backend/tests/unit/test_sandbox_wire.py"],
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "na", "deployed": "no"},
+      "sources": ["sandbox_runner/server.py", "sandbox_runner/Dockerfile", "backend/app/tools/sandbox_client.py", "backend/app/main.py", "backend/app/routes/sandbox.py", "docker-compose.local.yml", "frontend/src/lib/components/SandboxStatus.svelte"],
+      "tests": ["backend/tests/security/test_sandbox_runner.py", "backend/tests/unit/test_sandbox_wire.py", "backend/tests/unit/test_docker_sandbox.py", "scripts/sandbox-runner-smoke.sh"],
       "evidence": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/concepts/execution-isolation-sandbox.md"],
-      "limitation": "The Docker-only path has a local containment smoke but is optional and disabled in the verified local target; it is not VM-grade or multi-tenant certification."
+      "limitation": "The verified local target uses a separate non-root, networkless, read-only runner container over a private Unix socket with cgroup/resource bounds, child seccomp, strict bounded frames, peer-disconnect cancellation, unconditional process-group cleanup, and no Docker socket or project mount. This is local container isolation, not VM-grade hostile multi-tenant certification, public deployment, or a production SLO."
     },
     {
       "id": "live-embedding-provider",

@@ -16,6 +16,7 @@ const status = {
   memory_mb: 128,
   pids_limit: 64,
   cpus: 0.5,
+  limits_source: 'backend-config',
 };
 
 afterEach(() => {

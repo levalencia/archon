@@ -63,6 +63,7 @@ _SECCOMP_DENIED = (
     "chmod",
     "fchmod",
     "fchmodat",
+    "fchmodat2",
 )
 
 
@@ -172,10 +173,10 @@ async def execute(request: dict[str, Any]) -> dict[str, Any]:
     cap_wait = asyncio.create_task(cap.wait())
     timed_out = False
     try:
-        proc.stdin.write(content.encode())
-        await proc.stdin.drain()
-        proc.stdin.close()
         async with asyncio.timeout(timeout_value):
+            proc.stdin.write(content.encode())
+            await proc.stdin.drain()
+            proc.stdin.close()
             done, _ = await asyncio.wait((wait, cap_wait), return_when=asyncio.FIRST_COMPLETED)
             if cap_wait in done and not wait.done():
                 _kill_group(proc)
@@ -322,9 +323,11 @@ async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> 
 
 async def main() -> None:
     SOCKET_PATH.parent.mkdir(mode=0o770, parents=True, exist_ok=True)
+    os.chmod(SOCKET_PATH.parent, 0o770)
     SOCKET_PATH.unlink(missing_ok=True)
     server = await asyncio.start_unix_server(handle, path=SOCKET_PATH, limit=MAX_FRAME_BYTES + 1)
     os.chmod(SOCKET_PATH, 0o660)
+    os.chmod(SOCKET_PATH.parent, 0o550)
     async with server:
         await server.serve_forever()
 

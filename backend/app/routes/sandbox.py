@@ -25,6 +25,7 @@ class SandboxStatusResponse(BaseModel):
     memory_mb: int
     pids_limit: int
     cpus: float
+    limits_source: str
 
 
 @router.get("/status", response_model=SandboxStatusResponse)
@@ -54,4 +55,5 @@ async def sandbox_status(
         memory_mb=settings.execution_memory_mb,
         pids_limit=settings.execution_pids_limit,
         cpus=settings.execution_cpus,
+        limits_source="backend-config",
     )

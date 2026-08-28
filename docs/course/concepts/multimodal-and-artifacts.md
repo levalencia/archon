@@ -1,108 +1,79 @@
 # Multimodal input and artifacts
 
-> **Implementation status:** `partial`
-> **Status boundary:** Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established.
-> **Reviewed revision:** `6e3e13f`
+> **Implementation status:** `implemented` for deterministic local request flow
+> **Status boundary:** Authenticated sync and SSE chat validate and sanitize image inputs before persistence or provider execution. Provider builders are tested; no external vision-provider call, malware scanner, durable attachment backend, or public deployment is claimed.
+> **Reviewed revision:** S8.7 candidate
 > **Used by module:** [Module 13-auth-ui-observability](../modules/13-auth-ui-observability/README.md)
 > **Catalog ID:** `multimodal-and-artifacts`
 
 ## Beginner explanation
 
-Multimodal agents accept more than text, such as images. Artifacts are inspectable outputs such as code, HTML, diagrams, or tables. Passing a base64 string through data structures does not prove the selected model understood it, and rendering output safely is a separate concern.
+An image string is not trusted merely because it starts with `data:image`. Archon caps the encoded request, decodes strict base64, inspects actual image bytes, compares the declared MIME type, rejects oversized dimensions before pixel decoding, strips metadata by re-encoding pixels, and caps the sanitized output. Only then may the image enter a model request.
 
-## Problem and mental model
+Artifacts are a separate output concern. This note focuses on provider-bound image inputs; existing artifact ownership and inert-rendering controls remain independently tested.
 
-Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.
-
-## Architecture and components
+## Request flow
 
 ```mermaid
 flowchart LR
-    UI --> Chat[Chat request]
-    Chat --> Message[Message.images]
-    Message --> Adapter[Vision-capable adapter]
-    Adapter --> Model
-    Model --> Detector[Artifact detection]
-    Detector --> Store[Redacted owner-filtered ArtifactStore]
-    Store --> Viewer[Sandboxed/escaped viewer]
+    UI[Authenticated UI] --> Route[Sync or SSE chat]
+    Route --> Encoded[Encoded-length + Data URI shape]
+    Encoded --> Bytes[Strict base64 + decoded-size cap]
+    Bytes --> Header[MIME + dimensions + pixel budget]
+    Header --> Decode[Verify/load pixels]
+    Decode --> Sanitize[Re-encode and strip metadata]
+    Sanitize --> OutputCap[Sanitized-size cap]
+    OutputCap --> Message[Typed Message.images]
+    Message --> Adapter[OpenAI / Anthropic / Ollama builder]
 ```
 
-## Startup and request sequence
+Validation runs before new-conversation creation, message persistence, context hashing, or provider execution in both sync and SSE routes.
 
-```mermaid
-sequenceDiagram
-    Caller->>Chat: text + optional image
-    Chat->>Adapter: typed message with image
-    Adapter-->>Chat: response
-    Chat->>ArtifactStore: detected output after redaction
-    ArtifactStore-->>Caller: artifact metadata/content
-```
+## Implemented boundaries
 
-## Archon implementation and source walkthrough
-
-At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No committed real-provider vision observation, input media validation pipeline, malware scanning, or durable ArtifactStore backend.
-
-### Source symbols
-
-| Source symbol | Role and boundary |
+| Boundary | Implementation |
 |---|---|
-| [`backend/app/runtime/models.py:Message`](../../../backend/app/runtime/models.py) | Carries an immutable image tuple. |
-| [`backend/app/runtime/anthropic.py:anthropic_request`](../../../backend/app/runtime/anthropic.py) | Builds Anthropic image content blocks. |
-| [`backend/app/services/artifacts.py:ArtifactStore.save`](../../../backend/app/services/artifacts.py) | Redacts and stores owner-associated artifacts in process memory. |
+| Data URI contract | closed `data:image/<allowed>;base64,` format |
+| Encoded/decoded size | pre-decode encoded cap and decoded byte cap |
+| Type validation | declared MIME must match bytes detected by Pillow |
+| Decompression control | width, height and pixel budget checked before `verify()`/`load()` |
+| Metadata removal | decoded pixels are re-encoded without EXIF/comments/ICC/filename metadata |
+| Provider payload cap | sanitized output is capped again after re-encoding |
+| Retention | immediate chat validation is transient; accepted Data URIs are not retained globally |
+| Ownership | persistent attachment lookup remains owner/project scoped |
+| Provider path | sanitized data is tested through OpenAI, Anthropic and Ollama request builders |
+| Route parity | sync and SSE reject invalid bytes before calling the provider |
 
-### Tests
+## Verification
 
-| Test | Contract proved and limit |
-|---|---|
-| [`backend/tests/unit/test_wiring_gaps.py::test_images_flow_through_build_messages`](../../../backend/tests/unit/test_wiring_gaps.py) | Proves image plumbing into runtime messages. |
-| [`backend/tests/security/test_resource_security.py::test_artifacts_are_owner_scoped_and_render_inert`](../../../backend/tests/security/test_resource_security.py) | Exercises artifact ownership and inert rendering boundaries. |
-| [`backend/tests/security/test_static_security.py::test_generated_images_use_private_contained_temp_storage`](../../../backend/tests/security/test_static_security.py) | Checks generated-image path containment. |
+`backend/tests/integration/test_multimodal_contract.py` proves:
 
-### Evidence boundary
+- MIME, bytes, dimensions, pixel count, attachment count and ownership;
+- metadata stripping and filename sanitization;
+- dimensions fail before pixel load;
+- sanitized output remains under policy;
+- no transient attachment accumulation;
+- invalid sync/SSE input never reaches the provider;
+- valid sanitized input reaches capturing provider messages and all supported request builders.
 
-Current implementation dimensions are centralized in [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md). Source/tests below are repository evidence; they are not public-deployment or production-certification evidence.
+The frontend already supplies image Data URIs through the authenticated workbench path. Model capability negotiation rejects images when the selected provider/model does not advertise image support.
 
-## Try it: bounded study exercise
+## Risks and limits
 
-From the repository root, inspect the mapped source and test, then run the named focused test with the project test environment if available. Confirm both the passing contract and this gap: No committed real-provider vision observation, input media validation pipeline, malware scanning, or durable ArtifactStore backend.
-
-**Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
-
-## Risks, failures, and trade-offs
-
-| Topic | Assessment |
-|---|---|
-| Principal risk | Large/malformed media can exhaust resources; active HTML/SVG can create browser attacks; model support varies. |
-| Current gap/failure | No committed real-provider vision observation, input media validation pipeline, malware scanning, or durable ArtifactStore backend. |
-| Trade-off | Base64 is simple but expensive; object storage and signed references scale better but expand the trust surface. |
-| Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
-
-## Lab vs production
-
-The status remains **partial** at `6e3e13f`. Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+- No live external vision-provider request is recorded in S8.7; that belongs to provider-live acceptance.
+- There is no malware scanner, OCR policy service, durable object store or signed attachment URL.
+- Base64 remains bandwidth-expensive and unsuitable for large production media.
+- Re-encoding reduces metadata risk but does not prove that image semantic content is safe.
+- Artifact persistence remains distinct from transient image input validation.
 
 ## Interview answer
 
-> Multimodal agents accept more than text, such as images. Artifacts are inspectable outputs such as code, HTML, diagrams, or tables. Passing a base64 string through data structures does not prove the selected model understood it, and rendering output safely is a separate concern. In Archon the honest status is **partial**: Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established.
+> Archon treats images as hostile input. Sync and SSE routes validate strict Data URIs, decoded bytes, actual MIME, dimensions and pixel budgets before persistence. The service then re-encodes pixels to strip metadata, caps the sanitized result and passes only that value to a capability-aware provider adapter. Deterministic tests cover OpenAI, Anthropic and Ollama builders; live provider behavior and durable media storage remain explicit gaps.
 
 ## Self-check
 
-1. What problem does this concept solve, and what nearby concept is it not?
-2. Trace the diagram’s trust boundary and failure path.
-3. Which mapped symbol/test proves current behavior, or why are the lists empty?
-4. What exact gap prevents a stronger status?
-5. Which risk would you test first before production use?
-
-<details>
-<summary>Answer guide</summary>
-
-A good answer names the contract in the beginner explanation, follows the sequence, cites the exact table entry (or the explicit absence), repeats the status boundary, and chooses a risk from the table rather than claiming unrecorded behavior.
-
-</details>
-
-## Related concepts and modules
-
-- **Module:** [Module 13-auth-ui-observability](../modules/13-auth-ui-observability/README.md)
-- **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
-- **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)
+1. Why must dimensions be checked before `load()`?
+2. Why cap the sanitized output as well as the input?
+3. At what point can the provider first see image bytes?
+4. Why is a capturing mock not real-provider evidence?
+5. Which attachment/storage capabilities remain deferred?

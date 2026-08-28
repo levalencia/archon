@@ -46,10 +46,14 @@ async def main():
     assert network.stdout.strip() == 'network-isolated'
     reentry = await client.execute(
         "import socket\n"
-        "try:s=socket.socket(socket.AF_UNIX);s.connect('/run/archon-sandbox/runner.sock');"
+        "try:\n s=socket.socket(socket.AF_UNIX);s.connect('/run/archon-sandbox/runner.sock');"
         "raise SystemExit('control socket reachable')\n"
-        "except OSError:print('control-socket-blocked')", kind='python')
-    assert reentry.stdout.strip() == 'control-socket-blocked'
+        "except OSError:print('control-socket-blocked')\n"
+        "try:\n open('/run/archon-sandbox/payload.bin','wb').write(b'x');"
+        "raise SystemExit('control volume writable')\n"
+        "except OSError:print('control-volume-blocked')", kind='python')
+    assert reentry.stdout.strip().splitlines() == [
+        'control-socket-blocked', 'control-volume-blocked']
     detached = await client.execute(
         "sleep 30 </dev/null >/dev/null 2>&1 & echo $!", kind='shell')
     child_pid = int(detached.stdout.strip())

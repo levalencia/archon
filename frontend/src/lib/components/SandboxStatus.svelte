@@ -68,7 +68,7 @@
         <div><dt>Memory / PIDs</dt><dd>{status.memory_mb} MiB / {status.pids_limit}</dd></div>
         <div><dt>CPU limit</dt><dd>{status.cpus}</dd></div>
       </dl>
-      <p>Commands require the normal tool-policy and approval boundary. No host or Docker socket is exposed.</p>
+      <p>Availability is execution-attested. Limits shown are configured policy ({status.limits_source}), while the local Docker smoke separately inspects runtime flags. Commands still require the normal tool-policy and approval boundary; no host or Docker socket is exposed.</p>
     </div>
   {/if}
 </section>

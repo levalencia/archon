@@ -710,19 +710,20 @@
   limitations: "Supported message, run-event, memory, artifact, audit, and log persistence paths redact detected PII before storage; this is not a claim that detection is exhaustive or that provider-bound prompts are redacted. Regex/optional NER can miss identifiers; provider transmission, backups, and every future sink need separate review."
 
 - id: execution-isolation-sandbox
-  title: "Execution isolation and the Docker sandbox"
+  title: "Execution isolation and the sandbox runner"
   status: implemented
   module: docs/course/modules/05-policy-and-approvals/README.md
   sources:
-    - backend/app/tools/sandbox.py
+    - sandbox_runner/server.py
+    - backend/app/tools/sandbox_client.py
     - backend/app/tools/terminal.py
     - backend/app/main.py
   tests:
-    - backend/tests/unit/test_docker_sandbox.py
+    - backend/tests/security/test_sandbox_runner.py
     - backend/tests/unit/test_sandbox_wire.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Optional Python and shell execution is Docker-only, digest-pinned, networkless, mountless, resource-bounded, and fail-closed; it is disabled by default and is not a VM-grade or multi-tenant production sandbox claim. Most tests fake Docker; local smoke evidence is not hostile multi-tenant certification, seccomp customization, or microVM isolation."
+  limitations: "The verified local target uses a separate non-root, networkless, read-only runner container over a private Unix socket with resource bounds, child seccomp, peer-disconnect cancellation, unconditional process-group cleanup, and bounded encoded response frames. This is not VM-grade hostile multi-tenant certification, public deployment, or a production SLO."
 
 - id: cost-usage-budgets
   title: "Cost, usage, and budgets"
@@ -752,18 +753,21 @@
 
 - id: multimodal-and-artifacts
   title: "Multimodal input and artifacts"
-  status: partial
+  status: implemented
   module: docs/course/modules/13-auth-ui-observability/README.md
   sources:
-    - backend/app/runtime/models.py
+    - backend/app/runtime/images.py
+    - backend/app/routes/chat.py
+    - backend/app/routes/stream.py
     - backend/app/runtime/anthropic.py
     - backend/app/services/artifacts.py
   tests:
-    - backend/tests/unit/test_wiring_gaps.py
+    - backend/tests/integration/test_multimodal_contract.py
     - backend/tests/security/test_resource_security.py
     - backend/tests/security/test_static_security.py
-  evidence: []
-  limitations: "Image data flows through chat into typed messages and Anthropic/Ollama request builders, while owner-filtered redacted artifacts and private generated images exist; real-provider multimodal E2E and durable artifact storage are not established. No committed real-provider vision observation, input media validation pipeline, malware scanning, or durable ArtifactStore backend."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Authenticated sync and SSE paths validate and sanitize bounded image inputs before persistence/provider execution, and deterministic tests prove OpenAI, Anthropic, and Ollama request construction. No external vision-provider observation, malware scanner, durable attachment backend, or public deployment is claimed."
 
 - id: background-jobs-scheduling
   title: "Background jobs and scheduling"

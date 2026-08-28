@@ -11,6 +11,7 @@ export type SandboxStatus = {
   memory_mb: number;
   pids_limit: number;
   cpus: number;
+  limits_source: 'backend-config';
 };
 
 export async function getSandboxStatus(): Promise<SandboxStatus> {
