@@ -4,6 +4,7 @@
 > **Status boundary:** Archon compares immutable evaluation cohorts and records human-reviewed revision recommendations. It does not retrain models, rewrite prompts, or mutate runtime/production configuration automatically.
 > **Used by module:** [Module 09-evaluation-harness](../modules/09-evaluation-harness/README.md)
 > **Catalog ID:** `learning-optimization-drift`
+> **Deferred boundary:** [Autonomous unapproved production optimization](../../REMAINING-DEFERRED-GAPS.md#6-autonomous-unapproved-production-optimization) is a separate, intentionally omitted capability.
 
 ## Beginner explanation
 
@@ -119,6 +120,8 @@ Optimistic updates and database constraints prevent replay and stale transitions
 - Stale candidate versions return conflict rather than overwriting a newer decision.
 - A pending receipt is not approval; the human decision endpoint must approve it first.
 - Promotion records intent and evidence only. Deployment remains a separate operational act.
+
+This omission strengthens the implemented governance story: measurements may propose bounded revisions, but they never confer production authority. Autonomous status could change only after representative shadow/canary evidence, hard action and budget limits, metric-gaming tests, automatic rollback and kill-switch drills, complete audit lineage, and explicit authorization for unattended changes.
 
 ## Interview answer
 

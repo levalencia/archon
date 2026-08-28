@@ -2,7 +2,7 @@
 
 > **Implementation status:** `deferred`
 > **Status boundary:** No training, fine-tuning, adapter-weight, model-registry, or promotion pipeline exists; current skills, RAG, and prompts are runtime adaptation and must not be called fine-tuning.
-> **Reviewed revision:** `6e3e13f`
+> **Reviewed boundary:** S8.10 documentation candidate based at `440f08e`; no final gate claimed
 > **Used by module:** [Module 09-evaluation-harness](../modules/09-evaluation-harness/README.md)
 > **Catalog ID:** `fine-tuning-vertical-adaptation`
 
@@ -101,4 +101,5 @@ A good answer names the contract in the beginner explanation, follows the sequen
 - **Module:** [Module 09-evaluation-harness](../modules/09-evaluation-harness/README.md)
 - **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
 - **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
+- **Deferred decision:** [Required architecture, evidence threshold, and capstone rationale](../../REMAINING-DEFERRED-GAPS.md#3-fine-tuning-and-training)
 - **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)

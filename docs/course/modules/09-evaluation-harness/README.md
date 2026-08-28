@@ -9,7 +9,7 @@ An evaluation turns examples and expectations into repeatable measurements. Arch
 
 ## Prerequisites
 
-Datasets, test fixtures, metrics, thresholds, Run Ledger events, ownership, and regression testing. Read [evaluation harness](../../concepts/evaluation-harness.md), [datasets](../../concepts/datasets.md), plus RAG quality concepts from Module 08.
+Datasets, test fixtures, metrics, thresholds, Run Ledger events, ownership, and regression testing. Read [evaluation harness](../../concepts/evaluation-harness.md), [datasets](../../concepts/datasets.md), [governed learning and drift](../../concepts/learning-optimization-drift.md), and [why fine-tuning is deferred](../../concepts/fine-tuning-vertical-adaptation.md), plus RAG quality concepts from Module 08.
 
 ## Learning outcomes
 
@@ -86,6 +86,7 @@ Recorded-run evaluation derives support/citation/unsupported rates from safe eve
 - `backend/app/routes/evaluations.py`: `RecordedEvaluationRequest`, `create_recorded_evaluation`, compare/list/get.
 - `backend/app/eval/harness.py`: `EvalHarness` legacy/live-call exact/contains/latency harness.
 - `backend/app/eval/evaluators.py`: heuristic `evaluate_faithfulness`, `evaluate_relevance`, `evaluate_safety`, `evaluate_cost`.
+- `backend/app/eval/drift.py` and `candidates.py`: descriptive cohort comparison and human-gated, non-mutating revision records.
 
 ## Tests and evidence
 
@@ -94,6 +95,7 @@ Recorded-run evaluation derives support/citation/unsupported rates from safe eve
 - `backend/tests/integration/test_recorded_evaluation_api.py`: authenticated API lifecycle.
 - `backend/tests/unit/test_eval.py`: lightweight harness.
 - `backend/tests/unit/test_evaluation_persistence.py`: durable records.
+- `backend/tests/unit/test_drift_detection.py` and `backend/tests/integration/test_optimization_candidates.py`: deterministic drift and exact human approval boundaries.
 - `docs/evidence/local-portfolio-benchmark.json`: deterministic fixtures/control-plane only; no external model/network.
 
 ## Executable exercise
@@ -116,7 +118,7 @@ Every durable result stores dataset ID/version/hash, source run IDs, threshold, 
 
 ## Lab versus production
 
-Recorded-run evals are real, durable, scoped, and deterministic. Their current two-case fixture and synthetic recorded trajectories are regression evidence, not proof that a live model answers users well. No representative production dataset, human annotation agreement, calibrated semantic judge, live-provider acceptance, or deployment promotion gate is established.
+Recorded-run evals are real, durable, scoped, and deterministic. Their current two-case fixture and synthetic recorded trajectories are regression evidence, not proof that a live model answers users well. Drift reports and human-reviewed candidate records do not train weights or mutate production. Fine-tuning and autonomous unapproved optimization remain deliberately deferred with separate [architecture and evidence thresholds](../../../REMAINING-DEFERRED-GAPS.md). No representative production dataset, human annotation agreement, calibrated semantic judge, live-provider acceptance, or deployment promotion gate is established.
 
 ## Interview answer
 

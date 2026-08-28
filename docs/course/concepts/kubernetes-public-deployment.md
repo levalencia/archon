@@ -1,8 +1,8 @@
 # Kubernetes and public deployment
 
-> **Implementation status:** `partial`
-> **Status boundary:** Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values.
-> **Reviewed revision:** `6e3e13f`
+> **Implementation status:** `deferred` for public/cloud/Kubernetes operation
+> **Status boundary:** Historical Kubernetes and Helm artifacts describe possible resources, but no cluster validation or public deployment evidence exists; operation on that target is deliberately outside this capstone.
+> **Reviewed boundary:** S8.10 documentation candidate based at `440f08e`; no final gate claimed
 > **Used by module:** [Module 14-local-operations](../modules/14-local-operations/README.md)
 > **Catalog ID:** `kubernetes-public-deployment`
 
@@ -41,7 +41,7 @@ sequenceDiagram
 
 ## Archon implementation and source walkthrough
 
-At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No schema/render test, cluster smoke, TLS/DNS, external secret manager, immutable production image, migration job, or public URL evidence.
+The mapped files are historical design artifacts, not an implemented deployment target. No schema/render test, cluster smoke, TLS/DNS, external secret manager, immutable production image, migration job, or public URL evidence exists.
 
 ### Source symbols
 
@@ -77,11 +77,11 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **partial** at `6e3e13f`. Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+Public/cloud/Kubernetes operation remains **deferred**. The manifests do not prove that a cluster rendered, rolled out, served TLS traffic, protected secrets, migrated data, met an SLO, or rolled back. Unit tests, manifests, or local observations do not prove public deployment, legal compliance, or production operation.
 
 ## Interview answer
 
-> Kubernetes declares how containers run, scale, receive traffic, and recover. A public deployment also needs real image provenance, TLS/DNS, secret management, migrations, monitoring, and observed rollout behavior. A YAML manifest in Git is an artifact, not evidence that a cluster works. In Archon the honest status is **partial**: Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values.
+> Kubernetes declares how containers run, scale, receive traffic, and recover. A public deployment also needs real image provenance, TLS/DNS, secret management, migrations, monitoring, and observed rollout behavior. A YAML manifest in Git is an artifact, not evidence that a cluster works. In Archon public/cloud/Kubernetes operation is deliberately deferred; the sole observed deployment target remains local Compose.
 
 ## Self-check
 
@@ -103,4 +103,5 @@ A good answer names the contract in the beginner explanation, follows the sequen
 - **Module:** [Module 14-local-operations](../modules/14-local-operations/README.md)
 - **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
 - **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
+- **Deferred decision:** [Required architecture, evidence threshold, and capstone rationale](../../REMAINING-DEFERRED-GAPS.md#4-public-cloud-or-kubernetes-deployment)
 - **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)

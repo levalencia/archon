@@ -12,7 +12,7 @@ Archon is a local Agent Reliability Workbench, not a publicly deployed productio
 - **Interview study:** Luis or any engineer preparing concise architecture and trade-off explanations.
 - **Technical reference:** contributors tracing a concept to exact code, tests, and runtime evidence.
 
-Start with the [syllabus](syllabus.md) for prerequisites, outcomes, pacing, and capstone artifacts. Use the [concept map](concept-map.md) when a module assumes unfamiliar vocabulary. Use the [AIAMastery Days 1–30 coverage map](course-concept-coverage.md) to see every course topic—including partial, not-implemented, and deferred concepts—and the generated [`concept-catalog.yaml`](concept-catalog.yaml) for machine-readable source/test/evidence mappings.
+Start with the [syllabus](syllabus.md) for prerequisites, outcomes, pacing, and capstone artifacts. Use the [concept map](concept-map.md) when a module assumes unfamiliar vocabulary. Use the [AIAMastery Days 1–30 coverage map](course-concept-coverage.md) to see every course topic—including partial, not-implemented, and deferred concepts—and the generated [`concept-catalog.yaml`](concept-catalog.yaml) for machine-readable source/test/evidence mappings. The repository-wide [deferred-gap register](../REMAINING-DEFERRED-GAPS.md) explains the architecture and evidence required to revisit the six intentional capstone omissions.
 
 ## Information architecture
 
@@ -80,6 +80,7 @@ Tracks are navigation views, not alternate concept sources. Workshop exercises a
 3. Code walkthroughs explain source flow and link back to concepts.
 4. Implementation claims defer to the [evidence matrix](../IMPLEMENTATION-EVIDENCE.md), rather than restating mutable test counts or deployment results.
 5. Historical plans and audits are context, not the current learning or status source.
+6. Deferred scope uses the [deferred-gap register](../REMAINING-DEFERRED-GAPS.md); nearby artifacts never silently upgrade a deferred capability.
 
 ## Status vocabulary
 

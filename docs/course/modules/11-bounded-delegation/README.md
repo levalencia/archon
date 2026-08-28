@@ -220,7 +220,7 @@ Never expose credentials, raw provider exceptions, tool payloads, personal data,
 | Providers | Deterministic/mock/local dependencies as explicitly linked. | Final external providers were not verified. |
 | Security/operations | Tested ownership, validation, policy and redaction controls. | Independent audit, rotation, production alerting and incident drills. |
 
-Contract, integration, benchmark fixture, and local UI evidence establish one child. The final external providers were not verified. There is no dynamic swarm, recursive planner, generic reflection loop, or proof that the reviewer is always correct.
+Contract, integration, benchmark fixture, and local UI evidence establish one child. The final external providers were not verified. There is no dynamic swarm, recursive planner, generic reflection loop, or proof that the reviewer is always correct. Multi-node agent networking is intentionally deferred; see its [architecture and evidence threshold](../../../REMAINING-DEFERRED-GAPS.md#1-distributed-multi-node-agent-network).
 
 ## Interview answer
 
@@ -258,7 +258,7 @@ Contract, integration, benchmark fixture, and local UI evidence establish one ch
 
 ## Further reading
 
-- Canonical concepts: [bounded-delegation](../../concepts/bounded-delegation.md), [verifier-child](../../concepts/verifier-child.md), [parent-child-lineage](../../concepts/parent-child-lineage.md)
+- Canonical concepts: [bounded-delegation](../../concepts/bounded-delegation.md), [verifier-child](../../concepts/verifier-child.md), [parent-child-lineage](../../concepts/parent-child-lineage.md), [distributed agent networks (deferred)](../../concepts/distributed-agent-networks.md)
 - [Implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md)
 - [Architecture diagrams](../../../ARCHITECTURE-DIAGRAMS.md)
 - [Next step](../12-governed-mcp/README.md)

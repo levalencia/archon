@@ -1,6 +1,6 @@
 # Interview code bookmarks
 
-> **Current-revision boundary:** source and exact test symbols checked against revision `3577b00`. Links target files because line numbers drift; search the exact symbol after opening. Revalidate names after rebases.
+> **Current-revision boundary:** source and exact test symbols checked for this S8.10 documentation candidate based at `440f08e`. Links target files because line numbers drift; search the exact symbol after opening. Revalidate names after rebases. Candidate documentation is not a final gate result.
 
 ## Core request trace
 
@@ -34,6 +34,12 @@
 | Circuit breaker | [`security/circuit_breaker.py::CircuitBreaker.call`](../../../backend/app/security/circuit_breaker.py) | [`test_pii_circuit_breaker.py`](../../../backend/tests/security/test_pii_circuit_breaker.py) |
 | MCP runtime | [`mcp/runtime.py::MCPRuntimeToolProvider`](../../../backend/app/mcp/runtime.py) | [`test_mcp_runtime.py`](../../../backend/tests/integration/test_mcp_runtime.py) |
 | Bounded verifier | [`delegation/service.py::EvidenceVerifierSpecialist.verify`](../../../backend/app/delegation/service.py) | [`test_evidence_verifier.py::test_valid_call_is_isolated_bounded_and_durable`](../../../backend/tests/unit/test_evidence_verifier.py) |
+| Authenticated export/share | [`services/run_exports.py::RunExportService`](../../../backend/app/services/run_exports.py) → [`routes/runs.py`, `routes/shares.py`](../../../backend/app/routes/runs.py) | [`test_run_exports.py::test_export_owner_isolation_hash_only_grant_and_revocation`](../../../backend/tests/security/test_run_exports.py) |
+| Governed optimization | [`eval/drift.py`, `eval/candidates.py`](../../../backend/app/eval/drift.py) → [`routes/evaluations.py`](../../../backend/app/routes/evaluations.py) | [`test_optimization_candidates.py`](../../../backend/tests/integration/test_optimization_candidates.py) |
+
+## Negative-space bookmarks
+
+The six deliberate omissions have no implementation bookmark to imply. Use [Remaining Deferred Gaps](../../REMAINING-DEFERRED-GAPS.md) for their required architecture and status-changing evidence. In particular, authenticated recipient-bound sharing is not public anonymous sharing, and an approved promotion record is not autonomous production mutation.
 
 ## Three interview routes
 

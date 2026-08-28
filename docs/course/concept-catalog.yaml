@@ -829,7 +829,7 @@
     - frontend/src/lib/components/DriftOptimizationPanel.test.ts
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Archon records deterministic descriptive drift warnings and human-approved revision recommendations. Promotion is a durable evidence record only; it does not mutate runtime configuration, train a model, claim statistical significance, or prove live-provider quality."
+  limitations: "Archon records deterministic descriptive drift warnings and human-approved revision recommendations. Promotion is a durable evidence record only; it does not mutate runtime configuration, train a model, claim statistical significance, or prove live-provider quality. Autonomous unapproved production optimization is deliberately deferred."
 
 - id: distributed-agent-networks
   title: "Distributed agent networks"
@@ -837,7 +837,8 @@
   module: docs/course/modules/11-bounded-delegation/README.md
   sources: []
   tests: []
-  evidence: []
+  evidence:
+    - docs/REMAINING-DEFERRED-GAPS.md
   limitations: "No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. No broker, discovery, leases, distributed cancellation, deduplication, cross-node auth, or deployment evidence."
 
 - id: high-throughput-serving
@@ -846,7 +847,8 @@
   module: docs/course/modules/14-local-operations/README.md
   sources: []
   tests: []
-  evidence: []
+  evidence:
+    - docs/REMAINING-DEFERRED-GAPS.md
   limitations: "Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. No serving engine, batching scheduler, queue policy, GPU topology, load test, or measured capacity."
 
 - id: fine-tuning-vertical-adaptation
@@ -855,25 +857,53 @@
   module: docs/course/modules/09-evaluation-harness/README.md
   sources: []
   tests: []
-  evidence: []
+  evidence:
+    - docs/REMAINING-DEFERRED-GAPS.md
   limitations: "No training, fine-tuning, adapter-weight, model-registry, or promotion pipeline exists; current skills, RAG, and prompts are runtime adaptation and must not be called fine-tuning. No dataset consent pipeline, trainer, checkpoints, registry, offline/online gate, or deployment rollback."
 
 - id: kubernetes-public-deployment
   title: "Kubernetes and public deployment"
-  status: partial
+  status: deferred
   module: docs/course/modules/14-local-operations/README.md
   sources:
     - deploy/k8s/archon.yaml
     - deploy/helm/archon/Chart.yaml
   tests: []
-  evidence: []
-  limitations: "Kubernetes and Helm manifests describe deployments, probes, resources, ingress, autoscaling, and disruption policy, but no cluster validation or public deployment evidence exists; manifests contain placeholder images, hostnames, and secret values. No schema/render test, cluster smoke, TLS/DNS, external secret manager, immutable production image, migration job, or public URL evidence."
+  evidence:
+    - docs/REMAINING-DEFERRED-GAPS.md
+  limitations: "Historical Kubernetes and Helm artifacts describe possible resources but public/cloud/Kubernetes operation is deliberately deferred. No cluster validation, schema/render gate, TLS/DNS, external secret manager, immutable production image, migration job, public URL, SLO, or rollback evidence exists."
 
 - id: export-share-redaction
   title: "Redacted run export and sharing"
-  status: not-implemented
+  status: implemented
+  module: docs/course/modules/07-run-ledger/README.md
+  sources:
+    - backend/app/services/run_exports.py
+    - backend/app/routes/runs.py
+    - backend/app/routes/shares.py
+  tests:
+    - backend/tests/security/test_run_exports.py
+    - backend/tests/integration/test_run_export_migration.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Immutable disclosure-scanned exports and expiring/revocable grants are bound to an authenticated recipient and closed purpose. No anonymous public link, external delivery, public hosting, legal-compliance, or production deployment claim is made."
+
+- id: public-anonymous-sharing
+  title: "Public anonymous run sharing"
+  status: deferred
   module: docs/course/modules/07-run-ledger/README.md
   sources: []
   tests: []
-  evidence: []
-  limitations: "Archon has owner-scoped run reads and persistence redaction, but no export bundle, share token, recipient policy, revocation, expiry, or export-specific redaction/secret scan. No exporter or sharing model exists; persistence redaction does not establish safe disclosure."
+  evidence:
+    - docs/REMAINING-DEFERRED-GAPS.md
+  limitations: "Authenticated recipient-bound sharing is implemented, but anonymous Internet disclosure is deliberately excluded. No public capability URL, abuse controls, CDN/cache invalidation, takedown process, public-edge adversarial evidence, or public deployment exists."
+
+- id: autonomous-unapproved-production-optimization
+  title: "Autonomous unapproved production optimization"
+  status: deferred
+  module: docs/course/modules/09-evaluation-harness/README.md
+  sources: []
+  tests: []
+  evidence:
+    - docs/REMAINING-DEFERRED-GAPS.md
+  limitations: "Drift reports and human-approved promotion records do not mutate runtime configuration. Unattended production changes are deliberately excluded; no authorized optimizer, shadow/canary controller, hard action budget, automatic rollback, kill switch, or production evidence exists."

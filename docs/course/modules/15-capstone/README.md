@@ -6,7 +6,7 @@
 
 ## Why this module exists
 
-The capstone is not another feature. It is a disciplined claim-to-evidence narrative that joins policy, approvals, ledger, RAG/evaluation, one verifier child, MCP, observability, and local recovery. You will prepare truthful 2-, 15-, and 45-minute walkthroughs and an evidence packet.
+The capstone is not another feature. It is a disciplined claim-to-evidence narrative that joins policy, approvals, ledger, RAG/evaluation, one verifier child, MCP, observability, and local recovery. You will prepare truthful 2-, 15-, and 45-minute walkthroughs and an evidence packet, including the [six intentional deferred gaps](../../../REMAINING-DEFERRED-GAPS.md).
 
 ## Beginner explanation
 
@@ -236,6 +236,8 @@ Never expose credentials, raw provider exceptions, tool payloads, personal data,
 | Providers | Deterministic/mock/local dependencies as explicitly linked. | Final external providers were not verified. |
 | Security/operations | Tested ownership, validation, policy and redaction controls. | Independent audit, rotation, production alerting and incident drills. |
 
+The capstone deliberately excludes a distributed multi-node agent network, GPU/high-throughput serving, fine-tuning/training, public cloud/Kubernetes operation, public anonymous sharing, and autonomous unapproved production optimization. These are not prerequisites for the local reliability claim. The [deferred-gap register](../../../REMAINING-DEFERRED-GAPS.md) states why each is out of scope, the architecture it would require, and the evidence threshold for reconsideration.
+
 The defensible product is an evidence-rich local Agent Reliability Workbench. Exact CI revision/run evidence and local OTEL/DR observations are maintained in [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md), not duplicated here. Public deployment remains deferred. Final external-provider behavior, production traffic, indexed vector serving and SLOs are unverified.
 
 ## Interview answer
@@ -276,6 +278,7 @@ The defensible product is an evidence-rich local Agent Reliability Workbench. Ex
 
 - Canonical concepts: [bounded-delegation](../../concepts/bounded-delegation.md), [mcp](../../concepts/mcp.md), [authentication](../../concepts/authentication.md), [tracing-opentelemetry](../../concepts/tracing-opentelemetry.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md)
 - [Implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md)
+- [Remaining deferred gaps](../../../REMAINING-DEFERRED-GAPS.md)
 - [Architecture diagrams](../../../ARCHITECTURE-DIAGRAMS.md)
 - [Next step](../../README.md)
 

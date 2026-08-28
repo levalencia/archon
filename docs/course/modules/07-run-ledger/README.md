@@ -9,7 +9,7 @@ A chat answer alone cannot explain what an agent did. The Run Ledger stores an o
 
 ## Prerequisites
 
-Transactions, append-only logs, sequence numbers, pagination, ownership, redaction, and terminal states. Read [Run Ledger](../../concepts/run-ledger.md), [replay/fork/compare](../../concepts/replay-fork-compare.md), and [checkpoints](../../concepts/checkpoints.md).
+Transactions, append-only logs, sequence numbers, pagination, ownership, redaction, and terminal states. Read [Run Ledger](../../concepts/run-ledger.md), [replay/fork/compare](../../concepts/replay-fork-compare.md), [checkpoints](../../concepts/checkpoints.md), and [authenticated export/sharing](../../concepts/export-share-redaction.md).
 
 ## Learning outcomes
 
@@ -83,6 +83,8 @@ A fork creates a durable `RunCheckpointRow`, a new conversation with redacted me
 - `backend/app/services/run_ledger.py`: `SCHEMA_VERSION`, `_SAFE_FIELDS`, `safe_event_payload`, `RunRepository.ensure_run`, `append`, `events`, `fork`, `prune_completed`.
 - `backend/app/routes/runs.py`: `_trajectory`, `get_run`, `get_run_events`, `compare_runs`, `fork_run`.
 - `backend/app/runtime/run_models.py`: `RunRecord`, `RunEventRecord`, page types.
+- `backend/app/services/run_exports.py`: immutable bundle construction, disclosure/integrity checks, and recipient-bound grants.
+- `backend/app/routes/shares.py`: authenticated recipient redemption; no anonymous route.
 - `backend/alembic/versions/20260826_03_run_ledger.py`, `20260826_04_run_checkpoints.py`, `20260826_07_run_parent_fk.py`.
 
 ## Tests and evidence
@@ -90,6 +92,7 @@ A fork creates a durable `RunCheckpointRow`, a new conversation with redacted me
 - `backend/tests/unit/test_run_ledger.py`: concurrent contiguous sequences, owner scope, allowlist/redaction, terminal races, retention, malformed data.
 - `backend/tests/integration/test_run_replay_api.py` and `test_run_fork_compare.py`: authenticated stored replay/fork/compare.
 - `backend/tests/unit/test_run_lineage.py`: concurrent idempotent child lineage.
+- `backend/tests/security/test_run_exports.py`: export integrity, disclosure, scope, expiry, and revocation.
 - `docs/evidence/local-portfolio-benchmark.json`: terminal grounded-run event evidence; explicitly deterministic local control-plane evidence.
 
 ## Executable exercise
@@ -116,7 +119,7 @@ Use `/api/runs/{id}`, `/events`, `/children`, and `/compare`, plus persisted sta
 
 ## Lab versus production
 
-SQLite and PostgreSQL transaction paths are implemented/tested; local evidence demonstrates deterministic behavior. There is no signed/WORM audit store, cross-region replication, arbitrary workspace restoration, or automatic executable resume. Compare exposes stored safe fields and `settings: null`; it is not causal attribution.
+SQLite and PostgreSQL transaction paths are implemented/tested; local evidence demonstrates deterministic behavior. Immutable disclosure-scanned exports and authenticated recipient-bound, expiring/revocable grants are implemented, but [public anonymous sharing remains deferred](../../../REMAINING-DEFERRED-GAPS.md#5-public-anonymous-sharing). There is no signed/WORM audit store, cross-region replication, arbitrary workspace restoration, or automatic executable resume. Compare exposes stored safe fields and `settings: null`; it is not causal attribution.
 
 ## Interview answer
 

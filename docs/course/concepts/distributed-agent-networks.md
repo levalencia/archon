@@ -2,7 +2,7 @@
 
 > **Implementation status:** `deferred`
 > **Status boundary:** No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration.
-> **Reviewed revision:** `6e3e13f`
+> **Reviewed boundary:** S8.10 documentation candidate based at `440f08e`; no final gate claimed
 > **Used by module:** [Module 11-bounded-delegation](../modules/11-bounded-delegation/README.md)
 > **Catalog ID:** `distributed-agent-networks`
 
@@ -101,4 +101,5 @@ A good answer names the contract in the beginner explanation, follows the sequen
 - **Module:** [Module 11-bounded-delegation](../modules/11-bounded-delegation/README.md)
 - **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
 - **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
+- **Deferred decision:** [Required architecture, evidence threshold, and capstone rationale](../../REMAINING-DEFERRED-GAPS.md#1-distributed-multi-node-agent-network)
 - **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)

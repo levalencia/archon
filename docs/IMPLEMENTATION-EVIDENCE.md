@@ -55,6 +55,12 @@ Deterministic fake-provider coverage is **11 passed, 1 live test skipped**; focu
 
 No external provider was called and no live report is committed. Real-provider evidence therefore remains `Partial`/unobserved pending explicit operator authorization and valid provider/embedding configuration; deterministic harness success is not represented as live-provider success.
 
+### S8.10 documentation candidate boundaries
+
+The S8.10 documentation candidate at baseline `440f08e` adds the explicit [remaining deferred-gap register](REMAINING-DEFERRED-GAPS.md) and aligns course navigation/catalog boundaries. It records, for each intentional omission, the architecture and evidence that would be required before reconsidering status.
+
+This is candidate documentation only. It does **not** claim that the integrated S8.10 benchmark, final verification, local deployment smoke, or DR smoke has run; it does not declare S8.10 complete; and it does not upgrade provider, scale, anonymous-sharing, optimization, or deployment evidence. Every `Deployed` value remains **No**.
+
 ### Previous S7.5 full acceptance at `60a8d6a`
 
 ### Additional S7 evidence after that acceptance
@@ -184,6 +190,8 @@ Limits: no autonomous optimization, no runtime mutation, no model training, no s
 Archon is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.
 
 It is **not** a publicly deployed production platform. Real external-provider behavior, indexed vector serving, production traffic, SLOs, multi-host scaling, and cloud operations remain unverified or deliberately deferred.
+
+The architecture and evidence thresholds for the six intentional capstone omissions are maintained in [Remaining Deferred Gaps](REMAINING-DEFERRED-GAPS.md).
 
 ## Claim policy
 

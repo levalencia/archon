@@ -2,7 +2,7 @@
 
 > **Implementation status:** `deferred`
 > **Status boundary:** Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability.
-> **Reviewed revision:** `6e3e13f`
+> **Reviewed boundary:** S8.10 documentation candidate based at `440f08e`; no final gate claimed
 > **Used by module:** [Module 14-local-operations](../modules/14-local-operations/README.md)
 > **Catalog ID:** `high-throughput-serving`
 
@@ -101,4 +101,5 @@ A good answer names the contract in the beginner explanation, follows the sequen
 - **Module:** [Module 14-local-operations](../modules/14-local-operations/README.md)
 - **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
 - **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
+- **Deferred decision:** [Required architecture, evidence threshold, and capstone rationale](../../REMAINING-DEFERRED-GAPS.md#2-gpu-and-high-throughput-model-serving)
 - **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)

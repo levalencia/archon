@@ -30,17 +30,28 @@ async def test_portfolio_report_schema_determinism_invariants_and_privacy() -> N
         "deterministic mock/control-plane; no production or model-quality claim"
     )
     assert report["workspace"]["workspace_unchanged"] is True
+    assert report["workspace"]["clean_before"] is True
+    assert report["workspace"]["clean_after"] is True
     assert report["summary"]["passed"] is True
     assert report["summary"]["pass_rate"] == 1.0
     assert report["summary"]["failures"] == []
-    assert report["summary"]["scenario_iterations"] == 6
-    assert report["summary"]["tokens"] == 84
+    assert report["summary"]["scenario_iterations"] == 24
+    assert report["summary"]["tokens"] > 84
 
     scenarios: list[dict[str, Any]] = report["scenarios"]
     assert [item["id"] for item in scenarios] == [
         "unsafe_write_approval",
         "provider_resilience",
         "grounded_document_workflow",
+        "reflection_disabled_vs_enabled",
+        "duplicate_side_effect_replay",
+        "budget_reservation_provider_failure",
+        "context_provenance_key_rotation_interruption",
+        "share_grant_revoke_expiry_redaction",
+        "signed_child_envelope_replay",
+        "durable_job_restart_lease_loss",
+        "sandbox_breakout_probes",
+        "drift_candidate_exact_approval",
     ]
     for scenario in scenarios:
         assert scenario["passed"] is True
@@ -53,6 +64,23 @@ async def test_portfolio_report_schema_determinism_invariants_and_privacy() -> N
         assert 0 <= scenario["latency_ms"]["p50"] <= scenario["latency_ms"]["p95"]
         assert scenario["latency_ms"]["p95"] <= scenario["latency_ms"]["max"]
 
+    by_id = {item["id"]: item for item in scenarios}
+    assert (
+        by_id["budget_reservation_provider_failure"]["observation"]["provider_failure_propagated"]
+        is True
+    )
+    assert by_id["share_grant_revoke_expiry_redaction"]["observation"]["disclosure_redactions"] > 0
+    assert by_id["drift_candidate_exact_approval"]["observation"]["drift_report_bound"] is True
+    assert by_id["drift_candidate_exact_approval"]["observation"]["drift_pass_rate_delta"] == -1.0
+    sandbox = by_id["sandbox_breakout_probes"]["observation"]
+    assert sandbox["missing_runner_failed_closed"] is True
+    if sys.platform == "linux":
+        assert sandbox["seccomp_probe_executed"] is True
+        assert sandbox["socket_blocked"] is True
+        assert sandbox["control_unlink_blocked"] is True
+        assert sandbox["volume_write_blocked"] is True
+        assert sandbox["control_chmod_blocked"] is True
+
     encoded = json.dumps(report, sort_keys=True)
     for forbidden in (
         "run the registered benchmark probe",
@@ -60,6 +88,11 @@ async def test_portfolio_report_schema_determinism_invariants_and_privacy() -> N
         "Return JSON only",
         "private-provider-detail-must-not-appear",
         "private-breaker-detail-must-not-appear",
+        "raw-provider-secret",
+        "benchmark-sensitive-token-123456",
+        "private input",
+        "historical private value",
+        "current private value",
     ):
         assert forbidden not in encoded
     assert "git_status_porcelain" not in encoded

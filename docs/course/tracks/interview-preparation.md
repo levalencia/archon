@@ -46,7 +46,7 @@ Use the 15-minute route, then add these evidence stops:
 7. **Governed MCP (4m):** trace stdio initialization, inventory normalization, enablement, policy, exact-bound approval, invocation, and sanitized event output using [module 12](../modules/12-governed-mcp/README.md).
 8. **Auth and observability (5m):** trace JWT identity and ownership into SSE, safe events, logs, metrics, traces, and Workbench inspection using [module 13](../modules/13-auth-ui-observability/README.md).
 9. **Failure and recovery (4m):** contrast retry, idempotency, deadline, breaker, fallback, rate limiting, readiness, migration, backup, and restore using [modules 10](../modules/10-resilience/README.md) and [14](../modules/14-local-operations/README.md).
-10. **Close honestly (3m):** use [module 15](../modules/15-capstone/README.md) to state measured evidence and limits: local-only deployment, mock final provider/embeddings, no pgvector, and no generic self-reflection.
+10. **Close honestly (3m):** use [module 15](../modules/15-capstone/README.md) and the [deferred-gap register](../../REMAINING-DEFERRED-GAPS.md) to state measured evidence and limits: local-only deployment, provider evidence boundaries, no distributed network/GPU serving/training/public anonymous sharing, and no autonomous production mutation.
 
 ## Likely follow-ups
 
@@ -55,6 +55,7 @@ Use the 15-minute route, then add these evidence stops:
 - **Why persist events?** To inspect ordered behavior, compare runs, and evaluate recorded inputs without relying on hidden chain-of-thought.
 - **Biggest risk?** A mutable or mismatched tool identity crossing authorization. The runtime snapshots and revalidates identifiers and argument hashes, then fails closed.
 - **What would production require?** Direct evidence for deployment, SLOs, capacity, backup cadence, restore drills, secret rotation, provider parity, incident response, and external traffic.
+- **Why are the six gaps omissions rather than failures?** They require different trust, infrastructure, data-governance, or operating models. Deferring them keeps the demonstrated local policy/evidence boundary reproducible and prevents artifacts from being presented as runtime proof; cite the [gap register](../../REMAINING-DEFERRED-GAPS.md).
 
 ## Practice contract
 

@@ -6,7 +6,7 @@
 
 **A local-first, inspectable agent runtime built around policy, approvals, durable evidence, evaluation, and failure recovery.**
 
-[Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md) · [Architecture](docs/ARCHITECTURE-DIAGRAMS.md) · [DR Runbook](docs/DR-RUNBOOK.md) · [Demo](docs/DEMO-SCRIPT.md)
+[Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md) · [Deferred Gaps](docs/REMAINING-DEFERRED-GAPS.md) · [Architecture](docs/ARCHITECTURE-DIAGRAMS.md) · [DR Runbook](docs/DR-RUNBOOK.md) · [Demo](docs/DEMO-SCRIPT.md)
 
 </div>
 
@@ -176,6 +176,7 @@ OpenAPI is available at `/docs` while the backend is running.
 
 - **[Capstone course and interview study system](docs/course/README.md)** — 16 modules from agent anatomy through RAG, evaluation, MCP, observability, DR, and interview walkthroughs
 - [Canonical implementation evidence](docs/IMPLEMENTATION-EVIDENCE.md)
+- [Remaining deferred gaps and evidence thresholds](docs/REMAINING-DEFERRED-GAPS.md)
 - [Architecture diagrams](docs/ARCHITECTURE-DIAGRAMS.md)
 - [Local deployment ADR](docs/adr/0001-local-production-like-deployment.md)
 - [DR runbook](docs/DR-RUNBOOK.md)

@@ -2,7 +2,7 @@
 
 > **Documentation status:** Draft
 > **Estimated time:** 150 minutes
-> **Canonical concepts:** [liveness-readiness](../../concepts/liveness-readiness.md), [docker-compose](../../concepts/docker-compose.md), [migrations](../../concepts/migrations.md), [ci](../../concepts/ci.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md)
+> **Canonical concepts:** [liveness-readiness](../../concepts/liveness-readiness.md), [docker-compose](../../concepts/docker-compose.md), [migrations](../../concepts/migrations.md), [ci](../../concepts/ci.md), [backup-restore](../../concepts/backup-restore.md), [rto-rpo](../../concepts/rto-rpo.md), [GPU/high-throughput serving (deferred)](../../concepts/high-throughput-serving.md), [public/Kubernetes deployment (deferred)](../../concepts/kubernetes-public-deployment.md)
 
 ## Why this module exists
 
@@ -229,7 +229,7 @@ Never expose credentials, raw provider exceptions, tool payloads, personal data,
 | Providers | Deterministic/mock/local dependencies as explicitly linked. | Final external providers were not verified. |
 | Security/operations | Tested ownership, validation, policy and redaction controls. | Independent audit, rotation, production alerting and incident drills. |
 
-The local stack and DR drill have revision-scoped observations. Their recovery values are measurements, not objectives. Exact CI run/revision and DR environment values live only in [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md). Public deployment, scheduled/off-site backups, PITR, multi-region failover and production objectives remain deferred.
+The local stack and DR drill have revision-scoped observations. Their recovery values are measurements, not objectives. Exact CI run/revision and DR environment values live only in [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md). Public deployment, scheduled/off-site backups, PITR, multi-region failover and production objectives remain deferred. A Kubernetes manifest is not a cluster observation, and API timing is not GPU-serving capacity; see the [deployment and serving evidence thresholds](../../../REMAINING-DEFERRED-GAPS.md).
 
 ## Interview answer
 
