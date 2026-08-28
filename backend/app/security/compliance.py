@@ -135,5 +135,57 @@ class ComplianceChecker:
         return self.policy.to_dict()
 
 
-# Module-level default instance for easy import
+class ComplianceViolationError(ValueError):
+    """A mandatory compliance boundary rejected unsafe content."""
+
+    def __init__(self, direction: str, violations: list[str]) -> None:
+        super().__init__(f"{direction} rejected by compliance policy")
+        self.direction = direction
+        self.violation_codes = tuple(
+            "forbidden_topic" if item.lower().startswith("forbidden") else "policy_violation"
+            for item in violations
+        )
+
+
+class MandatoryComplianceService:
+    """Single fail-closed boundary used by persistence and effect paths."""
+
+    def __init__(self, checker: ComplianceChecker | None = None) -> None:
+        self._checker = checker or ComplianceChecker()
+
+    def enforce_input(self, text: str) -> None:
+        result = self._checker.check_input(text)
+        if not result["compliant"]:
+            raise ComplianceViolationError("input", result["violations"])
+
+    def enforce_output(self, text: str) -> str:
+        result = self._checker.check_output(text)
+        forbidden = [item for item in result["violations"] if item.startswith("Forbidden topic")]
+        if forbidden:
+            return "[Response withheld by compliance policy]"
+        return str(result["remediated_text"])
+
+    def enforce_dangerous_tool(self, tool_name: str, arguments: object) -> None:
+        import json
+
+        # Validation is deliberately content-only: policy and approval remain authoritative
+        # for tool identity, scope, and effect authorization.
+        serialized = json.dumps(arguments, sort_keys=True, separators=(",", ":"), default=str)
+        self.enforce_input(serialized)
+
+    def enforce_payload(self, value: object) -> object:
+        """Remediate every disclosed string while preserving JSON-compatible structure."""
+        if isinstance(value, str):
+            return self.enforce_output(value)
+        if isinstance(value, dict):
+            return {key: self.enforce_payload(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self.enforce_payload(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self.enforce_payload(item) for item in value)
+        return value
+
+
+# Module-level default instances for easy import
 default_checker = ComplianceChecker()
+default_compliance = MandatoryComplianceService(default_checker)

@@ -21,6 +21,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
@@ -260,6 +261,61 @@ class ContextSnapshotRow(Base):
     truncation_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RunExportRow(Base):
+    """Immutable, disclosure-scanned run evidence bundle."""
+
+    __tablename__ = "run_exports"
+    __table_args__ = (
+        CheckConstraint("schema_version = 1", name="ck_run_exports_schema_version"),
+        UniqueConstraint("export_id", "owner_id", name="uq_run_exports_export_owner"),
+        UniqueConstraint("owner_id", "run_id", "content_checksum", name="uq_run_exports_content"),
+        Index("ix_run_exports_owner_run", "owner_id", "run_id", "created_at"),
+    )
+    export_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("runs.run_id", ondelete="CASCADE"), nullable=False
+    )
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    bundle_json: Mapped[str] = mapped_column(Text, nullable=False)
+    content_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RunShareGrantRow(Base):
+    """Purpose-bound read grant; only the token digest is durable."""
+
+    __tablename__ = "run_share_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["export_id", "owner_id"],
+            ["run_exports.export_id", "run_exports.owner_id"],
+            ondelete="CASCADE",
+            name="fk_share_export_owner",
+        ),
+        CheckConstraint(
+            "purpose IN ('audit','incident_review','evaluation','support')",
+            name="ck_share_purpose",
+        ),
+        CheckConstraint("expires_at > created_at", name="ck_share_expiry_after_create"),
+        CheckConstraint(
+            "revoked_at IS NULL OR revoked_at >= created_at", name="ck_share_revoked_after_create"
+        ),
+        Index("ix_share_grants_owner_export", "owner_id", "export_id", "created_at"),
+        Index("ix_share_grants_token_hash", "token_hash", unique=True),
+    )
+    grant_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    export_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    recipient_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(120), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class EffectRow(Base):

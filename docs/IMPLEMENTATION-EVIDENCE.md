@@ -135,6 +135,14 @@ Persisted events contain closed metadata, bounded issue codes, validated `reques
 
 `reflection-benefit-v1.json` is explicitly a `recorded_synthetic_fixture`: its report says `runtime_executed=false` and `generalizes=false`. Its deterministic score delta tests the fixture loader/scorer only; it is not evidence that a live model improves under reflection.
 
+### Secure run export, sharing, and mandatory compliance
+
+Authenticated owners can create immutable, versioned run-evidence bundles containing disclosure-scanned run/event metadata, context lineage, citation/evaluation summaries, per-section checksums, a row-bound manifest checksum, and explicit omissions. Downloads and share redemption repeat integrity and disclosure scans. Structured secret values are replaced idempotently, so valid redacted bundles remain downloadable while raw structured secrets fail disclosure.
+
+Share grants store only a domain-separated HMAC token digest and bind an authenticated recipient, closed purpose, expiry, owner, and export. The token is returned once. Redemption linearizes against revocation/expiry inside one transaction and performs a final active-grant check before disclosure. The local target deliberately exposes no anonymous/public share URL or external token-delivery claim.
+
+Mandatory compliance executes before sync/SSE user persistence, grounded document ingestion, final-answer structured validation/persistence, model-progress persistence, and effect-ledger reservation/handler dispatch. Compliance remains a deterministic local rule boundary rather than a production legal-policy service. Migration `20260828_12` is forward/reversible over revision 11. Backend focused acceptance passed 93 tests and independent blocker review returned `APPROVED`; the export/share UI passed Svelte check, 20 Vitest tests, and production build in its isolated candidate before integration.
+
 ## Defensible summary
 
 Archon is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.

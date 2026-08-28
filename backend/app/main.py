@@ -48,6 +48,7 @@ from app.routes.multi_agent import router as multi_agent_router
 from app.routes.red_team import router as red_team_router
 from app.routes.runs import router as runs_router
 from app.routes.security_demo import router as security_router
+from app.routes.shares import router as shares_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
@@ -56,6 +57,7 @@ from app.security.approval_repository import ApprovalRepository
 from app.security.audit_logger import StructuredAuditLogger
 from app.security.auth import AuthRepository
 from app.security.circuit_breaker import CircuitBreaker, CircuitBreakingProvider
+from app.security.compliance import MandatoryComplianceService
 from app.security.live_approvals import DurableApprovalBroker
 from app.security.persistence_redactor import PersistenceRedactor
 from app.security.rate_limiter import RateLimiter
@@ -65,6 +67,7 @@ from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 from app.services.documents import DocumentRepository
 from app.services.key_rotation import MemoryKeyRotationService
+from app.services.run_exports import RunExportService
 from app.services.sql_json_vector_store import SqlJsonVectorStore
 from app.tools.sandbox import DockerSandboxConfig, DockerSandboxExecutor, SandboxExecutor
 
@@ -133,6 +136,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.settings = settings
     redactor = app.state.persistence_redactor_factory()
     app.state.persistence_redactor = redactor
+    app.state.compliance = MandatoryComplianceService()
     app.state.log_buffer = OwnerLogBuffer()
     repository = ConversationRepository(settings.database_url, redactor)
     await repository.initialize()
@@ -147,6 +151,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.evaluation_repository = EvaluationRepository(repository.session_factory)
     app.state.evaluation_service = EvaluationService(
         repository.runs, app.state.evaluation_repository
+    )
+    app.state.run_exports = RunExportService(
+        repository.session_factory, repository.runs, token_pepper=settings.secret_key
     )
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
@@ -303,6 +310,7 @@ def create_app(
     app.include_router(mcp_router)
     app.include_router(tasks_router)
     app.include_router(runs_router)
+    app.include_router(shares_router)
     app.include_router(evaluations_router)
 
     @app.get("/metrics")

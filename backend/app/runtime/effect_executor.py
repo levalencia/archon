@@ -161,6 +161,7 @@ class DurableEffectToolExecutor:
         spec = self._delegate.effect_spec(call, approved_resources=approved_resources)
         if not spec.effectful:
             return await self._delegate.execute(call)
+        self._delegate.enforce_effect_compliance(call)
 
         context = self._context
         binding = bind_effect_identity(

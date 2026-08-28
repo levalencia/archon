@@ -37,6 +37,7 @@ from app.runtime.ports import (
 )
 from app.runtime.structured_output import ResponseContract, StructuredOutputError
 from app.security.approvals import AuthorizationOutcome, AuthorizationRequest
+from app.security.compliance import MandatoryComplianceService, default_compliance
 from app.security.policy import (
     PolicyAction,
     PolicyDecision,
@@ -180,6 +181,7 @@ class AgentRuntime:
         reflection_policy: ReflectionPolicy | None = None,
         reflection_hash_key: bytes | None = None,
         reflection_hash_scope: str = "",
+        compliance: MandatoryComplianceService | None = default_compliance,
     ) -> None:
         if approval_timeout_seconds <= 0:
             raise ValueError("approval_timeout_seconds must be positive")
@@ -193,6 +195,7 @@ class AgentRuntime:
         self._authorizer = authorizer
         self._approval_timeout_seconds = approval_timeout_seconds
         self._result_recorder = result_recorder
+        self._compliance = compliance
         from app.reflection.models import ReflectionPolicy as RuntimeReflectionPolicy
         from app.reflection.service import BoundedReflectionService
 
@@ -366,6 +369,27 @@ class AgentRuntime:
                         usage,
                         f"provider_stop_reason:{provider_reason.value}",
                     )
+                if response_content:
+                    # Preserve the provider draft before optional reflection so a durable
+                    # monetary failure can stop with the best already-produced answer.
+                    content = response_content
+                if response_content and (
+                    not tool_calls and response_contract is None and self._reflection_policy.enabled
+                ):
+                    remaining_seconds = max(
+                        0.0, self._budget.max_seconds - (self._clock() - started_at)
+                    )
+                    reflection = await self._reflection.reflect(
+                        history,
+                        response_content,
+                        iteration=iterations,
+                        timeout_seconds=remaining_seconds,
+                        max_total_tokens=max(0, self._budget.max_tokens - usage.total_tokens),
+                    )
+                    response_content = reflection.content
+                    usage += reflection.usage
+                if response_content and self._compliance is not None:
+                    response_content = self._compliance.enforce_output(response_content)
                 if not tool_calls and response_contract is not None:
                     try:
                         structured_output = response_contract.parse_and_validate(
@@ -387,25 +411,7 @@ class AgentRuntime:
                         )
                 if response_content:
                     content = response_content
-                    if (
-                        not tool_calls
-                        and response_contract is None
-                        and self._reflection_policy.enabled
-                    ):
-                        remaining_seconds = max(
-                            0.0, self._budget.max_seconds - (self._clock() - started_at)
-                        )
-                        reflection = await self._reflection.reflect(
-                            history,
-                            response_content,
-                            iteration=iterations,
-                            timeout_seconds=remaining_seconds,
-                            max_total_tokens=max(0, self._budget.max_tokens - usage.total_tokens),
-                        )
-                        response_content = reflection.content
-                        usage += reflection.usage
-                    content = response_content
-                    # Text accompanying tool calls is progress, not the final answer.
+                    # Text accompanying tool calls is compliant progress, not the final answer.
                     event_kind = (
                         AgentEventKind.MODEL_PROGRESS
                         if has_tool_calls
@@ -1574,6 +1580,8 @@ class AgentRuntime:
                     usage,
                     "provider_stop_reason:final_synthesis_tool_call",
                 )
+            if response_content and self._compliance is not None:
+                response_content = self._compliance.enforce_output(response_content)
             structured_output: object | None = None
             if response_contract is not None:
                 try:
@@ -1689,7 +1697,9 @@ class AgentRuntime:
         error: str | None = None,
         structured_output: object | None = None,
     ) -> AgentResult:
-        # The terminal event finalizes completed_at, so persist the final answer first.
+        # The terminal event finalizes completed_at, so persist the compliant final answer first.
+        if self._compliance is not None:
+            content = self._compliance.enforce_output(content)
         if self._result_recorder is not None:
             await self._result_recorder(content)
         await self._emit(

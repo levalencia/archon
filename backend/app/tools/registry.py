@@ -30,6 +30,7 @@ from app.agents.protocols import AuditLog, PermissionChecker
 from app.observability.logging import get_correlation_id, safe_exception_metadata
 from app.runtime.models import ToolCall
 from app.runtime.models import ToolDefinition as RuntimeToolDefinition
+from app.security.compliance import MandatoryComplianceService, default_compliance
 from app.security.policy import (
     PolicyRequest,
     ResourceKind,
@@ -231,11 +232,13 @@ class SecureToolRegistry:
         permissions: PermissionChecker | None = None,
         audit: AuditLog | None = None,
         default_timeout: int = DEFAULT_TOOL_TIMEOUT,
+        compliance: MandatoryComplianceService | None = default_compliance,
     ) -> None:
         self._tools: dict[str, ToolDefinition] = {}
         self._permissions = permissions
         self._audit = audit
         self._default_timeout = default_timeout
+        self._compliance = compliance
 
     def register(
         self,
@@ -410,7 +413,20 @@ class SecureToolRegistry:
 
         # 2. Input validation. This must precede every permission or execution hook.
         parameters = self._validate_arguments(tool, parameters)
+        # Policy and approval run in AgentRuntime before this final effect boundary.
+        if tool.effectful and self._compliance is not None:
+            self._compliance.enforce_dangerous_tool(tool_name, parameters)
         return await self._execute_registered(tool_name, tool, parameters, parameters)
+
+    def enforce_effect_compliance(self, call: ToolCall) -> None:
+        """Validate an effectful call before any durable reservation or handler dispatch."""
+        tool_name = canonical_tool_name(call.name)
+        tool = self._tools.get(tool_name)
+        if tool is None:
+            raise PolicyMetadataError(f"Unknown tool: {tool_name}")
+        parameters = self._validate_arguments(tool, call.arguments)
+        if tool.effectful and self._compliance is not None:
+            self._compliance.enforce_dangerous_tool(tool_name, parameters)
 
     def effect_spec(
         self,

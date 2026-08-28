@@ -26,6 +26,7 @@ from app.delegation import (
 from app.research.models import Claim
 from app.runtime.models import Message, Role, TokenUsage
 from app.runtime.ports import ModelProvider
+from app.security.compliance import MandatoryComplianceService
 from app.services.chunker import DocumentChunk, EmbeddingService
 from app.services.run_ledger import RunRepository
 from app.services.vector_store import VectorStoreProtocol
@@ -231,6 +232,7 @@ class GroundedDocumentWorkflow:
         verifier: EvidenceVerifierSpecialist | None = None,
         verifier_budget: VerificationBudget | None = None,
         verifier_model: str = "verifier-model",
+        compliance: MandatoryComplianceService | None = None,
     ) -> None:
         self._retriever = DocumentEvidenceRetriever(vector_store, embedding_service, top_k=top_k)
         self._provider = model_provider
@@ -242,6 +244,7 @@ class GroundedDocumentWorkflow:
         self._verifier = verifier
         self._verifier_budget = verifier_budget
         self._verifier_model = verifier_model
+        self._compliance = compliance
 
     async def run(
         self,
@@ -375,6 +378,8 @@ class GroundedDocumentWorkflow:
         )
         if not answer:
             answer = _NO_EVIDENCE_ANSWER
+        if self._compliance is not None:
+            answer = self._compliance.enforce_output(answer)
         grounded = bool(claims)
         await self._append(
             identity,

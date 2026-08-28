@@ -1,6 +1,7 @@
 <script lang="ts">
  import { compareRuns, getRun, getRunEvents, listRuns, type ComparedRun, type Run, type RunEvent } from '$lib/runs';
  import RunSummary from './RunSummary.svelte';
+ import RunExportPanel from './RunExportPanel.svelte';
  let { conversationId, onFork = (_id: string) => {} }: { conversationId: string; onFork?: (id: string) => void } = $props();
  let runs: Run[] = $state([]); let selected: Run | null = $state(null); let events: RunEvent[] = $state([]);
  let compareId = $state(''); let comparison: {a: ComparedRun;b: ComparedRun}|null = $state(null); let loading=$state(false); let error=$state('');
@@ -14,7 +15,7 @@
  {#if error}<p role="alert">{error}</p>{/if}
  {#if runs.length}
   <label>Run <select value={selected?.run_id || ''} onchange={(e)=>select(e.currentTarget.value)}>{#each runs as run}<option value={run.run_id}>{new Date(run.started_at).toLocaleString()} · {run.status}</option>{/each}</select></label>
-  {#if selected}<RunSummary run={selected} {events} {onFork}/>{/if}
+  {#if selected}<RunSummary run={selected} {events} {onFork}/><RunExportPanel runId={selected.run_id}/>{/if}
   <ol>{#each events as event}<li><span>#{event.sequence}</span><strong>{event.kind.replaceAll('_',' ')}</strong><small>iteration {event.iteration}</small><code>{Object.entries(event.payload).map(([k,v])=>`${k}: ${String(v)}`).join(' · ') || 'No persisted payload'}</code></li>{/each}</ol>
   {#if runs.length > 1}<div class="compare"><select bind:value={compareId}><option value="">Compare with…</option>{#each runs.filter(r=>r.run_id!==selected?.run_id) as run}<option value={run.run_id}>{new Date(run.started_at).toLocaleString()}</option>{/each}</select><button disabled={!compareId} onclick={compare}>Compare</button></div>{/if}
   {#if comparison}<div class="comparison"><h3>Stored run comparison</h3><table><thead><tr><th>Metric</th><th>A</th><th>B</th></tr></thead><tbody>{#each [['Model',comparison.a.model,comparison.b.model],['Tokens',comparison.a.tokens.total,comparison.b.tokens.total],['Latency',comparison.a.latency_ms??'Not recorded',comparison.b.latency_ms??'Not recorded'],['Iterations',comparison.a.iterations,comparison.b.iterations],['Stop',comparison.a.stop_reason??'Not recorded',comparison.b.stop_reason??'Not recorded']] as row}<tr><th>{row[0]}</th><td>{row[1]}</td><td>{row[2]}</td></tr>{/each}</tbody></table></div>{/if}

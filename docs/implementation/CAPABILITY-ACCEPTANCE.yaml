@@ -14,12 +14,12 @@
     {
       "id": "run-export-share",
       "owner_module": "docs/course/modules/07-run-ledger/README.md",
-      "status": "not-implemented",
-      "dimensions": {"exists": "no", "wired": "no", "tested": "no", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
-      "sources": [],
-      "tests": [],
-      "evidence": ["docs/course/concepts/export-share-redaction.md"],
-      "limitation": "Owner-scoped run reads and persistence redaction are not an export bundle or sharing model; recipient policy, revocation, expiry, and export-specific secret scanning are absent."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/services/run_exports.py", "backend/app/security/disclosure.py", "backend/app/routes/runs.py", "backend/app/routes/shares.py", "frontend/src/lib/runs.ts", "frontend/src/lib/components/RunExportPanel.svelte"],
+      "tests": ["backend/tests/security/test_run_exports.py", "backend/tests/integration/test_run_export_migration.py", "frontend/src/lib/runs.test.ts"],
+      "evidence": ["docs/course/concepts/export-share-redaction.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "Sharing is authenticated, recipient/purpose-bound, expiring and revocable in the verified local target; there is no anonymous public link, external token delivery, public hosting, or signed export bundle claim."
     },
     {
       "id": "learning-optimization-drift",
@@ -124,12 +124,12 @@
     {
       "id": "mandatory-compliance",
       "owner_module": "docs/course/modules/09-evaluation-harness/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "no", "tested": "yes", "observed": "no", "ui": "partial", "live_provider": "na", "deployed": "no"},
-      "sources": ["backend/app/security/compliance.py", "backend/app/routes/red_team.py"],
-      "tests": ["backend/tests/unit/test_compliance.py", "backend/tests/security/test_resource_security.py"],
-      "evidence": ["docs/course/concepts/compliance-red-teaming.md"],
-      "limitation": "Rule checks and admin probes exist, but compliance is not mandatory on both chat paths and probes do not execute full agent trajectories."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/security/compliance.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py", "backend/app/routes/documents.py", "backend/app/runtime/engine.py", "backend/app/runtime/effect_executor.py", "backend/app/tools/registry.py"],
+      "tests": ["backend/tests/unit/test_compliance.py", "backend/tests/integration/test_mandatory_compliance.py", "backend/tests/unit/test_durable_effect_executor.py"],
+      "evidence": ["docs/course/concepts/compliance-red-teaming.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "The mandatory rule boundary is deterministic and local: it rejects unsafe inputs, remediates outputs before validation/persistence, and blocks effect reservation/dispatch, but it is not a substitute for jurisdiction-specific legal review or production policy operations."
     },
     {
       "id": "signed-agent-communication",

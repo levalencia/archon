@@ -26,6 +26,7 @@ from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.support import prepare_effective_context
 from app.security.auth import get_current_user
+from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 from app.security.policy import RiskClass
 from app.services.artifacts import Artifact, detect_artifact_in_response
@@ -353,6 +354,12 @@ async def chat(
 ) -> ChatResponse:
     """Send a message. The agent reasons with tools and skills, returns thinking steps."""
     await enforce_rate_limit(request, user, "chat")
+    try:
+        request.app.state.compliance.enforce_input(body.message)
+    except ComplianceViolationError as exc:
+        raise HTTPException(
+            status_code=422, detail="Message rejected by compliance policy"
+        ) from exc
     cid = get_correlation_id()
     start_time = time.monotonic()
     settings = request.app.state.settings

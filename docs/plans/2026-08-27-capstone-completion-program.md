@@ -208,6 +208,8 @@ flowchart TD
 
 **Objective:** Export/share redacted evidence safely and enforce compliance before persistence and effects.
 
+**Status:** Complete locally. Backend export/share/compliance and the owner-facing run export panel are implemented and independently approved. Public anonymous sharing, external token delivery, production deployment, and jurisdiction-specific legal-policy operations are not claimed.
+
 **Files:**
 - Create migration: `backend/alembic/versions/*_run_exports_and_share_grants.py`
 - Create: `backend/app/services/run_exports.py`

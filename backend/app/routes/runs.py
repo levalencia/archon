@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.runtime.run_models import RunEventRecord
@@ -15,6 +16,7 @@ from app.security.dependencies import enforce_rate_limit
 from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.effect_ledger import EffectRepository, EffectReviewConflictError
 from app.services.monetary_budget import MonetaryBudgetRepository
+from app.services.run_exports import ExportIntegrityError, RunExportService
 from app.services.run_ledger import LedgerDataError, RunRepository
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -22,6 +24,16 @@ router = APIRouter(prefix="/api/runs", tags=["runs"])
 
 class EffectReviewRequest(BaseModel):
     disposition: Literal["confirmed_committed", "confirmed_failed", "requires_compensation"]
+
+
+class ShareGrantRequest(BaseModel):
+    recipient_user_id: str = Field(min_length=1, max_length=255)
+    purpose: Literal["audit", "incident_review", "evaluation", "support"]
+    expires_in_seconds: int = Field(default=3600, ge=60, le=604800)
+
+
+def _export_service(request: Request) -> RunExportService:
+    return cast(RunExportService, request.app.state.run_exports)
 
 
 def _effect_repository(request: Request) -> EffectRepository:
@@ -83,6 +95,94 @@ def _trajectory(events: tuple[RunEventRecord, ...], run: dict[str, Any]) -> dict
 
 async def _rate_limit(request: Request, user: dict[str, Any]) -> None:
     await enforce_rate_limit(request, user, "run_read")
+
+
+@router.post("/{run_id}/exports", status_code=201)
+async def create_run_export(
+    run_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await enforce_rate_limit(request, user, "run_export")
+    result = await _export_service(request).create_export(user["user_id"], run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return asdict(result)
+
+
+@router.get("/{run_id}/exports")
+async def list_run_exports(
+    run_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await enforce_rate_limit(request, user, "run_export")
+    if await _repository(request).get(user["user_id"], run_id) is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    items = await _export_service(request).list_exports(user["user_id"], run_id)
+    return {"items": [asdict(item) for item in items]}
+
+
+@router.get("/{run_id}/exports/{export_id}/download")
+async def download_run_export(
+    run_id: str,
+    export_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> JSONResponse:
+    await enforce_rate_limit(request, user, "run_export")
+    try:
+        bundle = await _export_service(request).download(user["user_id"], export_id)
+    except ExportIntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Export integrity verification failed") from exc
+    if bundle is None or bundle["manifest"]["run_id"] != run_id:
+        raise HTTPException(status_code=404, detail="Export not found")
+    return JSONResponse(
+        bundle, headers={"Content-Disposition": f'attachment; filename="run-{run_id}.json"'}
+    )
+
+
+@router.post("/{run_id}/exports/{export_id}/shares", status_code=201)
+async def create_share_grant(
+    run_id: str,
+    export_id: str,
+    body: ShareGrantRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await enforce_rate_limit(request, user, "share_create")
+    export = await _export_service(request).download(user["user_id"], export_id)
+    if export is None or export["manifest"]["run_id"] != run_id:
+        raise HTTPException(status_code=404, detail="Export not found")
+    try:
+        created = await _export_service(request).create_grant(
+            user["user_id"],
+            export_id,
+            body.recipient_user_id,
+            body.purpose,
+            body.expires_in_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if created is None:
+        raise HTTPException(status_code=404, detail="Export not found")
+    grant, token = created
+    return {**asdict(grant), "token": token}
+
+
+@router.get("/{run_id}/exports/{export_id}/shares")
+async def list_share_grants(
+    run_id: str,
+    export_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await enforce_rate_limit(request, user, "share_list")
+    export = await _export_service(request).download(user["user_id"], export_id)
+    if export is None or export["manifest"]["run_id"] != run_id:
+        raise HTTPException(status_code=404, detail="Export not found")
+    grants = await _export_service(request).list_grants(user["user_id"], export_id)
+    return {"items": [asdict(item) for item in grants or ()]}
 
 
 @router.get("")

@@ -12,6 +12,7 @@ from app.runtime.effect_executor import (
 )
 from app.runtime.effect_ledger import EffectState
 from app.runtime.models import ToolCall
+from app.security.compliance import ComplianceViolationError
 from app.security.policy import ResourceKind, ResourcePattern, RiskClass
 from app.services.db_store import Base
 from app.services.effect_ledger import EffectRepository
@@ -67,6 +68,30 @@ async def test_effectful_duplicate_executes_once_and_returns_safe_tombstone(tmp_
     assert calls == ["x"]
     records = await repository.list(owner_id="alice", project_id="project", run_id="run-1")
     assert len(records) == 1 and records[0].state is EffectState.COMMITTED
+    await engine.dispose()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_compliance_rejection_precedes_effect_reservation(tmp_path) -> None:
+    calls = 0
+
+    async def write(value: str) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return {"written": value}
+
+    registry = SecureToolRegistry()
+    registry.register(
+        "write", write, input_schema=schema(), risk_classes=frozenset({RiskClass.WRITE})
+    )
+    wrapped, repository, engine = await executor(tmp_path, registry)
+
+    with pytest.raises(ComplianceViolationError):
+        await wrapped.execute(ToolCall("blocked", "write", {"value": "hacking tutorial"}))
+
+    assert calls == 0
+    assert await repository.list(owner_id="alice", project_id="project", run_id="run-1") == ()
     await engine.dispose()
 
 
