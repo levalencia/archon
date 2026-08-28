@@ -61,7 +61,7 @@ Large serialized outputs emit progress chunks and are truncated before insertion
 
 ## Reflection terminology boundary
 
-The comment and historical [`test_reflexion.py`](../../../backend/tests/unit/test_reflexion.py) use “reflexion” for error feedback followed by a corrected retry.
+The comment and historical [`test_tool_error_feedback.py`](../../../backend/tests/unit/test_tool_error_feedback.py) use “reflexion” for error feedback followed by a corrected retry.
 That proves a narrow recovery path, not a generic self-critique agent, rubric-based revision phase, learned reflection memory, or independent critic.
 Deterministic grounded-claim verification, one evidence-only verifier child, and post-run evaluation are separate mechanisms with different inputs and guarantees.
 Generic self-reflection is **not implemented**.
@@ -71,7 +71,7 @@ Generic self-reflection is **not implemented**.
 - [`test_typed_tool_round_trip_and_events`](../../../backend/tests/unit/test_runtime_v2.py) proves one action/observation/final round trip and event sequence. It does not prove open-ended planning quality.
 - [`test_duplicate_tool_calls_execute_only_once`](../../../backend/tests/unit/test_runtime_budget_regressions.py) proves a repeated semantic call is blocked in one run. It does not provide durable idempotency.
 - [`test_tool_results_are_bounded_before_returning_to_model`](../../../backend/tests/unit/test_runtime_budget_regressions.py) proves model-history truncation. It does not prove the original output is safe or complete.
-- [`test_reflexion_self_correction`](../../../backend/tests/unit/test_reflexion.py) proves a scripted error is observed and a later scripted call succeeds. It does not prove generic reflection or autonomous diagnosis.
+- [`test_reflexion_self_correction`](../../../backend/tests/unit/test_tool_error_feedback.py) proves a scripted error is observed and a later scripted call succeeds. It does not prove generic reflection or autonomous diagnosis.
 - [`test_policy_batch_authorizes_all_before_executing_in_order`](../../../backend/tests/unit/test_runtime_policy.py) proves guarded multi-call ordering against fakes. It does not make external effects transactional.
 
 ## Bounded executable exercise
@@ -82,7 +82,7 @@ Timebox: 12 minutes. Run the round-trip and error-recovery examples:
 cd backend
 pytest -q \
   tests/unit/test_runtime_v2.py::test_typed_tool_round_trip_and_events \
-  tests/unit/test_reflexion.py::test_reflexion_self_correction
+  tests/unit/test_tool_error_feedback.py::test_reflexion_self_correction
 ```
 
 Sketch the exact history roles after the first tool result. Label which behavior is ReAct and which is merely scripted recovery.

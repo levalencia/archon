@@ -82,7 +82,7 @@
     - backend/app/runtime/models.py
   tests:
     - backend/tests/unit/test_runtime_v2.py
-    - backend/tests/unit/test_reflexion.py
+    - backend/tests/unit/test_tool_error_feedback.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
   limitations: Tool-error feedback is not generic self-reflection.

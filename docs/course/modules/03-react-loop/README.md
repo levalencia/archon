@@ -40,13 +40,13 @@ sequenceDiagram
 
 ## Source, tests, and evidence
 
-Inspect [`AgentRuntime.run`](../../../../backend/app/runtime/engine.py), especially duplicate-call tracking, `_within_deadline`, `_finalize`, and `_stop`; [`RuntimeBudget` and `StopReason`](../../../../backend/app/runtime/engine.py); and typed [`Role.TOOL`](../../../../backend/app/runtime/models.py). Tests: [`test_runtime_v2.py`](../../../../backend/tests/unit/test_runtime_v2.py), [`test_runtime_budget_regressions.py`](../../../../backend/tests/unit/test_runtime_budget_regressions.py), and [`test_reflexion.py`](../../../../backend/tests/unit/test_reflexion.py). The last filename uses historical “reflexion” terminology, but its tests prove only tool-error feedback and retry. See [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md#capability-matrix).
+Inspect [`AgentRuntime.run`](../../../../backend/app/runtime/engine.py), especially duplicate-call tracking, `_within_deadline`, `_finalize`, and `_stop`; [`RuntimeBudget` and `StopReason`](../../../../backend/app/runtime/engine.py); and typed [`Role.TOOL`](../../../../backend/app/runtime/models.py). Tests: [`test_runtime_v2.py`](../../../../backend/tests/unit/test_runtime_v2.py), [`test_runtime_budget_regressions.py`](../../../../backend/tests/unit/test_runtime_budget_regressions.py), and [`test_tool_error_feedback.py`](../../../../backend/tests/unit/test_tool_error_feedback.py). The last filename uses historical “reflexion” terminology, but its tests prove only tool-error feedback and retry. See [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md#capability-matrix).
 
 ## Bounded-loop exercise
 
 ```bash
 cd backend
-uv run pytest -q tests/unit/test_reflexion.py tests/unit/test_runtime_budget_regressions.py
+uv run pytest -q tests/unit/test_tool_error_feedback.py tests/unit/test_runtime_budget_regressions.py
 ```
 
 For `test_reflexion_self_correction`, list three model calls and two tool observations, then state which budget prevents an infinite retry. **Done:** you can explain why this test does not prove generic self-reflection.
