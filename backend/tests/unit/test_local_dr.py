@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -56,6 +57,25 @@ def test_dr_smoke_covers_required_persisted_categories_without_fixed_secrets() -
     assert 'ARCHON_SANDBOX_PLATFORM="linux/arm64"' in text
     assert 'ARCHON_SANDBOX_PLATFORM="linux/amd64"' in text
     assert "127.0.0.1" in text
+
+
+def test_committed_dr_evidence_is_current_and_secret_free() -> None:
+    path = ROOT / "docs" / "evidence" / "local-dr-report.json"
+    report = json.loads(path.read_text())
+    assert report["result"] == "passed"
+    assert report["schema_revision"] == "20260828_14"
+    assert report["rpo_records"] == 0
+    assert report["rto_seconds"] >= 0
+    assert report["restored_counts"] == {
+        "approved_terminal_approvals": 1,
+        "documents": 1,
+        "run_events": 5,
+        "vector_chunks": 1,
+    }
+    encoded = path.read_text().lower()
+    assert "password" not in encoded
+    assert "access_token" not in encoded
+    assert "authorization" not in encoded
 
 
 def test_scripts_parse_and_are_executable() -> None:
