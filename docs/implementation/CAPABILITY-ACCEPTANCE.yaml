@@ -114,12 +114,12 @@
     {
       "id": "durable-background-jobs",
       "owner_module": "docs/course/modules/10-resilience/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
-      "sources": ["backend/app/services/task_queue.py", "backend/app/routes/tasks.py"],
-      "tests": ["backend/tests/unit/test_streaming_and_tasks.py"],
-      "evidence": ["docs/course/concepts/background-jobs-scheduling.md"],
-      "limitation": "The authenticated in-process lifecycle runs placeholder work and loses records on restart; owner scoping, durable broker, leases, retries, recovery, and scheduling are absent."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/services/task_queue.py", "backend/app/workers/jobs.py", "backend/app/routes/tasks.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py", "frontend/src/lib/jobs.ts", "frontend/src/lib/components/JobInspector.svelte"],
+      "tests": ["backend/tests/integration/test_durable_jobs.py", "backend/tests/integration/test_route_rate_limits.py", "frontend/src/lib/jobs.test.ts", "frontend/src/lib/components/JobInspector.test.ts"],
+      "evidence": ["docs/course/concepts/background-jobs-scheduling.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "The SQL queue provides atomic claims, monotonic lease fencing, heartbeats, bounded retries, dead-letter, cancellation, restart persistence, owner/project isolation, and only effect-free or database-idempotent handlers. Semantics are at-least-once, not exactly-once; an in-process cancellation-resistant coroutine cannot be forcibly killed, so non-idempotent external-effect job kinds remain prohibited and process isolation is deferred to S8.7."
     },
     {
       "id": "mandatory-compliance",
@@ -134,12 +134,12 @@
     {
       "id": "signed-agent-communication",
       "owner_module": "docs/course/modules/11-bounded-delegation/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "no", "tested": "yes", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
-      "sources": ["backend/app/agents/secure_channel.py", "backend/app/agents/agent_auth.py"],
-      "tests": ["backend/tests/unit/test_secure_channel.py", "backend/tests/unit/test_agent_auth.py"],
-      "evidence": ["docs/course/concepts/agent-communication-security.md"],
-      "limitation": "HMAC freshness and scoped-token primitives are isolated; active delegation does not require them and has no nonce store, key rotation, encryption, or durable receipt."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "na", "live_provider": "na", "deployed": "no"},
+      "sources": ["backend/app/delegation/envelope.py", "backend/app/delegation/service.py", "backend/app/services/grounded_rag.py", "backend/app/services/db_store.py", "backend/alembic/versions/20260828_13_durable_jobs_and_nonces.py"],
+      "tests": ["backend/tests/security/test_delegation_envelope.py", "backend/tests/unit/test_evidence_verifier.py", "backend/tests/unit/test_grounded_rag.py"],
+      "evidence": ["docs/course/concepts/agent-communication-security.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "The active verifier path requires a parent-issued HMAC envelope bound to bounded claim/evidence content, scope, budget, freshness, nonce, schema, and key version, with constant-time verification and durable replay receipts. This authenticates in-process delegation metadata; it does not encrypt message content or establish a remote multi-host PKI."
     },
     {
       "id": "isolated-sandbox-live-target",

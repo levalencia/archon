@@ -1,104 +1,103 @@
 # Background jobs and scheduling
 
-> **Implementation status:** `partial`
-> **Status boundary:** An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred.
-> **Reviewed revision:** `6e3e13f`
+> **Implementation status:** `implemented` for the verified local target
+> **Status boundary:** Durable SQL-backed jobs are owner/project scoped, restart-safe, allowlisted, retry-bounded, lease-fenced, observable, and exposed through authenticated APIs and UI. Execution is at-least-once, not exactly-once.
+> **Reviewed candidate:** S8.6 combined candidate
 > **Used by module:** [Module 10-resilience](../modules/10-resilience/README.md)
 > **Catalog ID:** `background-jobs-scheduling`
 
 ## Beginner explanation
 
-A background job continues outside the request that created it. Scheduling decides when a job should start. Reliable systems persist jobs, claim them idempotently, retry safely, and enforce the creator’s policy at execution time. `asyncio.create_task` alone is not a durable queue.
+A background job continues after the HTTP request that created it. A reliable queue must persist the job, let only one worker claim a particular lease, recover abandoned work, limit retries, and prevent stale workers from committing results.
 
-## Problem and mental model
+`asyncio.create_task()` alone is not a durable queue: process restart loses both work and status.
 
-Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.
-
-## Architecture and components
+## Architecture
 
 ```mermaid
 flowchart LR
-    API --> Queue[In-memory TaskQueue]
-    Queue --> Worker[Same-process coroutine]
-    Worker --> Result[Volatile TaskRecord]
-    Durable[(Durable broker/store: absent)] -.-> Queue
-    Scheduler[Cron/scheduler: deferred] -.-> Queue
+    Caller[Authenticated caller] --> API[Owner/project-scoped task API]
+    Agent[background_task tool] --> API
+    API --> DB[(background_jobs)]
+    Worker[Allowlisted worker] -->|atomic claim| DB
+    Worker -->|heartbeat + lease generation| DB
+    Worker --> Handler{Job kind}
+    Handler --> Echo[effect-free echo]
+    Handler --> Export[idempotent run export]
+    DB --> UI[Durable job inspector]
 ```
 
-## Startup and request sequence
+## State machine
 
 ```mermaid
-sequenceDiagram
-    Caller->>API: submit placeholder task
-    API->>Queue: create task
-    Queue-->>Caller: task id
-    Worker->>Queue: running -> completed/failed
-    Caller->>API: poll
-    Note over Queue,Worker: restart loses state and work
+stateDiagram-v2
+    [*] --> pending
+    pending --> running: atomic claim
+    running --> succeeded: fenced completion
+    running --> pending: retryable failure / expired lease
+    running --> failed: permanent failure
+    running --> dead_letter: attempt limit reached
+    pending --> cancelled: owner cancellation
+    running --> cancelled: owner cancellation
+    failed --> pending: explicit owner retry
+    dead_letter --> pending: explicit owner retry
 ```
 
-## Archon implementation and source walkthrough
+Each claim increments two values:
 
-At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. No ownership in records, durable broker, leases, retry/idempotency policy, restart recovery, real agent payload, or scheduler.
+- `attempts`, which implements bounded retry policy and may reset after explicit manual retry;
+- `lease_generation`, which is monotonic and never resets.
 
-### Source symbols
+Worker heartbeat, success, and failure updates bind `job_id + worker_id + attempts + lease_generation + unexpired lease`. The monotonic generation prevents an ABA collision when the same worker ID later reclaims a manually retried job.
 
-| Source symbol | Role and boundary |
+## Implementation map
+
+| Source | Responsibility |
 |---|---|
-| [`backend/app/services/task_queue.py:TaskQueue`](../../../backend/app/services/task_queue.py) | Implements volatile submit/status/list/cancel lifecycle. |
-| [`backend/app/routes/tasks.py:submit_task`](../../../backend/app/routes/tasks.py) | Authenticated route submits only simulated placeholder work. |
+| [`backend/app/services/task_queue.py:DurableJobQueue`](../../../backend/app/services/task_queue.py) | Create, list, project-scoped lookup, atomic claim, heartbeat, recovery, retry, cancellation, and fenced completion. |
+| [`backend/app/workers/jobs.py:JobWorker`](../../../backend/app/workers/jobs.py) | Allowlisted dispatch, heartbeat loop, hard handler deadline, safe failure metadata, and restart-safe acknowledgement. |
+| [`backend/app/routes/tasks.py`](../../../backend/app/routes/tasks.py) | Authenticated and rate-limited create/list/get/cancel/retry APIs. Individual operations require project scope. |
+| [`backend/alembic/versions/20260828_13_durable_jobs_and_nonces.py`](../../../backend/alembic/versions/20260828_13_durable_jobs_and_nonces.py) | Durable job/lease constraints and delegation nonce receipts. |
+| [`frontend/src/lib/components/JobInspector.svelte`](../../../frontend/src/lib/components/JobInspector.svelte) | Owner-visible lifecycle, attempts, safe result metadata, cancellation, and retry controls. |
 
-### Tests
+## Runtime contract
 
-| Test | Contract proved and limit |
+- Job kinds are closed to `echo` and `run_export` in this slice.
+- `run_export` verifies owner/project/run scope and relies on the export repository's content idempotency.
+- Payloads are bounded JSON. Callables, unsupported objects, excessive depth/size, PII, and secret-like values are rejected.
+- Persisted result metadata passes disclosure redaction.
+- Idempotency keys are owner/project scoped. Reusing a key with a different kind, payload, or attempt policy is rejected.
+- Atomic SQL claim supports SQLite acceptance and PostgreSQL's conditional-update semantics.
+- Worker liveness and safe last-error state participate in `/readyz`.
+
+## Tests and observed evidence
+
+| Test | Contract exercised |
 |---|---|
-| [`backend/tests/unit/test_streaming_and_tasks.py::TestTaskQueue`](../../../backend/tests/unit/test_streaming_and_tasks.py) | Proves in-process completion, failure, listing, and cancellation. |
+| [`backend/tests/integration/test_durable_jobs.py`](../../../backend/tests/integration/test_durable_jobs.py) | Restart persistence, concurrent create/claim, owner/project isolation, lease recovery, monotonic fencing, retries, dead-letter, cancellation, hard timeout, redaction, API access, and real `run_export` execution. |
+| [`backend/tests/security/test_delegation_envelope.py`](../../../backend/tests/security/test_delegation_envelope.py) | Signature tamper, freshness, scope, replay, key versions, URL-safe nonces, and receipt pruning. |
+| [`frontend/src/lib/jobs.test.ts`](../../../frontend/src/lib/jobs.test.ts) | Typed project-scoped API calls and safe errors. |
+| [`frontend/src/lib/components/JobInspector.test.ts`](../../../frontend/src/lib/components/JobInspector.test.ts) | Lifecycle/result rendering without raw payload disclosure and retry controls. |
 
-### Evidence boundary
+The integrated Mac candidate passed the full backend suite, Svelte diagnostics, frontend unit tests, production build, and browser suite. See [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md) for exact counts and revision.
 
-Current implementation dimensions are centralized in [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md). Source/tests below are repository evidence; they are not public-deployment or production-certification evidence.
+## Limits and failure semantics
 
-## Try it: bounded study exercise
-
-From the repository root, inspect the mapped source and test, then run the named focused test with the project test environment if available. Confirm both the passing contract and this gap: No ownership in records, durable broker, leases, retry/idempotency policy, restart recovery, real agent payload, or scheduler.
-
-**Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
-
-## Risks, failures, and trade-offs
-
-| Topic | Assessment |
-|---|---|
-| Principal risk | Tasks leak across users through global listing and disappear on process failure. |
-| Current gap/failure | No ownership in records, durable broker, leases, retry/idempotency policy, restart recovery, real agent payload, or scheduler. |
-| Trade-off | In-process tasks are educational and low overhead; durable queues add operational dependencies but provide recovery and scale. |
-| Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
-
-## Lab vs production
-
-The status remains **partial** at `6e3e13f`. An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+- Execution is **at-least-once**, not exactly-once. A worker may execute a job again after an indeterminate crash or lost acknowledgement.
+- An in-process Python coroutine that suppresses cancellation cannot be forcibly terminated. Therefore production job kinds in this slice are limited to effect-free or database-idempotent handlers. Non-idempotent external-effect jobs are prohibited.
+- Hard process termination and stronger workload isolation belong to the S8.7 sandbox runner.
+- SQLite validates local semantics. Live PostgreSQL multi-worker contention and multi-host operation remain unobserved.
+- Scheduling by wall-clock/cron is outside this slice; jobs support immediate availability and retry backoff.
+- Startup failure cleanup after partially initialized application resources remains a hardening item; normal shutdown cancels and awaits the worker before closing stores.
 
 ## Interview answer
 
-> A background job continues outside the request that created it. Scheduling decides when a job should start. Reliable systems persist jobs, claim them idempotently, retry safely, and enforce the creator’s policy at execution time. `asyncio.create_task` alone is not a durable queue. In Archon the honest status is **partial**: An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred.
+> Archon replaced its volatile task placeholder with a SQL-backed queue. Claims are conditional and leased; heartbeats retain ownership; a monotonic lease generation prevents stale-worker ABA commits even after manual retry resets the attempt counter. Jobs are owner/project scoped, payloads reject secrets, results are redacted, and retries terminate in dead-letter. The honest semantic is at-least-once. Because an in-process coroutine cannot be forcibly killed, only effect-free or repository-idempotent handlers are enabled until the isolated S8.7 runner provides a process boundary.
 
 ## Self-check
 
-1. What problem does this concept solve, and what nearby concept is it not?
-2. Trace the diagram’s trust boundary and failure path.
-3. Which mapped symbol/test proves current behavior, or why are the lists empty?
-4. What exact gap prevents a stronger status?
-5. Which risk would you test first before production use?
-
-<details>
-<summary>Answer guide</summary>
-
-A good answer names the contract in the beginner explanation, follows the sequence, cites the exact table entry (or the explicit absence), repeats the status boundary, and chooses a risk from the table rather than claiming unrecorded behavior.
-
-</details>
-
-## Related concepts and modules
-
-- **Module:** [Module 10-resilience](../modules/10-resilience/README.md)
-- **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
-- **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)
+1. Why are `attempts` and `lease_generation` separate?
+2. Why must get/cancel/retry include both owner and project scope?
+3. What happens when a worker dies after performing work but before acknowledging success?
+4. Why is `run_export` allowed while arbitrary external-effect jobs are prohibited?
+5. What additional guarantee does the S8.7 process boundary provide?

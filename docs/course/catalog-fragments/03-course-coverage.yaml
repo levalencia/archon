@@ -97,15 +97,18 @@
 
 - id: background-jobs-scheduling
   title: "Background jobs and scheduling"
-  status: partial
+  status: implemented
   module: docs/course/modules/10-resilience/README.md
   sources:
     - backend/app/services/task_queue.py
+    - backend/app/workers/jobs.py
     - backend/app/routes/tasks.py
   tests:
-    - backend/tests/unit/test_streaming_and_tasks.py
-  evidence: []
-  limitations: "An authenticated, rate-limited in-process task lifecycle exists, but the public submit route runs placeholder work; records vanish on restart, are not owner-scoped, and scheduled automation is deliberately deferred. No ownership in records, durable broker, leases, retry/idempotency policy, restart recovery, real agent payload, or scheduler."
+    - backend/tests/integration/test_durable_jobs.py
+    - frontend/src/lib/components/JobInspector.test.ts
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Durable owner/project-scoped SQL jobs have atomic claims, monotonic lease fencing, heartbeat, retry/dead-letter, cancellation, restart persistence and UI. Execution is at-least-once, not exactly-once. In-process cancellation-resistant coroutines cannot be forcibly killed, so non-idempotent external-effect job kinds are prohibited; process isolation is deferred to S8.7."
 
 - id: compliance-red-teaming
   title: "Compliance controls and red teaming"
@@ -122,16 +125,18 @@
 
 - id: agent-communication-security
   title: "Agent communication security"
-  status: partial
+  status: implemented
   module: docs/course/modules/11-bounded-delegation/README.md
   sources:
-    - backend/app/agents/secure_channel.py
-    - backend/app/agents/agent_auth.py
+    - backend/app/delegation/envelope.py
+    - backend/app/delegation/service.py
+    - backend/app/services/grounded_rag.py
   tests:
-    - backend/tests/unit/test_secure_channel.py
-    - backend/tests/unit/test_agent_auth.py
-  evidence: []
-  limitations: "HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary. Not injected into the active bounded verifier or legacy multi-agent route; no nonce store, key rotation, encryption, or durable receipt."
+    - backend/tests/security/test_delegation_envelope.py
+    - backend/tests/unit/test_evidence_verifier.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "The active verifier requires a parent-issued HMAC envelope bound to actual bounded claim/evidence content, owner/project/run scope, budget, freshness, nonce, schema and key version, with durable replay receipts. This authenticates local in-process delegation metadata; it does not encrypt content or establish a remote multi-host PKI."
 
 - id: learning-optimization-drift
   title: "Learning, optimization, and drift"

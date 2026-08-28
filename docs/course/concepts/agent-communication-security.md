@@ -1,108 +1,92 @@
 # Agent communication security
 
-> **Implementation status:** `partial`
-> **Status boundary:** HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary.
-> **Reviewed revision:** `6e3e13f`
+> **Implementation status:** `implemented` for the local verifier boundary
+> **Status boundary:** The active evidence-verifier child requires a parent-issued HMAC envelope bound to exact bounded content, scope, budget, freshness, nonce, schema, and key version.
+> **Reviewed candidate:** S8.6 combined candidate
 > **Used by module:** [Module 11-bounded-delegation](../modules/11-bounded-delegation/README.md)
 > **Catalog ID:** `agent-communication-security`
 
 ## Beginner explanation
 
-When one agent sends work to another, the receiver should know who sent it, what scope was granted, whether the message changed, and whether it is a replay. HMAC can prove integrity under a shared secret, but it does not encrypt content or define authorization.
+When a parent agent delegates work, the child must know exactly what was authorized. A signed envelope proves integrity and scope: changing the owner, project, run IDs, claims, evidence, budget, timestamp, nonce, schema, or key version invalidates the signature.
 
-## Problem and mental model
+HMAC authenticates data under a shared secret. It does **not** encrypt the content and is not a remote PKI.
 
-Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.
-
-## Architecture and components
+## Architecture
 
 ```mermaid
 flowchart LR
-    Parent --> Token[Scoped capability]
-    Parent --> Sign[HMAC envelope]
-    Sign --> Child
-    Child --> Verify[identity + integrity + freshness]
-    Verify --> Policy[Authorize operation]
-    LiveRoute[Current specialist route] -. not wired .-> Verify
+    Parent[Grounded parent workflow] --> Canon[Canonical bounded request]
+    Canon --> Issue[Issue HMAC envelope]
+    Issue --> Child[Evidence verifier]
+    Child --> Verify[Constant-time verify]
+    Verify --> Fresh[Freshness + exact scope/content]
+    Fresh --> Receipt[(Durable nonce receipt)]
+    Receipt --> Provider[No-tools verifier call]
 ```
 
-## Startup and request sequence
+## Sequence
 
 ```mermaid
 sequenceDiagram
-    Parent->>Channel: sign sender/receiver/content/time
-    Channel-->>Child: SignedMessage
-    Child->>Channel: verify HMAC and age
-    alt valid and authorized
-      Child-->>Parent: bounded result
-    else invalid/replayed
-      Child-->>Parent: reject
+    Parent->>Parent: construct bounded claims/evidence/budget
+    Parent->>EnvelopeService: issue exact-content envelope
+    Parent->>VerifierChild: verify(request, envelope)
+    VerifierChild->>EnvelopeService: verify and consume nonce
+    alt authentic, fresh, scoped, unused
+      EnvelopeService-->>VerifierChild: authorized
+      VerifierChild->>Provider: no-tools bounded request
+    else missing/tampered/stale/replayed
+      EnvelopeService-->>VerifierChild: reject before provider call
     end
 ```
 
-## Archon implementation and source walkthrough
+## Signed fields
 
-At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. Not injected into the active bounded verifier or legacy multi-agent route; no nonce store, key rotation, encryption, or durable receipt.
+- parent and child run IDs;
+- owner and project IDs;
+- canonical bounded claim text, evidence quote, identifiers, and declared hashes through `context_hash`;
+- input/output token limits, timeout, and retry count;
+- schema version;
+- issuance timestamp;
+- cryptographically random nonce;
+- key version.
 
-### Source symbols
+The child cannot mint its own authorization. `EvidenceVerifierSpecialist.verify()` requires an envelope whenever the service is configured. `GroundedDocumentWorkflow`, acting as the parent boundary, explicitly issues it before calling the child.
 
-| Source symbol | Role and boundary |
+## Implementation map
+
+| Source | Responsibility |
 |---|---|
-| [`backend/app/agents/secure_channel.py:SecureChannel`](../../../backend/app/agents/secure_channel.py) | Signs and verifies HMAC messages with a max age. |
-| [`backend/app/agents/agent_auth.py:create_agent_token`](../../../backend/app/agents/agent_auth.py) | Creates expiring role/permission records; these are plain in-process records, not signed bearer credentials. |
+| [`backend/app/delegation/envelope.py`](../../../backend/app/delegation/envelope.py) | Immutable envelope, domain-separated HMAC, constant-time verification, freshness, key versions, nonce consumption, and stale-receipt pruning. |
+| [`backend/app/delegation/service.py`](../../../backend/app/delegation/service.py) | Canonical request content, parent issuer helper, and mandatory child verification. |
+| [`backend/app/services/grounded_rag.py`](../../../backend/app/services/grounded_rag.py) | Active parent/orchestrator issuance before evidence-verifier execution. |
+| [`backend/alembic/versions/20260828_13_durable_jobs_and_nonces.py`](../../../backend/alembic/versions/20260828_13_durable_jobs_and_nonces.py) | Durable unique nonce receipts and indexed retention support. |
 
-### Tests
+## Tests
 
-| Test | Contract proved and limit |
+| Test | Contract proved |
 |---|---|
-| [`backend/tests/unit/test_secure_channel.py::TestSecureChannel`](../../../backend/tests/unit/test_secure_channel.py) | Proves tamper, wrong-secret, and expiry rejection. |
-| [`backend/tests/unit/test_agent_auth.py::test_create_token_default_permissions`](../../../backend/tests/unit/test_agent_auth.py) | Exercises scoped token behavior. |
+| [`backend/tests/security/test_delegation_envelope.py`](../../../backend/tests/security/test_delegation_envelope.py) | Tamper, wrong scope, stale/future envelope, unknown key version, replay, URL-safe nonce, and receipt pruning. |
+| [`backend/tests/unit/test_evidence_verifier.py`](../../../backend/tests/unit/test_evidence_verifier.py) | Missing envelope rejection and original-envelope rejection after claim/evidence mutation. |
+| [`backend/tests/unit/test_grounded_rag.py`](../../../backend/tests/unit/test_grounded_rag.py) | Parent issuance is wired into the real bounded verifier path. |
 
-### Evidence boundary
+## Limits
 
-Current implementation dimensions are centralized in [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md). Source/tests below are repository evidence; they are not public-deployment or production-certification evidence.
-
-## Try it: bounded study exercise
-
-From the repository root, inspect the mapped source and test, then run the named focused test with the project test environment if available. Confirm both the passing contract and this gap: Not injected into the active bounded verifier or legacy multi-agent route; no nonce store, key rotation, encryption, or durable receipt.
-
-**Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
-
-## Risks, failures, and trade-offs
-
-| Topic | Assessment |
-|---|---|
-| Principal risk | Shared-secret compromise affects all peers; freshness without nonce persistence permits replay inside the window. |
-| Current gap/failure | Not injected into the active bounded verifier or legacy multi-agent route; no nonce store, key rotation, encryption, or durable receipt. |
-| Trade-off | In-process typed calls avoid unnecessary crypto; distributed peers need authenticated transport and scoped authorization. |
-| Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
-
-## Lab vs production
-
-The status remains **partial** at `6e3e13f`. HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+- Shared-secret compromise compromises all envelopes signed by that key version.
+- Current startup wiring derives one active version from a dedicated secret; external KMS/HSM-backed rotation is not implemented.
+- Envelope content is authenticated, not encrypted.
+- This is a local in-process trust boundary; remote service identity, mTLS, federation, and multi-host PKI are not claimed.
+- Durable nonce receipts prevent replay within the acceptance target. Receipts older than the freshness window are safely pruned because those envelopes are already invalid.
 
 ## Interview answer
 
-> When one agent sends work to another, the receiver should know who sent it, what scope was granted, whether the message changed, and whether it is a replay. HMAC can prove integrity under a shared secret, but it does not encrypt content or define authorization. In Archon the honest status is **partial**: HMAC freshness and scoped-agent-token primitives have isolated tests, but the live specialist/delegation routes do not use them as a mandatory transport or authorization boundary.
+> Archon treats delegation as an authorization boundary, not a normal function call. The parent canonicalizes the exact bounded request and issues a versioned HMAC envelope. The child requires that envelope, verifies it in constant time, checks exact owner/project/run/content/budget scope and freshness, then atomically consumes a durable nonce before calling the provider. Replays and content mutations fail before execution. The design authenticates local metadata but does not claim encryption or remote PKI.
 
 ## Self-check
 
-1. What problem does this concept solve, and what nearby concept is it not?
-2. Trace the diagram’s trust boundary and failure path.
-3. Which mapped symbol/test proves current behavior, or why are the lists empty?
-4. What exact gap prevents a stronger status?
-5. Which risk would you test first before production use?
-
-<details>
-<summary>Answer guide</summary>
-
-A good answer names the contract in the beginner explanation, follows the sequence, cites the exact table entry (or the explicit absence), repeats the status boundary, and chooses a risk from the table rather than claiming unrecorded behavior.
-
-</details>
-
-## Related concepts and modules
-
-- **Module:** [Module 11-bounded-delegation](../modules/11-bounded-delegation/README.md)
-- **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
-- **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)
+1. Why must the parent issue the envelope rather than the child?
+2. Which mutation tests prove the actual claim and evidence content is bound?
+3. Why can old nonce receipts be pruned safely?
+4. What security property does HMAC provide, and what does it not provide?
+5. What changes would be needed for a multi-host trust boundary?

@@ -143,6 +143,14 @@ Share grants store only a domain-separated HMAC token digest and bind an authent
 
 Mandatory compliance executes before sync/SSE user persistence, grounded document ingestion, final-answer structured validation/persistence, model-progress persistence, and effect-ledger reservation/handler dispatch. Compliance remains a deterministic local rule boundary rather than a production legal-policy service. Migration `20260828_12` is forward/reversible over revision 11. Integrated Mac acceptance at candidate `ba62c0f` passed 1,335 backend tests, Svelte check with zero diagnostics, 20 Vitest tests, a production build, and 21 Playwright browser tests; independent blocker review returned `APPROVED`.
 
+### Signed delegation and durable background jobs
+
+The active verifier child requires a parent-issued, versioned HMAC envelope bound to owner/project, parent/child run IDs, the actual bounded claim and evidence text, declared hashes, budget, schema, timestamp, and one-time nonce. Verification is constant-time for signatures; successful nonces are durably consumed, stale receipts are pruned only after their freshness window, and missing, replayed, stale, foreign-scope, budget-modified, or content-modified envelopes fail before provider execution.
+
+Background work uses migration `20260828_13`, atomic SQL claims, monotonic lease generations independent of retry counters, heartbeats, expiry recovery, bounded exponential retries, dead-letter, cancellation, manual retry, concurrent idempotency, owner/project-scoped APIs, readiness, and an owner-scoped dashboard inspector. Production job kinds are closed to effect-free `echo` and database-idempotent `run_export`; payloads reject PII/secrets and result metadata is disclosure-redacted.
+
+Semantics are deliberately **at-least-once**, not exactly-once. In-process Python cannot forcibly terminate a coroutine that suppresses cancellation, so non-idempotent external-effect handlers are prohibited; harder process termination is delegated to the S8.7 sandbox boundary. No live PostgreSQL contention or multi-host worker claim is made. Integrated Mac candidate `98dbae5` passed 1,354 backend tests, Svelte check with zero diagnostics, 25 Vitest tests, a production build, and 21 Playwright tests. Independent backend and documentation blocker re-reviews returned `APPROVED`.
+
 ## Defensible summary
 
 Archon is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.
