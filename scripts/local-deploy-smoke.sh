@@ -41,6 +41,18 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+if [[ -z "${ARCHON_LOCAL_PLATFORM:-}" ]]; then
+  daemon_arch="$(docker info --format '{{.Architecture}}')"
+  case "$daemon_arch" in
+    aarch64 | arm64) ARCHON_LOCAL_PLATFORM="linux/arm64" ;;
+    x86_64 | amd64) ARCHON_LOCAL_PLATFORM="linux/amd64" ;;
+    *)
+      printf 'Unsupported Docker daemon architecture: %s\n' "$daemon_arch" >&2
+      exit 1
+      ;;
+  esac
+  export ARCHON_LOCAL_PLATFORM
+fi
 BASE_URL="http://127.0.0.1:$ARCHON_LOCAL_PORT"
 compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$PROJECT")
 
