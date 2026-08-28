@@ -9,7 +9,17 @@ from pathlib import Path
 from typing import Any
 
 _SCHEMA_VERSION = 1
-_TOP_KEYS = frozenset({"schema_version", "dataset_id", "version", "content_hash", "cases"})
+_TOP_KEYS = frozenset(
+    {
+        "schema_version",
+        "dataset_id",
+        "version",
+        "content_hash",
+        "evidence_kind",
+        "generation_provenance",
+        "cases",
+    }
+)
 _CASE_KEYS = frozenset({"key", "prompt", "expected_answer", "baseline_answer", "reflected_answer"})
 _MAX_CASES = 100
 _MAX_TEXT = 10_000
@@ -34,6 +44,8 @@ class ReflectionBenchmarkFixture:
     dataset_id: str
     version: str
     content_hash: str
+    evidence_kind: str
+    generation_provenance: str
     cases: tuple[ReflectionBenchmarkCase, ...]
 
 
@@ -42,6 +54,10 @@ class ReflectionBenefitReport:
     dataset_id: str
     version: str
     content_hash: str
+    evidence_kind: str
+    generation_provenance: str
+    runtime_executed: bool
+    generalizes: bool
     cases: int
     baseline_correct: int
     reflected_correct: int
@@ -82,6 +98,8 @@ def _canonical(fixture: ReflectionBenchmarkFixture) -> bytes:
             for case in fixture.cases
         ],
         "dataset_id": fixture.dataset_id,
+        "evidence_kind": fixture.evidence_kind,
+        "generation_provenance": fixture.generation_provenance,
         "schema_version": fixture.schema_version,
         "version": fixture.version,
     }
@@ -128,11 +146,16 @@ def load_reflection_benchmark_fixture(path: Path) -> ReflectionBenchmarkFixture:
         or any(character not in "0123456789abcdef" for character in content_hash)
     ):
         raise ReflectionFixtureError("content_hash must be a lowercase SHA-256 digest")
+    evidence_kind = _text(raw["evidence_kind"], "evidence_kind", 64)
+    if evidence_kind != "recorded_synthetic_fixture":
+        raise ReflectionFixtureError("unsupported reflection evidence kind")
     fixture = ReflectionBenchmarkFixture(
         _SCHEMA_VERSION,
         _text(raw["dataset_id"], "dataset_id", 128),
         _text(raw["version"], "version", 64),
         content_hash,
+        evidence_kind,
+        _text(raw["generation_provenance"], "generation_provenance", 512),
         tuple(cases),
     )
     if reflection_fixture_content_hash(fixture) != fixture.content_hash:
@@ -163,6 +186,10 @@ def measure_reflection_benefit(fixture: ReflectionBenchmarkFixture) -> Reflectio
         fixture.dataset_id,
         fixture.version,
         fixture.content_hash,
+        fixture.evidence_kind,
+        fixture.generation_provenance,
+        False,
+        False,
         count,
         baseline,
         reflected,

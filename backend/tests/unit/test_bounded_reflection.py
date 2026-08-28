@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import time
 from decimal import Decimal
 
 import pytest
@@ -15,6 +16,7 @@ from app.reflection.service import BoundedReflectionService
 from app.runtime.engine import AgentRuntime, RuntimeBudget
 from app.runtime.events import AgentEventKind, RecordingEventSink
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall
+from app.runtime.monetary_budget import ModelBudgetExhausted
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.run_ledger import safe_event_payload
 
@@ -62,6 +64,8 @@ def _policy(**overrides):
         "max_output_tokens": 2048,
         "max_seconds": 1.0,
         "max_cost_usd": Decimal("1"),
+        "input_cost_per_million_usd": Decimal("1"),
+        "output_cost_per_million_usd": Decimal("1"),
     }
     values.update(overrides)
     return ReflectionPolicy(**values)
@@ -82,12 +86,18 @@ def test_reflection_is_opt_in_and_requires_private_fingerprints() -> None:
     BoundedReflectionService(provider, ReflectionPolicy())
     with pytest.raises(ValueError, match="fingerprint key"):
         BoundedReflectionService(provider, _policy(), hash_scope="scope")
+    with pytest.raises(ValueError, match="requires pricing"):
+        ReflectionPolicy(enabled=True)
+    assert ReflectionPolicy(enabled=True, max_cost_usd=Decimal("0")).enabled is True
 
 
 def test_reflection_settings_use_documented_archon_prefix(monkeypatch) -> None:
+    with pytest.raises(ValueError, match="requires pricing"):
+        Settings(reflection_enabled=True)
     monkeypatch.setenv("ARCHON_REFLECTION_ENABLED", "true")
     monkeypatch.setenv("ARCHON_REFLECTION_MAX_REVISIONS", "0")
     monkeypatch.setenv("ARCHON_REFLECTION_TIMEOUT_SECONDS", "3.5")
+    monkeypatch.setenv("ARCHON_REFLECTION_INPUT_COST_PER_MILLION_USD", "1")
 
     settings = Settings()
 
@@ -192,7 +202,9 @@ async def test_runtime_reflects_only_at_final_answer_boundary_and_accounts_usage
     result = await runtime.run([Message(Role.USER, "question")])
 
     assert result.content == "fixed"
-    assert result.usage == TokenUsage(31, 9)
+    assert result.usage.input_tokens >= 31
+    assert result.usage.output_tokens >= 9
+    assert result.usage.total_tokens <= RuntimeBudget().max_tokens
     assert [event.kind for event in sink.events].count(AgentEventKind.TEXT_DELTA) == 1
     text_event = next(event for event in sink.events if event.kind is AgentEventKind.TEXT_DELTA)
     assert text_event.data["text"] == "fixed"
@@ -280,6 +292,89 @@ async def test_deadline_is_hard_and_fails_safe_to_keep() -> None:
     assert result.content == "draft"
     assert result.outcome is ReflectionOutcomeCode.TIME_LIMIT
     assert len(provider.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_deadline_detaches_provider_that_suppresses_cancellation() -> None:
+    class _CancellationDelayingProvider(_QueueProvider):
+        async def complete(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
+            try:
+                await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.2)
+                raise
+
+    provider = _CancellationDelayingProvider([])
+    service = _service(provider, _policy(max_seconds=0.05))
+    started = time.monotonic()
+
+    result = await service.reflect([], "draft")
+    elapsed = time.monotonic() - started
+
+    assert result.outcome is ReflectionOutcomeCode.TIME_LIMIT
+    assert result.calls == 1
+    assert elapsed < 0.15
+    await asyncio.sleep(0.25)
+
+
+@pytest.mark.asyncio
+async def test_zero_usage_and_oversized_revision_fail_safe_to_token_limit() -> None:
+    provider = _QueueProvider(
+        [
+            _response(
+                '{"verdict":"revise","issue_codes":["factual_error"],'
+                '"evidence_refs":["draft:L1"],"confidence":1}',
+                input_tokens=0,
+                output_tokens=0,
+            ),
+            _response("x" * 10_000, input_tokens=0, output_tokens=0),
+        ]
+    )
+
+    result = await _service(provider, _policy(max_output_tokens=600)).reflect([], "draft")
+
+    assert result.content == "draft"
+    assert result.outcome is ReflectionOutcomeCode.TOKEN_LIMIT
+    assert result.calls == 2
+    assert result.usage.total_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_secret_shaped_and_out_of_range_evidence_refs_are_rejected() -> None:
+    for reference in ("draft:secret-fragment", "draft:L2", "request:L1"):
+        provider = _QueueProvider(
+            [
+                _response(
+                    '{"verdict":"revise","issue_codes":["factual_error"],'
+                    f'"evidence_refs":["{reference}"],"confidence":1}}'
+                )
+            ]
+        )
+
+        result = await _service(provider).reflect([], "one-line draft")
+
+        assert result.outcome is ReflectionOutcomeCode.INVALID_VERDICT
+        assert result.content == "one-line draft"
+
+
+@pytest.mark.asyncio
+async def test_monetary_failure_reaches_runtime_stop_semantics() -> None:
+    provider = _QueueProvider([_response("draft"), ModelBudgetExhausted()])
+    sink = RecordingEventSink()
+    runtime = AgentRuntime(
+        provider,
+        _NoTools(),
+        events=sink,
+        reflection_policy=_policy(),
+        reflection_hash_key=HASH_KEY,
+        reflection_hash_scope="alice\0project\0run-1",
+    )
+
+    result = await runtime.run([Message(Role.USER, "question")])
+
+    assert result.stop_reason.value == "monetary_budget_exhausted"
+    assert any(event.kind is AgentEventKind.BUDGET_BLOCKED for event in sink.events)
 
 
 @pytest.mark.asyncio

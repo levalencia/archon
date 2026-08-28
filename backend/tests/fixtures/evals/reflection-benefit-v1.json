@@ -1,8 +1,10 @@
 {
   "schema_version": 1,
   "dataset_id": "archon-reflection-benefit",
-  "version": "1.0.0",
-  "content_hash": "e1e27cde001e921587a4a02dc626a319bc2addaa2521ff2c3b266d07c8e6223b",
+  "version": "1.1.0",
+  "content_hash": "75bcd282793af66bdc0a00c074098405462de987ec1c980e7d1ca5356c881187",
+  "evidence_kind": "recorded_synthetic_fixture",
+  "generation_provenance": "Hand-authored scorer examples; no runtime, provider, model, or reflection policy execution.",
   "cases": [
     {
       "key": "arithmetic-qualification",

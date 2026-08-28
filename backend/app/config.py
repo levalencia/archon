@@ -68,6 +68,17 @@ class Settings(BaseSettings):
     reflection_input_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)
     reflection_output_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)
 
+    @model_validator(mode="after")
+    def validate_reflection_pricing(self) -> Settings:
+        if (
+            self.reflection_enabled
+            and self.reflection_max_cost_usd > 0
+            and self.reflection_input_cost_per_million_usd == 0
+            and self.reflection_output_cost_per_million_usd == 0
+        ):
+            raise ValueError("enabled reflection requires pricing for a positive cost cap")
+        return self
+
     # Embeddings
     embedding_provider: str = "mock"  # mock | openai
     embedding_model: str = "text-embedding-3-small"

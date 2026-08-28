@@ -21,7 +21,11 @@ class TestReflectionBenefit:
         report = measure_reflection_benefit(fixture)
 
         assert report.dataset_id == "archon-reflection-benefit"
-        assert report.version == "1.0.0"
+        assert report.version == "1.1.0"
+        assert report.evidence_kind == "recorded_synthetic_fixture"
+        assert report.runtime_executed is False
+        assert report.generalizes is False
+        assert "no runtime" in report.generation_provenance.lower()
         assert report.cases == 3
         assert report.baseline_correct == 1
         assert report.reflected_correct == 3

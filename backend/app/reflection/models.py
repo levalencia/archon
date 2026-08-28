@@ -11,6 +11,7 @@ from enum import StrEnum
 from app.runtime.models import TokenUsage
 
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_EVIDENCE_REF = re.compile(r"^(?:request|draft):L[1-9][0-9]{0,5}$")
 MAX_ISSUES = 16
 MAX_EVIDENCE_REFS = 32
 
@@ -82,6 +83,13 @@ class ReflectionPolicy:
             value = getattr(self, name)
             if not isinstance(value, Decimal) or not value.is_finite() or value < 0:
                 raise ValueError(f"{name} must be a finite non-negative Decimal")
+        if (
+            self.enabled
+            and self.max_cost_usd > 0
+            and self.input_cost_per_million_usd == 0
+            and self.output_cost_per_million_usd == 0
+        ):
+            raise ValueError("enabled reflection requires pricing for a positive cost cap")
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,9 +116,9 @@ class ReflectionVerdict:
         if (
             len(refs) > MAX_EVIDENCE_REFS
             or len(refs) != len(set(refs))
-            or any(not isinstance(item, str) or _SAFE_ID.fullmatch(item) is None for item in refs)
+            or any(not isinstance(item, str) or _EVIDENCE_REF.fullmatch(item) is None for item in refs)
         ):
-            raise ValueError("evidence_refs must be unique bounded safe identifiers")
+            raise ValueError("evidence_refs must be unique bounded request:L# or draft:L# locations")
         if (
             isinstance(self.confidence, bool)
             or not isinstance(self.confidence, (int, float))

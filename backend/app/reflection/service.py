@@ -9,6 +9,7 @@ import json
 import math
 import time
 from collections.abc import Sequence
+from contextlib import suppress
 from decimal import ROUND_FLOOR, Decimal
 from typing import Any
 
@@ -22,6 +23,12 @@ from app.reflection.models import (
 )
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage
+from app.runtime.monetary_budget import (
+    DuplicateModelCharge,
+    DurableModelChargeStateError,
+    IndeterminateModelCharge,
+    ModelBudgetExhausted,
+)
 from app.runtime.ports import ModelProvider
 from app.runtime.structured_output import ResponseContract, StructuredOutputError
 
@@ -44,6 +51,28 @@ class _ReflectionLimitError(RuntimeError):
 def estimate_tokens(messages: Sequence[Message]) -> int:
     """Conservative deterministic pre-call estimate used only as a hard guard."""
     return sum(math.ceil(len(message.content.encode("utf-8")) / 4) + 8 for message in messages)
+
+
+def _response_token_floor(response: ModelResponse) -> int:
+    content = response.content if isinstance(response.content, str) else ""
+    return math.ceil(len(content.encode("utf-8")) / 4) + 8 * len(response.tool_calls)
+
+
+def _consume_background_task(task: asyncio.Task[Any]) -> None:
+    with suppress(asyncio.CancelledError, Exception):
+        task.exception()
+
+
+def _required_usage_count(value: object) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError("provider usage must contain non-negative integer counts")
+    return value
+
+
+def _optional_usage_count(value: object) -> int | None:
+    if value is None:
+        return None
+    return _required_usage_count(value)
 
 
 def _verdict_validator(value: Any) -> ReflectionVerdict:
@@ -82,13 +111,37 @@ REFLECTION_VERDICT_CONTRACT = ResponseContract(
                 "type": "array",
                 "maxItems": 32,
                 "uniqueItems": True,
-                "items": {"type": "string", "maxLength": 128},
+                "items": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^(request|draft):L[1-9][0-9]{0,5}$",
+                },
             },
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         },
     },
     validator=_verdict_validator,
 )
+
+
+def _line_count(text: str) -> int:
+    return max(1, len(text.splitlines()))
+
+
+def _validate_evidence_locations(
+    verdict: ReflectionVerdict, request_messages: Sequence[Message], draft: str
+) -> None:
+    request_lines = sum(
+        _line_count(item.content)
+        for item in request_messages
+        if item.role in (Role.SYSTEM, Role.USER)
+    )
+    draft_lines = _line_count(draft)
+    for reference in verdict.evidence_refs:
+        source, line = reference.split(":L", 1)
+        maximum = request_lines if source == "request" else draft_lines
+        if int(line) > maximum:
+            raise ValueError("evidence reference is outside supplied content")
 
 
 def derive_reflection_hmac_key(application_secret: str) -> bytes:
@@ -201,36 +254,61 @@ class BoundedReflectionService:
                 max_tokens = min(max_tokens, affordable)
                 if max_tokens <= 0:
                     raise _ReflectionLimitError(ReflectionOutcomeCode.COST_LIMIT)
-            try:
-                response = await asyncio.wait_for(
-                    self._provider.complete(
-                        messages,
-                        tools=(),
-                        max_tokens=max_tokens,
-                        response_contract=contract,
-                    ),
-                    timeout=remaining_time,
+            provider_task = asyncio.create_task(
+                self._provider.complete(
+                    messages,
+                    tools=(),
+                    max_tokens=max_tokens,
+                    response_contract=contract,
                 )
-            except TimeoutError as exc:
-                raise _ReflectionLimitError(ReflectionOutcomeCode.TIME_LIMIT) from exc
+            )
+            calls += 1
+            try:
+                done, _ = await asyncio.wait(
+                    {provider_task},
+                    timeout=max(0.0, remaining_time),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if provider_task not in done or self._clock() - started >= time_limit:
+                    provider_task.cancel()
+                    provider_task.add_done_callback(_consume_background_task)
+                    raise _ReflectionLimitError(ReflectionOutcomeCode.TIME_LIMIT)
+                response = provider_task.result()
             except asyncio.CancelledError:
+                provider_task.cancel()
+                provider_task.add_done_callback(_consume_background_task)
+                raise
+            except (
+                ModelBudgetExhausted,
+                DuplicateModelCharge,
+                IndeterminateModelCharge,
+                DurableModelChargeStateError,
+            ):
+                raise
+            except _ReflectionLimitError:
                 raise
             except Exception as exc:
                 raise _ReflectionLimitError(ReflectionOutcomeCode.PROVIDER_ERROR) from exc
-            calls += 1
-            response_usage = TokenUsage(
-                response.usage.input_tokens,
-                response.usage.output_tokens,
-                response.usage.cache_read_input_tokens,
-                response.usage.cache_write_input_tokens,
-            )
+            try:
+                output_floor = _response_token_floor(response)
+                response_usage = TokenUsage(
+                    max(_required_usage_count(response.usage.input_tokens), estimated_input),
+                    max(_required_usage_count(response.usage.output_tokens), output_floor),
+                    _optional_usage_count(response.usage.cache_read_input_tokens),
+                    _optional_usage_count(response.usage.cache_write_input_tokens),
+                )
+            except _ReflectionLimitError:
+                raise
+            except Exception as exc:
+                raise _ReflectionLimitError(ReflectionOutcomeCode.PROVIDER_ERROR) from exc
             usage = usage + response_usage
             cost += (
                 Decimal(response_usage.input_tokens) * input_price
                 + Decimal(response_usage.output_tokens) * output_price
             )
             if (
-                usage.input_tokens > self._policy.max_input_tokens
+                output_floor > max_tokens
+                or usage.input_tokens > self._policy.max_input_tokens
                 or usage.output_tokens > self._policy.max_output_tokens
                 or (max_total_tokens is not None and usage.total_tokens > max_total_tokens)
             ):
@@ -267,7 +345,8 @@ class BoundedReflectionService:
                 if not isinstance(parsed, ReflectionVerdict):
                     raise StructuredOutputError("schema_mismatch", "invalid reflection verdict")
                 verdict = parsed
-            except StructuredOutputError as exc:
+                _validate_evidence_locations(verdict, request_messages, draft)
+            except (StructuredOutputError, ValueError) as exc:
                 raise _ReflectionLimitError(ReflectionOutcomeCode.INVALID_VERDICT) from exc
             await self._emit(
                 AgentEventKind.REFLECTION_VERDICT,
