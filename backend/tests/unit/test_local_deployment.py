@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -73,15 +74,33 @@ def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
     assert "ARCHON_EXECUTION_RUNNER_SOCKET" in text
     assert "docker.sock" not in text
     services = _compose_config()["services"]
-    assert set(services["sandbox-runner"]["security_opt"]) == {
-        "no-new-privileges:true",
-        "seccomp=unconfined",
-    }
+    security_options = set(services["sandbox-runner"]["security_opt"])
+    assert "no-new-privileges:true" in security_options
+    seccomp_options = [option for option in security_options if option.startswith("seccomp=")]
+    assert len(seccomp_options) == 1
+    assert seccomp_options[0].endswith("/sandbox_runner/seccomp-bootstrap.json")
     assert all(
         "seccomp=unconfined" not in service.get("security_opt", [])
         for name, service in services.items()
         if name != "sandbox-runner"
     )
+    profile_path = ROOT / "sandbox_runner" / "seccomp-bootstrap.json"
+    profile_bytes = profile_path.read_bytes()
+    assert hashlib.sha256(profile_bytes).hexdigest() == (
+        "536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74"
+    )
+    profile = json.loads(profile_bytes)
+    assert profile["defaultAction"] == "SCMP_ACT_ERRNO"
+    unconditional = {
+        syscall
+        for rule in profile["syscalls"]
+        if rule["action"] == "SCMP_ACT_ALLOW"
+        and not rule.get("includes")
+        and not rule.get("excludes")
+        for syscall in rule["names"]
+    }
+    assert "seccomp" in unconditional
+    assert not {"clone3", "unshare", "bpf", "keyctl", "perf_event_open"} & unconditional
     assert "OTEL_BSP_SCHEDULE_DELAY" in text
     assert "ARCHON_LOCAL_PLATFORM:-linux/amd64" in text
     assert "ARCHON_SANDBOX_PLATFORM:-linux/amd64" in text

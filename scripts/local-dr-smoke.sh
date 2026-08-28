@@ -39,6 +39,19 @@ with open(path, "w", encoding="utf-8") as stream:
         stream.write(f"{key}={value}\n")
 PY
 
+if [[ -z "${ARCHON_SANDBOX_PLATFORM:-}" ]]; then
+  daemon_arch="$(docker info --format '{{.Architecture}}')"
+  case "$daemon_arch" in
+    aarch64 | arm64) ARCHON_SANDBOX_PLATFORM="linux/arm64" ;;
+    x86_64 | amd64) ARCHON_SANDBOX_PLATFORM="linux/amd64" ;;
+    *)
+      printf 'Unsupported Docker daemon architecture: %s\n' "$daemon_arch" >&2
+      exit 1
+      ;;
+  esac
+  export ARCHON_SANDBOX_PLATFORM
+fi
+
 source_compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$SOURCE_PROJECT")
 dest_compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$DEST_PROJECT")
 stage="initializing"
@@ -209,7 +222,7 @@ SQL
 )
 [[ "$DEST_FINGERPRINT" == "$SOURCE_FINGERPRINT" && "$RESTORED_EVENT_COUNT" == "$RUN_EVENT_COUNT" ]]
 ALEMBIC_REVISION=$(psql_dest -Atqc 'SELECT version_num FROM alembic_version')
-[[ "$ALEMBIC_REVISION" == "20260826_08" ]]
+[[ "$ALEMBIC_REVISION" == "20260828_14" ]]
 
 export REPORT_PATH BACKUP_SECONDS RTO_SECONDS SNAPSHOT_UTC DUMP_SHA256 ALEMBIC_REVISION USER_ID CONVERSATION_ID RUN_ID DOCUMENT_ID APPROVAL_ID SOURCE_DOCUMENT_COUNT SOURCE_CHUNK_COUNT SOURCE_APPROVAL_COUNT SOURCE_EVENT_COUNT
 python3 - <<'PY'

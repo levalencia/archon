@@ -45,13 +45,16 @@ def test_dr_smoke_covers_required_persisted_categories_without_fixed_secrets() -
         "runtime_events",
         "rpo_records",
         "rto_seconds",
-        "20260826_08",
+        "20260828_14",
     ):
         assert category in text
     assert "secrets.token" in text
     assert "ALLOW_REPLACE=1" not in text
     assert "mktemp -u" not in text
     assert "json_list_length" in text
+    assert "docker info --format '{{.Architecture}}'" in text
+    assert 'ARCHON_SANDBOX_PLATFORM="linux/arm64"' in text
+    assert 'ARCHON_SANDBOX_PLATFORM="linux/amd64"' in text
     assert "127.0.0.1" in text
 
 
