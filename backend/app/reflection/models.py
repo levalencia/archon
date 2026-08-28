@@ -116,9 +116,14 @@ class ReflectionVerdict:
         if (
             len(refs) > MAX_EVIDENCE_REFS
             or len(refs) != len(set(refs))
-            or any(not isinstance(item, str) or _EVIDENCE_REF.fullmatch(item) is None for item in refs)
+            or any(
+                not isinstance(item, str) or _EVIDENCE_REF.fullmatch(item) is None
+                for item in refs
+            )
         ):
-            raise ValueError("evidence_refs must be unique bounded request:L# or draft:L# locations")
+            raise ValueError(
+                "evidence_refs must be unique bounded request:L# or draft:L# locations"
+            )
         if (
             isinstance(self.confidence, bool)
             or not isinstance(self.confidence, (int, float))
