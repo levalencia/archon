@@ -53,7 +53,9 @@ The model, multimodal, and embedding acceptance scripts require both `--execute-
 
 Deterministic fake-provider coverage is **11 passed, 1 live test skipped**; focused provider/embedding/multimodal regression coverage is **147 passed, 1 skipped**. macOS full backend acceptance passed **1,382 tests with 2 expected skips**, followed by the final FIFO-focused gate (**11 passed, 1 skipped**) on both Linux and macOS. Default CLI dry-runs for all three scripts produced `skipped` reports without provider calls. Independent blocker review of `c04cd15` returned `APPROVED`.
 
-No external provider was called and no live report is committed. Real-provider evidence therefore remains `Partial`/unobserved pending explicit operator authorization and valid provider/embedding configuration; deterministic harness success is not represented as live-provider success.
+Operator-authorized live acceptance was executed on 2026-08-28 using the configured Azure AI Foundry Anthropic adapter (`claude-opus-4-6`). Native tool calling passed with one tool call; provider-reported cache counters were transported successfully with zero read/write tokens, which is not a cache-hit or billing-savings claim. The one-pixel multimodal semantic probe passed. Native JSON Schema was skipped because that adapter does not advertise the capability. Embedding and ingest/query were not called because the configured embedding provider remains `mock`. The sanitized timestamps, elapsed durations, host, model revision, results, metrics, and limits are recorded in [live-provider-acceptance-summary.json](evidence/live-provider-acceptance-summary.json); prompts, responses, credentials, full URLs, and raw provider errors were not retained.
+
+S8.9 therefore closes as **Partial**, not fully live-evidenced: actual external model/tool/cache-metric and multimodal behavior was observed, while native JSON Schema and live embedding remain explicit gaps.
 
 ### S8.10 benchmark and documentation candidate
 
@@ -65,7 +67,7 @@ The integrated macOS gate passed after adding locked frontend dependency prepara
 
 The final local deployment smoke then passed with a split-platform configuration on Apple Silicon: application containers remain reproducible `linux/amd64`, while the sandbox runner uses the daemon-native architecture so nested seccomp is not attempted under QEMU. The runner keeps Moby's vendored outer default-deny profile and installs an additional child filter; `seccomp=unconfined` is prohibited. The smoke verified gateway, PostgreSQL, Redis, mock embeddings, authentication, metrics, Alembic revision `20260828_14`, and an exported OTEL span. The final DR smoke also passed: checksum-verified backup/restore preserved the run, five run events, one document/vector chunk, and one terminal approval with **RPO 0 records** and measured **RTO 24.787 seconds**. The sanitized DR artifact is committed at [local-dr-report.json](evidence/local-dr-report.json).
 
-S8.10 local acceptance is complete for the declared local-only target. This does **not** upgrade provider-live, distributed scale, anonymous-sharing, autonomous optimization, or public deployment evidence. Every `Deployed` value remains **No**, and S8.9 real-provider evidence remains `Partial` pending explicit operator authorization and valid external configuration.
+S8.10 local acceptance is complete for the declared local-only target. This does **not** upgrade distributed scale, anonymous-sharing, autonomous optimization, or public deployment evidence. Every `Deployed` value remains **No**. S8.9 is closed as `Partial`: model tool/cache-metric and multimodal paths have live evidence, while native JSON Schema and embeddings remain non-live gaps.
 
 ### Previous S7.5 full acceptance at `60a8d6a`
 
