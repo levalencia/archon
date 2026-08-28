@@ -55,11 +55,13 @@ Deterministic fake-provider coverage is **11 passed, 1 live test skipped**; focu
 
 No external provider was called and no live report is committed. Real-provider evidence therefore remains `Partial`/unobserved pending explicit operator authorization and valid provider/embedding configuration; deterministic harness success is not represented as live-provider success.
 
-### S8.10 documentation candidate boundaries
+### S8.10 benchmark and documentation candidate
 
-The S8.10 documentation candidate at baseline `440f08e` adds the explicit [remaining deferred-gap register](REMAINING-DEFERRED-GAPS.md) and aligns course navigation/catalog boundaries. It records, for each intentional omission, the architecture and evidence that would be required before reconsidering status.
+The S8.10 candidate adds the explicit [remaining deferred-gap register](REMAINING-DEFERRED-GAPS.md), aligns course navigation/catalog boundaries, expands the deterministic benchmark to twelve production-control-plane scenarios, and hardens the integrated verification script. For each intentional omission, the register states the architecture and evidence required before reconsidering status.
 
-This is candidate documentation only. It does **not** claim that the integrated S8.10 benchmark, final verification, local deployment smoke, or DR smoke has run; it does not declare S8.10 complete; and it does not upgrade provider, scale, anonymous-sharing, optimization, or deployment evidence. Every `Deployed` value remains **No**.
+The reviewed Linux benchmark at `8e21302` passed **120/120 scenario iterations** with zero failures and a clean workspace. Its Linux sandbox scenario executed the production runner child with seccomp and observed socket creation, protected control-file deletion, control-directory writes, and chmod attempts blocked. The benchmark also observed one real disclosure redaction from seeded legacy-sensitive data and a persisted drift report with a `-1.0` pass-rate delta bound to an approval-gated candidate. The checked-in benchmark artifact is the sanitized report from that run. macOS cross-platform acceptance passed **15 focused tests** and **24/24 benchmark iterations**; it explicitly records that seccomp was not executed on Darwin while still proving the Unix-socket client has no host fallback.
+
+This remains candidate acceptance. It does **not** claim that the full integrated `verify.sh`, local deployment smoke, or DR smoke has passed after these changes, and it does not upgrade provider-live, scale, anonymous-sharing, optimization, or deployment evidence. Every `Deployed` value remains **No**.
 
 ### Previous S7.5 full acceptance at `60a8d6a`
 

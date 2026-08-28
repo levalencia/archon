@@ -8,11 +8,11 @@
     "iterations": 10
   },
   "environment": {
-    "platform": "macOS-26.5.1-arm64-arm-64bit",
-    "python": "3.11.10",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "python": "3.11.15",
     "python_implementation": "CPython"
   },
-  "generated_at_utc": "2026-08-26T23:29:56.204770Z",
+  "generated_at_utc": "2026-08-28T19:03:44.365266Z",
   "scenarios": [
     {
       "failures": [],
@@ -25,9 +25,9 @@
       },
       "iterations": 10,
       "latency_ms": {
-        "max": 2.269,
-        "p50": 0.893,
-        "p95": 2.269
+        "max": 3.836,
+        "p50": 2.298,
+        "p95": 3.836
       },
       "observation": {
         "approved": {
@@ -113,9 +113,9 @@
       },
       "iterations": 10,
       "latency_ms": {
-        "max": 0.479,
-        "p50": 0.099,
-        "p95": 0.479
+        "max": 0.73,
+        "p50": 0.489,
+        "p95": 0.73
       },
       "observation": {
         "breaker_callable_calls": 1,
@@ -154,9 +154,9 @@
       },
       "iterations": 10,
       "latency_ms": {
-        "max": 566.307,
-        "p50": 38.339,
-        "p95": 566.307
+        "max": 3619.635,
+        "p50": 2446.746,
+        "p95": 3619.635
       },
       "observation": {
         "answer": "Alpha uses Python3 [E1]",
@@ -189,6 +189,301 @@
       "passed": true,
       "passed_iterations": 10,
       "tokens": 200
+    },
+    {
+      "failures": [],
+      "id": "reflection_disabled_vs_enabled",
+      "invariants": {
+        "disabled_has_no_reflection_calls": true,
+        "enabled_revises_once": true,
+        "enabled_usage_accounts_all_calls": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 1.102,
+        "p50": 0.684,
+        "p95": 1.102
+      },
+      "observation": {
+        "disabled": {
+          "answer": "uncorrected",
+          "provider_calls": 1
+        },
+        "enabled": {
+          "answer": "corrected",
+          "provider_calls": 3
+        }
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 2660
+    },
+    {
+      "failures": [],
+      "id": "duplicate_side_effect_replay",
+      "invariants": {
+        "effect_executes_once": true,
+        "one_committed_record": true,
+        "replay_is_blocked": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 2570.582,
+        "p50": 2343.846,
+        "p95": 2570.582
+      },
+      "observation": {
+        "first_status": "same",
+        "handler_calls": 1,
+        "ledger_state": "committed",
+        "replay_status": "duplicate_effect_blocked"
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
+    },
+    {
+      "failures": [],
+      "id": "budget_reservation_provider_failure",
+      "invariants": {
+        "failure_is_indeterminate": true,
+        "provider_failure_propagates_after_reconciliation": true,
+        "reservation_precedes_dispatch": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 2730.971,
+        "p50": 2591.704,
+        "p95": 2730.971
+      },
+      "observation": {
+        "charge_count": 1,
+        "charge_state": "indeterminate",
+        "provider_calls": 1,
+        "provider_failure_propagated": true,
+        "reserved_positive": true
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
+    },
+    {
+      "failures": [],
+      "id": "context_provenance_key_rotation_interruption",
+      "invariants": {
+        "asset_is_keyed_fingerprint": true,
+        "interruption_rolls_back": true,
+        "provenance_is_metadata_only": true,
+        "rotation_resumes_without_loss": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 2010.386,
+        "p50": 1577.705,
+        "p95": 2010.386
+      },
+      "observation": {
+        "asset_fingerprint_count": 1,
+        "memory_ids": [
+          "memory-1"
+        ],
+        "recovered_items": [
+          "first",
+          "second"
+        ],
+        "selected_message_ids": [
+          7
+        ],
+        "skill_ids": [
+          "skill-1"
+        ],
+        "versions_after_interruption": {
+          "1": 2
+        },
+        "versions_after_resume": {
+          "2": 2
+        }
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
+    },
+    {
+      "failures": [],
+      "id": "share_grant_revoke_expiry_redaction",
+      "invariants": {
+        "expiry_is_enforced": true,
+        "export_disclosure_scanner_redacts_seeded_secret": true,
+        "revocation_is_immediate": true,
+        "tokens_are_hash_only": true,
+        "valid_grant_is_readable": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 1966.116,
+        "p50": 1579.109,
+        "p95": 1966.116
+      },
+      "observation": {
+        "disclosure_redactions": 1,
+        "initial_redeem": true,
+        "redeem_after_expiry": false,
+        "redeem_after_revoke": false,
+        "revoked": true,
+        "seeded_secret_absent": true,
+        "stored_hashes": 2
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
+    },
+    {
+      "failures": [],
+      "id": "signed_child_envelope_replay",
+      "invariants": {
+        "budget_is_bounded_metadata": true,
+        "signature_is_bound": true,
+        "signed_envelope_consumes_once": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 1515.386,
+        "p50": 1420.12,
+        "p95": 1515.386
+      },
+      "observation": {
+        "first_consumed": true,
+        "key_version": 1,
+        "replay_blocked": true,
+        "tamper_blocked": true
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
+    },
+    {
+      "failures": [],
+      "id": "durable_job_restart_lease_loss",
+      "invariants": {
+        "current_lease_completes": true,
+        "expired_lease_is_recovered": true,
+        "job_survives_restart": true,
+        "stale_lease_is_fenced": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 1569.424,
+        "p50": 1534.462,
+        "p95": 1569.424
+      },
+      "observation": {
+        "current_completion": true,
+        "final_status": "succeeded",
+        "lease_generations": [
+          1,
+          2
+        ],
+        "persisted_status": "running",
+        "recovered": 1,
+        "stale_completion": false
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
+    },
+    {
+      "failures": [],
+      "id": "sandbox_breakout_probes",
+      "invariants": {
+        "client_has_no_host_fallback": true,
+        "linux_runner_blocks_breakout_syscalls": true,
+        "non_linux_does_not_claim_seccomp_execution": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 46.807,
+        "p50": 41.382,
+        "p95": 46.807
+      },
+      "observation": {
+        "control_chmod_blocked": true,
+        "control_unlink_blocked": true,
+        "missing_runner_failed_closed": true,
+        "payload_absent": true,
+        "protected_control_preserved": true,
+        "seccomp_platform_supported": true,
+        "seccomp_probe_executed": true,
+        "socket_blocked": true,
+        "transport": "unix_socket",
+        "volume_write_blocked": true
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
+    },
+    {
+      "failures": [],
+      "id": "drift_candidate_exact_approval",
+      "invariants": {
+        "drift_candidate_starts_proposed": true,
+        "drift_is_computed_and_persisted": true,
+        "exact_receipt_advances_once": true,
+        "promotion_records_declared_revision_only": true,
+        "promotion_requires_approval": true
+      },
+      "iterations": 10,
+      "latency_ms": {
+        "max": 1894.634,
+        "p50": 1745.249,
+        "p95": 1894.634
+      },
+      "observation": {
+        "approval_decided": true,
+        "baseline_revision": "config-baseline",
+        "blocked_without_receipt": true,
+        "candidate_revision": "config-candidate",
+        "drift_pass_rate_delta": -1.0,
+        "drift_report_bound": true,
+        "drift_warning_metrics": [
+          "abstention_rate",
+          "citation_coverage",
+          "mean_cost_usd",
+          "mean_latency_ms",
+          "mean_score",
+          "mean_tokens",
+          "pass_rate",
+          "safety_failure_rate",
+          "score_p10",
+          "unsupported_claim_rate"
+        ],
+        "receipt_replay_blocked": true,
+        "states": [
+          "proposed",
+          "approved",
+          "promoted"
+        ]
+      },
+      "observations_stable": true,
+      "pass_rate": 1.0,
+      "passed": true,
+      "passed_iterations": 10,
+      "tokens": 0
     }
   ],
   "schema_version": "1.0",
@@ -197,9 +492,9 @@
     "failures": [],
     "pass_rate": 1.0,
     "passed": true,
-    "passed_iterations": 30,
-    "scenario_iterations": 30,
-    "tokens": 420
+    "passed_iterations": 120,
+    "scenario_iterations": 120,
+    "tokens": 3080
   },
   "workspace": {
     "after": {
@@ -210,6 +505,8 @@
       "dirty_entries": 0,
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
+    "clean_after": true,
+    "clean_before": true,
     "workspace_unchanged": true
   }
 }
