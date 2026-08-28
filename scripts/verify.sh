@@ -92,6 +92,12 @@ printf '\n== Backend tests ==\n'
   uv run --extra dev pytest -q --cov=app --cov-report=term-missing --cov-fail-under=50
 )
 
+printf '\n== Frontend dependencies ==\n'
+(
+  cd "$ROOT/frontend"
+  npm ci
+)
+
 printf '\n== Frontend static checks ==\n'
 (
   cd "$ROOT/frontend"

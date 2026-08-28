@@ -67,6 +67,7 @@ def test_integrated_gate_orders_offline_acceptance_before_existing_and_benchmark
         "== Capability acceptance manifest ==",
         "== Backend lint ==",
         "== Backend tests ==",
+        "== Frontend dependencies ==",
         "== Frontend static checks ==",
         "== Frontend tests ==",
         "== Frontend production build ==",
@@ -79,6 +80,8 @@ def test_integrated_gate_orders_offline_acceptance_before_existing_and_benchmark
 
     positions = [script.index(heading) for heading in headings]
     assert positions == sorted(positions)
+    assert "npm ci" in script
+    assert script.index("npm ci") < script.index("npm run check")
     assert "scripts/acceptance_support.py" in script
     assert "scripts/embedding_smoke.py" in script
     assert "scripts/multimodal_smoke.py" in script
