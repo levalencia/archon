@@ -93,7 +93,7 @@ unset ACCESS_TOKEN AUTH_HEADER_NAME
 
 curl --fail --silent --show-error "$BASE_URL/metrics" | python3 -c 'import sys; assert sys.stdin.read().strip()'
 migration=$("${compose[@]}" exec -T postgres psql -U archon -d archon -Atqc 'select version_num from alembic_version')
-[[ "$migration" == "20260826_08" ]]
+[[ "$migration" == "20260828_14" ]]
 "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://otel-collector:13133/', timeout=3)"
 
 otel_observed=0

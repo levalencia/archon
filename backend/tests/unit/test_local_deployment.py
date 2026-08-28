@@ -88,6 +88,8 @@ def test_images_run_nonroot_and_backend_migrates() -> None:
     assert "--frozen --no-dev" in backend
     assert backend.count("@sha256:") >= 3
     assert "alembic upgrade head" in entrypoint
+    smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
+    assert '[[ "$migration" == "20260828_14" ]]' in smoke
     assert "USER node" in frontend
     assert frontend.count("@sha256:") == 2
     assert "adapter-node" in (ROOT / "frontend/svelte.config.js").read_text()
