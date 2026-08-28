@@ -13,10 +13,8 @@ from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from app.reflection.models import ReflectionPolicy
-from app.reflection.service import BoundedReflectionService
 from app.runtime.capabilities import (
     ProviderCapabilities,
     UnsupportedProviderCapability,
@@ -49,6 +47,9 @@ from app.security.policy import (
     canonical_arguments_snapshot,
     canonical_tool_name,
 )
+
+if TYPE_CHECKING:
+    from app.reflection.models import ReflectionPolicy
 
 T = TypeVar("T")
 Clock = Callable[[], float]
@@ -192,7 +193,10 @@ class AgentRuntime:
         self._authorizer = authorizer
         self._approval_timeout_seconds = approval_timeout_seconds
         self._result_recorder = result_recorder
-        self._reflection_policy = reflection_policy or ReflectionPolicy()
+        from app.reflection.models import ReflectionPolicy as RuntimeReflectionPolicy
+        from app.reflection.service import BoundedReflectionService
+
+        self._reflection_policy = reflection_policy or RuntimeReflectionPolicy()
         self._reflection = BoundedReflectionService(
             model,
             self._reflection_policy,
