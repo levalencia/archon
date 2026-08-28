@@ -117,8 +117,7 @@ class ReflectionVerdict:
             len(refs) > MAX_EVIDENCE_REFS
             or len(refs) != len(set(refs))
             or any(
-                not isinstance(item, str) or _EVIDENCE_REF.fullmatch(item) is None
-                for item in refs
+                not isinstance(item, str) or _EVIDENCE_REF.fullmatch(item) is None for item in refs
             )
         ):
             raise ValueError(
