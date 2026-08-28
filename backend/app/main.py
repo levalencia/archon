@@ -4,8 +4,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import uuid
 from collections.abc import AsyncGenerator, Callable, Mapping
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from typing import Any
 
 import structlog
 from dotenv import load_dotenv
@@ -17,7 +20,11 @@ load_dotenv()
 
 from app.agents.llm_factory import create_llm_client
 from app.config import Settings, get_settings
-from app.delegation import EvidenceVerifierSpecialist
+from app.delegation import (
+    DelegationEnvelopeService,
+    EvidenceVerifierSpecialist,
+    derive_delegation_hmac_key,
+)
 from app.eval.persistence import EvaluationRepository
 from app.eval.service import EvaluationService
 from app.mcp.inventory import MCPInventoryService
@@ -69,7 +76,9 @@ from app.services.documents import DocumentRepository
 from app.services.key_rotation import MemoryKeyRotationService
 from app.services.run_exports import RunExportService
 from app.services.sql_json_vector_store import SqlJsonVectorStore
+from app.services.task_queue import ClaimedJob, DurableJobQueue
 from app.tools.sandbox import DockerSandboxConfig, DockerSandboxExecutor, SandboxExecutor
+from app.workers.jobs import JobWorker, PermanentJobError, echo_handler
 
 logger = structlog.get_logger()
 
@@ -155,6 +164,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.run_exports = RunExportService(
         repository.session_factory, repository.runs, token_pepper=settings.secret_key
     )
+    app.state.job_queue = DurableJobQueue(repository.session_factory)
+    app.state.delegation_envelopes = None
+    if settings.verifier_enabled:
+        app.state.delegation_envelopes = DelegationEnvelopeService(
+            repository.session_factory,
+            {1: derive_delegation_hmac_key(settings.delegation_signing_key.get_secret_value(), 1)},
+            active_key_version=1,
+        )
+
+    async def run_export_job(job: ClaimedJob) -> dict[str, Any]:
+        run_id = str(job.payload["run_id"])
+        run = await repository.runs.get(job.owner_id, run_id)
+        if run is None or run.project_id != job.project_id:
+            raise PermanentJobError("run_scope_unavailable")
+        exported = await app.state.run_exports.create_export(job.owner_id, run_id)
+        if exported is None:
+            raise PermanentJobError("run_scope_unavailable")
+        return {
+            "export_id": exported.export_id,
+            "run_id": exported.run_id,
+            "schema_version": exported.schema_version,
+            "content_checksum": exported.content_checksum,
+        }
+
+    job_worker = JobWorker(
+        app.state.job_queue,
+        f"web-{uuid.uuid4()}",
+        handlers={"echo": echo_handler, "run_export": run_export_job},
+    )
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
     app.state.auth = AuthRepository(auth_store, settings.secret_key, settings.admin_usernames)
@@ -224,7 +262,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         as_model_provider(app.state.model_provider_factory(settings)), breaker
     )
     app.state.evidence_verifier = (
-        EvidenceVerifierSpecialist(app.state.model_provider, repository.runs, redactor)
+        EvidenceVerifierSpecialist(
+            app.state.model_provider,
+            repository.runs,
+            redactor,
+            app.state.delegation_envelopes,
+        )
         if settings.verifier_enabled
         else None
     )
@@ -232,16 +275,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.otel_endpoint:
         exporter = OTLPExporter(settings.otel_service_name, settings.otel_endpoint)
     app.state.otel_exporter = exporter
+    job_worker_task = asyncio.create_task(job_worker.run_forever())
+    app.state.job_worker = job_worker
+    app.state.job_worker_task = job_worker_task
 
-    yield
-
-    await repository.close()
-    await auth_store.close()
-    await app.state.rate_limiter.close()
-    await app.state.embedding_service.close()
-    if exporter:
-        exporter.shutdown()
-    logger.info("archon_shutdown")
+    try:
+        yield
+    finally:
+        job_worker_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await job_worker_task
+        await repository.close()
+        await auth_store.close()
+        await app.state.rate_limiter.close()
+        await app.state.embedding_service.close()
+        if exporter:
+            exporter.shutdown()
+        logger.info("archon_shutdown")
 
 
 def create_app(
@@ -332,7 +382,15 @@ def create_app(
 
     @app.get("/readyz")
     async def readyz():
-        """Report readiness based on a live database query."""
+        """Report readiness based on live dependencies and durable-worker health."""
+        worker_task = getattr(app.state, "job_worker_task", None)
+        worker = getattr(app.state, "job_worker", None)
+        worker_ready = (
+            worker_task is not None
+            and not worker_task.done()
+            and worker is not None
+            and worker.last_error_code is None
+        )
         dependencies = {
             "conversation_repository": "up",
             "rate_limiter": {
@@ -347,6 +405,13 @@ def create_app(
                 else {"backend": "disabled", "status": "disabled"}
             ),
             "model_provider_circuit": app.state.provider_breaker.state.value,
+            "background_job_worker": (
+                "up"
+                if worker_ready
+                else worker.last_error_code
+                if worker is not None and worker.last_error_code
+                else "down"
+            ),
             "vector_store": app.state.vector_store.backend,
             "evidence_verifier": (
                 "enabled" if app.state.evidence_verifier is not None else "disabled"
@@ -359,7 +424,9 @@ def create_app(
                 "readiness": app.state.embedding_service.capability.readiness,
             },
         }
-        ready = app.state.otel_exporter is None or app.state.otel_exporter.is_active
+        ready = worker_ready and (
+            app.state.otel_exporter is None or app.state.otel_exporter.is_active
+        )
         try:
             await app.state.conversations.check_health()
         except Exception as error:

@@ -45,6 +45,75 @@ class Base(DeclarativeBase):
     pass
 
 
+class DelegationNonceRow(Base):
+    """One-time receipt for an authenticated delegation envelope."""
+
+    __tablename__ = "delegation_nonce_receipts"
+    __table_args__ = (
+        CheckConstraint("key_version BETWEEN 1 AND 255", name="ck_delegation_key_version"),
+        Index("ix_delegation_receipts_issued_at", "issued_at"),
+    )
+    nonce = Column(String(255), primary_key=True)
+    key_version = Column(Integer, nullable=False)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    parent_run_id = Column(String(255), nullable=False)
+    child_run_id = Column(String(255), nullable=False)
+    signature_hash = Column(String(64), nullable=False)
+    issued_at = Column(BigInteger, nullable=False)
+    received_at = Column(BigInteger, nullable=False)
+
+
+class BackgroundJobRow(Base):
+    """Restart-safe, owner/project-scoped allowlisted work item."""
+
+    __tablename__ = "background_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','running','succeeded','failed','dead_letter','cancelled')",
+            name="ck_background_jobs_status",
+        ),
+        CheckConstraint("kind IN ('echo','run_export')", name="ck_background_jobs_kind"),
+        CheckConstraint(
+            "attempts >= 0 AND max_attempts BETWEEN 1 AND 10 AND attempts <= max_attempts",
+            name="ck_background_jobs_attempts",
+        ),
+        CheckConstraint("lease_generation >= 0", name="ck_background_jobs_lease_generation"),
+        CheckConstraint(
+            "(status = 'running' AND worker_id IS NOT NULL AND lease_expires_at IS NOT NULL) "
+            "OR (status != 'running' AND worker_id IS NULL AND lease_expires_at IS NULL)",
+            name="ck_background_jobs_lease_state",
+        ),
+        CheckConstraint(
+            "(status IN ('succeeded','failed','dead_letter','cancelled') "
+            "AND completed_at IS NOT NULL) OR "
+            "(status IN ('pending','running') AND completed_at IS NULL)",
+            name="ck_background_jobs_completion_state",
+        ),
+        UniqueConstraint("owner_id", "project_id", "idempotency_key", name="uq_job_idempotency"),
+        Index("ix_jobs_claim", "status", "available_at", "created_at"),
+        Index("ix_jobs_owner_project", "owner_id", "project_id", "created_at"),
+    )
+    job_id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    kind = Column(String(64), nullable=False)
+    payload_json = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=3)
+    lease_generation = Column(Integer, nullable=False, default=0)
+    idempotency_key = Column(String(255), nullable=True)
+    worker_id = Column(String(255), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    available_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    result_json = Column(Text, nullable=True)
+    error_code = Column(String(64), nullable=True)
+
+
 class ConversationRow(Base):
     __tablename__ = "conversations"
     id = Column(String(36), primary_key=True)

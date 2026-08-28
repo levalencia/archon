@@ -9,6 +9,11 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from app.delegation.envelope import (
+    DelegationEnvelope,
+    DelegationEnvelopeService,
+    InvalidDelegationEnvelope,
+)
 from app.delegation.models import (
     ChildVerificationRequest,
     ChildVerificationResult,
@@ -155,6 +160,56 @@ def _fail_closed(
     )
 
 
+def verifier_delegation_context(request: ChildVerificationRequest) -> dict[str, Any]:
+    """Canonical bounded request content that the parent authorizes for the child."""
+    return {
+        "policy_id": request.policy_id,
+        "model": request.model,
+        "claims": [
+            {
+                "claim_id": claim.claim_id,
+                "claim_hash": claim.claim_hash,
+                "text": claim.text,
+                "evidence_ids": list(claim.evidence_ids),
+            }
+            for claim in request.claims
+        ],
+        "evidence": [
+            {
+                "evidence_id": item.evidence_id,
+                "document_id": item.document_id,
+                "chunk_id": item.chunk_id,
+                "content_hash": item.content_hash,
+                "quote": item.quote,
+            }
+            for item in request.evidence
+        ],
+    }
+
+
+def verifier_delegation_budget(request: ChildVerificationRequest) -> dict[str, int | float]:
+    return {
+        "input_tokens": request.budget.input_tokens,
+        "output_tokens": request.budget.output_tokens,
+        "retries": request.budget.retries,
+        "timeout_seconds": request.budget.timeout_seconds,
+    }
+
+
+def issue_verifier_delegation(
+    envelopes: DelegationEnvelopeService, request: ChildVerificationRequest
+) -> DelegationEnvelope:
+    """Parent/orchestrator boundary: issue authorization before entering the child."""
+    return envelopes.issue(
+        parent_run_id=request.parent_run_id,
+        child_run_id=request.child_id,
+        owner_id=request.user_id,
+        project_id=request.project_id,
+        context_hash=envelopes.context_digest(verifier_delegation_context(request)),
+        budget=verifier_delegation_budget(request),
+    )
+
+
 class EvidenceVerifierSpecialist:
     """Run one no-tools verifier child and durably record its safe lifecycle."""
 
@@ -163,15 +218,36 @@ class EvidenceVerifierSpecialist:
         provider: ModelProvider,
         runs: RunRepository,
         redactor: PersistenceRedactor,
+        envelopes: DelegationEnvelopeService | None = None,
     ) -> None:
         self._provider = provider
         self._runs = runs
         self._redactor = redactor
+        self._envelopes = envelopes
 
-    async def verify(self, request: ChildVerificationRequest) -> ChildVerificationResult:
+    async def verify(
+        self,
+        request: ChildVerificationRequest,
+        envelope: DelegationEnvelope | None = None,
+    ) -> ChildVerificationResult:
         # Keep redaction as an explicit dependency of this persistence boundary.
         # RunRepository performs the actual allow-listing and redaction.
         _ = self._redactor
+        if self._envelopes is not None:
+            if envelope is None:
+                raise InvalidDelegationEnvelope("delegation envelope is required")
+            context_hash = self._envelopes.context_digest(verifier_delegation_context(request))
+            budget = verifier_delegation_budget(request)
+            if dict(envelope.budget) != budget:
+                raise InvalidDelegationEnvelope("delegation envelope rejected")
+            await self._envelopes.verify_and_consume(
+                envelope,
+                owner_id=request.user_id,
+                project_id=request.project_id,
+                parent_run_id=request.parent_run_id,
+                child_run_id=request.child_id,
+                context_hash=context_hash,
+            )
         started = time.monotonic()
         messages = _messages(request)
         estimate = estimate_input_tokens(messages)

@@ -33,7 +33,7 @@ from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.conversations import ConversationRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
-from app.services.task_queue import get_task_queue
+from app.services.task_queue import DurableJobQueue
 from app.tools.builtin import calculator_tool, datetime_tool, read_file_tool, write_file_tool
 from app.tools.image_gen import image_gen_tool
 from app.tools.memory_tools import (
@@ -66,6 +66,7 @@ def get_tool_registry(
     scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
     sandbox_executor: SandboxExecutor | None = None,
+    job_queue: DurableJobQueue | None = None,
     bound_tools: Sequence[MCPBoundToolSpec] = (),
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
@@ -76,6 +77,7 @@ def get_tool_registry(
         scoped_memory=scoped_memory,
         conversations=conversations,
         sandbox_executor=sandbox_executor,
+        job_queue=job_queue,
         bound_tools=bound_tools,
     )
 
@@ -110,6 +112,7 @@ def _create_tool_registry(
     scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
     sandbox_executor: SandboxExecutor | None = None,
+    job_queue: DurableJobQueue | None = None,
     bound_tools: Sequence[MCPBoundToolSpec] = (),
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
@@ -283,16 +286,21 @@ def _create_tool_registry(
         )
 
     async def _background_task_handler(action: str, task_id: str = "") -> dict[str, Any]:
-        """Manage background tasks: submit, status, list."""
-        queue = get_task_queue()
+        """Read durable background-job state for the current owner/project."""
+        if context is None or job_queue is None:
+            return {"error": "Background jobs unavailable"}
         if action == "list":
-            return {"tasks": queue.list_tasks()}
+            return {
+                "tasks": await job_queue.list(
+                    context.user_id, project_id=context.project_id, limit=50
+                )
+            }
         if action == "status" and task_id:
-            status = queue.get_status(task_id)
-            if status is None:
-                return {"error": f"Task not found: {task_id}"}
+            status = await job_queue.get(context.user_id, context.project_id, task_id)
+            if status is None or status["project_id"] != context.project_id:
+                return {"error": "Task not found"}
             return status
-        return {"error": f"Unknown action: {action}. Use 'list' or 'status'."}
+        return {"error": "Unknown action. Use 'list' or 'status'."}
 
     registry.register(
         name="background_task",
@@ -403,6 +411,7 @@ async def chat(
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
+        job_queue=request.app.state.job_queue,
         bound_tools=bound_tools,
     )
 

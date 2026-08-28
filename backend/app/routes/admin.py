@@ -27,14 +27,17 @@ _start_time = time.time()
 async def detailed_health(request: Request) -> dict:
     """Detailed health check with service status."""
     uptime = time.time() - _start_time
+    worker = getattr(request.app.state, "job_worker_task", None)
+    worker_status = "up" if worker is not None and not worker.done() else "down"
     return {
-        "status": "healthy",
+        "status": "healthy" if worker_status == "up" else "degraded",
         "llm_model": request.app.state.settings.llm_model,
         "llm_provider": request.app.state.settings.llm_provider,
         "uptime_seconds": round(uptime, 2),
         "services": {
             "api": "up",
             "audit_logger": "up",
+            "background_job_worker": worker_status,
             "circuit_breakers": 1,
         },
     }

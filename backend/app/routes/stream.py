@@ -168,6 +168,7 @@ async def chat_stream_real(
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
+        job_queue=request.app.state.job_queue,
         bound_tools=bound_tools,
     )
     approval_broker: ApprovalBroker = request.app.state.approval_broker

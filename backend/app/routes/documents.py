@@ -132,6 +132,7 @@ async def query_documents(
         model=settings.llm_model,
         top_k=body.top_k,
         verifier=request.app.state.evidence_verifier,
+        delegation_envelopes=request.app.state.delegation_envelopes,
         verifier_model=settings.verifier_model,
         compliance=request.app.state.compliance,
         verifier_budget=(

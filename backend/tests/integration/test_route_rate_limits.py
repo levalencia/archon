@@ -108,7 +108,10 @@ def test_task_and_mcp_require_auth_and_are_limited_per_action(tmp_path) -> None:
     app = create_app(_settings(tmp_path, rate_limit_task_requests=1, rate_limit_mcp_requests=1))
     with TestClient(app, client=("192.0.2.30", 50000)) as client:
         assert client.get("/api/tasks").status_code == 401
-        assert client.post("/api/tasks/submit", json={"description": "x"}).status_code == 401
+        assert (
+            client.post("/api/tasks/submit", json={"kind": "echo", "payload": {}}).status_code
+            == 401
+        )
         assert client.get("/api/mcp/tools").status_code == 401
         assert (
             client.post(
@@ -121,9 +124,13 @@ def test_task_and_mcp_require_auth_and_are_limited_per_action(tmp_path) -> None:
         token = _register(client, "route-user")
         client.headers.update({"Authorization": f"Bearer {token}"})
 
-        submitted = client.post("/api/tasks/submit", json={"description": "allowed"})
-        assert submitted.status_code == 200
-        task_limited = client.post("/api/tasks/submit", json={"description": "blocked"})
+        submitted = client.post(
+            "/api/tasks/submit", json={"kind": "echo", "payload": {"value": "allowed"}}
+        )
+        assert submitted.status_code == 201
+        task_limited = client.post(
+            "/api/tasks/submit", json={"kind": "echo", "payload": {"value": "blocked"}}
+        )
         assert task_limited.status_code == 429
         assert "Retry-After" in task_limited.headers
         assert client.get("/api/tasks").status_code == 200

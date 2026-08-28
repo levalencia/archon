@@ -117,6 +117,7 @@ class Settings(BaseSettings):
     memory_keyring_json: SecretStr = SecretStr("")
     memory_active_key_version: int = Field(default=1, ge=1, le=255)
     memory_encryption_enabled: bool = True
+    delegation_signing_key: SecretStr = SecretStr("")
     admin_usernames: list[str] = ["admin"]
 
     # Rate Limiting
@@ -152,6 +153,14 @@ class Settings(BaseSettings):
                 "execution_docker_image must be an immutable sha256 registry digest "
                 "or local image ID"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_delegation_signing_key(self) -> Settings:
+        if self.verifier_enabled:
+            value = self.delegation_signing_key.get_secret_value().encode("utf-8")
+            if len(value) < 32:
+                raise ValueError("delegation signing key must contain at least 32 UTF-8 bytes")
         return self
 
     @model_validator(mode="after")

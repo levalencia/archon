@@ -1,5 +1,11 @@
 """Bounded verifier-child contracts."""
 
+from app.delegation.envelope import (
+    DelegationEnvelope,
+    DelegationEnvelopeService,
+    InvalidDelegationEnvelope,
+    derive_delegation_hmac_key,
+)
 from app.delegation.models import (
     MAX_CLAIMS,
     MAX_EVIDENCE_SLICES,
@@ -24,9 +30,15 @@ from app.delegation.service import (
     EvidenceVerifierSpecialist,
     TransientVerifierError,
     estimate_input_tokens,
+    issue_verifier_delegation,
+    verifier_delegation_context,
 )
 
 __all__ = [
+    "DelegationEnvelope",
+    "DelegationEnvelopeService",
+    "InvalidDelegationEnvelope",
+    "derive_delegation_hmac_key",
     "MAX_CLAIMS",
     "MAX_EVIDENCE_SLICES",
     "MAX_INPUT_TOKENS",
@@ -48,4 +60,6 @@ __all__ = [
     "EvidenceVerifierSpecialist",
     "TransientVerifierError",
     "estimate_input_tokens",
+    "issue_verifier_delegation",
+    "verifier_delegation_context",
 ]
