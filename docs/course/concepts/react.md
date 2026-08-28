@@ -61,10 +61,9 @@ Large serialized outputs emit progress chunks and are truncated before insertion
 
 ## Reflection terminology boundary
 
-The comment and historical [`test_tool_error_feedback.py`](../../../backend/tests/unit/test_tool_error_feedback.py) use “reflexion” for error feedback followed by a corrected retry.
-That proves a narrow recovery path, not a generic self-critique agent, rubric-based revision phase, learned reflection memory, or independent critic.
-Deterministic grounded-claim verification, one evidence-only verifier child, and post-run evaluation are separate mechanisms with different inputs and guarantees.
-Generic self-reflection is **not implemented**.
+The historical [`test_tool_error_feedback.py`](../../../backend/tests/unit/test_tool_error_feedback.py) uses “reflexion” for error feedback followed by a corrected retry. That proves only a narrow recovery path.
+
+Archon now also has optional **generic final-answer reflection** through [`BoundedReflectionService`](../../../backend/app/reflection/service.py): a tool-free structured critique and at most one bounded revision. It is invoked only after a normal unstructured final-answer draft, is disabled by default, and has no recursive loop or learned reflection memory. Deterministic grounded-claim verification, verifier delegation, and post-run evaluation remain separate mechanisms.
 
 ## Behavior-focused tests—and their limits
 
@@ -118,7 +117,7 @@ Do not label one corrected fixture as “self-healing” or “self-reflective.�
 
 ## 30-second interview answer
 
-“ReAct is the action-observation loop, not hidden chain-of-thought. Archon's custom `AgentRuntime` sends typed history and tool definitions, receives native `ToolCall`s, snapshots and authorizes them, executes through the registry, appends bounded `Role.TOOL` observations, and repeats under token, time, iteration, and call budgets. Errors can become retry hints, but that is narrow feedback. Generic critique/revision self-reflection is not implemented.”
+“ReAct is the action-observation loop, not hidden chain-of-thought. Archon's custom `AgentRuntime` sends typed history and tool definitions, receives native `ToolCall`s, snapshots and authorizes them, executes through the registry, appends bounded `Role.TOOL` observations, and repeats under token, time, iteration, and call budgets. Tool errors can become retry hints, which is narrow feedback. Separately, optional final-answer reflection performs one tool-free structured critique and at most one bounded revision; it is disabled by default and is not a recursive agent or learned memory.”
 
 ## Self-check questions
 

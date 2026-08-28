@@ -1,106 +1,120 @@
 # Generic self-reflection
 
-> **Implementation status:** `not-implemented`
-> **Status boundary:** Archon feeds tool errors back into its bounded ReAct loop and can run post-run evaluation or a verifier child, but it has no general reflection memory, critique/revision contract, or measured reflection policy.
-> **Reviewed revision:** `6e3e13f`
+> **Implementation status:** `implemented`
+> **Status boundary:** Archon can optionally critique a tool-free final-answer draft and perform at most one bounded revision. It does not expose chain-of-thought, create recursive agents, or maintain learned reflection memory.
+> **Reviewed revision:** `eb5a448`
 > **Used by module:** [Module 03-react-loop](../modules/03-react-loop/README.md)
 > **Catalog ID:** `generic-self-reflection`
 
 ## Beginner explanation
 
-Generic self-reflection asks an agent to critique its own reasoning or result and revise it under a defined contract. Retrying after a tool error is local error recovery; a separate verifier is delegation; scoring after completion is evaluation. None alone proves a general reflection system.
+Self-reflection is a second, deliberately bounded look at a proposed final answer. Archon first produces the normal draft. If reflection is enabled, a tool-free critic returns a small structured verdict: keep or revise, issue codes, validated `request:L#` / `draft:L#` evidence locations, and confidence. A revise verdict permits at most one tool-free revision.
 
-## Problem and mental model
+This is different from ReAct tool-error feedback, verifier delegation, and post-run scoring.
 
-Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.
-
-## Architecture and components
+## Architecture
 
 ```mermaid
 flowchart LR
-    Draft -.-> Critic[Reflection pass]
-    Critic -.-> Decision{Revise?}
-    Decision -.-> Revision
-    Revision -.-> Eval[Measured outcome]
-    ReflectionMemory[Bounded reflection memory] -.-> Critic
-    Note[Expected architecture only] -.-> Critic
+    Draft[Final-answer draft] --> Guard{Reflection enabled and budget remains?}
+    Guard -- no --> Return[Return draft]
+    Guard -- yes --> Critic[Structured tool-free critique]
+    Critic --> Verdict{keep or revise}
+    Verdict -- keep --> Return
+    Verdict -- revise + revision budget --> Revision[One tool-free revision]
+    Revision --> Return2[Return revised answer]
+    Critic --> Events[Metadata-only HMAC-scoped events]
+    Revision --> Events
 ```
 
-## Startup and request sequence
+The critic and revision use `tools=()`. Reflection inherits the run deadline/token budget and adds its own input, output, time, revision, and priced cost limits. Provider calls are still wrapped by durable monetary accounting when that feature is enabled.
+
+## Runtime sequence
 
 ```mermaid
 sequenceDiagram
-    Runtime->>Critic: draft + allowed evidence + rubric
-    Critic-->>Runtime: structured critique
-    alt revision justified and budget remains
-      Runtime->>Runtime: produce one bounded revision
-    else stop
-      Runtime-->>Caller: original result + evidence
+    Runtime->>Provider: normal final-answer request
+    Provider-->>Runtime: draft
+    alt reflection disabled or structured caller response
+        Runtime-->>Caller: draft
+    else reflection enabled
+        Runtime->>Provider: critique contract, tools=()
+        Provider-->>Runtime: keep/revise verdict
+        alt keep, invalid verdict, limit, timeout, or ordinary provider error
+            Runtime-->>Caller: original draft
+        else revise and one revision remains
+            Runtime->>Provider: bounded revision, tools=()
+            Provider-->>Runtime: revised answer
+            Runtime-->>Caller: revision
+        end
     end
-    Note over Runtime,Critic: Not implemented
 ```
 
-## Archon implementation and source walkthrough
+A hard deadline detaches cancellation-delaying providers and returns immediately. Unknown or zero usage is raised to deterministic conservative token estimates. A provider response that ignores `max_tokens` is rejected and its estimated usage remains accounted. Durable monetary failures preserve the draft while using the existing `BUDGET_BLOCKED` and monetary stop reasons.
 
-This is an expected architecture, not a source walkthrough. The misleadingly named reflexion test proves tool-error feedback/retry only; no generic critique/revision lifecycle exists. The diagram and sequence define the boundary a future design would need; they do not imply scheduled work.
-
-### Source symbols
+## Code walkthrough
 
 | Source symbol | Role and boundary |
 |---|---|
-| None | No Archon implementation is claimed for this concept. |
+| [`ReflectionPolicy`](../../../backend/app/reflection/models.py) | Opt-in policy, one-revision maximum, token/time/priced-cost limits and rubric version. |
+| [`ReflectionVerdict`](../../../backend/app/reflection/models.py) | Closed structured verdict; evidence references are locations, not model text. |
+| [`BoundedReflectionService`](../../../backend/app/reflection/service.py) | Tool-free critique/revision, hard timeout, conservative usage, fail-safe draft retention and metadata-only events. |
+| [`AgentRuntime.run`](../../../backend/app/runtime/engine.py) | Invokes reflection only at the unstructured final-answer boundary and preserves normal run/budget semantics. |
+| [`measure_reflection_benefit`](../../../backend/app/reflection/measurement.py) | Scores a versioned recorded synthetic fixture; does not execute a provider or prove generalization. |
 
-### Tests
+Persisted reflection events include rubric/version, outcome, counts, bounded issue codes, validated location references, usage/cost, and owner/project/run-scoped HMAC fingerprints. Draft, critique, revision, prompts, and hidden reasoning are not persisted by the reflection event allowlist.
+
+## Tests and evidence
 
 | Test | Contract proved and limit |
 |---|---|
-| None | No implementation test is claimed; adjacent tests do not establish this concept. |
+| [`test_bounded_reflection.py`](../../../backend/tests/unit/test_bounded_reflection.py) | Disabled zero-call path, keep/revise, tool blocking, invalid verdict, hard deadline, conservative usage, HMAC privacy, budget propagation and monetary stop semantics against fakes/adversarial providers. |
+| [`test_reflection_benefit.py`](../../../backend/tests/integration/test_reflection_benefit.py) | Version/hash validation and deterministic scorer delta for a recorded synthetic fixture only. |
+| [`test_tool_error_feedback.py`](../../../backend/tests/unit/test_tool_error_feedback.py) | Narrow ReAct error feedback; explicitly not generic self-reflection. |
 
-### Evidence boundary
+The current recorded fixture reports a positive exact-match delta because its answers are hand-authored scorer examples. Its report explicitly states `recorded_synthetic_fixture`, `runtime_executed=false`, and `generalizes=false`. It is parser/scorer evidence—not model-quality evidence.
 
-There is no runtime evidence for this concept. Use the repository and current [implementation evidence](../../IMPLEMENTATION-EVIDENCE.md) to confirm the negative boundary; do not infer implementation from adjacent features.
+## Try it
 
-## Try it: bounded study exercise
+```bash
+cd backend
+pytest -q \
+  tests/unit/test_bounded_reflection.py \
+  tests/integration/test_reflection_benefit.py \
+  tests/unit/test_tool_error_feedback.py
+```
 
-Code-reading exercise: search the repository for the missing components named in the gap. Confirm that adjacent features do not satisfy them. No service should be started and no data should be changed.
+**Done criteria:** explain why disabled reflection makes zero extra calls; identify both tool-free calls; reproduce one hard limit; and distinguish synthetic scorer delta from live-provider benefit.
 
-**Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
+## Risks and trade-offs
 
-## Risks, failures, and trade-offs
-
-| Topic | Assessment |
+| Risk | Control and remaining limit |
 |---|---|
-| Principal risk | Unbounded reflection increases cost and latency and can amplify confident errors without independent evidence. |
-| Current gap/failure | The misleadingly named reflexion test proves tool-error feedback/retry only; no generic critique/revision lifecycle exists. |
-| Trade-off | Targeted verifier/evaluation steps are measurable; generic reflection is broader but harder to bound and validate. |
-| Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
+| Cost/latency amplification | Opt-in, one critique, at most one revision, hard deadline, token limits and priced local cost cap. Live provider latency is not yet measured. |
+| Confident self-reinforcement | Closed verdict and evidence locations reduce persistence risk but do not make the same model independent. |
+| Prompt/draft disclosure | Only scoped HMAC fingerprints and closed metadata persist. Provider processing still sees the draft by design. |
+| Provider ignores limits/usage | Conservative estimates and oversized-output rejection fail safe, but consumed upstream capacity cannot be undone. |
+| Recursive reflection | No recursive loop or reflection memory exists. |
 
-## Lab vs production
+## Lab versus production
 
-The status remains **not-implemented** at `6e3e13f`. Archon feeds tool errors back into its bounded ReAct loop and can run post-run evaluation or a verifier child, but it has no general reflection memory, critique/revision contract, or measured reflection policy. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+Implemented and locally tested means the runtime wiring and hard boundaries exist. It does not prove that reflection improves answers for real providers, domains, or production traffic. No live-provider reflection benchmark, public deployment, production SLO, or learned reflection memory is claimed.
 
 ## Interview answer
 
-> Generic self-reflection asks an agent to critique its own reasoning or result and revise it under a defined contract. Retrying after a tool error is local error recovery; a separate verifier is delegation; scoring after completion is evaluation. None alone proves a general reflection system. In Archon the honest status is **not-implemented**: Archon feeds tool errors back into its bounded ReAct loop and can run post-run evaluation or a verifier child, but it has no general reflection memory, critique/revision contract, or measured reflection policy.
+> Archon implements optional final-answer reflection as a bounded runtime phase, not another autonomous agent. The critic and optional single revision have no tools, use a strict structured verdict, inherit the run budget, add hard time/token/priced-cost limits, and persist only HMAC-scoped metadata. Failures retain the draft; monetary failures preserve established stop semantics. We have deterministic adversarial tests and a clearly labeled synthetic scorer fixture, but no claim that reflection improves live-provider quality yet.
 
 ## Self-check
 
-1. What problem does this concept solve, and what nearby concept is it not?
-2. Trace the diagram’s trust boundary and failure path.
-3. Which mapped symbol/test proves current behavior, or why are the lists empty?
-4. What exact gap prevents a stronger status?
-5. Which risk would you test first before production use?
+1. Why is tool-error feedback not generic reflection?
+2. Which paths retain the original draft?
+3. How does the timeout remain hard when provider cancellation cleanup stalls?
+4. Why are `request:L#` and `draft:L#` safer than free-form evidence text?
+5. What does the synthetic fixture prove, and what does it not prove?
 
-<details>
-<summary>Answer guide</summary>
+## Related concepts
 
-A good answer names the contract in the beginner explanation, follows the sequence, cites the exact table entry (or the explicit absence), repeats the status boundary, and chooses a risk from the table rather than claiming unrecorded behavior.
-
-</details>
-
-## Related concepts and modules
-
-- **Module:** [Module 03-react-loop](../modules/03-react-loop/README.md)
-- **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
-- **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)
+- [ReAct loop](react.md)
+- [Evaluation harness](evaluation-harness.md)
+- [Provider capability parity](provider-adapters-capability-parity.md)
+- [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)

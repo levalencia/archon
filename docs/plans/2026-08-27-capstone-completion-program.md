@@ -179,6 +179,8 @@ flowchart TD
 
 **Objective:** Add real, optional self-reflection without creating unbounded recursive loops.
 
+**Status:** Complete locally. Final-answer reflection is opt-in, tool-free, limited to one critique and at most one revision, hard-bounded by inherited and reflection-specific budgets, privacy-safe in durable events, adversarially tested, and independently approved. The recorded synthetic fixture is scorer evidence only; live-provider benefit is deferred to Slice 9.
+
 **Files:**
 - Create: `backend/app/reflection/models.py`
 - Create: `backend/app/reflection/service.py`

@@ -4,12 +4,12 @@
     {
       "id": "generic-self-reflection",
       "owner_module": "docs/course/modules/03-react-loop/README.md",
-      "status": "not-implemented",
-      "dimensions": {"exists": "no", "wired": "no", "tested": "no", "observed": "no", "ui": "no", "live_provider": "na", "deployed": "no"},
-      "sources": [],
-      "tests": [],
-      "evidence": ["docs/course/concepts/generic-self-reflection.md"],
-      "limitation": "Tool-error feedback, deterministic verification, verifier delegation, and post-run evaluation do not provide a general critique/revision memory or measured reflection policy."
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "no", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/reflection/models.py", "backend/app/reflection/service.py", "backend/app/reflection/measurement.py", "backend/app/runtime/engine.py", "backend/app/runtime/events.py", "backend/app/services/run_ledger.py"],
+      "tests": ["backend/tests/unit/test_bounded_reflection.py", "backend/tests/integration/test_reflection_benefit.py", "backend/tests/unit/test_tool_error_feedback.py"],
+      "evidence": ["docs/course/concepts/generic-self-reflection.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "limitation": "Optional final-answer critique and one revision are hard-bounded and metadata-only; the measured delta is a recorded synthetic scorer fixture, not live-provider quality or generalization evidence, and no learned reflection memory exists."
     },
     {
       "id": "run-export-share",

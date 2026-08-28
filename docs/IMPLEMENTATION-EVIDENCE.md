@@ -127,6 +127,14 @@ Sync and SSE runs persist a metadata-only context manifest after the run and cur
 
 Encrypted memory supports versioned keyrings, row-version decryption, active-version writes, bounded transactional re-encryption, interruption-safe resume, owner/project-scoped status and rotation APIs, startup validation, a durable global active-generation fence for updated writers, and a responsive rotation-status panel. Migration `20260827_11` forward-migrates databases already stamped at revision 10. Retirement additionally requires the explicit pre-fence writer drain documented in `docs/operations/memory-key-rotation.md`; external KMS integration and automatic expiry are not claimed.
 
+### Bounded final-answer reflection
+
+Reflection is disabled by default and runs only on an unstructured final-answer draft. The critic and optional single revision receive no tools. Reflection inherits the run deadline/token budget and adds rubric-versioned input/output/time/revision/priced-cost limits. The hard timeout returns without waiting for cancellation-delaying provider cleanup; zero/unknown usage receives conservative estimates; oversized responses fail safe; monetary failures preserve the draft and established budget stop semantics.
+
+Persisted events contain closed metadata, bounded issue codes, validated `request:L#` / `draft:L#` locations, usage/cost and owner/project/run-scoped HMAC fingerprints. Draft, critique, revision, prompt text and hidden reasoning are excluded. Focused adversarial acceptance passed 35 tests at Mac revision `eb5a448`, and independent blocker review returned `APPROVED`.
+
+`reflection-benefit-v1.json` is explicitly a `recorded_synthetic_fixture`: its report says `runtime_executed=false` and `generalizes=false`. Its deterministic score delta tests the fixture loader/scorer only; it is not evidence that a live model improves under reflection.
+
 ## Defensible summary
 
 Archon is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.

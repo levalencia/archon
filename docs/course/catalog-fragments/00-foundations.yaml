@@ -87,13 +87,20 @@
 
 - id: generic-self-reflection
   title: Generic critique and revision self-reflection
-  status: not-implemented
+  status: implemented
   module: docs/course/modules/03-react-loop/README.md
-  sources: []
-  tests: []
+  sources:
+    - backend/app/reflection/models.py
+    - backend/app/reflection/service.py
+    - backend/app/reflection/measurement.py
+    - backend/app/runtime/engine.py
+  tests:
+    - backend/tests/unit/test_bounded_reflection.py
+    - backend/tests/integration/test_reflection_benefit.py
+    - backend/tests/unit/test_tool_error_feedback.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: Distinct from ReAct error feedback, deterministic verification, verifier delegation, and post-run evaluation.
+  limitations: Bounded local final-answer reflection is implemented; the recorded synthetic fixture does not prove live-provider benefit or generalization, and no learned reflection memory exists.
 
 - id: tool-contracts
   title: Secure typed tool contracts

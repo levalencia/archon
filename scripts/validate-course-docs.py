@@ -239,13 +239,17 @@ def _validate_catalog(repo_root: Path, course_root: Path, issues: list[str]) -> 
         limitation = entry.fields.get("limitations")
         if not isinstance(limitation, str) or not limitation.strip():
             issues.append(f"{prefix}: limitations are required")
-    reflection_is_honest = any(
-        entry.identifier == "generic-self-reflection"
-        and entry.fields.get("status") == "not-implemented"
-        for entry in entries
+    reflection = next(
+        (entry for entry in entries if entry.identifier == "generic-self-reflection"), None
     )
-    if not reflection_is_honest:
-        issues.append("catalog must mark generic-self-reflection as not-implemented")
+    reflection_is_evidenced = bool(
+        reflection is not None
+        and reflection.fields.get("status") == "implemented"
+        and reflection.fields.get("sources")
+        and reflection.fields.get("tests")
+    )
+    if not reflection_is_evidenced:
+        issues.append("catalog must evidence implemented generic-self-reflection")
 
 
 def validate_repository(repo_root: Path) -> list[str]:

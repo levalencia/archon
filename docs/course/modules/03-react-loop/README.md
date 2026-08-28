@@ -1,7 +1,7 @@
 # 03 — ReAct loop, budgets, and stop reasons
 
 > **Documentation status:** Draft
-> **Capability status:** ReAct-style tool loop implemented; generic self-reflection is **not implemented**
+> **Capability status:** ReAct-style tool loop and optional bounded final-answer reflection are implemented; they remain separate mechanisms
 
 ## Outcomes and prerequisites
 
@@ -9,7 +9,7 @@ You will distinguish reasoning/action/observation iteration from reflection, ver
 
 ## Mental model
 
-ReAct alternates model decisions and tool observations. Archon does not expose hidden chain-of-thought; it handles provider-native calls and visible observations. A tool error can be returned to the model for another bounded attempt. That is local error feedback—not a general critique/rewrite/reflection subsystem. The evidence-only verifier child and recorded-run evaluations are separate features.
+ReAct alternates model decisions and tool observations. Archon does not expose hidden chain-of-thought; it handles provider-native calls and visible observations. A tool error can be returned to the model for another bounded attempt. That is local error feedback—not final-answer reflection. Separately, optional [`BoundedReflectionService`](../../../../backend/app/reflection/service.py) can critique a completed unstructured draft without tools and perform at most one hard-bounded revision. The evidence-only verifier child and recorded-run evaluations are also separate features.
 
 ```mermaid
 flowchart TD
@@ -40,7 +40,7 @@ sequenceDiagram
 
 ## Source, tests, and evidence
 
-Inspect [`AgentRuntime.run`](../../../../backend/app/runtime/engine.py), especially duplicate-call tracking, `_within_deadline`, `_finalize`, and `_stop`; [`RuntimeBudget` and `StopReason`](../../../../backend/app/runtime/engine.py); and typed [`Role.TOOL`](../../../../backend/app/runtime/models.py). Tests: [`test_runtime_v2.py`](../../../../backend/tests/unit/test_runtime_v2.py), [`test_runtime_budget_regressions.py`](../../../../backend/tests/unit/test_runtime_budget_regressions.py), and [`test_tool_error_feedback.py`](../../../../backend/tests/unit/test_tool_error_feedback.py). The last filename uses historical “reflexion” terminology, but its tests prove only tool-error feedback and retry. See [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md#capability-matrix).
+Inspect [`AgentRuntime.run`](../../../../backend/app/runtime/engine.py), especially duplicate-call tracking, `_within_deadline`, `_finalize`, `_stop`, and the final-answer reflection boundary; [`RuntimeBudget` and `StopReason`](../../../../backend/app/runtime/engine.py); typed [`Role.TOOL`](../../../../backend/app/runtime/models.py); and [`BoundedReflectionService`](../../../../backend/app/reflection/service.py). Tests: [`test_runtime_v2.py`](../../../../backend/tests/unit/test_runtime_v2.py), [`test_runtime_budget_regressions.py`](../../../../backend/tests/unit/test_runtime_budget_regressions.py), [`test_bounded_reflection.py`](../../../../backend/tests/unit/test_bounded_reflection.py), and [`test_tool_error_feedback.py`](../../../../backend/tests/unit/test_tool_error_feedback.py). The last filename uses historical “reflexion” terminology, but its tests prove only tool-error feedback and retry. See [implementation evidence](../../../IMPLEMENTATION-EVIDENCE.md#capability-matrix).
 
 ## Bounded-loop exercise
 
