@@ -2,7 +2,10 @@ FROM python:3.11-slim@sha256:be1575ed968de893bd54f4c56315ff7c4736ce522c1bca08fd5
 
 WORKDIR /runner
 COPY sandbox_runner /runner/sandbox_runner
-RUN groupadd --system --gid 10001 archon \
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends libseccomp2 \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 archon \
  && useradd --system --uid 10001 --gid archon --home-dir /nonexistent archon \
  && mkdir -p /run/archon-sandbox \
  && chown archon:archon /run/archon-sandbox

@@ -21,6 +21,12 @@ from app.tools.sandbox import SandboxResult
 from app.tools.sandbox_client import SandboxClientConfig, SandboxRunnerClient
 
 
+def test_runner_image_installs_seccomp_runtime() -> None:
+    dockerfile = (Path(__file__).parents[3] / "sandbox_runner" / "Dockerfile").read_text()
+    assert "apt-get install --yes --no-install-recommends libseccomp2" in dockerfile
+    assert "rm -rf /var/lib/apt/lists/*" in dockerfile
+
+
 def short_socket(name: str) -> Path:
     return Path("/tmp") / f"archon-{name}-{uuid.uuid4().hex[:8]}.sock"
 
