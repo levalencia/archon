@@ -154,9 +154,7 @@ async def test_revise_is_exactly_one_critique_and_one_tool_free_revision() -> No
             _response("must never be consumed"),
         ]
     )
-    result = await _service(provider).reflect(
-        [Message(Role.USER, "question")], "wrong draft"
-    )
+    result = await _service(provider).reflect([Message(Role.USER, "question")], "wrong draft")
 
     assert result.content == "corrected final answer"
     assert result.outcome is ReflectionOutcomeCode.REVISED

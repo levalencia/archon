@@ -395,9 +395,7 @@ class AgentRuntime:
                             response_content,
                             iteration=iterations,
                             timeout_seconds=remaining_seconds,
-                            max_total_tokens=max(
-                                0, self._budget.max_tokens - usage.total_tokens
-                            ),
+                            max_total_tokens=max(0, self._budget.max_tokens - usage.total_tokens),
                         )
                         response_content = reflection.content
                         usage += reflection.usage

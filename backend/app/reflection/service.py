@@ -354,9 +354,7 @@ class BoundedReflectionService:
                 "rubric_id": self._policy.rubric_id,
                 "rubric_version": self._policy.rubric_version,
                 "draft_hash": _digest(self._hash_key, self._hash_scope, "draft", draft),
-                "selected_hash": _digest(
-                    self._hash_key, self._hash_scope, "selected", selected
-                ),
+                "selected_hash": _digest(self._hash_key, self._hash_scope, "selected", selected),
                 "outcome": outcome.value,
                 "calls": calls,
                 "revisions": revisions,

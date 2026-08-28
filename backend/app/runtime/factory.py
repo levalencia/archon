@@ -154,7 +154,5 @@ def create_chat_runtime(
             output_cost_per_million_usd=settings.reflection_output_cost_per_million_usd,
         ),
         reflection_hash_key=derive_reflection_hmac_key(settings.secret_key),
-        reflection_hash_scope="\0".join(
-            (context.user_id, context.project_id, context.run_id)
-        ),
+        reflection_hash_scope="\0".join((context.user_id, context.project_id, context.run_id)),
     )
