@@ -334,6 +334,12 @@ def test_report_secret_scanner_and_atomic_owner_only_permissions(
     linked_parent.symlink_to(real_parent, target_is_directory=True)
     with pytest.raises(ValueError, match="invalid report parent"):
         write_report(linked_parent / "report.json", report)
+    fifo = tmp_path / "report.fifo"
+    os.mkfifo(fifo)
+    started = time.monotonic()
+    with pytest.raises(ValueError, match="regular file"):
+        read_report(fifo)
+    assert time.monotonic() - started < 1
     monkeypatch.setattr(acceptance_support, "MAX_REPORT_BYTES", 10)
     with pytest.raises(ValueError, match="size limit"):
         write_report(target, report)

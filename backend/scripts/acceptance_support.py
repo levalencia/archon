@@ -423,7 +423,13 @@ def read_report(path: str | Path) -> dict[str, Any]:
     parent_fd, name = _secure_parent(path)
     descriptor: int | None = None
     try:
-        descriptor = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=parent_fd)
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+            dir_fd=parent_fd,
+        )
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError("report artifact must be a regular file")
         payload = os.read(descriptor, MAX_REPORT_BYTES + 1)
         if len(payload) > MAX_REPORT_BYTES:
             raise ValueError("report exceeds size limit")
