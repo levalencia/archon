@@ -374,6 +374,7 @@ async def test_monetary_failure_reaches_runtime_stop_semantics() -> None:
     result = await runtime.run([Message(Role.USER, "question")])
 
     assert result.stop_reason.value == "monetary_budget_exhausted"
+    assert result.content == "draft"
     assert any(event.kind is AgentEventKind.BUDGET_BLOCKED for event in sink.events)
 
 

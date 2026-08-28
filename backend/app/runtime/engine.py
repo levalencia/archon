@@ -386,6 +386,7 @@ class AgentRuntime:
                             f"structured_output_invalid:{error.code}",
                         )
                 if response_content:
+                    content = response_content
                     if (
                         not tool_calls
                         and response_contract is None
@@ -716,6 +717,19 @@ class AgentRuntime:
         except (TimeoutError, _RuntimeDeadlineExceededError):
             return await self._stop(
                 StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
+            )
+        except (
+            ModelBudgetExhausted,
+            DuplicateModelCharge,
+            IndeterminateModelCharge,
+            DurableModelChargeStateError,
+        ) as error:
+            return await self._stop_for_budget_error(
+                error,
+                content=content,
+                iterations=iterations,
+                calls=calls,
+                usage=usage,
             )
         except Exception as error:
             return await self._stop(
