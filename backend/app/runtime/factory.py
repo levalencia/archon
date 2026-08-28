@@ -9,6 +9,8 @@ from typing import Any
 
 from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.runtime_events import CompositeEventSink
+from app.reflection.models import ReflectionPolicy
+from app.reflection.service import derive_reflection_hmac_key
 from app.runtime.effect_executor import DurableEffectToolExecutor, EffectRunContext
 from app.runtime.engine import AgentRuntime, RuntimeBudget
 from app.runtime.events import EventSink
@@ -139,4 +141,20 @@ def create_chat_runtime(
         authorizer=authorizer,
         approval_timeout_seconds=settings.approval_timeout_seconds,
         result_recorder=result_recorder,
+        reflection_policy=ReflectionPolicy(
+            enabled=settings.reflection_enabled,
+            rubric_id=settings.reflection_rubric_id,
+            rubric_version=settings.reflection_rubric_version,
+            max_revisions=settings.reflection_max_revisions,
+            max_input_tokens=settings.reflection_input_tokens,
+            max_output_tokens=settings.reflection_output_tokens,
+            max_seconds=settings.reflection_timeout_seconds,
+            max_cost_usd=settings.reflection_max_cost_usd,
+            input_cost_per_million_usd=settings.reflection_input_cost_per_million_usd,
+            output_cost_per_million_usd=settings.reflection_output_cost_per_million_usd,
+        ),
+        reflection_hash_key=derive_reflection_hmac_key(settings.secret_key),
+        reflection_hash_scope="\0".join(
+            (context.user_id, context.project_id, context.run_id)
+        ),
     )

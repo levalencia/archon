@@ -31,6 +31,9 @@ class AgentEventKind(StrEnum):
     GROUNDED_ANSWER = "grounded_answer"
     DELEGATION_REQUESTED = "delegation_requested"
     DELEGATION_COMPLETED = "delegation_completed"
+    REFLECTION_STARTED = "reflection_started"
+    REFLECTION_VERDICT = "reflection_verdict"
+    REFLECTION_COMPLETED = "reflection_completed"
     RUN_STOPPED = "run_stopped"
 
 

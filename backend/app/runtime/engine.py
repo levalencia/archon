@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, TypeVar
 
+from app.reflection.models import ReflectionPolicy
+from app.reflection.service import BoundedReflectionService
 from app.runtime.capabilities import (
     ProviderCapabilities,
     UnsupportedProviderCapability,
@@ -174,6 +176,9 @@ class AgentRuntime:
         authorizer: ToolAuthorizer | None = None,
         approval_timeout_seconds: float = 30.0,
         result_recorder: ResultRecorder | None = None,
+        reflection_policy: ReflectionPolicy | None = None,
+        reflection_hash_key: bytes | None = None,
+        reflection_hash_scope: str = "",
     ) -> None:
         if approval_timeout_seconds <= 0:
             raise ValueError("approval_timeout_seconds must be positive")
@@ -187,6 +192,15 @@ class AgentRuntime:
         self._authorizer = authorizer
         self._approval_timeout_seconds = approval_timeout_seconds
         self._result_recorder = result_recorder
+        self._reflection_policy = reflection_policy or ReflectionPolicy()
+        self._reflection = BoundedReflectionService(
+            model,
+            self._reflection_policy,
+            events=self._events,
+            clock=clock,
+            hash_key=reflection_hash_key,
+            hash_scope=reflection_hash_scope,
+        )
 
     async def run(
         self,
@@ -368,6 +382,25 @@ class AgentRuntime:
                             f"structured_output_invalid:{error.code}",
                         )
                 if response_content:
+                    if (
+                        not tool_calls
+                        and response_contract is None
+                        and self._reflection_policy.enabled
+                    ):
+                        remaining_seconds = max(
+                            0.0, self._budget.max_seconds - (self._clock() - started_at)
+                        )
+                        reflection = await self._reflection.reflect(
+                            history,
+                            response_content,
+                            iteration=iterations,
+                            timeout_seconds=remaining_seconds,
+                            max_total_tokens=max(
+                                0, self._budget.max_tokens - usage.total_tokens
+                            ),
+                        )
+                        response_content = reflection.content
+                        usage += reflection.usage
                     content = response_content
                     # Text accompanying tool calls is progress, not the final answer.
                     event_kind = (

@@ -117,6 +117,35 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
             "total_tokens",
         }
     ),
+    AgentEventKind.REFLECTION_STARTED.value: frozenset(
+        {"rubric_id", "rubric_version", "draft_hash", "max_revisions"}
+    ),
+    AgentEventKind.REFLECTION_VERDICT.value: frozenset(
+        {
+            "rubric_id",
+            "rubric_version",
+            "draft_hash",
+            "critique_hash",
+            "verdict",
+            "issue_codes",
+            "evidence_refs",
+            "confidence",
+        }
+    ),
+    AgentEventKind.REFLECTION_COMPLETED.value: frozenset(
+        {
+            "rubric_id",
+            "rubric_version",
+            "draft_hash",
+            "selected_hash",
+            "outcome",
+            "calls",
+            "revisions",
+            "input_tokens",
+            "output_tokens",
+            "cost_microusd",
+        }
+    ),
     AgentEventKind.RUN_STOPPED.value: frozenset(
         {"reason", "error", "cache_read_input_tokens", "cache_write_input_tokens"}
     ),

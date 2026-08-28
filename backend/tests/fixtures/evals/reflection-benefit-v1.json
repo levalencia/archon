@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "dataset_id": "archon-reflection-benefit",
+  "version": "1.0.0",
+  "content_hash": "e1e27cde001e921587a4a02dc626a319bc2addaa2521ff2c3b266d07c8e6223b",
+  "cases": [
+    {
+      "key": "arithmetic-qualification",
+      "prompt": "State the sum of 17 and 25 as a complete sentence.",
+      "expected_answer": "The sum of 17 and 25 is 42.",
+      "baseline_answer": "The sum is 41.",
+      "reflected_answer": "The sum of 17 and 25 is 42."
+    },
+    {
+      "key": "instruction-following",
+      "prompt": "Reply with exactly: bounded reflection",
+      "expected_answer": "bounded reflection",
+      "baseline_answer": "Here is the answer: bounded reflection",
+      "reflected_answer": "bounded reflection"
+    },
+    {
+      "key": "already-correct",
+      "prompt": "Reply with exactly: keep",
+      "expected_answer": "keep",
+      "baseline_answer": "keep",
+      "reflected_answer": "keep"
+    }
+  ]
+}

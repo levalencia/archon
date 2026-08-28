@@ -52,6 +52,22 @@ class Settings(BaseSettings):
     verifier_timeout_seconds: float = Field(default=10.0, ge=0.1, le=60.0)
     verifier_retries: int = Field(default=0, ge=0, le=1)
 
+    # Optional final-answer reflection (distinct from tool-error feedback and verification)
+    reflection_enabled: bool = False
+    reflection_rubric_id: str = Field(
+        default="final-answer-quality", pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    )
+    reflection_rubric_version: str = Field(
+        default="1", pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    )
+    reflection_max_revisions: int = Field(default=1, ge=0, le=1)
+    reflection_input_tokens: int = Field(default=8_192, ge=1, le=65_536)
+    reflection_output_tokens: int = Field(default=2_048, ge=1, le=16_384)
+    reflection_timeout_seconds: float = Field(default=10.0, ge=0.05, le=60.0)
+    reflection_max_cost_usd: Decimal = Field(default=Decimal("0.05"), ge=0)
+    reflection_input_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)
+    reflection_output_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)
+
     # Embeddings
     embedding_provider: str = "mock"  # mock | openai
     embedding_model: str = "text-embedding-3-small"
