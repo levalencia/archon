@@ -79,7 +79,10 @@ services:
     cap_drop:
       - ALL
     security_opt:
+      # The runner daemon must be able to install the stricter per-child libseccomp filter.
+      # Backend startup fails closed unless that child-level probe succeeds.
       - no-new-privileges:true
+      - seccomp=unconfined
     pids_limit: 64
     mem_limit: 128m
     cpus: 0.50

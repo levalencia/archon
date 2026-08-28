@@ -72,6 +72,16 @@ def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
     assert 'ARCHON_EXECUTION_ENABLED: "true"' in text
     assert "ARCHON_EXECUTION_RUNNER_SOCKET" in text
     assert "docker.sock" not in text
+    services = _compose_config()["services"]
+    assert set(services["sandbox-runner"]["security_opt"]) == {
+        "no-new-privileges:true",
+        "seccomp=unconfined",
+    }
+    assert all(
+        "seccomp=unconfined" not in service.get("security_opt", [])
+        for name, service in services.items()
+        if name != "sandbox-runner"
+    )
     assert "OTEL_BSP_SCHEDULE_DELAY" in text
     assert "ARCHON_LOCAL_PLATFORM:-linux/amd64" in text
     assert text.count("@sha256:") >= 4
