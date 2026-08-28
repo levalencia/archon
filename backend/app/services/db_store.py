@@ -502,6 +502,7 @@ class EvalRunRow(Base):
         CheckConstraint("status IN ('running','completed','failed')", name="ck_eval_runs_status"),
         CheckConstraint("threshold >= 0 AND threshold <= 1", name="ck_eval_runs_threshold"),
         CheckConstraint("passed IS NULL OR passed IN (0,1)", name="ck_eval_runs_passed"),
+        UniqueConstraint("id", "owner_id", "project_id", name="uq_eval_runs_scope"),
         Index("ix_eval_runs_owner_project_created", "owner_id", "project_id", "created_at"),
     )
 
@@ -519,6 +520,19 @@ class EvalRunRow(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class EvalCohortRevisionRow(Base):
+    """Immutable runtime revision identity for an evaluation cohort."""
+
+    __tablename__ = "eval_cohort_revisions"
+    eval_run_id = Column(
+        String(36), ForeignKey("eval_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    model_revision = Column(String(255), nullable=False)
+    provider_revision = Column(String(255), nullable=False)
+    config_revision = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
 
 
 class EvalCaseResultRow(Base):
@@ -540,6 +554,143 @@ class EvalCaseResultRow(Base):
     score = Column(Float, nullable=False)
     metrics_json = Column(JSON, nullable=False)
     checks_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class EvalDriftReportRow(Base):
+    """Immutable metadata-only comparison of two evaluation cohorts."""
+
+    __tablename__ = "eval_drift_reports"
+    __table_args__ = (
+        UniqueConstraint("id", "owner_id", "project_id", name="uq_drift_scope"),
+        ForeignKeyConstraint(
+            ["baseline_eval_id", "owner_id", "project_id"],
+            ["eval_runs.id", "eval_runs.owner_id", "eval_runs.project_id"],
+            name="fk_drift_baseline_scope",
+        ),
+        ForeignKeyConstraint(
+            ["candidate_eval_id", "owner_id", "project_id"],
+            ["eval_runs.id", "eval_runs.owner_id", "eval_runs.project_id"],
+            name="fk_drift_candidate_scope",
+        ),
+        CheckConstraint("minimum_sample_size BETWEEN 2 AND 10000", name="ck_drift_min_sample"),
+        CheckConstraint(
+            "baseline_eval_id <> candidate_eval_id", name="ck_drift_distinct_evaluations"
+        ),
+        UniqueConstraint(
+            "owner_id",
+            "project_id",
+            "baseline_eval_id",
+            "candidate_eval_id",
+            "minimum_sample_size",
+            name="uq_drift_comparison",
+        ),
+        Index("ix_drift_owner_project_created", "owner_id", "project_id", "created_at"),
+    )
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    baseline_eval_id = Column(String(36), nullable=False)
+    candidate_eval_id = Column(String(36), nullable=False)
+    baseline_identity_json = Column(JSON, nullable=False)
+    candidate_identity_json = Column(JSON, nullable=False)
+    baseline_summary_json = Column(JSON, nullable=False)
+    candidate_summary_json = Column(JSON, nullable=False)
+    deltas_json = Column(JSON, nullable=False)
+    warnings_json = Column(JSON, nullable=False)
+    minimum_sample_size = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class OptimizationCandidateRow(Base):
+    """Bounded recommendation only; promotion records but never applies a revision."""
+
+    __tablename__ = "optimization_candidates"
+    __table_args__ = (
+        UniqueConstraint("id", "owner_id", "project_id", name="uq_candidate_scope"),
+        ForeignKeyConstraint(
+            ["baseline_eval_id", "owner_id", "project_id"],
+            ["eval_runs.id", "eval_runs.owner_id", "eval_runs.project_id"],
+            name="fk_candidate_baseline_scope",
+        ),
+        ForeignKeyConstraint(
+            ["candidate_eval_id", "owner_id", "project_id"],
+            ["eval_runs.id", "eval_runs.owner_id", "eval_runs.project_id"],
+            name="fk_candidate_evidence_scope",
+        ),
+        ForeignKeyConstraint(
+            ["drift_report_id", "owner_id", "project_id"],
+            [
+                "eval_drift_reports.id",
+                "eval_drift_reports.owner_id",
+                "eval_drift_reports.project_id",
+            ],
+            name="fk_candidate_drift_scope",
+        ),
+        CheckConstraint(
+            "candidate_type IN ('prompt','policy','retrieval','config')", name="ck_candidate_type"
+        ),
+        CheckConstraint(
+            "state IN ('proposed','approved','rejected','promoted','rolled_back')",
+            name="ck_candidate_state",
+        ),
+        CheckConstraint("version >= 1", name="ck_candidate_version"),
+        CheckConstraint(
+            "baseline_eval_id <> candidate_eval_id", name="ck_candidate_distinct_evaluations"
+        ),
+        UniqueConstraint("approval_id", name="uq_candidate_approval_single_use"),
+        Index("ix_candidates_owner_project_created", "owner_id", "project_id", "created_at"),
+    )
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    candidate_type = Column(String(20), nullable=False)
+    change_summary = Column(String(1000), nullable=False)
+    proposal_metadata_json = Column(JSON, nullable=False)
+    rollback_plan = Column(String(2000), nullable=False)
+    target_revision = Column(String(255), nullable=False)
+    baseline_eval_id = Column(String(36), nullable=False)
+    candidate_eval_id = Column(String(36), nullable=False)
+    drift_report_id = Column(String(36), nullable=True)
+    state = Column(String(20), nullable=False)
+    version = Column(Integer, nullable=False)
+    approval_id = Column(String(36), ForeignKey("approval_requests.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    promoted_at = Column(DateTime(timezone=True), nullable=True)
+    rolled_back_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class OptimizationCandidateEventRow(Base):
+    """Append-only candidate transition audit record."""
+
+    __tablename__ = "optimization_candidate_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["candidate_id", "owner_id", "project_id"],
+            [
+                "optimization_candidates.id",
+                "optimization_candidates.owner_id",
+                "optimization_candidates.project_id",
+            ],
+            name="fk_candidate_event_scope",
+        ),
+        CheckConstraint(
+            "event_type IN ('proposed','approved','rejected','promoted','rolled_back')",
+            name="ck_candidate_event_type",
+        ),
+        UniqueConstraint("candidate_id", "candidate_version", name="uq_candidate_event_version"),
+    )
+    id = Column(String(36), primary_key=True)
+    candidate_id = Column(String(36), nullable=False)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    event_type = Column(String(20), nullable=False)
+    from_state = Column(String(20), nullable=True)
+    to_state = Column(String(20), nullable=False)
+    candidate_version = Column(Integer, nullable=False)
+    approval_id = Column(String(36), nullable=True)
+    reason_code = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
 

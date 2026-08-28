@@ -14,7 +14,7 @@ from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services.db_store import EvalCaseResultRow, EvalRunRow
+from app.services.db_store import EvalCaseResultRow, EvalCohortRevisionRow, EvalRunRow
 
 JSONScalar: TypeAlias = str | int | float | bool | None
 JSONValue: TypeAlias = JSONScalar | list["JSONValue"] | dict[str, "JSONValue"]
@@ -42,6 +42,9 @@ class EvaluationRun:
     dataset_id: str
     dataset_version: str
     dataset_hash: str
+    model_revision: str
+    provider_revision: str
+    config_revision: str
     source_run_ids: tuple[str, ...]
     threshold: float
     status: str
@@ -99,6 +102,9 @@ class EvaluationRepository:
         dataset_hash: str,
         source_run_ids: Sequence[str],
         threshold: float,
+        model_revision: str = "unknown",
+        provider_revision: str = "unknown",
+        config_revision: str = "unknown",
     ) -> EvaluationRun:
         if not owner_id or not project_id or not dataset_id or not dataset_version:
             raise ValueError("evaluation scope and dataset identity are required")
@@ -109,6 +115,16 @@ class EvaluationRepository:
             raise ValueError("source_run_ids must be non-empty and unique")
         if not math.isfinite(threshold) or not 0 <= threshold <= 1:
             raise ValueError("threshold must be finite and between zero and one")
+        revisions = (model_revision, provider_revision, config_revision)
+        if any(
+            not isinstance(value, str)
+            or not value
+            or value != value.strip()
+            or len(value) > 255
+            or any(ord(character) < 32 for character in value)
+            for value in revisions
+        ):
+            raise ValueError("model, provider, and config revisions must be bounded identifiers")
         now = datetime.now(tz=UTC)
         row = EvalRunRow(
             id=str(uuid.uuid4()),
@@ -128,8 +144,18 @@ class EvaluationRepository:
         )
         async with self._sessions() as session:
             session.add(row)
+            await session.flush()
+            session.add(
+                EvalCohortRevisionRow(
+                    eval_run_id=row.id,
+                    model_revision=model_revision,
+                    provider_revision=provider_revision,
+                    config_revision=config_revision,
+                    created_at=now,
+                )
+            )
             await session.commit()
-        return self._run_model(row, ())
+        return self._run_model(row, (), (model_revision, provider_revision, config_revision))
 
     async def append_case(
         self,
@@ -231,6 +257,7 @@ class EvaluationRepository:
             )
             if row is None:
                 return None
+            revision = await session.get(EvalCohortRevisionRow, evaluation_id)
             case_rows = (
                 await session.scalars(
                     select(EvalCaseResultRow)
@@ -238,7 +265,20 @@ class EvaluationRepository:
                     .order_by(EvalCaseResultRow.created_at, EvalCaseResultRow.id)
                 )
             ).all()
-        return self._run_model(row, tuple(self._case_model(item) for item in case_rows))
+        revision_identity = (
+            ("unknown", "unknown", "unknown")
+            if revision is None
+            else (
+                str(revision.model_revision),
+                str(revision.provider_revision),
+                str(revision.config_revision),
+            )
+        )
+        return self._run_model(
+            row,
+            tuple(self._case_model(item) for item in case_rows),
+            revision_identity,
+        )
 
     async def list(
         self,
@@ -261,7 +301,25 @@ class EvaluationRepository:
                     .offset(offset)
                 )
             ).all()
-        return tuple(self._run_model(row, ()) for row in rows)
+            revisions = (
+                await session.scalars(
+                    select(EvalCohortRevisionRow).where(
+                        EvalCohortRevisionRow.eval_run_id.in_([str(row.id) for row in rows])
+                    )
+                )
+            ).all()
+        by_eval = {
+            str(item.eval_run_id): (
+                str(item.model_revision),
+                str(item.provider_revision),
+                str(item.config_revision),
+            )
+            for item in revisions
+        }
+        return tuple(
+            self._run_model(row, (), by_eval.get(str(row.id), ("unknown", "unknown", "unknown")))
+            for row in rows
+        )
 
     @staticmethod
     def _case_model(row: EvalCaseResultRow) -> EvaluationCaseResult:
@@ -278,7 +336,11 @@ class EvaluationRepository:
         )
 
     @staticmethod
-    def _run_model(row: EvalRunRow, cases: tuple[EvaluationCaseResult, ...]) -> EvaluationRun:
+    def _run_model(
+        row: EvalRunRow,
+        cases: tuple[EvaluationCaseResult, ...],
+        revision: tuple[str, str, str] = ("unknown", "unknown", "unknown"),
+    ) -> EvaluationRun:
         return EvaluationRun(
             id=str(row.id),
             owner_id=str(row.owner_id),
@@ -286,6 +348,9 @@ class EvaluationRepository:
             dataset_id=str(row.dataset_id),
             dataset_version=str(row.dataset_version),
             dataset_hash=str(row.dataset_hash),
+            model_revision=revision[0],
+            provider_revision=revision[1],
+            config_revision=revision[2],
             source_run_ids=tuple(cast(list[str], row.source_run_ids_json)),
             threshold=float(row.threshold),
             status=str(row.status),

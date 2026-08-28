@@ -8,10 +8,17 @@ import { listRuns } from '$lib/runs';
 import {
   EvaluationApiError,
   compareEvaluations,
+  createCandidate,
+  createDriftReport,
   createEvaluation,
+  decideCandidateApproval,
+  getDriftReport,
   getEvaluation,
+  isInsufficientSample,
+  listCandidates,
   listEvaluations,
   listRecordedRuns,
+  transitionCandidate,
 } from './evaluations';
 
 const fetchMock = vi.mocked(authenticatedFetch);
@@ -73,5 +80,68 @@ describe('recorded evaluation client', () => {
     const body = status === 409 ? { detail: 'not terminal' } : status === 422 ? { detail: 'invalid mapping' } : {};
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
     await expect(listEvaluations()).rejects.toEqual(expect.objectContaining<Partial<EvaluationApiError>>({ status, message: expect.stringContaining(message) }));
+  });
+});
+
+describe('drift and reviewed optimization client', () => {
+  const drift = {
+    id: 'drift/a', owner_id: 'owner-a', project_id: 'project/a', baseline_eval_id: 'base', candidate_eval_id: 'next',
+    baseline_identity: {}, candidate_identity: {}, baseline_summary: { sample_count: 2 }, candidate_summary: { sample_count: 2 },
+    deltas: { mean_score: -0.2 }, warnings: [{ metric: 'sample_count', direction: 'insufficient_sample', baseline_count: 2, candidate_count: 2, threshold: 20 }],
+    minimum_sample_size: 20, created_at: '2026-08-28T00:00:00Z',
+  };
+  const candidate = {
+    id: 'candidate/a', owner_id: 'owner-a', project_id: 'project/a', candidate_type: 'prompt', change_summary: 'Improve grounding',
+    proposal_metadata: {}, rollback_plan: 'Restore rev-1', target_revision: 'rev-2', baseline_eval_id: 'base', candidate_eval_id: 'next',
+    drift_report_id: 'drift/a', state: 'proposed', version: 7, approval_id: null, created_at: 'now', updated_at: 'now', promoted_at: null, rolled_back_at: null,
+  } as const;
+
+  it('uses project-scoped drift contracts and detects insufficient samples', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(drift), { status: 201 }));
+    const result = await createDriftReport({ projectId: 'project/a', baselineEvalId: 'base', candidateEvalId: 'next', minimumSampleSize: 20 });
+    expect(isInsufficientSample(result)).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/evals/drift');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ project_id: 'project/a', baseline_eval_id: 'base', candidate_eval_id: 'next', minimum_sample_size: 20 });
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(drift)));
+    await getDriftReport('drift/a', 'project/a');
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/evals/drift/drift%2Fa?project_id=project%2Fa');
+  });
+
+  it('lists and creates project-aware candidates without autonomously promoting', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [candidate] })));
+    expect(await listCandidates('project/a')).toHaveLength(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/evals/candidates?project_id=project%2Fa&limit=50');
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(candidate), { status: 201 }));
+    await createCandidate({ projectId: 'project/a', candidateType: 'prompt', changeSummary: 'Improve grounding', rollbackPlan: 'Restore rev-1', targetRevision: 'rev-2', baselineEvalId: 'base', candidateEvalId: 'next', driftReportId: 'drift/a' });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ project_id: 'project/a', candidate_type: 'prompt', change_summary: 'Improve grounding', proposal_metadata: {}, rollback_plan: 'Restore rev-1', target_revision: 'rev-2', baseline_eval_id: 'base', candidate_eval_id: 'next', drift_report_id: 'drift/a' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/promote'))).toBe(false);
+  });
+
+  it('binds the explicit human decision to the candidate run', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ approved: true })));
+    await decideCandidateApproval('tool/a', 'candidate/a', true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/chat/approve/tool%2Fa');
+    expect(JSON.parse(String(init?.body))).toEqual({ run_id: 'candidate/a', approved: true });
+  });
+
+  it('sends exact expected-version snapshots for every review action', async () => {
+    const cases = [
+      ['approval', {}, '/approval'], ['approve', { approvalId: 'receipt-1' }, '/approve'],
+      ['reject', { reasonCode: 'poor_quality' }, '/reject'], ['promote', {}, '/promote'], ['rollback', { reasonCode: 'regression' }, '/rollback'],
+    ] as const;
+    for (const [action, extra, suffix] of cases) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(action === 'approval' ? { approval_id: 'receipt-1', tool_call_id: 'tool-1' } : candidate)));
+      await transitionCandidate('candidate/a', action, { projectId: 'project/a', expectedVersion: 7, ...extra });
+      const [url, init] = fetchMock.mock.calls.at(-1)!;
+      expect(url).toBe(`/api/evals/candidates/candidate%2Fa${suffix}`);
+      expect(JSON.parse(String(init?.body))).toEqual({ project_id: 'project/a', expected_version: 7, ...(action === 'approve' ? { approval_id: 'receipt-1' } : {}), ...(action === 'reject' ? { reason_code: 'poor_quality' } : {}), ...(action === 'rollback' ? { reason_code: 'regression' } : {}) });
+    }
+  });
+
+  it('bounds server-controlled error detail', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'x'.repeat(1000) }), { status: 409 }));
+    await expect(listCandidates('p')).rejects.toMatchObject({ status: 409, message: 'x'.repeat(300) });
   });
 });

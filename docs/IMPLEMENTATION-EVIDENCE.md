@@ -159,6 +159,18 @@ The authenticated sync and SSE image paths reject malformed/oversized Data URIs,
 
 Linux acceptance executed 1,360 backend tests before the final focused lifecycle regressions, followed by 25 focused sandbox/multimodal/deployment tests and a real Docker Compose smoke covering executable seccomp preflight, runtime flags, backend-to-runner execution, stdin backpressure deadlines, network/control-socket denial, shared-volume write denial, detached-child cleanup, timeout, output truncation, and JSON-escape framing. The smoke removed containers, networks, and volumes. Mac candidate `ffeada9` passed 1,366 tests with one expected Linux-only seccomp skip, 35 Vitest tests, Svelte check with zero diagnostics, a production build, and 21 Playwright tests. Independent final blocker re-review at `be28e7f` returned `APPROVED`. The result is local container isolation, not VM-grade hostile multi-tenant certification, live-provider evidence, public deployment, or a production SLO.
 
+### Governed drift reports and reviewed optimization candidates
+
+Archon now compares owner/project-scoped, immutable evaluation cohorts using deterministic descriptive summaries for pass rate, score distribution, latency, token/cost, abstention, citation coverage, unsupported claims, and safety failures. Minimum sample checks and fixed warning thresholds are operational rules only; no p-value or statistical-significance claim is made.
+
+Recorded evaluation identities derive model/provider from the completed source-run ledger and an internal evaluator config revision; the public API cannot override them. Migration 14 backfills historical cohorts with deterministic legacy identity when source rows exist and explicit `legacy-*-unresolved` markers otherwise. Unresolved cohorts are rejected from drift comparison.
+
+Optimization candidates are bounded to prompt, policy, retrieval, or config revision records. Metadata uses per-type allowlists and deterministic PII/credential rejection. Exact human approval binds owner, project, candidate ID/version, target revision, purpose, and before/after evaluations. Promotion records the approved declared revision only: it does not modify runtime configuration, prompts, retrieval, providers, or model weights. Reject/approve closes alternate pending receipts; rollback remains a separate auditable transition.
+
+Migration-level integrity includes composite scope foreign keys and SQLite/PostgreSQL append-only/state-machine triggers. PostgreSQL real acceptance passed upgrade to head, downgrade to revision 13, and re-upgrade with four active S8.8 triggers. macOS acceptance passed 1,371 backend tests with one expected Linux-only seccomp skip. The final UI gate passed 44 Vitest tests, Svelte check with zero diagnostics, production build, and 21 Playwright tests after fixing an accessible-label collision. Independent blocker re-review of `cb76b1e` returned `APPROVED` for stale busy-state handling and atomic approval reservation.
+
+Limits: no autonomous optimization, no runtime mutation, no model training, no scheduler that generates candidates unattended, no live-provider quality claim, and no public deployment claim.
+
 ## Defensible summary
 
 Archon is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.

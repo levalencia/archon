@@ -181,12 +181,18 @@ def test_recorded_evaluation_api_persists_and_survives_restart(tmp_path) -> None
             )
         )
 
+        spoofed = {**request, "model_revision": "caller-spoof"}
+        assert api.post("/api/evals/runs", headers=headers, json=spoofed).status_code == 422
+
         created = api.post("/api/evals/runs", headers=headers, json=request)
         assert created.status_code == 201
         first = created.json()
         assert first["status"] == "completed"
         assert first["passed"] is True
         assert first["source_run_ids"] == [grounded_run_id, abstention_run_id]
+        assert first["model_revision"] == "recorded"
+        assert first["provider_revision"] == "recorded"
+        assert first["config_revision"] == "runtime-schema-v1"
         assert [case["case_key"] for case in first["cases"]] == [
             "grounded-citation",
             "safe-abstention",

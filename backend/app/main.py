@@ -25,6 +25,8 @@ from app.delegation import (
     EvidenceVerifierSpecialist,
     derive_delegation_hmac_key,
 )
+from app.eval.candidates import OptimizationCandidateService
+from app.eval.drift import DriftService
 from app.eval.persistence import EvaluationRepository
 from app.eval.service import EvaluationService
 from app.mcp.inventory import MCPInventoryService
@@ -160,6 +162,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.evaluation_service = EvaluationService(
         repository.runs, app.state.evaluation_repository
     )
+    app.state.drift_service = DriftService(
+        repository.session_factory, app.state.evaluation_repository
+    )
     app.state.run_exports = RunExportService(
         repository.session_factory, repository.runs, token_pepper=settings.secret_key
     )
@@ -222,10 +227,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         app.state.scoped_memory = None
         app.state.memory_key_rotation = None
+    app.state.approval_repository = ApprovalRepository(auth_store.session_factory)
     app.state.approval_broker = DurableApprovalBroker(
-        ApprovalRepository(auth_store.session_factory),
+        app.state.approval_repository,
         timeout_seconds=settings.approval_timeout_seconds,
         poll_interval_seconds=settings.approval_poll_interval_seconds,
+    )
+    app.state.optimization_candidates = OptimizationCandidateService(
+        repository.session_factory, app.state.approval_repository
     )
     app.state.artifacts = ArtifactStore(redactor)
     app.state.audit_logger = StructuredAuditLogger(redactor)

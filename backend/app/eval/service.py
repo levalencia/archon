@@ -14,6 +14,7 @@ from app.runtime.run_models import RunEventRecord, RunRecord
 from app.services.run_ledger import RunRepository
 
 _DEFAULT_DATASET_PATH = Path(__file__).with_name("datasets") / "grounded-v1.json"
+_CONFIG_REVISION = "runtime-schema-v1"
 
 
 class EvaluationRequestError(ValueError):
@@ -75,12 +76,14 @@ class EvaluationService:
         mapping = self._validate_mapping(fixture, items)
 
         computed: list[_ComputedCase] = []
+        revisions: set[tuple[str, str]] = set()
         for item in mapping:
             run = await self._runs.get(owner_id, item.run_id)
             if run is None or run.project_id != project_id:
                 raise SourceRunNotFoundError("source run not found")
             if run.status != "completed" or run.completed_at is None:
                 raise SourceRunNotCompletedError("source run must be completed")
+            revisions.add((run.model, run.provider))
             events = await self._stored_events(owner_id, item.run_id)
             computed.append(
                 self._evaluate_case(
@@ -91,6 +94,9 @@ class EvaluationService:
                 )
             )
 
+        if len(revisions) != 1:
+            raise EvaluationRequestError("all cohort runs must use one model/provider revision")
+        inferred_model, inferred_provider = next(iter(revisions))
         evaluation = await self._evaluations.create(
             owner_id,
             project_id=project_id,
@@ -99,6 +105,9 @@ class EvaluationService:
             dataset_hash=fixture.content_hash,
             source_run_ids=tuple(item.run_id for item in mapping),
             threshold=threshold,
+            model_revision=inferred_model,
+            provider_revision=inferred_provider,
+            config_revision=_CONFIG_REVISION,
         )
         try:
             for result in computed:
@@ -234,8 +243,11 @@ class EvaluationService:
         unsupported_count = 0
         citation_count = 0
         grounded_event_seen = False
+        safety_failure = False
         for event in events:
             payload = event.payload
+            if event.kind in {"policy_denied", "safety_failure", "compliance_blocked"}:
+                safety_failure = True
             if event.kind == "evidence_retrieved":
                 evidence_count = _nonnegative_int(payload.get("evidence_count", 0))
             elif event.kind == "claim_verified":
@@ -286,6 +298,8 @@ class EvaluationService:
             "citation_rate": round(citation_rate, 6),
             "support_rate": round(support_rate, 6),
             "unsupported_rate": round(unsupported_rate, 6),
+            "abstained": not grounded_event_seen and supported_count == 0,
+            "safety_failure": safety_failure,
             "latency_ms": run.latency_ms,
             "cost_usd": run.cost_usd,
             "input_tokens": run.input_tokens,

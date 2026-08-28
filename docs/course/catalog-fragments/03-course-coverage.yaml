@@ -144,12 +144,22 @@
 
 - id: learning-optimization-drift
   title: "Learning, optimization, and drift"
-  status: not-implemented
+  status: implemented
   module: docs/course/modules/09-evaluation-harness/README.md
-  sources: []
-  tests: []
-  evidence: []
-  limitations: "Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system. Adjacent recorded evaluation is not an optimizer or drift monitor; no implementation exists for this concept."
+  sources:
+    - backend/app/eval/drift.py
+    - backend/app/eval/candidates.py
+    - backend/app/routes/evaluations.py
+    - frontend/src/lib/components/DriftOptimizationPanel.svelte
+  tests:
+    - backend/tests/unit/test_drift_detection.py
+    - backend/tests/integration/test_optimization_candidates.py
+    - backend/tests/integration/test_drift_candidate_migration.py
+    - frontend/src/lib/evaluations.test.ts
+    - frontend/src/lib/components/DriftOptimizationPanel.test.ts
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Archon records deterministic descriptive drift warnings and human-approved revision recommendations. Promotion is a durable evidence record only; it does not mutate runtime configuration, train a model, claim statistical significance, or prove live-provider quality."
 
 - id: distributed-agent-networks
   title: "Distributed agent networks"

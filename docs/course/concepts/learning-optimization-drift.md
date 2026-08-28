@@ -1,103 +1,133 @@
-# Learning, optimization, and drift
+# Learning recommendations and drift governance
 
-> **Implementation status:** `not-implemented`
-> **Status boundary:** Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system.
-> **Reviewed revision:** `6e3e13f`
+> **Implementation status:** `implemented` for the verified local target
+> **Status boundary:** Archon compares immutable evaluation cohorts and records human-reviewed revision recommendations. It does not retrain models, rewrite prompts, or mutate runtime/production configuration automatically.
 > **Used by module:** [Module 09-evaluation-harness](../modules/09-evaluation-harness/README.md)
 > **Catalog ID:** `learning-optimization-drift`
 
 ## Beginner explanation
 
-Learning optimization uses measured outcomes to change prompts, models, retrieval, or policies. Drift is a change in inputs or performance over time. Running an evaluation once is measurement, not learning; changing production behavior requires versioning, review, and rollback.
+A trustworthy learning loop separates three things:
 
-## Problem and mental model
+1. **Measurement:** compare two versioned evaluation cohorts.
+2. **Recommendation:** describe a bounded prompt, policy, retrieval, or configuration revision.
+3. **Decision:** require a human-bound approval before recording promotion.
 
-Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.
+Archon implements those records and gates. “Promoted” means the recommendation was approved and recorded; it does **not** mean runtime configuration changed.
 
-## Architecture and components
+## Architecture
 
 ```mermaid
 flowchart LR
-    Runs --> Dataset[Versioned evaluation data]
-    Dataset --> Metrics
-    Metrics -. absent .-> Drift[Drift detector]
-    Metrics -. absent .-> Optimizer
-    Optimizer -. absent .-> Gate[Human/policy promotion gate]
-    Gate -. absent .-> Deployment
+    Runs[Recorded run ledger] --> EvalA[Baseline evaluation]
+    Runs --> EvalB[Candidate evaluation]
+    EvalA --> Drift[Deterministic drift report]
+    EvalB --> Drift
+    Drift --> Proposal[Optimization candidate]
+    Proposal --> Approval[Exact human approval receipt]
+    Approval --> Record[Promotion record]
+    Record -. no automatic mutation .-> Runtime[Runtime configuration]
+    Record --> Rollback[Auditable rollback record]
 ```
 
-## Startup and request sequence
+## Request and state sequence
+
+```mermaid
+stateDiagram-v2
+    [*] --> proposed
+    proposed --> approved: exact approved receipt + version fence
+    proposed --> rejected: reason code
+    approved --> promoted: explicit UI confirmation
+    approved --> rejected: reason code
+    promoted --> rolled_back: reason code
+```
 
 ```mermaid
 sequenceDiagram
-    Operator->>Metrics: compare time windows/candidates
-    Metrics->>Drift: detect significant change
-    Drift->>Gate: evidence + proposed change
-    Gate-->>Deployment: approve/reject/rollback
-    Note over Operator,Deployment: Expected architecture; not Archon code
+    Operator->>API: compare baseline and candidate evaluation IDs
+    API->>DriftStore: persist immutable identities, summaries, deltas, warnings
+    Operator->>API: create bounded revision candidate
+    Operator->>API: request approval for candidate/version/evidence hash
+    Operator->>ApprovalStore: explicit approve or deny
+    Operator->>API: record approved receipt
+    Operator->>API: record promotion
+    Note over API: No prompt/config/model mutation occurs
 ```
 
-## Archon implementation and source walkthrough
+## Implemented contracts
 
-This is an expected architecture, not a source walkthrough. Adjacent recorded evaluation is not an optimizer or drift monitor; no implementation exists for this concept. The diagram and sequence define the boundary a future design would need; they do not imply scheduled work.
+### Versioned cohort identity
 
-### Source symbols
+Each new evaluation stores:
 
-| Source symbol | Role and boundary |
+- dataset ID, version, and content hash;
+- model and provider derived from the completed source-run ledger;
+- an internal evaluator configuration revision.
+
+The public API cannot override model/provider/config revision. Migration 14 deterministically backfills historical evaluations with hashed legacy source-run identity and an explicit legacy config marker.
+
+### Deterministic drift
+
+`app.eval.drift` records descriptive summaries for:
+
+- pass rate and score distribution;
+- latency, tokens, and cost;
+- abstention and citation coverage;
+- unsupported claims and safety failures.
+
+Warnings use fixed thresholds and a minimum sample gate. They are operational warning rules—not p-values and not statistical-significance claims. Repeating an identical comparison returns the same durable report.
+
+### Reviewed candidate lifecycle
+
+Candidates are limited to `prompt`, `policy`, `retrieval`, or `config`. Metadata uses a closed per-type allowlist and bounded scalar/list values. Summaries, rollback plans, targets, and metadata reject detected PII or credentials.
+
+Approval binds:
+
+- owner and project;
+- candidate ID and exact candidate version;
+- target revision;
+- baseline and candidate evaluation IDs;
+- the `optimization_candidate_promotion` purpose.
+
+Optimistic updates and database constraints prevent replay and stale transitions. Composite foreign keys prevent cross-owner/project evidence links. Database triggers preserve cohort/report/event append-only semantics and candidate evidence immutability.
+
+## Source walkthrough
+
+| Source | Responsibility |
 |---|---|
-| None | No Archon implementation is claimed for this concept. |
+| `backend/app/eval/drift.py` | Deterministic summaries, thresholds, report persistence |
+| `backend/app/eval/candidates.py` | Candidate schemas, approval binding, fenced state machine |
+| `backend/app/eval/persistence.py` | Immutable evaluation and runtime revision identity |
+| `backend/alembic/versions/20260828_14_drift_and_candidates.py` | Backfill, scoped FKs, constraints, append-only guards |
+| `backend/app/routes/evaluations.py` | Authenticated, rate-limited, project-scoped APIs |
+| `frontend/src/lib/components/DriftOptimizationPanel.svelte` | Trends, reports, explicit review/promotion/rollback UI |
 
-### Tests
+## Tests and evidence
 
-| Test | Contract proved and limit |
+| Test | Contract |
 |---|---|
-| None | No implementation test is claimed; adjacent tests do not establish this concept. |
+| `tests/unit/test_drift_detection.py` | Stable metric summaries, minimum sample, deterministic warnings |
+| `tests/integration/test_optimization_candidates.py` | Scope, metadata rejection, approval binding, replay, promotion, rollback |
+| `tests/integration/test_drift_candidate_migration.py` | Backfill, migration roundtrip, composite FKs, append-only/state triggers |
+| `frontend/src/lib/evaluations.test.ts` | Project-scoped API payloads and exact version snapshots |
+| `frontend/src/lib/components/DriftOptimizationPanel.test.ts` | Human decision precedes approval state transition |
 
-### Evidence boundary
+## Failure boundaries
 
-There is no runtime evidence for this concept. Use the repository and current [implementation evidence](../../IMPLEMENTATION-EVIDENCE.md) to confirm the negative boundary; do not infer implementation from adjacent features.
-
-## Try it: bounded study exercise
-
-Code-reading exercise: search the repository for the missing components named in the gap. Confirm that adjacent features do not satisfy them. No service should be started and no data should be changed.
-
-**Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
-
-## Risks, failures, and trade-offs
-
-| Topic | Assessment |
-|---|---|
-| Principal risk | Automatic optimization can reward proxies, amplify bias, contaminate evaluation data, or regress safety. |
-| Current gap/failure | Adjacent recorded evaluation is not an optimizer or drift monitor; no implementation exists for this concept. |
-| Trade-off | Manual evidence review is slower but safer; automation becomes worthwhile only with stable datasets and rollback. |
-| Evidence hygiene | Do not log secrets or hidden chain-of-thought; record revision, environment, command, and only redacted outcomes. |
-
-## Lab vs production
-
-The status remains **not-implemented** at `6e3e13f`. Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+- Small cohorts produce `insufficient_sample`; deltas remain descriptive.
+- Unknown/unversioned cohort identity is rejected.
+- Stale candidate versions return conflict rather than overwriting a newer decision.
+- A pending receipt is not approval; the human decision endpoint must approve it first.
+- Promotion records intent and evidence only. Deployment remains a separate operational act.
 
 ## Interview answer
 
-> Learning optimization uses measured outcomes to change prompts, models, retrieval, or policies. Drift is a change in inputs or performance over time. Running an evaluation once is measurement, not learning; changing production behavior requires versioning, review, and rollback. In Archon the honest status is **not-implemented**: Archon can evaluate versioned recorded-run datasets, but it has no feedback-to-training loop, drift detector, champion/challenger promotion gate, or automatic optimization system.
+> Archon implements a governed learning loop, not autonomous self-modification. It compares immutable, versioned evaluation cohorts with deterministic thresholds, creates bounded metadata-only recommendations, and requires an exact owner/project/version-bound human approval. A promoted candidate records the intended revision and before/after evidence, but deliberately does not change production or train a model.
 
 ## Self-check
 
-1. What problem does this concept solve, and what nearby concept is it not?
-2. Trace the diagram’s trust boundary and failure path.
-3. Which mapped symbol/test proves current behavior, or why are the lists empty?
-4. What exact gap prevents a stronger status?
-5. Which risk would you test first before production use?
-
-<details>
-<summary>Answer guide</summary>
-
-A good answer names the contract in the beginner explanation, follows the sequence, cites the exact table entry (or the explicit absence), repeats the status boundary, and chooses a risk from the table rather than claiming unrecorded behavior.
-
-</details>
-
-## Related concepts and modules
-
-- **Module:** [Module 09-evaluation-harness](../modules/09-evaluation-harness/README.md)
-- **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
-- **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)
+1. Why is `insufficient_sample` different from “no drift”?
+2. Which fields bind an approval to one candidate version?
+3. Why does promotion not update runtime configuration?
+4. How do composite foreign keys prevent evidence-scope forgery?
+5. Which records are append-only, and why?
