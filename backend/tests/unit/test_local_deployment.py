@@ -84,10 +84,11 @@ def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
     )
     assert "OTEL_BSP_SCHEDULE_DELAY" in text
     assert "ARCHON_LOCAL_PLATFORM:-linux/amd64" in text
+    assert "ARCHON_SANDBOX_PLATFORM:-linux/amd64" in text
     smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
     assert "docker info --format '{{.Architecture}}'" in smoke
-    assert 'aarch64 | arm64) ARCHON_LOCAL_PLATFORM="linux/arm64"' in smoke
-    assert 'x86_64 | amd64) ARCHON_LOCAL_PLATFORM="linux/amd64"' in smoke
+    assert 'aarch64 | arm64) ARCHON_SANDBOX_PLATFORM="linux/arm64"' in smoke
+    assert 'x86_64 | amd64) ARCHON_SANDBOX_PLATFORM="linux/amd64"' in smoke
     assert text.count("@sha256:") >= 4
 
 
