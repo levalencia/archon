@@ -369,7 +369,7 @@ class AgentRuntime:
                         usage,
                         f"provider_stop_reason:{provider_reason.value}",
                     )
-                if response_content:
+                if response_content and response_contract is None:
                     # Preserve the provider draft before optional reflection so a durable
                     # monetary failure can stop with the best already-produced answer.
                     content = response_content
