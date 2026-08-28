@@ -122,4 +122,4 @@ raise SystemExit(0 if "agent.run" in text and "archon-local" in text else 1)
 done
 [[ "$otel_observed" == "1" ]]
 
-printf 'Local deployment smoke test passed: gateway, DB, Redis, mock embeddings, auth, metrics, migration 08, and exported OTEL span.\n'
+printf 'Local deployment smoke test passed: gateway, DB, Redis, mock embeddings, auth, metrics, migration 14, and exported OTEL span.\n'
