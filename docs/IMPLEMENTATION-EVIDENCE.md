@@ -141,7 +141,7 @@ Authenticated owners can create immutable, versioned run-evidence bundles contai
 
 Share grants store only a domain-separated HMAC token digest and bind an authenticated recipient, closed purpose, expiry, owner, and export. The token is returned once. Redemption linearizes against revocation/expiry inside one transaction and performs a final active-grant check before disclosure. The local target deliberately exposes no anonymous/public share URL or external token-delivery claim.
 
-Mandatory compliance executes before sync/SSE user persistence, grounded document ingestion, final-answer structured validation/persistence, model-progress persistence, and effect-ledger reservation/handler dispatch. Compliance remains a deterministic local rule boundary rather than a production legal-policy service. Migration `20260828_12` is forward/reversible over revision 11. Backend focused acceptance passed 93 tests and independent blocker review returned `APPROVED`; the export/share UI passed Svelte check, 20 Vitest tests, and production build in its isolated candidate before integration.
+Mandatory compliance executes before sync/SSE user persistence, grounded document ingestion, final-answer structured validation/persistence, model-progress persistence, and effect-ledger reservation/handler dispatch. Compliance remains a deterministic local rule boundary rather than a production legal-policy service. Migration `20260828_12` is forward/reversible over revision 11. Integrated Mac acceptance at candidate `ba62c0f` passed 1,335 backend tests, Svelte check with zero diagnostics, 20 Vitest tests, a production build, and 21 Playwright browser tests; independent blocker review returned `APPROVED`.
 
 ## Defensible summary
 
