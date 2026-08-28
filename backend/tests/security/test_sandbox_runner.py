@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,10 @@ from app.config import Settings
 from app.main import create_app
 from app.tools.sandbox import SandboxResult
 from app.tools.sandbox_client import SandboxClientConfig, SandboxRunnerClient
+
+
+def short_socket(name: str) -> Path:
+    return Path("/tmp") / f"archon-{name}-{uuid.uuid4().hex[:8]}.sock"
 
 
 @pytest.mark.asyncio
@@ -97,12 +103,62 @@ async def test_runner_allowlist_timeout_output_and_safe_errors(tmp_path: Path) -
     assert extra["status"] == "error" and extra["error"] == "invalid_request"
 
 
+def test_response_frame_is_bounded_after_json_escaping() -> None:
+    response = {
+        "version": 1,
+        "status": "ok",
+        "request_id": "a" * 32,
+        "stdout": "\x00" * runner_server.MAX_OUTPUT_BYTES,
+        "stderr": "",
+        "exit_code": 0,
+        "timed_out": False,
+        "truncated": False,
+        "isolation": "runner-container",
+    }
+    frame = runner_server._encode_response(response)
+    decoded = json.loads(frame)
+    assert len(frame) <= runner_server.MAX_FRAME_BYTES
+    assert decoded["truncated"] is True
+    assert decoded["stdout"]
+
+
+@pytest.mark.asyncio
+async def test_successful_command_kills_detached_descendants(tmp_path: Path) -> None:
+    runner_server.WORK_DIR = tmp_path
+    result = await runner_server.execute(
+        {
+            "version": 1,
+            "operation": "execute",
+            "request_id": "3" * 32,
+            "kind": "shell",
+            "content": "sleep 30 </dev/null >/dev/null 2>&1 & echo $!",
+            "timeout_seconds": 1.0,
+            "output_bytes": 1024,
+        }
+    )
+    pid = int(result["stdout"].strip())
+    for _ in range(20):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        stat = Path(f"/proc/{pid}/stat")
+        try:
+            if stat.exists() and stat.read_text().split()[2] == "Z":
+                break
+        except OSError:
+            break
+        await asyncio.sleep(0.025)
+    else:
+        pytest.fail("detached sandbox descendant survived successful execution")
+
+
 @pytest.mark.asyncio
 async def test_runner_serializes_execution_and_rejects_reentry(tmp_path: Path) -> None:
     runner_server.WORK_DIR = tmp_path
     runner_server.COMMANDS["python"] = (sys.executable, "-I", "-")
     runner_server.EXECUTION_ACTIVE = False
-    socket_path = tmp_path / "actual-runner.sock"
+    socket_path = short_socket("actual")
 
     async def send(payload: dict) -> dict:
         reader, writer = await asyncio.open_unix_connection(socket_path)
@@ -128,11 +184,37 @@ async def test_runner_serializes_execution_and_rejects_reentry(tmp_path: Path) -
         "output_bytes": 1024,
     }
     second_payload = {**first_payload, "request_id": "1" * 32, "content": "print('nested')"}
+    abandoned_payload = {
+        **first_payload,
+        "request_id": "4" * 32,
+        "content": "import time;time.sleep(5)",
+        "timeout_seconds": 5.0,
+    }
     async with server:
         first = asyncio.create_task(send(first_payload))
         await asyncio.sleep(0.05)
         second = await send(second_payload)
         completed = await first
+
+        _, abandoned = await asyncio.open_unix_connection(socket_path)
+        abandoned.write(json.dumps(abandoned_payload).encode() + b"\n")
+        await abandoned.drain()
+        for _ in range(40):
+            if runner_server.EXECUTION_ACTIVE:
+                break
+            await asyncio.sleep(0.01)
+        assert runner_server.EXECUTION_ACTIVE is True
+        abandoned.close()
+        await abandoned.wait_closed()
+        for _ in range(40):
+            if not runner_server.EXECUTION_ACTIVE:
+                break
+            await asyncio.sleep(0.025)
+        assert runner_server.EXECUTION_ACTIVE is False
+        recovered = await send(
+            {**first_payload, "request_id": "5" * 32, "content": "print('recovered')"}
+        )
+    socket_path.unlink(missing_ok=True)
     assert second == {
         "version": 1,
         "status": "error",
@@ -140,6 +222,7 @@ async def test_runner_serializes_execution_and_rejects_reentry(tmp_path: Path) -
         "error": "runner_busy",
     }
     assert completed["status"] == "ok" and completed["stdout"] == "done\n"
+    assert recovered["status"] == "ok" and recovered["stdout"] == "recovered\n"
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="seccomp is a Linux boundary")
@@ -187,7 +270,7 @@ def test_runner_client_rejects_invalid_limits(config: SandboxClientConfig) -> No
 
 @pytest.mark.asyncio
 async def test_unix_client_contract_has_no_host_fallback(tmp_path: Path) -> None:
-    socket_path = tmp_path / "runner.sock"
+    socket_path = short_socket("client")
 
     async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         request = json.loads(await reader.readline())
@@ -215,9 +298,11 @@ async def test_unix_client_contract_has_no_host_fallback(tmp_path: Path) -> None
     async with server:
         await client.preflight()
         result = await client.execute("print('not local')", kind="python")
+    socket_path.unlink(missing_ok=True)
     assert result.stdout == "remote\n" and result.isolation == "runner-container"
 
-    missing = SandboxRunnerClient(SandboxClientConfig(str(tmp_path / "missing"), 1, 1024))
+    missing_path = short_socket("missing")
+    missing = SandboxRunnerClient(SandboxClientConfig(str(missing_path), 1, 1024))
     with pytest.raises(RuntimeError, match="unavailable"):
         await missing.execute("print('must not run')", kind="python")
 

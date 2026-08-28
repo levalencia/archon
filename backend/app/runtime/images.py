@@ -129,6 +129,8 @@ class ImageAttachmentStore:
             raise ImageValidationError("image_bytes_invalid") from None
 
         sanitized = clean.getvalue()
+        if len(sanitized) > self.limits.max_bytes:
+            raise ImageValidationError("image_size_invalid")
         attachment_id = secrets.token_hex(16)
         basename = Path(filename.replace("\\", "/")).name if filename else "image"
         safe_name = (

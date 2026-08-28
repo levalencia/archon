@@ -72,6 +72,7 @@ services:
       dockerfile: sandbox_runner/Dockerfile
     environment:
       SANDBOX_SOCKET_PATH: /run/archon-sandbox/runner.sock
+    init: true
     user: "10001:10001"
     network_mode: none
     read_only: true

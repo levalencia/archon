@@ -126,7 +126,10 @@ class SandboxRunnerClient:
                     raise ValueError("Sandbox request exceeds protocol limit")
                 writer.write(frame)
                 await writer.drain()
-                line = await reader.readline()
+                try:
+                    line = await reader.readline()
+                except ValueError as exc:
+                    raise RuntimeError("Sandbox runner returned an invalid response") from exc
                 if not line or len(line) > _MAX_FRAME_BYTES or not line.endswith(b"\n"):
                     raise RuntimeError("Sandbox runner returned an invalid response")
                 decoded = json.loads(line)

@@ -53,6 +53,8 @@ _SECCOMP_DENIED = (
     "tkill",
     "tgkill",
     "pidfd_send_signal",
+    "setsid",
+    "setpgid",
     "unlink",
     "unlinkat",
     "rename",
@@ -110,8 +112,10 @@ def _limits() -> None:
 
 async def execute(request: dict[str, Any]) -> dict[str, Any]:
     request_id = request.get("request_id")
-    if set(request) != _EXECUTE_KEYS or type(request_id) is not str or not _REQUEST_ID.fullmatch(
-        request_id
+    if (
+        set(request) != _EXECUTE_KEYS
+        or type(request_id) is not str
+        or not _REQUEST_ID.fullmatch(request_id)
     ):
         return _error("invalid_request", "")
     kind = request.get("kind")
@@ -188,6 +192,7 @@ async def execute(request: dict[str, Any]) -> dict[str, Any]:
             await asyncio.wait_for(wait, 1.0)
         raise
     finally:
+        _kill_group(proc)
         for task in (*readers, wait, cap_wait):
             if not task.done():
                 task.cancel()
@@ -207,13 +212,49 @@ async def execute(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def _kill_group(proc: asyncio.subprocess.Process) -> None:
-    if proc.returncode is None:
-        with suppress(ProcessLookupError):
-            os.killpg(proc.pid, signal.SIGKILL)
+    # The leader may already have exited while background descendants still own the group.
+    with suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGKILL)
 
 
 def _error(code: str, request_id: str) -> dict[str, Any]:
     return {"version": 1, "status": "error", "request_id": request_id, "error": code}
+
+
+def _json_frame(response: dict[str, Any]) -> bytes:
+    return json.dumps(response, ensure_ascii=True, separators=(",", ":")).encode() + b"\n"
+
+
+def _encode_response(response: dict[str, Any]) -> bytes:
+    frame = _json_frame(response)
+    if len(frame) <= MAX_FRAME_BYTES:
+        return frame
+    if response.get("status") != "ok":
+        return _json_frame(_error("response_too_large", ""))
+
+    stdout = response.get("stdout")
+    stderr = response.get("stderr")
+    if type(stdout) is not str or type(stderr) is not str:
+        return _json_frame(_error("response_too_large", ""))
+    low, high = 0, len(stdout) + len(stderr)
+    best_frame = _json_frame({**response, "stdout": "", "stderr": "", "truncated": True})
+    while low <= high:
+        keep = (low + high) // 2
+        stdout_keep = min(len(stdout), keep)
+        stderr_keep = max(0, keep - stdout_keep)
+        candidate = {
+            **response,
+            "stdout": stdout[:stdout_keep],
+            "stderr": stderr[:stderr_keep],
+            "truncated": True,
+        }
+        candidate_frame = _json_frame(candidate)
+        if len(candidate_frame) <= MAX_FRAME_BYTES:
+            best_frame = candidate_frame
+            low = keep + 1
+        else:
+            high = keep - 1
+    return best_frame
 
 
 async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -236,14 +277,33 @@ async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> 
                 )
             elif request.get("operation") == "execute":
                 request_id = request.get("request_id")
-                safe_id = request_id if type(request_id) is str and _REQUEST_ID.fullmatch(request_id) else ""
+                safe_id = (
+                    request_id
+                    if type(request_id) is str and _REQUEST_ID.fullmatch(request_id)
+                    else ""
+                )
                 if EXECUTION_ACTIVE:
                     response = _error("runner_busy", safe_id)
                 else:
                     EXECUTION_ACTIVE = True
+                    execution = asyncio.create_task(execute(request))
+                    peer = asyncio.create_task(reader.read(1))
                     try:
-                        response = await execute(request)
+                        done, _ = await asyncio.wait(
+                            (execution, peer), return_when=asyncio.FIRST_COMPLETED
+                        )
+                        if execution in done:
+                            response = execution.result()
+                        else:
+                            execution.cancel()
+                            await asyncio.gather(execution, return_exceptions=True)
+                            response = _error("client_disconnected", safe_id)
                     finally:
+                        if not execution.done():
+                            execution.cancel()
+                        if not peer.done():
+                            peer.cancel()
+                        await asyncio.gather(execution, peer, return_exceptions=True)
                         EXECUTION_ACTIVE = False
             else:
                 response = _error("unsupported_operation", "")
@@ -252,8 +312,8 @@ async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> 
     except Exception:
         # Never include exception, command content, environment, or process output in metadata.
         response = _error("execution_failed", "")
-    writer.write(json.dumps(response, separators=(",", ":")).encode() + b"\n")
-    with suppress(ConnectionError):
+    with suppress(ConnectionError, BrokenPipeError):
+        writer.write(_encode_response(response))
         await writer.drain()
     writer.close()
     with suppress(ConnectionError):
@@ -263,9 +323,7 @@ async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> 
 async def main() -> None:
     SOCKET_PATH.parent.mkdir(mode=0o770, parents=True, exist_ok=True)
     SOCKET_PATH.unlink(missing_ok=True)
-    server = await asyncio.start_unix_server(
-        handle, path=SOCKET_PATH, limit=MAX_FRAME_BYTES + 1
-    )
+    server = await asyncio.start_unix_server(handle, path=SOCKET_PATH, limit=MAX_FRAME_BYTES + 1)
     os.chmod(SOCKET_PATH, 0o660)
     async with server:
         await server.serve_forever()

@@ -21,6 +21,7 @@ c = json.loads(sys.argv[1])[0]
 h = c["HostConfig"]
 assert h["NetworkMode"] == "none"
 assert h["ReadonlyRootfs"] is True
+assert h["Init"] is True
 assert h["CapDrop"] == ["ALL"]
 assert h["PidsLimit"] == 64
 assert h["Memory"] == 128 * 1024 * 1024
@@ -49,10 +50,27 @@ async def main():
         "raise SystemExit('control socket reachable')\n"
         "except OSError:print('control-socket-blocked')", kind='python')
     assert reentry.stdout.strip() == 'control-socket-blocked'
+    detached = await client.execute(
+        "sleep 30 </dev/null >/dev/null 2>&1 & echo $!", kind='shell')
+    child_pid = int(detached.stdout.strip())
+    orphan = await client.execute(
+        f"import os,time\n"
+        f"p='/proc/{child_pid}'\n"
+        "for _ in range(25):\n"
+        " if not os.path.exists(p):break\n"
+        " time.sleep(.02)\n"
+        "print(os.path.exists(p))", kind='python')
+    assert orphan.stdout.strip() == 'False'
     timeout = await client.execute("import time;time.sleep(30)", kind='python', timeout=.2)
     assert timeout.timed_out
     capped = await client.execute("print('x'*100000)", kind='python')
     assert capped.truncated and len(capped.stdout.encode()) + len(capped.stderr.encode()) <= 65536
+    large = SandboxRunnerClient(
+        SandboxClientConfig('/run/archon-sandbox/runner.sock', 2, 1048576))
+    escaped = await large.execute(
+        "import sys;sys.stdout.buffer.write(b'\\0'*1048576)", kind='python')
+    assert escaped.truncated
+    assert len(escaped.stdout.encode()) + len(escaped.stderr.encode()) <= 1048576
 
 asyncio.run(main())
 PY

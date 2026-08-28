@@ -68,6 +68,50 @@ def test_upload_validates_bytes_mime_dimensions_count_ownership_and_metadata() -
         )
 
 
+def test_oversized_dimensions_are_rejected_before_pixel_load(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = png(9, 1)
+
+    def forbidden_load(*_args, **_kwargs):
+        raise AssertionError("pixel decode must not run for rejected dimensions")
+
+    monkeypatch.setattr(Image.Image, "load", forbidden_load)
+    store = ImageAttachmentStore(ImageLimits(max_width=8, max_height=8, max_pixels=64))
+    with pytest.raises(ImageValidationError, match="image_dimensions_invalid"):
+        store.add(
+            raw,
+            declared_mime="image/png",
+            owner_id="alice",
+            project_id="p1",
+            filename="wide.png",
+        )
+
+
+def test_sanitized_output_is_capped_after_reencoding() -> None:
+    source = io.BytesIO()
+    Image.new("1", (128, 128), 1).save(source, "PNG", optimize=True)
+    raw = source.getvalue()
+    baseline = ImageAttachmentStore().add(
+        raw,
+        declared_mime="image/png",
+        owner_id="alice",
+        project_id="p1",
+        filename="palette.png",
+    )
+    sanitized = base64.b64decode(baseline.data_uri.split(",", 1)[1])
+    assert len(sanitized) > len(raw)
+    limited = ImageAttachmentStore(ImageLimits(max_bytes=len(raw)))
+    with pytest.raises(ImageValidationError, match="image_size_invalid"):
+        limited.add(
+            raw,
+            declared_mime="image/png",
+            owner_id="alice",
+            project_id="p1",
+            filename="palette.png",
+        )
+
+
 def test_validated_image_reaches_supported_provider_request_builders() -> None:
     attachment = ImageAttachmentStore().add(
         png(), declared_mime="image/png", owner_id="alice", project_id="p1", filename="x.png"
