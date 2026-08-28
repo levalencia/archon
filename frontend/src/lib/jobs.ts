@@ -42,8 +42,20 @@ const statusMessages: Record<number, string> = {
   429: 'Too many job requests. Try again shortly.',
 };
 
+const REQUEST_TIMEOUT_MS = 10_000;
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await authenticatedFetch(url, init);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await authenticatedFetch(url, { ...init, signal: controller.signal });
+  } catch (cause) {
+    if (controller.signal.aborted) throw new JobApiError(408, 'Job request timed out');
+    throw cause;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) {
     let detail = '';
     try {

@@ -29,10 +29,10 @@ describe('durable jobs client', () => {
     fetchMock.mockImplementation(async () => new Response(JSON.stringify({ job_id: 'job/1', status: 'pending' }), { status: 200 }));
     await cancelJob('job/1', 'project/a');
     await retryJob('job/1', 'project/a');
-    expect(fetchMock.mock.calls).toEqual([
-      ['/api/tasks/job%2F1/cancel?project_id=project%2Fa', { method: 'POST' }],
-      ['/api/tasks/job%2F1/retry?project_id=project%2Fa', { method: 'POST' }],
-    ]);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/tasks/job%2F1/cancel?project_id=project%2Fa');
+    expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({ method: 'POST', signal: expect.any(AbortSignal) }));
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/tasks/job%2F1/retry?project_id=project%2Fa');
+    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({ method: 'POST', signal: expect.any(AbortSignal) }));
   });
 
   it('surfaces bounded safe API errors and stable fallbacks', async () => {

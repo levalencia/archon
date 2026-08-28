@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { AlertTriangle, Ban, BriefcaseBusiness, Loader2, RefreshCw, RotateCcw } from 'lucide-svelte';
   import { cancelJob, getJob, listJobs, retryJob, type DurableJob, type JobStatus } from '$lib/jobs';
 
@@ -10,7 +11,11 @@
   let detailLoading = $state(false);
   let busy = $state('');
   let error = $state('');
-  let requestVersion = 0;
+  let listRequestVersion = 0;
+  let selectionVersion = 0;
+  let listInFlight = false;
+  let pendingForegroundLoad = false;
+  let destroyed = false;
 
   const labels: Record<JobStatus, string> = {
     pending: 'Pending', running: 'Running', succeeded: 'Succeeded', failed: 'Failed',
@@ -31,67 +36,116 @@
   }
 
   async function load(options: { quiet?: boolean } = {}) {
-    const version = ++requestVersion;
+    if (listInFlight) {
+      if (!options.quiet) {
+        pendingForegroundLoad = true;
+        loading = true;
+      }
+      return;
+    }
+    listInFlight = true;
+    const version = ++listRequestVersion;
+    const filter = projectFilter;
     if (!options.quiet) loading = true;
     error = '';
     try {
-      const loaded = await listJobs({ projectId: projectFilter || undefined, limit: 50 });
-      if (version !== requestVersion) return;
+      const loaded = await listJobs({ projectId: filter || undefined, limit: 50 });
+      if (destroyed || version !== listRequestVersion || filter !== projectFilter) return;
       jobs = loaded;
-      if (selected) selected = loaded.find((job) => job.job_id === selected?.job_id) ?? null;
     } catch (cause) {
-      if (version === requestVersion) error = cause instanceof Error ? cause.message : 'Jobs unavailable';
+      if (!destroyed && version === listRequestVersion && filter === projectFilter) {
+        error = cause instanceof Error ? cause.message : 'Jobs unavailable';
+      }
     } finally {
-      if (version === requestVersion) loading = false;
+      listInFlight = false;
+      if (!destroyed && version === listRequestVersion && filter === projectFilter) loading = false;
+      if (!destroyed && pendingForegroundLoad) {
+        pendingForegroundLoad = false;
+        void load();
+      }
     }
   }
 
   function applyFilter(event: SubmitEvent) {
     event.preventDefault();
     projectFilter = projectId.trim();
+    ++listRequestVersion;
+    ++selectionVersion;
     selected = null;
+    detailLoading = false;
     void load();
   }
 
   async function inspect(job: DurableJob) {
+    if (busy) return;
+    const version = ++selectionVersion;
+    const jobId = job.job_id;
+    const jobProject = job.project_id;
     selected = job;
     detailLoading = true;
     error = '';
-    try { selected = await getJob(job.job_id, job.project_id); }
-    catch (cause) { error = cause instanceof Error ? cause.message : 'Job detail unavailable'; }
-    finally { detailLoading = false; }
+    try {
+      const detail = await getJob(jobId, jobProject);
+      if (!destroyed && version === selectionVersion && selected?.job_id === jobId) {
+        selected = detail;
+      }
+    } catch (cause) {
+      if (!destroyed && version === selectionVersion && selected?.job_id === jobId) {
+        error = cause instanceof Error ? cause.message : 'Job detail unavailable';
+      }
+    } finally {
+      if (!destroyed && version === selectionVersion && selected?.job_id === jobId) {
+        detailLoading = false;
+      }
+    }
   }
 
   async function act(action: 'cancel' | 'retry') {
-    if (!selected) return;
+    if (!selected || busy) return;
+    const target = selected;
+    const version = selectionVersion;
     busy = action;
     error = '';
     try {
-      if (action === 'cancel') await cancelJob(selected.job_id, selected.project_id);
-      else await retryJob(selected.job_id, selected.project_id);
-      selected = await getJob(selected.job_id, selected.project_id);
+      if (action === 'cancel') await cancelJob(target.job_id, target.project_id);
+      else await retryJob(target.job_id, target.project_id);
+      const refreshed = await getJob(target.job_id, target.project_id);
+      if (!destroyed && version === selectionVersion && selected?.job_id === target.job_id) {
+        selected = refreshed;
+      }
       await load({ quiet: true });
-    } catch (cause) { error = cause instanceof Error ? cause.message : `Could not ${action} job`; }
-    finally { busy = ''; }
+    } catch (cause) {
+      if (!destroyed && version === selectionVersion && selected?.job_id === target.job_id) {
+        error = cause instanceof Error ? cause.message : `Could not ${action} job`;
+      }
+    } finally {
+      if (!destroyed && version === selectionVersion && selected?.job_id === target.job_id) busy = '';
+    }
   }
 
-  $effect(() => {
+  onMount(() => {
+    destroyed = false;
     void load();
     const timer = setInterval(() => void load({ quiet: true }), 8000);
-    return () => clearInterval(timer);
+    return () => {
+      destroyed = true;
+      ++listRequestVersion;
+      ++selectionVersion;
+      clearInterval(timer);
+    };
   });
 </script>
 
 <section class="jobs-card" aria-labelledby="jobs-heading">
   <header class="jobs-header">
     <div><p class="eyebrow">Restart-safe work</p><h2 id="jobs-heading"><BriefcaseBusiness size={17} /> Durable jobs</h2></div>
-    <button class="icon-button" onclick={() => load()} disabled={loading} aria-label="Refresh durable jobs"><RefreshCw size={15} class={loading ? 'spin' : ''} /> Refresh</button>
+    <button class="icon-button" onclick={() => load()} disabled={loading || Boolean(busy)} aria-label="Refresh durable jobs"><RefreshCw size={15} class={loading ? 'spin' : ''} /> Refresh</button>
   </header>
 
   <form class="filters" onsubmit={applyFilter}>
     <label for="job-project">Project scope</label>
-    <input id="job-project" bind:value={projectId} maxlength="255" placeholder="All owned projects" />
-    <button type="submit" disabled={loading}>Apply filter</button>
+    <input id="job-project" bind:value={projectId} maxlength="255" placeholder="All owned projects" disabled={Boolean(busy)} />
+    <button type="submit" disabled={loading || Boolean(busy)}>Apply filter</button>
   </form>
 
   {#if error}<p class="error" role="alert"><AlertTriangle size={15} /> {error}</p>{/if}
@@ -103,7 +157,7 @@
     <div class="workspace">
       <div class="job-list" aria-label="Durable job history">
         {#each jobs as job}
-          <button class="job-row" class:selected={selected?.job_id === job.job_id} onclick={() => inspect(job)} aria-label={`Inspect ${job.kind} job ${job.job_id}`}>
+          <button class="job-row" class:selected={selected?.job_id === job.job_id} onclick={() => inspect(job)} disabled={Boolean(busy)} aria-label={`Inspect ${job.kind} job ${job.job_id}`}>
             <span class="row-top"><strong>{job.kind.replaceAll('_', ' ')}</strong><span class="status status-{job.status}">{labels[job.status]}</span></span>
             <span class="row-meta"><code title={job.job_id}>{short(job.job_id)}</code><span>{job.project_id}</span></span>
             <span class="row-bottom"><span>Attempt {job.attempts} of {job.max_attempts}</span><time>{date(job.updated_at)}</time></span>
