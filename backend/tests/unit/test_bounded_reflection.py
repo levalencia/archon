@@ -124,7 +124,9 @@ async def test_keep_uses_one_critique_and_no_revision() -> None:
     assert len(provider.calls) == 1
     assert provider.calls[0][1] == ()
     assert provider.calls[0][3] is not None
-    started = next(event for event in sink.events if event.kind is AgentEventKind.REFLECTION_STARTED)
+    started = next(
+        event for event in sink.events if event.kind is AgentEventKind.REFLECTION_STARTED
+    )
     expected_hash = hmac.new(
         HASH_KEY,
         b"archon/reflection/v1\0alice\0project\0run-1\0draft\0private draft",
