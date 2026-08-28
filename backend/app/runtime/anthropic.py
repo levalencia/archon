@@ -148,7 +148,7 @@ def normalize_anthropic_usage(usage: object) -> TokenUsage:
 
     def count(name: str, *, required: bool) -> int | None:
         value = raw(name)
-        if value is _MISSING:
+        if value is _MISSING or (value is None and not required):
             return 0 if required else None
         if type(value) is not int:
             raise TypeError(f"Anthropic usage {name} must be an int")

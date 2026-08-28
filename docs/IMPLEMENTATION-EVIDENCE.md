@@ -47,6 +47,10 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 
 The provider-contract slice adds typed capability negotiation, fail-before-call enforcement, local structured-output validation, capability-preserving fallback, provider-reported cache accounting, per-response fallback pricing, and conservative OpenAI/Ollama opt-ins. These are local deterministic and container acceptance results, not real-provider or public-deployment evidence.
 
+### S8.9 real-provider acceptance harness
+
+The model, multimodal, and embedding acceptance scripts now require both `--execute-live` and non-mock application configuration. They emit only schema-versioned, secret-scanned reports beneath the system temporary directory via atomic owner-only (`0600`) writes. Deterministic fake-provider coverage is **11 passed, 1 live test skipped**; focused provider/embedding/multimodal regression coverage is **147 passed, 1 skipped**. Default CLI dry-runs for all three scripts produced `skipped` reports without provider calls. No external provider was called and no live report is committed, so real-provider evidence remains `Partial`/unobserved pending operator credentials and review.
+
 ### Previous S7.5 full acceptance at `60a8d6a`
 
 ### Additional S7 evidence after that acceptance
