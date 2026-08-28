@@ -24,6 +24,7 @@ from app.routes.admin import get_skills_top_k
 from app.routes.skills import get_skill_registry
 from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
+from app.runtime.images import ImageValidationError
 from app.runtime.support import prepare_effective_context
 from app.security.auth import get_current_user
 from app.security.compliance import ComplianceViolationError
@@ -337,7 +338,7 @@ class ChatRequest(BaseModel):
     project_id: str = Field(
         default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
     )
-    image: str = ""  # Base64 encoded image (optional)
+    image: str = Field(default="", max_length=7_000_000)
 
 
 class ChatResponse(BaseModel):
@@ -368,6 +369,21 @@ async def chat(
         raise HTTPException(
             status_code=422, detail="Message rejected by compliance policy"
         ) from exc
+    images: list[str] | None = None
+    if body.image:
+        try:
+            attachment = request.app.state.image_attachments.add_data_uri(
+                body.image,
+                owner_id=user["user_id"],
+                project_id=body.project_id,
+                filename="chat-image",
+                persist=False,
+            )
+        except ImageValidationError as exc:
+            raise HTTPException(
+                status_code=422, detail="Image rejected by validation policy"
+            ) from exc
+        images = [attachment.data_uri]
     cid = get_correlation_id()
     start_time = time.monotonic()
     settings = request.app.state.settings
@@ -424,9 +440,7 @@ async def chat(
         correlation_id=cid,
     )
 
-    # Run the agent
-    # Parse images if provided
-    images = [body.image] if body.image else None
+    # Run the agent with the validated image tuple prepared above.
     # Optimize context window before running agent
     history = await memory.retrieve(conv_id, limit=50, user_id=user["user_id"])
     if len(history) > 10:
@@ -521,7 +535,7 @@ async def chat(
     ]
 
     # Add image step if image was analyzed
-    if body.image:
+    if images:
         thinking_steps.insert(
             0,
             {
@@ -586,7 +600,7 @@ async def chat(
         tokens_used=result.usage.total_tokens,
         thinking_steps=thinking_steps,
         skills_used=skills_used,
-        image_analyzed=bool(body.image),
+        image_analyzed=bool(images),
         artifacts=saved_artifacts,
     )
 

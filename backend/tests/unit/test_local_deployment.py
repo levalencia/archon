@@ -49,11 +49,13 @@ def test_only_loopback_gateway_is_published() -> None:
         "postgres",
         "redis",
         "otel-collector",
+        "sandbox-runner",
     }
     assert "ports" not in services["postgres"]
     assert "ports" not in services["redis"]
     assert "ports" not in services["backend"]
     assert "ports" not in services["frontend"]
+    assert "ports" not in services["sandbox-runner"]
     assert services["gateway"]["ports"][0]["host_ip"] == "127.0.0.1"
 
 
@@ -67,7 +69,9 @@ def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
     assert "postgres:16-alpine" in text
     assert "pgvector" not in text.lower()
     assert "ARCHON_RATE_LIMIT_BACKEND: redis" in text
-    assert 'ARCHON_EXECUTION_ENABLED: "false"' in text
+    assert 'ARCHON_EXECUTION_ENABLED: "true"' in text
+    assert "ARCHON_EXECUTION_RUNNER_SOCKET" in text
+    assert "docker.sock" not in text
     assert "OTEL_BSP_SCHEDULE_DELAY" in text
     assert "ARCHON_LOCAL_PLATFORM:-linux/amd64" in text
     assert text.count("@sha256:") >= 4

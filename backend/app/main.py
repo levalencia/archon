@@ -54,11 +54,13 @@ from app.routes.memory import router as memory_router
 from app.routes.multi_agent import router as multi_agent_router
 from app.routes.red_team import router as red_team_router
 from app.routes.runs import router as runs_router
+from app.routes.sandbox import router as sandbox_router
 from app.routes.security_demo import router as security_router
 from app.routes.shares import router as shares_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
+from app.runtime.images import ImageAttachmentStore
 from app.runtime.support import as_model_provider
 from app.security.approval_repository import ApprovalRepository
 from app.security.audit_logger import StructuredAuditLogger
@@ -77,7 +79,8 @@ from app.services.key_rotation import MemoryKeyRotationService
 from app.services.run_exports import RunExportService
 from app.services.sql_json_vector_store import SqlJsonVectorStore
 from app.services.task_queue import ClaimedJob, DurableJobQueue
-from app.tools.sandbox import DockerSandboxConfig, DockerSandboxExecutor, SandboxExecutor
+from app.tools.sandbox import SandboxExecutor
+from app.tools.sandbox_client import SandboxClientConfig, SandboxRunnerClient
 from app.workers.jobs import JobWorker, PermanentJobError, echo_handler
 
 logger = structlog.get_logger()
@@ -87,6 +90,7 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: startup and shutdown."""
     settings = app.state.settings
+    app.state.image_attachments = ImageAttachmentStore()
 
     # Validate embedding capability before opening any application resources.
     app.state.embedding_service = EmbeddingService(
@@ -115,14 +119,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     app.state.sandbox_executor = None
     if settings.execution_enabled:
-        sandbox_config = DockerSandboxConfig(
-            binary=settings.execution_docker_binary,
-            image=settings.execution_docker_image,
-            platform=settings.execution_docker_platform,
+        sandbox_config = SandboxClientConfig(
+            socket_path=settings.execution_runner_socket,
             timeout_seconds=settings.execution_timeout_seconds,
-            cpus=settings.execution_cpus,
-            memory_mb=settings.execution_memory_mb,
-            pids_limit=settings.execution_pids_limit,
             output_bytes=settings.execution_output_bytes,
         )
         executor = app.state.sandbox_executor_factory(sandbox_config)
@@ -301,8 +300,8 @@ def create_app(
     persistence_redactor_factory: Callable[[], PersistenceRedactor] = PersistenceRedactor,
     model_provider_factory: Callable[[Settings], object] = create_llm_client,
     sandbox_executor_factory: Callable[
-        [DockerSandboxConfig], SandboxExecutor
-    ] = DockerSandboxExecutor,
+        [SandboxClientConfig], SandboxExecutor
+    ] = SandboxRunnerClient,
 ) -> FastAPI:
     """Application factory. Accepts optional settings for testing."""
     if settings is None:
@@ -359,6 +358,7 @@ def create_app(
     app.include_router(compliance_router)
     app.include_router(mcp_router)
     app.include_router(tasks_router)
+    app.include_router(sandbox_router)
     app.include_router(runs_router)
     app.include_router(shares_router)
     app.include_router(evaluations_router)

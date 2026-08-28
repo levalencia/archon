@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall, ToolDefinition
+
+_DATA_IMAGE_RE = re.compile(r"\Adata:(image/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]+={0,2})\Z")
+
+
+def _anthropic_image(image: str) -> tuple[str, str]:
+    match = _DATA_IMAGE_RE.fullmatch(image)
+    if match is None:
+        # Legacy raw image values were JPEG base64.
+        return "image/jpeg", image
+    return match.group(1), match.group(2)
 
 
 def anthropic_request(
@@ -57,8 +68,8 @@ def anthropic_request(
                             "type": "image",
                             "source": {
                                 "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": image,
+                                "media_type": _anthropic_image(image)[0],
+                                "data": _anthropic_image(image)[1],
                             },
                         }
                         for image in message.images

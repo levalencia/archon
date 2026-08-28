@@ -8,8 +8,6 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
-from app.tools.sandbox import is_immutable_image_reference
-
 
 class Settings(BaseSettings):
     """Archon configuration. All values can be overridden via environment variables."""
@@ -135,6 +133,11 @@ class Settings(BaseSettings):
 
     # Isolated execution (disabled and absent from the live registry by default)
     execution_enabled: bool = False
+    execution_runner_socket: str = Field(
+        default="/run/archon-sandbox/runner.sock", pattern=r"^/[A-Za-z0-9_./-]+$"
+    )
+    # Legacy settings remain parseable for developer tooling, but the live backend
+    # never invokes Docker.
     execution_docker_binary: str = Field(default="docker", pattern=r"^[A-Za-z0-9_./-]+$")
     execution_docker_image: str = Field(
         default="archon-sandbox:local", pattern=r"^[A-Za-z0-9][A-Za-z0-9._/@:-]+$"
@@ -147,12 +150,9 @@ class Settings(BaseSettings):
     execution_output_bytes: int = Field(default=65536, ge=1024, le=1048576)
 
     @model_validator(mode="after")
-    def validate_execution_image(self) -> Settings:
-        if self.execution_enabled and not is_immutable_image_reference(self.execution_docker_image):
-            raise ValueError(
-                "execution_docker_image must be an immutable sha256 registry digest "
-                "or local image ID"
-            )
+    def validate_execution_runner(self) -> Settings:
+        if self.execution_enabled and not self.execution_runner_socket.startswith("/"):
+            raise ValueError("execution_runner_socket must be absolute")
         return self
 
     @model_validator(mode="after")

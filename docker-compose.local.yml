@@ -34,7 +34,8 @@ services:
       ARCHON_LLM_MODEL: mock-model
       ARCHON_EMBEDDING_PROVIDER: mock
       ARCHON_EMBEDDING_MODEL: mock-embedding
-      ARCHON_EXECUTION_ENABLED: "false"
+      ARCHON_EXECUTION_ENABLED: "true"
+      ARCHON_EXECUTION_RUNNER_SOCKET: /run/archon-sandbox/runner.sock
       ARCHON_RATE_LIMIT_BACKEND: redis
       ARCHON_OTEL_ENDPOINT: http://otel-collector:4317
       ARCHON_OTEL_SERVICE_NAME: archon-local
@@ -47,6 +48,10 @@ services:
         condition: service_healthy
       otel-collector:
         condition: service_started
+      sandbox-runner:
+        condition: service_healthy
+    volumes:
+      - sandbox-socket:/run/archon-sandbox
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
       interval: 5s
@@ -59,6 +64,35 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+
+  sandbox-runner:
+    platform: ${ARCHON_LOCAL_PLATFORM:-linux/amd64}
+    build:
+      context: .
+      dockerfile: sandbox_runner/Dockerfile
+    environment:
+      SANDBOX_SOCKET_PATH: /run/archon-sandbox/runner.sock
+    user: "10001:10001"
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.50
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=10001,gid=10001
+      - /work:rw,nosuid,nodev,size=16m,uid=10001,gid=10001
+    volumes:
+      - sandbox-socket:/run/archon-sandbox
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket;s=socket.socket(socket.AF_UNIX);s.connect('/run/archon-sandbox/runner.sock');s.sendall(b'{\"version\":1,\"operation\":\"health\"}\\n');assert b'\"status\":\"ok\"' in s.recv(256)"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    restart: unless-stopped
 
   frontend:
     build:
@@ -127,3 +161,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  sandbox-socket:
