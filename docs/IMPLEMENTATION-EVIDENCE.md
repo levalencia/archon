@@ -49,7 +49,11 @@ The provider-contract slice adds typed capability negotiation, fail-before-call 
 
 ### S8.9 real-provider acceptance harness
 
-The model, multimodal, and embedding acceptance scripts now require both `--execute-live` and non-mock application configuration. They emit only schema-versioned, secret-scanned reports beneath the system temporary directory via atomic owner-only (`0600`) writes. Deterministic fake-provider coverage is **11 passed, 1 live test skipped**; focused provider/embedding/multimodal regression coverage is **147 passed, 1 skipped**. Default CLI dry-runs for all three scripts produced `skipped` reports without provider calls. No external provider was called and no live report is committed, so real-provider evidence remains `Partial`/unobserved pending operator credentials and review.
+The model, multimodal, and embedding acceptance scripts require both `--execute-live` and non-mock application configuration. Provider work executes in a killable child process with a hard wall-clock watchdog. Reports use strict per-kind schemas and explicit `dry_run`/`deterministic`/`live` provenance; they reject raw URLs, query material, credentials, inconsistent status/error fields, symlink traversal, blocking special files, and artifacts over 64 KiB. Writes are descriptor-relative, atomic, and owner-only (`0600`) beneath the system temporary directory.
+
+Deterministic fake-provider coverage is **11 passed, 1 live test skipped**; focused provider/embedding/multimodal regression coverage is **147 passed, 1 skipped**. macOS full backend acceptance passed **1,382 tests with 2 expected skips**, followed by the final FIFO-focused gate (**11 passed, 1 skipped**) on both Linux and macOS. Default CLI dry-runs for all three scripts produced `skipped` reports without provider calls. Independent blocker review of `c04cd15` returned `APPROVED`.
+
+No external provider was called and no live report is committed. Real-provider evidence therefore remains `Partial`/unobserved pending explicit operator authorization and valid provider/embedding configuration; deterministic harness success is not represented as live-provider success.
 
 ### Previous S7.5 full acceptance at `60a8d6a`
 
