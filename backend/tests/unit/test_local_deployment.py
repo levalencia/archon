@@ -70,6 +70,10 @@ def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
     assert "postgres:16-alpine" in text
     assert "pgvector" not in text.lower()
     assert "ARCHON_RATE_LIMIT_BACKEND: redis" in text
+    assert "ARCHON_LLM_PROVIDER: ${ARCHON_LLM_PROVIDER:-mock}" in text
+    assert "ARCHON_LLM_MODEL: ${ARCHON_LLM_MODEL:-mock-model}" in text
+    assert "ARCHON_LLM_API_KEY: ${ARCHON_LLM_API_KEY:-}" in text
+    assert "ARCHON_LLM_BASE_URL: ${ARCHON_LLM_BASE_URL:-}" in text
     assert 'ARCHON_EXECUTION_ENABLED: "true"' in text
     assert "ARCHON_EXECUTION_RUNNER_SOCKET" in text
     assert "docker.sock" not in text
@@ -144,11 +148,22 @@ def test_real_otel_dependencies_and_span_assertion_are_part_of_the_target() -> N
 def test_local_stack_wrapper_preserves_exact_generated_runtime_context() -> None:
     smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
     wrapper = (ROOT / "scripts/local-stack.sh").read_text()
+    generator = (ROOT / "scripts/generate-local-env.py").read_text()
 
     assert "STATE_FILE=${ARCHON_RUNTIME_STATE_FILE:-}" in smoke
     assert "ARCHON_COMPOSE_PROJECT" in smoke
     assert "ARCHON_COMPOSE_ENV_FILE" in smoke
     assert "ARCHON_BASE_URL" in smoke
+    assert "ARCHON_RUNTIME_MODE" in smoke
+    assert "generate-local-env.py" in smoke
+    assert "ARCHON_PROVIDER_ENV_FILE" in smoke
+    assert '"ARCHON_LLM_PROVIDER"' in generator
+    assert '"ARCHON_LLM_MODEL"' in generator
+    assert '"ARCHON_LLM_API_KEY"' in generator
+    assert '"ARCHON_LLM_BASE_URL"' in generator
+    assert "provider env must not be group/world accessible" in generator
+    assert "managed live mode currently requires ARCHON_LLM_PROVIDER=foundry" in generator
+    assert "managed Foundry endpoint must be an absolute HTTPS URL" in generator
     assert 'state_tmp=$(mktemp "${STATE_FILE}.XXXXXX")' in smoke
     assert 'mv -f "$state_tmp" "$STATE_FILE"' in smoke
     assert '"${KEEP:-0}" == "1" && "$status" == "0"' in smoke
@@ -157,6 +172,12 @@ def test_local_stack_wrapper_preserves_exact_generated_runtime_context() -> None
     for command in ("start)", "status)", "url)", "logs)", "stop)"):
         assert command in wrapper
     assert "local-deploy-smoke.sh" in wrapper
+    assert "start [--live-provider]" in wrapper
+    assert "requested_mode=live-foundry" in wrapper
+    assert "provider_env=${ARCHON_PROVIDER_ENV_FILE:-$ROOT/backend/.env}" in wrapper
+    assert "Stop explicitly before changing provider mode" in wrapper
+    assert 'ARCHON_PROVIDER_ENV_FILE="$provider_env"' in wrapper
+    assert "RUNTIME_MODE=%s" in wrapper
     assert '--env-file "$ARCHON_COMPOSE_ENV_FILE"' in wrapper
     assert '-p "$ARCHON_COMPOSE_PROJECT"' in wrapper
     assert 'chmod 600 "$STATE_FILE"' in wrapper

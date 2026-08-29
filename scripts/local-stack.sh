@@ -11,8 +11,8 @@ usage() {
 Usage: ./scripts/local-stack.sh <command> [args]
 
 Commands:
-  start                 Build, verify, and retain the seven-service local stack
-  status                Show current project state and verify /healthz and /readyz
+  start [--live-provider]  Build, verify, and retain the stack (mock by default)
+  status                    Show current project state and verify /healthz and /readyz
   url                   Print the loopback application URL
   logs [SERVICE ...]    Read logs using retained context (label fallback if env is missing)
   stop                  Explicitly remove the managed project, volumes, env, and state
@@ -33,6 +33,9 @@ load_state_metadata() {
   : "${ARCHON_COMPOSE_ENV_FILE:?missing env path in state file}"
   : "${ARCHON_COMPOSE_FILE:?missing compose path in state file}"
   : "${ARCHON_BASE_URL:?missing base URL in state file}"
+  ARCHON_RUNTIME_MODE=${ARCHON_RUNTIME_MODE:-mock}
+  ARCHON_LLM_PROVIDER_NAME=${ARCHON_LLM_PROVIDER_NAME:-mock}
+  ARCHON_LLM_MODEL_NAME=${ARCHON_LLM_MODEL_NAME:-mock-model}
   case "$ARCHON_COMPOSE_PROJECT" in
     archon-local-*) ;;
     *)
@@ -159,10 +162,33 @@ shift
 
 case "$command" in
   start)
-    acquire_start_lock
+    requested_mode=mock
+    provider_env=""
+    case "${1:-}" in
+      "") ;;
+      --live-provider)
+        requested_mode=live-foundry
+        provider_env=${ARCHON_PROVIDER_ENV_FILE:-$ROOT/backend/.env}
+        ;;
+      *)
+        printf 'Unknown start option: %s\n' "$1" >&2
+        usage >&2
+        exit 2
+        ;;
+    esac
+    if [[ $# -gt 1 ]]; then
+      printf 'start accepts at most one option: --live-provider\n' >&2
+      exit 2
+    fi
+    acquire_start_lock "$@"
     if [[ -f "$STATE_FILE" ]]; then
       if ! prepare_compose_context; then
         printf 'Managed runtime state exists but cannot be used. Preserving it for recovery; do not start another stack.\n' >&2
+        exit 1
+      fi
+      if [[ "$ARCHON_RUNTIME_MODE" != "$requested_mode" ]]; then
+        printf 'Managed stack mode is %s, requested %s. Stop explicitly before changing provider mode.\n' \
+          "$ARCHON_RUNTIME_MODE" "$requested_mode" >&2
         exit 1
       fi
       if curl --fail --silent --show-error "$ARCHON_BASE_URL/healthz" >/dev/null 2>&1 \
@@ -170,6 +196,8 @@ case "$command" in
         printf 'Archon is already running, healthy, and ready.\n'
         printf 'ARCHON_URL=%s\n' "$ARCHON_BASE_URL"
         printf 'STATE_FILE=%s\n' "$STATE_FILE"
+        printf 'RUNTIME_MODE=%s\nLLM_PROVIDER=%s\nLLM_MODEL=%s\n' \
+          "$ARCHON_RUNTIME_MODE" "$ARCHON_LLM_PROVIDER_NAME" "$ARCHON_LLM_MODEL_NAME"
         exit 0
       fi
       printf 'Managed Archon stack exists but health or readiness is failing. Preserving containers, volumes, env, and state.\n' >&2
@@ -177,7 +205,12 @@ case "$command" in
       "${compose[@]}" ps >&2 || true
       exit 1
     fi
-    KEEP=1 ARCHON_RUNTIME_STATE_FILE="$STATE_FILE" "$ROOT/scripts/local-deploy-smoke.sh"
+    if [[ "$requested_mode" == "live-foundry" && ! -f "$provider_env" ]]; then
+      printf 'Foundry provider env is missing: %s\n' "$provider_env" >&2
+      exit 1
+    fi
+    ARCHON_PROVIDER_ENV_FILE="$provider_env" KEEP=1 ARCHON_RUNTIME_STATE_FILE="$STATE_FILE" \
+      "$ROOT/scripts/local-deploy-smoke.sh"
     ;;
   status)
     load_state_metadata
@@ -188,6 +221,8 @@ case "$command" in
       curl --fail --silent --show-error "$ARCHON_BASE_URL/readyz" >/dev/null
       printf 'STATUS=ready\n'
       printf 'ARCHON_URL=%s\n' "$ARCHON_BASE_URL"
+      printf 'RUNTIME_MODE=%s\nLLM_PROVIDER=%s\nLLM_MODEL=%s\n' \
+        "$ARCHON_RUNTIME_MODE" "$ARCHON_LLM_PROVIDER_NAME" "$ARCHON_LLM_MODEL_NAME"
     else
       printf 'STATUS=unmanaged-missing-env\n' >&2
       project_ps_without_env

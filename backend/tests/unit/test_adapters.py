@@ -42,6 +42,33 @@ class TestAdapterProtocolCompliance:
         assert isinstance(MockLLM(), LLMClient)
 
 
+class TestMockAdapter:
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_default_response_is_repeatable_and_discloses_no_live_inference(self) -> None:
+        adapter = MockLLM()
+        messages = (Message(role=Role.USER, content="hello"),)
+
+        first = await adapter.complete(messages)
+        second = await adapter.complete(messages)
+
+        assert first.content == second.content == MockLLM.DEFAULT_RESPONSE
+        assert "no live model inference" in first.content.lower()
+        assert len(adapter.call_history) == 2
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_explicit_sequence_exhaustion_is_disclosed(self) -> None:
+        adapter = MockLLM(["configured response"])
+        messages = (Message(role=Role.USER, content="hello"),)
+
+        assert (await adapter.complete(messages)).content == "configured response"
+        exhausted = await adapter.complete(messages)
+
+        assert exhausted.content == MockLLM.EXHAUSTED_RESPONSE
+        assert "no live model inference" in exhausted.content.lower()
+
+
 class TestOpenAIAdapter:
     """OpenAI adapter with mocked HTTP responses."""
 

@@ -20,6 +20,9 @@ cleanup() {
         printf 'ARCHON_COMPOSE_ENV_FILE=%q\n' "$ENV_FILE"
         printf 'ARCHON_COMPOSE_FILE=%q\n' "$COMPOSE_FILE"
         printf 'ARCHON_BASE_URL=%q\n' "$BASE_URL"
+        printf 'ARCHON_RUNTIME_MODE=%q\n' "$ARCHON_RUNTIME_MODE"
+        printf 'ARCHON_LLM_PROVIDER_NAME=%q\n' "$ARCHON_LLM_PROVIDER"
+        printf 'ARCHON_LLM_MODEL_NAME=%q\n' "$ARCHON_LLM_MODEL"
       } >"$state_tmp"
       chmod 600 "$state_tmp"
       mv -f "$state_tmp" "$STATE_FILE"
@@ -45,23 +48,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-export ENV_FILE
-python3 - <<'PY'
-import base64
-import os
-import secrets
-
-path = os.environ["ENV_FILE"]
-values = {
-    "POSTGRES_PASSWORD": secrets.token_hex(32),
-    "ARCHON_SECRET_KEY": secrets.token_urlsafe(48),
-    "ARCHON_ENCRYPTION_MASTER_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="),
-    "ARCHON_LOCAL_PORT": str(18000 + secrets.randbelow(20000)),
-}
-with open(path, "w", encoding="utf-8") as stream:
-    for key, value in values.items():
-        stream.write(f"{key}={value}\n")
-PY
+generate_env=(python3 "$ROOT/scripts/generate-local-env.py" "$ENV_FILE")
+if [[ -n "${ARCHON_PROVIDER_ENV_FILE:-}" ]]; then
+  generate_env+=(--provider-env "$ARCHON_PROVIDER_ENV_FILE")
+fi
+"${generate_env[@]}"
 
 set -a
 # shellcheck disable=SC1090
@@ -95,6 +86,14 @@ for endpoint in healthz readyz; do
   done
   curl --fail --silent --show-error "$BASE_URL/$endpoint" >/dev/null
 done
+
+curl --fail --silent --show-error "$BASE_URL/healthz" | python3 -c '
+import json, os, sys
+d=json.load(sys.stdin)
+assert d["status"] == "alive"
+assert d["llm_provider"] == os.environ["ARCHON_LLM_PROVIDER"]
+assert d["llm_model"] == os.environ["ARCHON_LLM_MODEL"]
+'
 
 curl --fail --silent --show-error "$BASE_URL/readyz" | python3 -c '
 import json, sys
@@ -153,3 +152,4 @@ done
 [[ "$otel_observed" == "1" ]]
 
 printf 'Local deployment smoke test passed: gateway, DB, Redis, mock embeddings, auth, metrics, migration 14, and a newly exported OTEL trace batch.\n'
+printf 'RUNTIME_MODE=%s\nLLM_PROVIDER=%s\nLLM_MODEL=%s\n' "$ARCHON_RUNTIME_MODE" "$ARCHON_LLM_PROVIDER" "$ARCHON_LLM_MODEL"

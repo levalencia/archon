@@ -1,7 +1,7 @@
 {
   "schema": "archon.live-provider-acceptance-summary",
   "version": 1,
-  "evidence_date": "2026-08-28",
+  "evidence_date": "2026-08-29",
   "claim_scope": "Sanitized operator-authorized live acceptance results; no prompts, responses, credentials, full endpoint URLs, or raw provider errors retained.",
   "runs": [
     {
@@ -48,6 +48,31 @@
       },
       "limitations": [
         "This is a minimal capability probe, not a vision-quality benchmark."
+      ]
+    },
+    {
+      "kind": "managed_application_chat",
+      "provider": "foundry",
+      "model_revision": "claude-opus-4-6",
+      "observed_at": "2026-08-29T19:05:47Z",
+      "overall_status": "pass",
+      "checks": {
+        "managed_live_start": "pass",
+        "health_identity_foundry_model": "pass",
+        "authenticated_api_chat": "pass",
+        "browser_sse_chat": "pass",
+        "live_ui_has_no_mock_banner": "pass",
+        "provider_env_allowlist_and_mode_0600": "pass"
+      },
+      "metrics": {
+        "live_model_requests_observed": 3,
+        "browser_chat_turns": 1,
+        "api_chat_turns": 1
+      },
+      "limitations": [
+        "This is loopback managed-application evidence, not a public deployment or load test.",
+        "Marker prompts prove transport and UI wiring, not broad answer quality.",
+        "Embeddings remained mock/non-production."
       ]
     },
     {

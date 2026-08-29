@@ -63,6 +63,7 @@ def test_ci_guide_matches_compose_and_run_commands() -> None:
     required_commands = (
         "./scripts/verify.sh",
         "./scripts/local-stack.sh start",
+        "./scripts/local-stack.sh start --live-provider",
         "./scripts/local-stack.sh status",
         "./scripts/local-stack.sh url",
         "./scripts/local-stack.sh logs otel-collector",

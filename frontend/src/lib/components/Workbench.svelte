@@ -564,6 +564,13 @@
       </button>
     </header>
 
+    {#if provider.toLowerCase() === 'mock'}
+      <section class="provider-mode-banner" role="status" aria-label="Mock provider mode">
+        <strong>Deterministic mock mode</strong>
+        <span>No live model inference is running. Restart with <code>local-stack.sh start --live-provider</code> for real responses.</span>
+      </section>
+    {/if}
+
     {#if error}
       <div class="error-banner" role="alert">
         <span>{error}</span>

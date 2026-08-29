@@ -24,6 +24,20 @@ test.beforeEach(async ({ page }) => {
     : route.fulfill({ status: 401 }));
 });
 
+test('mock provider is disclosed before the user sends a message', async ({ page }) => {
+  await page.route('**/healthz', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ status: 'alive', llm_model: 'mock-model', llm_provider: 'mock' }),
+  }));
+  await page.goto('/');
+
+  const banner = page.getByRole('status', { name: 'Mock provider mode' });
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText('Deterministic mock mode');
+  await expect(banner).toContainText('No live model inference is running');
+  await expect(banner).toContainText('local-stack.sh start --live-provider');
+});
+
 test('desktop workbench streams an answer and exposes inspector tabs', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('/');
   await expect(page.getByRole('heading', { name: /Make every answer/ })).toBeVisible();

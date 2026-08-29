@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agents.mock_llm import MockLLM
 from app.config import Settings
 from app.main import create_app
 
@@ -47,7 +48,7 @@ class TestChatEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "response" in data
-        assert data["response"] == "I am a mock LLM."
+        assert data["response"] == MockLLM.DEFAULT_RESPONSE
         assert "conversation_id" in data
         assert "correlation_id" in data
         assert data["iterations"] >= 1
