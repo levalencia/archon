@@ -11,9 +11,15 @@ from app.runtime.structured_output import ResponseContract
 
 class MockLLM:
     capabilities = ProviderCapabilities(native_tools=True, usage=True)
+    DEFAULT_RESPONSE = (
+        "Mock mode: no live model inference was performed. "
+        "Restart Archon with --live-provider for real responses."
+    )
+    EXHAUSTED_RESPONSE = "Mock response sequence exhausted; no live model inference was performed."
 
     def __init__(self, responses: Sequence[str | ModelResponse] | None = None) -> None:
-        self.responses = list(responses) if responses else ["I am a mock LLM."]
+        self._repeat_default = responses is None
+        self.responses = list(responses) if responses is not None else [self.DEFAULT_RESPONSE]
         self.call_history: list[dict] = []
         self._call_count = 0
 
@@ -38,9 +44,11 @@ class MockLLM:
             }
         )
         response = (
-            self.responses[self._call_count]
+            self.responses[0]
+            if self._repeat_default
+            else self.responses[self._call_count]
             if self._call_count < len(self.responses)
-            else "I don't have more responses configured."
+            else self.EXHAUSTED_RESPONSE
         )
         self._call_count += 1
         if isinstance(response, ModelResponse):

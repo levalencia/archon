@@ -225,7 +225,19 @@ Use the managed wrapper for day-to-day startup and operations:
 ./scripts/local-stack.sh logs otel-collector
 ```
 
-`start` generates valid ephemeral PostgreSQL, JWT, and encryption material; builds and verifies all seven services; atomically retains the exact Compose project/env context in a mode-`0600` state file; and prints the loopback application URL. A kernel advisory lock (`lockf` on macOS, `flock` on Linux) rejects concurrent starts and is released automatically on exit, signal, or crash. If managed state exists but health is failing or the protected env is missing, `start` preserves containers, volumes, env pointers, and state for explicit diagnosis instead of destroying data or creating a second stack. When the protected env is missing, `status` and `logs` fall back to exact Compose project labels, and explicit `stop` can remove only resources carrying that project label. The reproducible target uses mock model and embedding providers by default.
+`start` generates valid ephemeral PostgreSQL, JWT, and encryption material; builds and verifies all seven services; atomically retains the exact Compose project/env context in a mode-`0600` state file; and prints the loopback application URL. A kernel advisory lock (`lockf` on macOS, `flock` on Linux) rejects concurrent starts and is released automatically on exit, signal, or crash. If managed state exists but health is failing or the protected env is missing, `start` preserves containers, volumes, env pointers, and state for explicit diagnosis instead of destroying data or creating a second stack. When the protected env is missing, `status` and `logs` fall back to exact Compose project labels, and explicit `stop` can remove only resources carrying that project label.
+
+The default is deterministic mock mode. The UI displays a visible warning and the mock response explicitly states that no live inference occurred.
+
+For an operator-authorized Foundry demo, stop the current mode and start live:
+
+```bash
+./scripts/local-stack.sh stop
+./scripts/local-stack.sh start --live-provider
+./scripts/local-stack.sh status
+```
+
+Live mode imports only an allowlist of `ARCHON_LLM_*` settings from the mode-`0600` `backend/.env` into the generated protected Compose env; it never passes `backend/.env` directly to Compose. The startup smoke performs one real chat request and therefore incurs provider usage. Embeddings remain mock/non-production unless separately evidenced. Switching modes always requires an explicit `stop`.
 
 Do **not** invoke `docker compose` with `backend/.env`, a nonexistent root `.env`, or dummy secrets. Those files/values do not satisfy the deployment contract. Use `local-stack.sh` so every status/log/stop command reuses the exact generated context.
 
@@ -268,7 +280,8 @@ Operator-authorized acceptance against Azure AI Foundry and `claude-opus-4-6` ob
 
 - one native tool call;
 - provider-reported cache counters transported as `0/0`;
-- one bounded one-pixel multimodal semantic probe.
+- one bounded one-pixel multimodal semantic probe;
+- one managed loopback deployment using the Foundry model through authenticated API chat and browser SSE chat, with provider/model identity visible in the UI.
 
 The configured adapter did not advertise native JSON Schema. The embedding provider remained `mock`, so no live embedding request was made.
 

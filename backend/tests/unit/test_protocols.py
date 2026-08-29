@@ -48,7 +48,8 @@ class TestMockLLM:
         llm = MockLLM(responses=["only one"])
         await llm.chat([{"role": "user", "content": "1"}])
         r2 = await llm.chat([{"role": "user", "content": "2"}])
-        assert "don't have more" in r2.lower()
+        assert r2 == MockLLM.EXHAUSTED_RESPONSE
+        assert "no live model inference" in r2.lower()
 
     @pytest.mark.unit
     @pytest.mark.asyncio

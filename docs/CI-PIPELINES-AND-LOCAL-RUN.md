@@ -237,6 +237,27 @@ If managed state already exists but health is failing or the protected env is un
 
 The wrapper is the only supported day-to-day path for retained stacks. Do not use `backend/.env`, a nonexistent root `.env`, or dummy secret values to satisfy Compose interpolation.
 
+#### Deterministic versus live model mode
+
+The default command remains deterministic and cost-free:
+
+```bash
+./scripts/local-stack.sh start
+```
+
+It runs `mock-model`; the Workbench shows a `Deterministic mock mode` banner and mock answers disclose that no live inference occurred.
+
+An operator-authorized Foundry session is explicit:
+
+```bash
+./scripts/local-stack.sh stop
+./scripts/local-stack.sh start --live-provider
+```
+
+The live path validates that `backend/.env` is mode `0600`, parses it without shell evaluation, copies only allowlisted `ARCHON_LLM_PROVIDER`, `ARCHON_LLM_MODEL`, `ARCHON_LLM_API_KEY`, `ARCHON_LLM_BASE_URL`, and optional caching configuration into the generated protected env, and requires Foundry plus an absolute HTTPS endpoint. It never exposes the values or passes the provider file wholesale to Compose. Startup performs one real chat request and incurs provider usage. Mock embeddings remain explicitly non-production.
+
+Mode is part of managed runtime state. A running mock stack cannot silently become live, or vice versa; stop it explicitly before changing mode.
+
 Inspect health and Compose state:
 
 ```bash

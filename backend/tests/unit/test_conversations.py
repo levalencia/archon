@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agents.mock_llm import MockLLM
 from app.config import Settings
 from app.main import create_app
 from app.security.persistence_redactor import PersistenceRedactor
@@ -107,7 +108,7 @@ class TestConversationCRUD:
         assert history.status_code == 200
         assert history.json()["messages"] == [
             {"role": "user", "content": "Remember this"},
-            {"role": "assistant", "content": "I am a mock LLM."},
+            {"role": "assistant", "content": MockLLM.DEFAULT_RESPONSE},
         ]
 
         conversations = client.get("/api/conversations")
