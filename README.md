@@ -6,7 +6,7 @@
 
 A local-first system for building, governing, inspecting, and evaluating AI agent runs.
 
-[Architecture](docs/ARCHITECTURE-DIAGRAMS.md) · [Implementation evidence](docs/IMPLEMENTATION-EVIDENCE.md) · [Course](docs/course/README.md) · [Interview route](docs/course/tracks/interview-preparation.md) · [Demo](docs/DEMO-SCRIPT.md)
+[Architecture](docs/ARCHITECTURE-DIAGRAMS.md) · [CI and local run](docs/CI-PIPELINES-AND-LOCAL-RUN.md) · [Implementation evidence](docs/IMPLEMENTATION-EVIDENCE.md) · [Course](docs/course/README.md) · [Interview route](docs/course/tracks/interview-preparation.md) · [Demo](docs/DEMO-SCRIPT.md)
 
 </div>
 
@@ -273,6 +273,7 @@ See the sanitized [Live Provider Acceptance Summary](docs/evidence/live-provider
 | Recovery report | [DR Report](docs/evidence/local-dr-report.json) |
 | Live-provider summary | [Live Provider Acceptance](docs/evidence/live-provider-acceptance-summary.json) |
 | Deferred scope | [Remaining Deferred Gaps](docs/REMAINING-DEFERRED-GAPS.md) |
+| CI, pipelines, containers, and local commands | [CI and Local Run Guide](docs/CI-PIPELINES-AND-LOCAL-RUN.md) |
 | API surface | [API Map](docs/course/reference/api-map.md) |
 | Runtime events | [Event Catalog](docs/course/reference/event-catalog.md) |
 | Tests by concept | [Test Map](docs/course/reference/test-map.md) |

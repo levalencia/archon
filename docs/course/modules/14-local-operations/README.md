@@ -6,6 +6,8 @@
 
 ## Why this module exists
 
+Use the repository-level [CI, pipelines, Docker services, and local execution guide](../../../CI-PIPELINES-AND-LOCAL-RUN.md) for the exact `ci.yml` jobs, seven-container inventory, and copyable run/cleanup commands.
+
 Code is not operable until it starts reproducibly, reports dependency health, migrates durable state, passes clean-room checks, and can recover from loss. You will inspect the local Compose target and produce or analyze a checksummed clean-restore report without calling it production deployment.
 
 ## Beginner explanation
