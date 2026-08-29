@@ -5,15 +5,41 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 COMPOSE_FILE="$ROOT/docker-compose.local.yml"
 PROJECT="archon-local-$PPID-$RANDOM"
 ENV_FILE=$(mktemp "${TMPDIR:-/tmp}/archon-local.XXXXXX")
+STATE_FILE=${ARCHON_RUNTIME_STATE_FILE:-}
 chmod 600 "$ENV_FILE"
 
 cleanup() {
   status=$?
-  if [[ "${KEEP:-0}" == "1" ]]; then
-    printf 'KEEP=1: deployment retained (project %s); protected env file retained at %s\n' "$PROJECT" "$ENV_FILE"
+  if [[ "${KEEP:-0}" == "1" && "$status" == "0" ]]; then
+    if [[ -n "$STATE_FILE" ]]; then
+      mkdir -p "$(dirname "$STATE_FILE")"
+      umask 077
+      state_tmp=$(mktemp "${STATE_FILE}.XXXXXX")
+      {
+        printf 'ARCHON_COMPOSE_PROJECT=%q\n' "$PROJECT"
+        printf 'ARCHON_COMPOSE_ENV_FILE=%q\n' "$ENV_FILE"
+        printf 'ARCHON_COMPOSE_FILE=%q\n' "$COMPOSE_FILE"
+        printf 'ARCHON_BASE_URL=%q\n' "$BASE_URL"
+      } >"$state_tmp"
+      chmod 600 "$state_tmp"
+      mv -f "$state_tmp" "$STATE_FILE"
+      chmod 600 "$STATE_FILE"
+    fi
+    printf 'KEEP=1: deployment retained\n'
+    printf 'PROJECT=%s\n' "$PROJECT"
+    printf 'ENV_FILE=%s\n' "$ENV_FILE"
+    printf 'ARCHON_URL=%s\n' "$BASE_URL"
+    if [[ -n "$STATE_FILE" ]]; then
+      printf 'STATE_FILE=%s\n' "$STATE_FILE"
+    fi
+  elif [[ "${KEEP:-0}" == "1" && "${KEEP_FAILED:-0}" == "1" ]]; then
+    printf 'KEEP_FAILED=1: failed deployment retained for debugging (project %s); protected env file retained at %s\n' "$PROJECT" "$ENV_FILE" >&2
   else
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$PROJECT" down --volumes --remove-orphans >/dev/null 2>&1 || true
     rm -f "$ENV_FILE"
+    if [[ -n "$STATE_FILE" ]]; then
+      rm -f "$STATE_FILE"
+    fi
   fi
   exit "$status"
 }
@@ -95,7 +121,11 @@ ACCESS_TOKEN=$(printf '%s' "$login_response" | python3 -c 'import json,sys; prin
 AUTH_HEADER_NAME=$(printf 'Authoriza%s' 'tion')
 unset AUTH_PASSWORD register_response login_response
 
-# Exercise the actual runtime so CompositeEventSink emits and exports an `agent.run` span.
+# Exercise the actual runtime and require the collector to export a new trace batch.
+otel_before=$("${compose[@]}" logs otel-collector 2>&1 | python3 -c '
+import sys
+print(sum(1 for line in sys.stdin if "\tTraces\t" in line and "resource spans" in line))
+')
 curl --fail --silent --show-error -X POST "$BASE_URL/api/chat" \
   -H 'Content-Type: application/json' \
   -H "${AUTH_HEADER_NAME}: Bearer ${ACCESS_TOKEN}" \
@@ -110,11 +140,11 @@ migration=$("${compose[@]}" exec -T postgres psql -U archon -d archon -Atqc 'sel
 
 otel_observed=0
 for _ in {1..30}; do
-  if "${compose[@]}" logs otel-collector 2>&1 | python3 -c '
+  otel_after=$("${compose[@]}" logs otel-collector 2>&1 | python3 -c '
 import sys
-text = sys.stdin.read()
-raise SystemExit(0 if "agent.run" in text and "archon-local" in text else 1)
-'; then
+print(sum(1 for line in sys.stdin if "\tTraces\t" in line and "resource spans" in line))
+')
+  if ((otel_after > otel_before)); then
     otel_observed=1
     break
   fi
@@ -122,4 +152,4 @@ raise SystemExit(0 if "agent.run" in text and "archon-local" in text else 1)
 done
 [[ "$otel_observed" == "1" ]]
 
-printf 'Local deployment smoke test passed: gateway, DB, Redis, mock embeddings, auth, metrics, migration 14, and exported OTEL span.\n'
+printf 'Local deployment smoke test passed: gateway, DB, Redis, mock embeddings, auth, metrics, migration 14, and a newly exported OTEL trace batch.\n'

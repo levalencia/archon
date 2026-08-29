@@ -214,21 +214,34 @@ See [Database Schema](docs/course/reference/database-schema.md) for table relati
 
 This runs backend and frontend gates, browser tests, sandbox containment, container health, the capability manifest, and a one-iteration benchmark preflight. It does not enable live-provider calls.
 
-### Production-like local smoke
+### Run the verified local application
+
+Use the managed wrapper for day-to-day startup and operations:
+
+```bash
+./scripts/local-stack.sh start
+./scripts/local-stack.sh status
+./scripts/local-stack.sh url
+./scripts/local-stack.sh logs otel-collector
+```
+
+`start` generates valid ephemeral PostgreSQL, JWT, and encryption material; builds and verifies all seven services; atomically retains the exact Compose project/env context in a mode-`0600` state file; and prints the loopback application URL. A kernel advisory lock (`lockf` on macOS, `flock` on Linux) rejects concurrent starts and is released automatically on exit, signal, or crash. If managed state exists but health is failing or the protected env is missing, `start` preserves containers, volumes, env pointers, and state for explicit diagnosis instead of destroying data or creating a second stack. When the protected env is missing, `status` and `logs` fall back to exact Compose project labels, and explicit `stop` can remove only resources carrying that project label. The reproducible target uses mock model and embedding providers by default.
+
+Do **not** invoke `docker compose` with `backend/.env`, a nonexistent root `.env`, or dummy secrets. Those files/values do not satisfy the deployment contract. Use `local-stack.sh` so every status/log/stop command reuses the exact generated context.
+
+Stop the managed stack and remove its volumes, protected env file, and state:
+
+```bash
+./scripts/local-stack.sh stop
+```
+
+### One-shot production-like smoke
 
 ```bash
 ./scripts/local-deploy-smoke.sh
 ```
 
-The script generates ephemeral credentials, starts the seven-service stack, verifies readiness, authentication, migrations, metrics, sandbox isolation, and OTEL export, then removes its resources.
-
-Keep the verified stack running:
-
-```bash
-KEEP=1 ./scripts/local-deploy-smoke.sh
-```
-
-The script prints the Compose project and protected temporary env-file path. The reproducible target uses mock model and embedding providers by default.
+The smoke generates ephemeral credentials, starts the seven-service stack, verifies readiness, authentication, migrations, metrics, sandbox isolation, and OTEL export, then removes its resources. `local-stack.sh start` invokes this same smoke with safe retention enabled.
 
 ### Disaster recovery
 

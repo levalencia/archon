@@ -94,7 +94,7 @@ sequenceDiagram
   Gateway->>Backend: /readyz before routing
 ```
 
-Compose waits for PostgreSQL/Redis/collector health, runs Alembic to head, then starts the backend and gateway. Migration or required dependency failure prevents readiness; it is not converted to a simulated healthy mode.
+Compose waits for PostgreSQL and Redis health, requires the OTEL collector process to be started, runs Alembic to head, then starts the backend and gateway. The collector exposes an internal health extension, but Compose does not define an OTEL healthcheck. Migration or required dependency failure prevents readiness; it is not converted to a simulated healthy mode.
 
 ## Per-request sequence
 
@@ -151,10 +151,11 @@ This is an operational dependency model, not an application entity state machine
 | 2 | [`backend/app/main.py:lifespan / healthz / readyz`](../../../../backend/app/main.py) | Startup validation and dependency-aware readiness. | `implemented` within stated boundary |
 | 3 | [`backend/alembic/versions/20260826_08_mcp_inventory.py:upgrade`](../../../../backend/alembic/versions/20260826_08_mcp_inventory.py) | Latest observed schema revision content. | `implemented` within stated boundary |
 | 4 | [`.github/workflows/ci.yml:backend-quality / frontend-quality / backend-image`](../../../../.github/workflows/ci.yml) | Clean-worker gates and image smoke. | `implemented` within stated boundary |
-| 5 | [`scripts/local-deploy-smoke.sh:local deployment smoke`](../../../../scripts/local-deploy-smoke.sh) | Auth, metrics, migration and OTEL local checks. | `implemented` within stated boundary |
-| 6 | [`scripts/local-backup.sh:backup flow`](../../../../scripts/local-backup.sh) | Secure env, custom dump, atomic move, checksum/metadata. | `implemented` within stated boundary |
-| 7 | [`scripts/local-restore.sh:restore flow`](../../../../scripts/local-restore.sh) | Checksum and clean-target guard. | `implemented` within stated boundary |
-| 8 | [`scripts/local-dr-smoke.sh:end-to-end DR drill`](../../../../scripts/local-dr-smoke.sh) | Destroy, restore, authenticate, exact evidence and timings. | `implemented` within stated boundary |
+| 5 | [`scripts/local-stack.sh:managed local runtime`](../../../../scripts/local-stack.sh) | Start, status, URL, logs, and stop using the exact generated project/env context. | `implemented` within stated boundary |
+| 6 | [`scripts/local-deploy-smoke.sh:local deployment smoke`](../../../../scripts/local-deploy-smoke.sh) | Auth, metrics, migration and OTEL local checks plus safe state handoff. | `implemented` within stated boundary |
+| 7 | [`scripts/local-backup.sh:backup flow`](../../../../scripts/local-backup.sh) | Secure env, custom dump, atomic move, checksum/metadata. | `implemented` within stated boundary |
+| 8 | [`scripts/local-restore.sh:restore flow`](../../../../scripts/local-restore.sh) | Checksum and clean-target guard. | `implemented` within stated boundary |
+| 9 | [`scripts/local-dr-smoke.sh:end-to-end DR drill`](../../../../scripts/local-dr-smoke.sh) | Destroy, restore, authenticate, exact evidence and timings. | `implemented` within stated boundary |
 
 ### Tests to inspect
 
