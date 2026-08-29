@@ -134,8 +134,60 @@ def test_real_otel_dependencies_and_span_assertion_are_part_of_the_target() -> N
     smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
     assert "opentelemetry-sdk==" in dependencies
     assert "opentelemetry-exporter-otlp-proto-grpc==" in dependencies
-    assert '"agent.run" in text' in smoke
-    assert '"archon-local" in text' in smoke
+    assert "otel_before=" in smoke
+    assert "otel_after=" in smoke
+    assert '"\\tTraces\\t" in line and "resource spans" in line' in smoke
+    assert "otel_after > otel_before" in smoke
+    assert "newly exported OTEL trace batch" in smoke
+
+
+def test_local_stack_wrapper_preserves_exact_generated_runtime_context() -> None:
+    smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
+    wrapper = (ROOT / "scripts/local-stack.sh").read_text()
+
+    assert "STATE_FILE=${ARCHON_RUNTIME_STATE_FILE:-}" in smoke
+    assert "ARCHON_COMPOSE_PROJECT" in smoke
+    assert "ARCHON_COMPOSE_ENV_FILE" in smoke
+    assert "ARCHON_BASE_URL" in smoke
+    assert 'state_tmp=$(mktemp "${STATE_FILE}.XXXXXX")' in smoke
+    assert 'mv -f "$state_tmp" "$STATE_FILE"' in smoke
+    assert '"${KEEP:-0}" == "1" && "$status" == "0"' in smoke
+    assert "KEEP_FAILED=1" in smoke
+
+    for command in ("start)", "status)", "url)", "logs)", "stop)"):
+        assert command in wrapper
+    assert "local-deploy-smoke.sh" in wrapper
+    assert '--env-file "$ARCHON_COMPOSE_ENV_FILE"' in wrapper
+    assert '-p "$ARCHON_COMPOSE_PROJECT"' in wrapper
+    assert 'chmod 600 "$STATE_FILE"' in wrapper
+    assert 'chmod 600 "$ARCHON_COMPOSE_ENV_FILE"' in wrapper
+    assert 'LOCK_FILE="$STATE_DIR/start.lock"' in wrapper
+    assert "ARCHON_START_LOCK_HELD:-0" in wrapper
+    assert 'exec lockf -t 0 "$LOCK_FILE"' in wrapper
+    assert 'exec flock -n "$LOCK_FILE"' in wrapper
+    assert "Legacy lock directory detected" in wrapper
+    assert "No supported advisory lock primitive found" in wrapper
+    assert "LOCK_DIR" not in wrapper
+    assert "release_start_lock" not in wrapper
+    assert "kill -0" not in wrapper
+    assert "preserving env and state for retry" in wrapper
+    assert "Managed runtime state exists but cannot be used" in wrapper
+    assert '"$ARCHON_BASE_URL/healthz"' in wrapper
+    assert '"$ARCHON_BASE_URL/readyz"' in wrapper
+    assert "already running, healthy, and ready" in wrapper
+    assert "Managed Archon stack exists but health or readiness is failing" in wrapper
+    assert "Preserving containers, volumes, env, and state" in wrapper
+    assert "stop explicitly before a new start" in wrapper
+    assert "label=com.docker.compose.project=$ARCHON_COMPOSE_PROJECT" in wrapper
+    assert "reading logs through exact Compose project labels" in wrapper
+    assert "removing only resources labeled for project" in wrapper
+    assert "Removing stale managed stack before restart" not in wrapper
+    assert "stop_loaded_stack || true" not in wrapper
+    assert "backend/.env" in wrapper
+    assert "dummy secret" in wrapper
+    assert "ARCHON_SECRET_KEY=x" not in wrapper
+    assert "ARCHON_ENCRYPTION_MASTER_KEY=x" not in wrapper
+    assert "POSTGRES_PASSWORD=x" not in wrapper
 
 
 def test_gateway_routes_backend_and_frontend_with_sse_settings() -> None:

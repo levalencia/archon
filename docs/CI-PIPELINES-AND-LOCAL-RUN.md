@@ -215,66 +215,69 @@ uv run python scripts/portfolio_benchmark.py \
 
 This executes 12 scenarios for 120 total scenario iterations.
 
-### Seven-service deployment smoke
+### Managed seven-service application
+
+Use the managed wrapper for normal local operation:
+
+```bash
+./scripts/local-stack.sh start
+```
+
+`start` calls the acceptance smoke with retention enabled. It:
+
+1. creates a mode-`0600` temporary env file;
+2. generates valid ephemeral database, JWT, and encryption material;
+3. builds and starts the seven services;
+4. waits for health/readiness;
+5. checks auth, migrations, metrics, OTEL, and sandbox behavior;
+6. atomically stores only non-secret runtime metadata (project, env-file path, Compose file, and URL) in a mode-`0600` state file;
+7. rejects concurrent starts and prints the loopback application URL.
+
+If managed state already exists but health is failing or the protected env is unavailable, `start` preserves the existing state, containers, volumes, and pointers and exits nonzero. The kernel advisory start lock (`lockf` on macOS, `flock` on Linux) rejects concurrent starts and is released automatically on exit, signal, or crash. Diagnose with `status`/`logs`; when the protected env is missing, those commands use exact Compose project labels instead of invented values. Run `stop` explicitly before replacement; its missing-env recovery removes only containers, volumes, and networks carrying the recorded project label. The wrapper never destroys a possibly recoverable stack merely because one health probe failed.
+
+The wrapper is the only supported day-to-day path for retained stacks. Do not use `backend/.env`, a nonexistent root `.env`, or dummy secret values to satisfy Compose interpolation.
+
+Inspect health and Compose state:
+
+```bash
+./scripts/local-stack.sh status
+```
+
+Print the URL:
+
+```bash
+./scripts/local-stack.sh url
+```
+
+Read all logs or one service without reconstructing project/env arguments:
+
+```bash
+./scripts/local-stack.sh logs
+./scripts/local-stack.sh logs otel-collector
+./scripts/local-stack.sh logs backend
+```
+
+Stop the exact managed stack and remove volumes, protected env, and state:
+
+```bash
+./scripts/local-stack.sh stop
+```
+
+### One-shot seven-service acceptance
 
 ```bash
 ./scripts/local-deploy-smoke.sh
 ```
 
-The script:
+The one-shot form performs the same acceptance checks and removes containers, volumes, and its generated env on exit.
 
-1. creates a mode-`0600` temporary env file;
-2. generates ephemeral database, JWT, and encryption material;
-3. builds and starts the seven services;
-4. waits for health/readiness;
-5. checks auth, migrations, metrics, OTEL, and sandbox behavior;
-6. removes containers, volumes, and the env file on exit.
-
-### Retain the verified stack
+For low-level debugging only, direct retention remains available:
 
 ```bash
 KEEP=1 ./scripts/local-deploy-smoke.sh
 ```
 
-The script prints the Compose project and retained env-file path. It does not print the generated port.
-
-Read only the non-secret port entry:
-
-```bash
-ENV_FILE=/path/printed/by/the/script
-PROJECT=project-printed-by-the-script
-grep '^ARCHON_LOCAL_PORT=' "$ENV_FILE"
-```
-
-Open:
-
-```text
-http://127.0.0.1:<ARCHON_LOCAL_PORT>
-```
-
-Inspect the retained stack:
-
-```bash
-docker compose \
-  --env-file "$ENV_FILE" \
-  -f docker-compose.local.yml \
-  -p "$PROJECT" \
-  ps
-```
-
-Stop it and remove its volumes:
-
-```bash
-docker compose \
-  --env-file "$ENV_FILE" \
-  -f docker-compose.local.yml \
-  -p "$PROJECT" \
-  down --volumes --remove-orphans
-
-rm -f "$ENV_FILE"
-```
-
-Use the exact project and env-file values printed by the smoke script.
+It prints `PROJECT`, `ENV_FILE`, and `ARCHON_URL`. Every later direct `docker compose` command must reuse that exact project and env file. Never substitute `backend/.env` or dummy values. A failed smoke cleans itself unless `KEEP_FAILED=1` is explicitly requested for debugging.
 
 ### Disaster recovery
 

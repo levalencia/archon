@@ -62,6 +62,11 @@ def test_ci_guide_matches_compose_and_run_commands() -> None:
 
     required_commands = (
         "./scripts/verify.sh",
+        "./scripts/local-stack.sh start",
+        "./scripts/local-stack.sh status",
+        "./scripts/local-stack.sh url",
+        "./scripts/local-stack.sh logs otel-collector",
+        "./scripts/local-stack.sh stop",
         "./scripts/local-deploy-smoke.sh",
         "KEEP=1 ./scripts/local-deploy-smoke.sh",
         "./scripts/local-dr-smoke.sh /tmp/archon-dr-report.json",
