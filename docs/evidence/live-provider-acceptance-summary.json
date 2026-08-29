@@ -1,0 +1,79 @@
+{
+  "schema": "archon.live-provider-acceptance-summary",
+  "version": 1,
+  "evidence_date": "2026-08-28",
+  "claim_scope": "Sanitized operator-authorized live acceptance results; no prompts, responses, credentials, full endpoint URLs, or raw provider errors retained.",
+  "runs": [
+    {
+      "kind": "model",
+      "provider": "foundry",
+      "model_revision": "claude-opus-4-6",
+      "endpoint_host": "aifoundry-for-developme-resource.services.ai.azure.com",
+      "started_at": "2026-08-28T19:56:50Z",
+      "finished_at": "2026-08-28T19:56:53Z",
+      "elapsed_ms": 3382.1,
+      "overall_status": "partial",
+      "checks": {
+        "native_tool_call": "pass",
+        "provider_reported_cache_metrics": "pass",
+        "native_json_schema": "skipped_unsupported"
+      },
+      "metrics": {
+        "tool_calls": 1,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "limitations": [
+        "The configured Foundry Anthropic adapter does not advertise native JSON Schema.",
+        "Zero cache counters prove metric transport, not a cache hit or billing reduction."
+      ]
+    },
+    {
+      "kind": "multimodal",
+      "provider": "foundry",
+      "model_revision": "claude-opus-4-6",
+      "endpoint_host": "aifoundry-for-developme-resource.services.ai.azure.com",
+      "started_at": "2026-08-28T19:57:10Z",
+      "finished_at": "2026-08-28T19:57:13Z",
+      "elapsed_ms": 4745.1,
+      "overall_status": "pass",
+      "checks": {
+        "validated_one_pixel_image_input": "pass",
+        "semantic_red_response": "pass"
+      },
+      "metrics": {
+        "images": 1,
+        "width": 1,
+        "height": 1
+      },
+      "limitations": [
+        "This is a minimal capability probe, not a vision-quality benchmark."
+      ]
+    },
+    {
+      "kind": "embedding",
+      "provider": "mock",
+      "model_revision": "text-embedding-3-small",
+      "endpoint_host": "api.openai.com",
+      "started_at": "2026-08-28T19:57:47Z",
+      "finished_at": "2026-08-28T19:57:47Z",
+      "elapsed_ms": 263.7,
+      "overall_status": "blocked",
+      "checks": {
+        "embedding": "not_called_mock_configuration",
+        "ingest_query": "not_called_mock_configuration"
+      },
+      "metrics": {
+        "configured_dimensions": 256
+      },
+      "limitations": [
+        "No live embedding provider is configured; no embedding request was made."
+      ]
+    }
+  ],
+  "overall_status": "partial",
+  "remaining_live_gaps": [
+    "Native JSON Schema on a configured provider that advertises the capability.",
+    "Live embedding plus ingest/query validation against a non-mock embedding provider."
+  ]
+}

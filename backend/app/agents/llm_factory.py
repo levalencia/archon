@@ -26,6 +26,11 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             base_url=settings.llm_base_url or None,
+            native_tools_enabled=settings.openai_native_tools_enabled,
+            images_enabled=settings.openai_images_enabled,
+            json_mode_enabled=settings.openai_json_mode_enabled,
+            json_schema_enabled=settings.openai_json_schema_enabled,
+            cache_usage_enabled=settings.openai_cache_usage_enabled,
         )
 
     if provider == "anthropic":
@@ -34,6 +39,7 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
         return AnthropicAdapter(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
+            prompt_caching_enabled=settings.prompt_caching_enabled,
         )
 
     if provider == "foundry":
@@ -43,6 +49,7 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
             api_key=settings.llm_api_key,
             base_url=settings.llm_base_url,
             model=settings.llm_model,
+            prompt_caching_enabled=settings.prompt_caching_enabled,
         )
 
     if provider == "ollama":
@@ -51,6 +58,11 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
         return OllamaAdapter(
             model=settings.llm_model,
             base_url=settings.llm_base_url or "http://localhost:11434",
+            native_tools_enabled=settings.ollama_native_tools_enabled,
+            vision_model=settings.ollama_vision_model or None,
+            vision_native_tools_enabled=settings.ollama_vision_native_tools_enabled,
+            json_mode_enabled=settings.ollama_json_mode_enabled,
+            json_schema_enabled=settings.ollama_json_schema_enabled,
         )
 
     msg = f"Unknown LLM provider: {provider}. Use: mock, openai, anthropic, foundry, ollama"

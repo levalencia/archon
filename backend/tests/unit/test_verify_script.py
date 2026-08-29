@@ -2,9 +2,15 @@
 
 from pathlib import Path
 
+ROOT = Path(__file__).parents[3]
+
+
+def _verify_script() -> str:
+    return (ROOT / "scripts" / "verify.sh").read_text()
+
 
 def test_docker_smoke_uses_ephemeral_validated_memory_key() -> None:
-    script = (Path(__file__).parents[3] / "scripts" / "verify.sh").read_text()
+    script = _verify_script()
     smoke = script.partition("== Backend container smoke test ==")[2]
 
     assert "secrets.token_urlsafe(32)" in smoke
@@ -30,7 +36,7 @@ def test_ci_backend_smoke_supplies_ephemeral_memory_key_without_literal_value() 
 
 
 def test_docker_smoke_uses_configurable_reproducible_platform() -> None:
-    script = (Path(__file__).parents[3] / "scripts" / "verify.sh").read_text()
+    script = _verify_script()
     smoke = script.partition("== Backend container smoke test ==")[2]
 
     assert 'PLATFORM="${ARCHON_VERIFY_PLATFORM:-linux/amd64}"' in script
@@ -40,7 +46,7 @@ def test_docker_smoke_uses_configurable_reproducible_platform() -> None:
 
 
 def test_sandbox_smoke_runs_exact_built_image_id() -> None:
-    root = Path(__file__).parents[3]
+    root = ROOT
     build_script = (root / "scripts" / "build-sandbox.sh").read_text()
     verify_script = (root / "scripts" / "verify.sh").read_text()
 
@@ -49,3 +55,58 @@ def test_sandbox_smoke_runs_exact_built_image_id() -> None:
     assert "^sha256:[0-9a-f]{64}$" in build_script
     assert 'SANDBOX_IMAGE_ID="$("$ROOT/scripts/build-sandbox.sh")"' in verify_script
     assert 'ARCHON_SANDBOX_IMAGE="$SANDBOX_IMAGE_ID"' in verify_script
+
+
+def test_integrated_gate_orders_offline_acceptance_before_existing_and_benchmark_gates() -> None:
+    script = _verify_script()
+    headings = [
+        "== Clean workspace preflight ==",
+        "== Shell script syntax ==",
+        "== Acceptance script lint ==",
+        "== Acceptance script tests ==",
+        "== Capability acceptance manifest ==",
+        "== Backend lint ==",
+        "== Backend tests ==",
+        "== Frontend dependencies ==",
+        "== Frontend static checks ==",
+        "== Frontend tests ==",
+        "== Frontend production build ==",
+        "== Frontend browser tests ==",
+        "== Docker sandbox containment smoke ==",
+        "== Backend container smoke test ==",
+        "== Final portfolio benchmark preflight ==",
+        "== Clean workspace verification ==",
+    ]
+
+    positions = [script.index(heading) for heading in headings]
+    assert positions == sorted(positions)
+    assert "npm ci" in script
+    assert script.index("npm ci") < script.index("npm run check")
+    assert "scripts/acceptance_support.py" in script
+    assert "scripts/embedding_smoke.py" in script
+    assert "scripts/multimodal_smoke.py" in script
+    assert "scripts/portfolio_benchmark.py" in script
+    assert "scripts/provider_acceptance.py" in script
+    assert "../scripts/sandbox_smoke.py" in script
+    assert 'bash -n "${SHELL_SCRIPTS[@]}"' in script
+    assert "tests/unit/test_provider_acceptance_scripts.py" in script
+    assert 'scripts/portfolio_benchmark.py --output "$BENCHMARK_REPORT" --iterations 1' in script
+    assert "--execute-live" not in script
+
+
+def test_integrated_gate_cleans_artifacts_and_has_no_or_true_bypass() -> None:
+    script = _verify_script()
+
+    assert 'VERIFY_TMPDIR="$(mktemp -d' in script
+    assert 'rm -rf "$VERIFY_TMPDIR"' in script
+    assert "local status=$?" in script
+    assert "local cleanup_failed=0" in script
+    assert 'docker rm -f "$CONTAINER_ID"' in script
+    assert 'CONTAINER_ID="$(ARCHON_ENCRYPTION_MASTER_KEY=' in script
+    assert "Refusing to remove pre-existing container" in script
+    assert 'CONTAINER="${ARCHON_VERIFY_CONTAINER:-archon-backend-verify-$$}"' in script
+    assert "status=1" in script
+    assert 'exit "$status"' in script
+    assert script.count("assert_clean_tree") >= 3  # definition plus preflight and final check
+    assert 'git -C "$ROOT" status --porcelain=v1 --untracked-files=all' in script
+    assert "|| true" not in script

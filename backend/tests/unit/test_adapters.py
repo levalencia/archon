@@ -310,7 +310,7 @@ class TestOllamaAdapter:
                 },
             )
 
-        adapter = OllamaAdapter(model="llama3")
+        adapter = OllamaAdapter(model="llama3", native_tools_enabled=True)
         adapter._client = httpx.AsyncClient(
             transport=httpx.MockTransport(handler), base_url="http://localhost:11434"
         )

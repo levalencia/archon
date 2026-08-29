@@ -9,6 +9,21 @@ export type Run = {
   trajectory?: { tools: Record<string, unknown>[]; approvals: Record<string, unknown>[]; policy: Record<string, unknown>[]; evidence: unknown[]; workspace_restoration: string };
 };
 export type RunEvent = { sequence: number; event_at: string; kind: string; iteration: number; payload: Record<string, unknown> };
+export type ContextManifest = {
+  snapshot_id: string; schema_version: number; run_id: string; conversation_id: string; project_id: string;
+  selected_message_ids: number[]; summarized_message_ids: number[]; memory_ids: string[]; skill_ids: string[];
+  input_asset_fingerprints: string[]; estimated_tokens: number; summary_version: string | null;
+  truncation_reason: string | null; manifest_hash: string;
+};
+export type RunExport = {
+  export_id: string; run_id: string; schema_version: number; content_checksum: string;
+  manifest_checksum: string; created_at: string;
+};
+export type ShareGrant = {
+  grant_id: string; export_id: string; recipient_user_id: string; purpose: string;
+  created_at: string; expires_at: string; revoked_at: string | null;
+};
+export type CreatedShareGrant = ShareGrant & { token: string };
 export type ComparedRun = Pick<Run, 'run_id' | 'conversation_id' | 'project_id' | 'provider' | 'model' | 'answer_summary' | 'cost_usd' | 'latency_ms' | 'iterations' | 'stop_reason' | 'parent_run_id' | 'fork_source_sequence'> & {
   tokens: { input: number; output: number; total: number };
 };
@@ -29,9 +44,37 @@ export async function listRuns(options: { conversationId?: string; projectId?: s
   return Array.isArray(result.items) ? result.items : [];
 }
 export const getRun = (id: string) => json<Run>(`/api/runs/${encodeURIComponent(id)}`);
+export const getRunContext = (id: string) =>
+  json<ContextManifest>(`/api/runs/${encodeURIComponent(id)}/context`);
 export async function getRunEvents(id: string): Promise<RunEvent[]> {
   const result = await json<{ items?: RunEvent[] }>(`/api/runs/${encodeURIComponent(id)}/events?limit=200`);
   return (Array.isArray(result.items) ? result.items : []).slice().sort((a, b) => a.sequence - b.sequence);
 }
 export const forkRun = (id: string, sourceSequence: number) => json<{ target_conversation_id: string; checkpoint_id: string; workspace_restoration: string }>(`/api/runs/${encodeURIComponent(id)}/fork`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source_sequence: sourceSequence }) });
 export const compareRuns = (a: string, b: string) => json<{ a: ComparedRun; b: ComparedRun }>(`/api/runs/compare?${query({ a, b })}`);
+export const createRunExport = (runId: string) =>
+  json<RunExport>(`/api/runs/${encodeURIComponent(runId)}/exports`, { method: 'POST' });
+export async function listRunExports(runId: string): Promise<RunExport[]> {
+  const result = await json<{ items?: RunExport[] }>(`/api/runs/${encodeURIComponent(runId)}/exports`);
+  return Array.isArray(result.items) ? result.items : [];
+}
+export const downloadRunExport = (runId: string, exportId: string) =>
+  json<Record<string, unknown>>(`/api/runs/${encodeURIComponent(runId)}/exports/${encodeURIComponent(exportId)}/download`);
+export const createShareGrant = (
+  runId: string,
+  exportId: string,
+  recipientUserId: string,
+  purpose: 'audit' | 'incident_review' | 'evaluation' | 'support',
+  expiresInSeconds: number,
+) => json<CreatedShareGrant>(`/api/runs/${encodeURIComponent(runId)}/exports/${encodeURIComponent(exportId)}/shares`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ recipient_user_id: recipientUserId, purpose, expires_in_seconds: expiresInSeconds }),
+});
+export async function listShareGrants(runId: string, exportId: string): Promise<ShareGrant[]> {
+  const result = await json<{ items?: ShareGrant[] }>(`/api/runs/${encodeURIComponent(runId)}/exports/${encodeURIComponent(exportId)}/shares`);
+  return Array.isArray(result.items) ? result.items : [];
+}
+export async function revokeShareGrant(grantId: string): Promise<void> {
+  const response = await authenticatedFetch(`/api/shares/${encodeURIComponent(grantId)}`, { method: 'DELETE' });
+  if (!response.ok) throw new RunApiError(response.status, response.status === 404 ? 'Share grant not found' : `Share request failed (${response.status})`);
+}

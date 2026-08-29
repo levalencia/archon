@@ -13,7 +13,11 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import select, update
 
-from app.delegation import EvidenceVerifierSpecialist, VerificationBudget
+from app.delegation import (
+    DelegationEnvelopeService,
+    EvidenceVerifierSpecialist,
+    VerificationBudget,
+)
 from app.research.models import Claim
 from app.runtime.models import ModelResponse, TokenUsage
 from app.security.persistence_redactor import PersistenceRedactor
@@ -112,8 +116,17 @@ async def _run(
     verifier_provider: FakeProvider | None = None,
 ) -> tuple[Any, FakeVectors]:
     vectors = FakeVectors(rows)
+    envelopes = (
+        DelegationEnvelopeService(
+            harness.store.session_factory, {1: b"d" * 32}, active_key_version=1
+        )
+        if verifier_provider is not None
+        else None
+    )
     verifier = (
-        EvidenceVerifierSpecialist(verifier_provider, harness.runs, PersistenceRedactor())
+        EvidenceVerifierSpecialist(
+            verifier_provider, harness.runs, PersistenceRedactor(), envelopes
+        )
         if verifier_provider is not None
         else None
     )
@@ -125,6 +138,7 @@ async def _run(
         provider="fake-provider",
         model="fake-model",
         verifier=verifier,
+        delegation_envelopes=envelopes,
         verifier_budget=VerificationBudget(4_000, 500, 1.0) if verifier is not None else None,
     )
     result = await workflow.run(

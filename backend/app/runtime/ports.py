@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 from app.runtime.models import Message, ModelResponse, ToolCall, ToolDefinition
+from app.runtime.structured_output import ResponseContract
 from app.security.approvals import AuthorizationOutcome, AuthorizationRequest
 from app.security.policy import PolicyRequest
 
@@ -17,6 +18,7 @@ class ModelProvider(Protocol):
         tools: Sequence[ToolDefinition] = (),
         *,
         max_tokens: int = 4096,
+        response_contract: ResponseContract | None = None,
         response_format: str | None = None,
     ) -> ModelResponse: ...
 

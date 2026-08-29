@@ -6,6 +6,7 @@
     type Evaluation, type EvaluationComparison,
   } from '$lib/evaluations';
   import type { Run } from '$lib/runs';
+  import DriftOptimizationPanel from '$lib/components/DriftOptimizationPanel.svelte';
   import { Shield, Zap, AlertTriangle, CheckCircle, XCircle, Loader, Play, History, GitCompare, FileCheck } from 'lucide-svelte';
 
   let runs: Run[] = $state([]);
@@ -23,6 +24,15 @@
   let reportLoading = $state(false);
   let comparing = $state(false);
   let error = $state('');
+  let loadSequence = 0;
+  let createSequence = 0;
+  let reportSequence = 0;
+  let compareSequence = 0;
+  let createController: AbortController | null = null;
+  let reportController: AbortController | null = null;
+  let compareController: AbortController | null = null;
+  let comparisonKey = $state('');
+  let pendingComparisonKey = $state('');
 
   let redTeamResults: any = $state(null);
   let fuzzResults: any = $state(null);
@@ -34,6 +44,24 @@
   const shortId = (id: string) => id.length > 14 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
   const date = (value: string | null) => value ? new Date(value).toLocaleString() : 'Pending';
   const errorMessage = (cause: unknown) => cause instanceof Error ? cause.message : 'Evaluation request failed';
+  const currentComparisonKey = $derived(`${compareA}\u0000${compareB}`);
+
+  $effect(() => {
+    const key = currentComparisonKey;
+    if (pendingComparisonKey && pendingComparisonKey !== key) {
+      compareController?.abort();
+      ++compareSequence;
+      pendingComparisonKey = '';
+      comparing = false;
+    }
+    if (comparisonKey && comparisonKey !== key) {
+      comparison = null;
+      comparisonKey = '';
+      compareController?.abort();
+      ++compareSequence;
+      comparing = false;
+    }
+  });
 
   function chooseDefaults() {
     if (!projectId && runs[0]) projectId = runs[0].project_id;
@@ -45,42 +73,98 @@
   }
 
   async function load() {
+    const sequence = ++loadSequence;
     loading = true; error = '';
     try {
-      [runs, evaluations] = await Promise.all([listRecordedRuns(), listEvaluations()]);
+      const [nextRuns, nextEvaluations] = await Promise.all([
+        listRecordedRuns(),
+        listEvaluations(),
+      ]);
+      if (sequence !== loadSequence) return;
+      runs = nextRuns;
+      evaluations = nextEvaluations;
       chooseDefaults();
       compareA = evaluations[0]?.id || '';
       compareB = evaluations.find((item) => item.id !== compareA)?.id || '';
-    } catch (cause) { error = errorMessage(cause); }
-    finally { loading = false; }
+    } catch (cause) {
+      if (sequence === loadSequence) error = errorMessage(cause);
+    }
+    finally { if (sequence === loadSequence) loading = false; }
   }
 
   async function runEvaluation() {
     if (!projectId || !groundedRunId || !abstentionRunId || groundedRunId === abstentionRunId) return;
-    creating = true; error = ''; comparison = null;
+    const sequence = ++createSequence;
+    createController?.abort();
+    const controller = new AbortController(); createController = controller;
+    const snapshot = {
+      projectId,
+      threshold,
+      groundedRunId,
+      abstentionRunId,
+    };
+    creating = true; error = ''; comparison = null; comparisonKey = '';
     try {
-      const result = await createEvaluation({ projectId, threshold, groundedCitationRunId: groundedRunId, safeAbstentionRunId: abstentionRunId });
+      const result = await createEvaluation({
+        projectId: snapshot.projectId,
+        threshold: snapshot.threshold,
+        groundedCitationRunId: snapshot.groundedRunId,
+        safeAbstentionRunId: snapshot.abstentionRunId,
+      }, controller.signal);
+      if (sequence !== createSequence || controller.signal.aborted) return;
+      ++loadSequence; // invalidate refreshes that started before this durable result
+      loading = false;
       evaluations = [result, ...evaluations.filter((item) => item.id !== result.id)];
-      selected = result;
-      compareA = result.id;
-      compareB ||= evaluations.find((item) => item.id !== result.id)?.id || '';
-    } catch (cause) { error = errorMessage(cause); }
-    finally { creating = false; }
+      if (snapshot.projectId === projectId) {
+        selected = result;
+        compareA = result.id;
+        compareB ||= evaluations.find((item) => item.id !== result.id)?.id || '';
+      }
+    } catch (cause) {
+      if (sequence === createSequence && !controller.signal.aborted) error = errorMessage(cause);
+    }
+    finally { if (sequence === createSequence) creating = false; }
   }
 
   async function showReport(id: string) {
-    reportLoading = true; error = ''; comparison = null;
-    try { selected = await getEvaluation(id); }
-    catch (cause) { error = errorMessage(cause); }
-    finally { reportLoading = false; }
+    const sequence = ++reportSequence;
+    reportController?.abort();
+    const controller = new AbortController(); reportController = controller;
+    reportLoading = true; error = ''; comparison = null; comparisonKey = '';
+    try {
+      const result = await getEvaluation(id, controller.signal);
+      if (sequence === reportSequence && !controller.signal.aborted) selected = result;
+    }
+    catch (cause) {
+      if (sequence === reportSequence && !controller.signal.aborted) error = errorMessage(cause);
+    }
+    finally { if (sequence === reportSequence) reportLoading = false; }
   }
 
   async function runComparison() {
     if (!compareA || !compareB || compareA === compareB) return;
+    const sequence = ++compareSequence;
+    compareController?.abort();
+    const controller = new AbortController(); compareController = controller;
+    const snapshot = { a: compareA, b: compareB, key: currentComparisonKey };
+    pendingComparisonKey = snapshot.key;
     comparing = true; error = '';
-    try { comparison = await compareEvaluations(compareA, compareB); }
-    catch (cause) { error = errorMessage(cause); }
-    finally { comparing = false; }
+    try {
+      const result = await compareEvaluations(snapshot.a, snapshot.b, controller.signal);
+      if (sequence === compareSequence && !controller.signal.aborted && snapshot.key === currentComparisonKey) {
+        comparison = result;
+        comparisonKey = snapshot.key;
+      }
+    }
+    catch (cause) {
+      if (sequence === compareSequence && !controller.signal.aborted && snapshot.key === currentComparisonKey) error = errorMessage(cause);
+    }
+    finally {
+      if (sequence === compareSequence) {
+        pendingComparisonKey = '';
+        comparing = false;
+      }
+    }
   }
 
   async function runSecurity(kind: 'redteam' | 'fuzz') {
@@ -95,7 +179,15 @@
     } finally { securityRunning = ''; }
   }
 
-  onMount(load);
+  onMount(() => {
+    void load();
+    return () => {
+      createController?.abort();
+      reportController?.abort();
+      compareController?.abort();
+      ++loadSequence; ++createSequence; ++reportSequence; ++compareSequence;
+    };
+  });
 </script>
 
 <svelte:head><title>Recorded Run Evaluations · Archon</title></svelte:head>
@@ -165,6 +257,8 @@
     <div class="compare-controls"><label>Baseline<select aria-label="Baseline evaluation" bind:value={compareA}><option value="">Select baseline</option>{#each evaluations as item}<option value={item.id}>{item.project_id} · {shortId(item.id)}</option>{/each}</select></label><label>Candidate<select aria-label="Candidate evaluation" bind:value={compareB}><option value="">Select candidate</option>{#each evaluations as item}<option value={item.id}>{item.project_id} · {shortId(item.id)}</option>{/each}</select></label><button class="btn-secondary" onclick={runComparison} disabled={comparing || !compareA || !compareB || compareA === compareB}>{#if comparing}<Loader size={15} class="animate-spin" />{:else}<GitCompare size={15} />{/if} Compare</button></div>
     {#if comparison}<div class="delta-grid" aria-label="Evaluation deltas">{#each Object.entries(comparison.metric_delta_b_minus_a) as [name, value]}<div><span>{name.replaceAll('_', ' ')}</span><strong class:positive={value > 0} class:negative={value < 0}>{value > 0 ? '+' : ''}{number(value)}</strong><small>candidate − baseline</small></div>{/each}</div>{/if}
   </section>
+
+  <DriftOptimizationPanel {projectId} {evaluations} />
 
   <div class="security-divider"><span>Separate security testing</span></div>
   <section class="security-grid" aria-label="Security testing">

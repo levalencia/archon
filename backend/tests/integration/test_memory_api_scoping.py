@@ -128,6 +128,61 @@ def test_unknown_and_malformed_project_ids_have_explicit_safe_behavior(memory_ap
 
 
 @pytest.mark.integration
+def test_rotation_status_and_batch_are_owner_project_scoped(memory_api) -> None:
+    client, _, alice_headers, bob_headers, secrets = memory_api
+
+    alice = client.get("/api/memory/rotation?project_id=red", headers=alice_headers)
+    bob = client.get("/api/memory/rotation?project_id=red", headers=bob_headers)
+    assert alice.status_code == bob.status_code == 200
+    assert alice.json() == {
+        "project_id": "red",
+        "active_version": 1,
+        "version_counts": {"1": 1},
+        "remaining": 0,
+        "complete": True,
+        "retirement_requires_legacy_writer_drain": True,
+    }
+    assert bob.json()["version_counts"] == {"1": 1}
+
+    rotated = client.post(
+        "/api/memory/rotation?project_id=red",
+        headers=alice_headers,
+        json={"batch_size": 1},
+    )
+    assert rotated.status_code == 200
+    assert rotated.json()["rotated"] == 0
+    serialized = str(rotated.json())
+    assert all(secret not in serialized for secret in secrets.values())
+
+    unknown = client.get("/api/memory/rotation?project_id=unknown", headers=alice_headers)
+    assert unknown.status_code == 200
+    assert unknown.json()["version_counts"] == {}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("payload", [{"batch_size": 0}, {"batch_size": 1001}, {"batch_size": True}])
+def test_rotation_rejects_invalid_batch_size(memory_api, payload) -> None:
+    client, _, alice_headers, _, _ = memory_api
+    response = client.post(
+        "/api/memory/rotation?project_id=red", headers=alice_headers, json=payload
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.integration
+def test_rotation_status_is_rate_limited(memory_api) -> None:
+    client, _, alice_headers, _, _ = memory_api
+    client.app.state.settings.rate_limit_requests = 1
+
+    assert (
+        client.get("/api/memory/rotation?project_id=red", headers=alice_headers).status_code == 200
+    )
+    limited = client.get("/api/memory/rotation?project_id=red", headers=alice_headers)
+    assert limited.status_code == 429
+    assert "retry-after" in limited.headers
+
+
+@pytest.mark.integration
 def test_openapi_documents_only_project_id_for_scoped_memory_queries() -> None:
     schema = create_app(Settings(llm_provider="mock", debug=True)).openapi()
 

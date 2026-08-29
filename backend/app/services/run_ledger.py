@@ -31,7 +31,18 @@ _TERMINAL_RUN_STATUSES = ("completed", "failed", "cancelled")
 _SAFE_FIELDS: dict[str, frozenset[str]] = {
     AgentEventKind.RUN_STARTED.value: frozenset({"safe"}),
     AgentEventKind.ITERATION_STARTED.value: frozenset(),
-    AgentEventKind.MODEL_RESPONSE.value: frozenset({"provider_stop_reason"}),
+    AgentEventKind.MODEL_RESPONSE.value: frozenset(
+        {
+            "provider_stop_reason",
+            "actual_provider",
+            "actual_model",
+            "cache_read_input_tokens",
+            "cache_write_input_tokens",
+        }
+    ),
+    AgentEventKind.BUDGET_BLOCKED.value: frozenset({"code", "stop_reason"}),
+    AgentEventKind.PROVIDER_CAPABILITY_REJECTED.value: frozenset({"code", "missing_capabilities"}),
+    AgentEventKind.STRUCTURED_OUTPUT_REJECTED.value: frozenset({"code"}),
     AgentEventKind.MODEL_PROGRESS.value: frozenset(),
     AgentEventKind.TEXT_DELTA.value: frozenset(),
     AgentEventKind.TOOL_CALL_REQUESTED.value: frozenset({"id", "name", "arguments_hash"}),
@@ -106,7 +117,38 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
             "total_tokens",
         }
     ),
-    AgentEventKind.RUN_STOPPED.value: frozenset({"reason", "error"}),
+    AgentEventKind.REFLECTION_STARTED.value: frozenset(
+        {"rubric_id", "rubric_version", "draft_hash", "max_revisions"}
+    ),
+    AgentEventKind.REFLECTION_VERDICT.value: frozenset(
+        {
+            "rubric_id",
+            "rubric_version",
+            "draft_hash",
+            "critique_hash",
+            "verdict",
+            "issue_codes",
+            "evidence_refs",
+            "confidence",
+        }
+    ),
+    AgentEventKind.REFLECTION_COMPLETED.value: frozenset(
+        {
+            "rubric_id",
+            "rubric_version",
+            "draft_hash",
+            "selected_hash",
+            "outcome",
+            "calls",
+            "revisions",
+            "input_tokens",
+            "output_tokens",
+            "cost_microusd",
+        }
+    ),
+    AgentEventKind.RUN_STOPPED.value: frozenset(
+        {"reason", "error", "cache_read_input_tokens", "cache_write_input_tokens"}
+    ),
 }
 
 

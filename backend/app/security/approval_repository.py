@@ -165,6 +165,39 @@ class ApprovalRepository:
         ttl: timedelta,
         now: datetime | None = None,
     ) -> ApprovalRecord:
+        async with self._sessions() as session:
+            record = await self.reserve_in_session(
+                session,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                run_id=run_id,
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                arguments_hash=arguments_hash,
+                risk_classes=risk_classes,
+                matched_rule_id=matched_rule_id,
+                ttl=ttl,
+                now=now,
+            )
+            await session.commit()
+        return record
+
+    async def reserve_in_session(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: str,
+        conversation_id: str,
+        run_id: str,
+        tool_call_id: str,
+        tool_name: str,
+        arguments_hash: str,
+        risk_classes: Iterable[RiskClass | str],
+        matched_rule_id: str | None = None,
+        ttl: timedelta,
+        now: datetime | None = None,
+    ) -> ApprovalRecord:
+        """Reserve within the caller's transaction so its domain fence is atomic."""
         if not isinstance(ttl, timedelta) or ttl <= timedelta(0):
             raise ValueError("ttl must be a positive timedelta")
         created = _datetime(now or datetime.now(tz=UTC), "now")
@@ -197,13 +230,11 @@ class ApprovalRepository:
             expires_at=record.expires_at,
             decided_at=None,
         )
-        async with self._sessions() as session:
-            session.add(row)
-            try:
-                await session.commit()
-            except IntegrityError as error:
-                await session.rollback()
-                raise ValueError("duplicate approval owner/run/tool-call identity") from error
+        session.add(row)
+        try:
+            await session.flush()
+        except IntegrityError as error:
+            raise ValueError("duplicate approval owner/run/tool-call identity") from error
         return record
 
     async def get_owner(

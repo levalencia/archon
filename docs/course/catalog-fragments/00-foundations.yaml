@@ -1,0 +1,174 @@
+- id: agent-anatomy
+  title: Agent anatomy and trust boundaries
+  status: implemented
+  module: docs/course/modules/00-agent-anatomy/README.md
+  sources:
+    - backend/app/runtime/engine.py
+    - backend/app/runtime/factory.py
+    - backend/app/runtime/ports.py
+  tests:
+    - backend/tests/unit/test_runtime_v2.py
+    - backend/tests/unit/test_runtime_sse.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Custom local runtime; no agent framework and no public production evidence.
+
+- id: python-protocols-di
+  title: Python OOP, Protocols, and dependency injection
+  status: implemented
+  module: docs/course/modules/01-python-architecture/README.md
+  sources:
+    - backend/app/runtime/ports.py
+    - backend/app/runtime/factory.py
+    - backend/app/main.py
+  tests:
+    - backend/tests/unit/test_adapters.py
+    - backend/tests/unit/test_tools.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Protocols and mocks prove interfaces, not external-adapter behavior.
+
+- id: async-python
+  title: Async Python and cancellation
+  status: implemented
+  module: docs/course/modules/01-python-architecture/README.md
+  sources:
+    - backend/app/runtime/engine.py
+    - backend/app/tools/registry.py
+    - backend/app/security/live_approvals.py
+  tests:
+    - backend/tests/unit/test_runtime_budget_regressions.py
+    - backend/tests/unit/test_durable_live_approvals.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Cancellation and timeout cannot roll back a committed external effect.
+
+- id: typed-runtime
+  title: Typed provider-neutral runtime
+  status: implemented
+  module: docs/course/modules/02-typed-runtime/README.md
+  sources:
+    - backend/app/runtime/models.py
+    - backend/app/runtime/events.py
+    - backend/app/runtime/engine.py
+  tests:
+    - backend/tests/unit/test_runtime_v2.py
+    - backend/tests/unit/test_runtime_policy.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: External provider token accuracy and production load are unverified.
+
+- id: runtime-state-machine
+  title: Runtime state machine and stop reasons
+  status: implemented
+  module: docs/course/modules/02-typed-runtime/README.md
+  sources:
+    - backend/app/runtime/engine.py
+    - backend/app/runtime/events.py
+  tests:
+    - backend/tests/unit/test_runtime_budget_regressions.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Implemented as explicit loop control, not a state-machine framework.
+
+- id: react-loop
+  title: Bounded ReAct-style tool loop
+  status: implemented
+  module: docs/course/modules/03-react-loop/README.md
+  sources:
+    - backend/app/runtime/engine.py
+    - backend/app/runtime/models.py
+  tests:
+    - backend/tests/unit/test_runtime_v2.py
+    - backend/tests/unit/test_tool_error_feedback.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Tool-error feedback is not generic self-reflection.
+
+- id: generic-self-reflection
+  title: Generic critique and revision self-reflection
+  status: implemented
+  module: docs/course/modules/03-react-loop/README.md
+  sources:
+    - backend/app/reflection/models.py
+    - backend/app/reflection/service.py
+    - backend/app/reflection/measurement.py
+    - backend/app/runtime/engine.py
+  tests:
+    - backend/tests/unit/test_bounded_reflection.py
+    - backend/tests/integration/test_reflection_benefit.py
+    - backend/tests/unit/test_tool_error_feedback.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Bounded local final-answer reflection is implemented; the recorded synthetic fixture does not prove live-provider benefit or generalization, and no learned reflection memory exists.
+
+- id: tool-contracts
+  title: Secure typed tool contracts
+  status: implemented
+  module: docs/course/modules/04-tools-and-schemas/README.md
+  sources:
+    - backend/app/tools/registry.py
+    - backend/app/runtime/models.py
+    - backend/app/routes/chat.py
+  tests:
+    - backend/tests/unit/test_tools.py
+    - backend/tests/unit/test_runtime_policy.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Handler semantics and effect rollback remain adapter responsibilities.
+
+- id: json-schema-subset
+  title: Tool input JSON Schema subset
+  status: partial
+  module: docs/course/modules/04-tools-and-schemas/README.md
+  sources:
+    - backend/app/tools/registry.py
+  tests:
+    - backend/tests/unit/test_tools.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Compact object/property/type/enum subset; not full JSON Schema.
+
+- id: policy-engine
+  title: Deterministic policy engine
+  status: implemented
+  module: docs/course/modules/05-policy-and-approvals/README.md
+  sources:
+    - backend/app/security/policy.py
+    - backend/app/security/default_policy.py
+  tests:
+    - backend/tests/security/test_policy_engine.py
+    - backend/tests/unit/test_runtime_policy.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Path policy matching is lexical; execution must enforce containment.
+
+- id: durable-approvals
+  title: Exact-bound durable approvals
+  status: implemented
+  module: docs/course/modules/05-policy-and-approvals/README.md
+  sources:
+    - backend/app/security/approvals.py
+    - backend/app/security/approval_repository.py
+    - backend/app/security/live_approvals.py
+  tests:
+    - backend/tests/unit/test_approval_repository.py
+    - backend/tests/unit/test_durable_live_approvals.py
+    - backend/tests/unit/test_runtime_policy.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Locally verified; no multi-region consistency or public SLO claim.
+
+- id: idempotency
+  title: Idempotency and exactly-once claim boundaries
+  status: partial
+  module: docs/course/modules/05-policy-and-approvals/README.md
+  sources:
+    - backend/app/runtime/engine.py
+    - backend/app/security/approval_repository.py
+  tests:
+    - backend/tests/unit/test_runtime_policy.py
+    - backend/tests/unit/test_durable_live_approvals.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Local duplicate blocking and one-shot approval do not guarantee exactly-once external effects.

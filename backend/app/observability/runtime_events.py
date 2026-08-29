@@ -117,6 +117,11 @@ class CompositeEventSink:
         # Raw provider output is reserved for the requesting response sink. Every
         # operational and persistence path gets an independent redacted copy.
         safe_data = sanitize(self.redactor.redact_value(event.data))
+        if event.kind in (AgentEventKind.MODEL_RESPONSE, AgentEventKind.RUN_STOPPED):
+            if event.usage.cache_read_input_tokens is not None:
+                safe_data["cache_read_input_tokens"] = event.usage.cache_read_input_tokens
+            if event.usage.cache_write_input_tokens is not None:
+                safe_data["cache_write_input_tokens"] = event.usage.cache_write_input_tokens
         common_log = {
             "event_kind": event.kind.value,
             "iteration": event.iteration,
@@ -148,6 +153,14 @@ class CompositeEventSink:
                     "gen_ai.usage.total_tokens": event.usage.total_tokens,
                 }
             )
+            if event.usage.cache_read_input_tokens is not None:
+                self._model_span.attributes["gen_ai.usage.cache_read_input_tokens"] = (
+                    event.usage.cache_read_input_tokens
+                )
+            if event.usage.cache_write_input_tokens is not None:
+                self._model_span.attributes["gen_ai.usage.cache_write_input_tokens"] = (
+                    event.usage.cache_write_input_tokens
+                )
             duration = round((now - self._model_span.start_time) * 1000, 3)
             metrics.record_llm_call(self.model, event.usage.total_tokens, duration)
             self._finish(self._model_span)
@@ -193,6 +206,14 @@ class CompositeEventSink:
                     "gen_ai.usage.total_tokens": event.usage.total_tokens,
                 }
             )
+            if event.usage.cache_read_input_tokens is not None:
+                self._run.attributes["gen_ai.usage.cache_read_input_tokens"] = (
+                    event.usage.cache_read_input_tokens
+                )
+            if event.usage.cache_write_input_tokens is not None:
+                self._run.attributes["gen_ai.usage.cache_write_input_tokens"] = (
+                    event.usage.cache_write_input_tokens
+                )
             duration = round((now - self._run.start_time) * 1000, 3)
             metrics.record_run_stopped(
                 reason, event.iteration, event.usage.total_tokens, duration, bool(error)

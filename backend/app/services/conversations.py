@@ -100,8 +100,8 @@ class ConversationRepository:
 
     async def store(
         self, conversation_id: str, role: str, content: str, user_id: str = "default"
-    ) -> None:
-        await self._store.store_message(
+    ) -> int | None:
+        return await self._store.store_message(
             conversation_id, role, self._redactor.redact_text(content).text, user_id
         )
 
@@ -109,6 +109,11 @@ class ConversationRepository:
         self, conversation_id: str, limit: int = 50, user_id: str = "default"
     ) -> builtins.list[dict[str, Any]]:
         return await self._store.retrieve(conversation_id, limit, user_id)
+
+    async def retrieve_with_metadata(
+        self, conversation_id: str, limit: int = 50, user_id: str = "default"
+    ) -> builtins.list[dict[str, Any]]:
+        return await self._store.retrieve_with_metadata(conversation_id, limit, user_id)
 
     async def retrieve_through(
         self,

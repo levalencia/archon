@@ -22,14 +22,19 @@ from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
 from app.routes.admin import get_skills_top_k
 from app.routes.skills import get_skill_registry
+from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
-from app.runtime.support import prepare_messages
+from app.runtime.images import ImageValidationError
+from app.runtime.support import prepare_effective_context
 from app.security.auth import get_current_user
+from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 from app.security.policy import RiskClass
 from app.services.artifacts import Artifact, detect_artifact_in_response
+from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.conversations import ConversationRepository
-from app.services.task_queue import get_task_queue
+from app.services.monetary_budget import MonetaryBudgetRepository
+from app.services.task_queue import DurableJobQueue
 from app.tools.builtin import calculator_tool, datetime_tool, read_file_tool, write_file_tool
 from app.tools.image_gen import image_gen_tool
 from app.tools.memory_tools import (
@@ -62,6 +67,7 @@ def get_tool_registry(
     scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
     sandbox_executor: SandboxExecutor | None = None,
+    job_queue: DurableJobQueue | None = None,
     bound_tools: Sequence[MCPBoundToolSpec] = (),
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
@@ -72,6 +78,7 @@ def get_tool_registry(
         scoped_memory=scoped_memory,
         conversations=conversations,
         sandbox_executor=sandbox_executor,
+        job_queue=job_queue,
         bound_tools=bound_tools,
     )
 
@@ -106,6 +113,7 @@ def _create_tool_registry(
     scoped_memory: ScopedEncryptedMemoryRepository | None = None,
     conversations: ConversationRepository | None = None,
     sandbox_executor: SandboxExecutor | None = None,
+    job_queue: DurableJobQueue | None = None,
     bound_tools: Sequence[MCPBoundToolSpec] = (),
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
@@ -279,16 +287,21 @@ def _create_tool_registry(
         )
 
     async def _background_task_handler(action: str, task_id: str = "") -> dict[str, Any]:
-        """Manage background tasks: submit, status, list."""
-        queue = get_task_queue()
+        """Read durable background-job state for the current owner/project."""
+        if context is None or job_queue is None:
+            return {"error": "Background jobs unavailable"}
         if action == "list":
-            return {"tasks": queue.list_tasks()}
+            return {
+                "tasks": await job_queue.list(
+                    context.user_id, project_id=context.project_id, limit=50
+                )
+            }
         if action == "status" and task_id:
-            status = queue.get_status(task_id)
-            if status is None:
-                return {"error": f"Task not found: {task_id}"}
+            status = await job_queue.get(context.user_id, context.project_id, task_id)
+            if status is None or status["project_id"] != context.project_id:
+                return {"error": "Task not found"}
             return status
-        return {"error": f"Unknown action: {action}. Use 'list' or 'status'."}
+        return {"error": "Unknown action. Use 'list' or 'status'."}
 
     registry.register(
         name="background_task",
@@ -325,7 +338,7 @@ class ChatRequest(BaseModel):
     project_id: str = Field(
         default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
     )
-    image: str = ""  # Base64 encoded image (optional)
+    image: str = Field(default="", max_length=7_000_000)
 
 
 class ChatResponse(BaseModel):
@@ -350,6 +363,27 @@ async def chat(
 ) -> ChatResponse:
     """Send a message. The agent reasons with tools and skills, returns thinking steps."""
     await enforce_rate_limit(request, user, "chat")
+    try:
+        request.app.state.compliance.enforce_input(body.message)
+    except ComplianceViolationError as exc:
+        raise HTTPException(
+            status_code=422, detail="Message rejected by compliance policy"
+        ) from exc
+    images: list[str] | None = None
+    if body.image:
+        try:
+            attachment = request.app.state.image_attachments.add_data_uri(
+                body.image,
+                owner_id=user["user_id"],
+                project_id=body.project_id,
+                filename="chat-image",
+                persist=False,
+            )
+        except ImageValidationError as exc:
+            raise HTTPException(
+                status_code=422, detail="Image rejected by validation policy"
+            ) from exc
+        images = [attachment.data_uri]
     cid = get_correlation_id()
     start_time = time.monotonic()
     settings = request.app.state.settings
@@ -393,6 +427,7 @@ async def chat(
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
+        job_queue=request.app.state.job_queue,
         bound_tools=bound_tools,
     )
 
@@ -405,9 +440,7 @@ async def chat(
         correlation_id=cid,
     )
 
-    # Run the agent
-    # Parse images if provided
-    images = [body.image] if body.image else None
+    # Run the agent with the validated image tuple prepared above.
     # Optimize context window before running agent
     history = await memory.retrieve(conv_id, limit=50, user_id=user["user_id"])
     if len(history) > 10:
@@ -420,12 +453,26 @@ async def chat(
             utilization_pct=stats["utilization_pct"],
         )
 
-    persistent_memory_text = (
-        await scoped_memory.context_text(user["user_id"], body.project_id)
-        if scoped_memory is not None
-        else ""
+    if scoped_memory is not None:
+        memory_bundle = await scoped_memory.context_bundle(user["user_id"], body.project_id)
+        persistent_memory_text = memory_bundle.text
+        memory_ids = memory_bundle.fact_ids
+    else:
+        persistent_memory_text = ""
+        memory_ids = ()
+    await memory.runs.ensure_run(
+        run_id=run_context.run_id,
+        user_id=user["user_id"],
+        project_id=body.project_id,
+        conversation_id=conv_id,
+        correlation_id=run_context.correlation_id,
+        provider=settings.llm_provider,
+        model=settings.llm_model,
     )
-    messages = await prepare_messages(
+    current_message_id = await memory.store(conv_id, "user", body.message, user["user_id"])
+    if current_message_id is None:
+        raise RuntimeError("context_message_persistence_failed")
+    effective_context = await prepare_effective_context(
         body.message,
         conv_id,
         memory,
@@ -434,8 +481,15 @@ async def chat(
         images,
         user["user_id"],
         persistent_memory_text,
+        project_id=body.project_id,
+        run_id=run_context.run_id,
+        memory_ids=memory_ids,
+        skill_ids=tuple(skill.name for skill in relevant_skills),
+        current_message_id=current_message_id,
+        asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
     )
-    await memory.store(conv_id, "user", body.message, user["user_id"])
+    await ContextSnapshotRepository(memory.session_factory).record(effective_context.manifest)
+    messages = list(effective_context.messages)
     runtime = create_chat_runtime(
         context=run_context,
         provider=provider,
@@ -450,8 +504,21 @@ async def chat(
     result = await runtime.run(messages)
 
     elapsed_ms = (time.monotonic() - start_time) * 1000
+    cost_usd: float | None = None
+    if settings.durable_monetary_budget_enabled:
+        summary = await MonetaryBudgetRepository(memory.session_factory).summary(
+            owner_id=user["user_id"],
+            project_id=run_context.project_id,
+            run_id=run_context.run_id,
+        )
+        if summary is not None:
+            cost_usd = round(summary.run_spent_nusd / 1_000_000_000, 9)
     await memory.runs.finalize_metadata(
-        user["user_id"], str(run_context.run_id), answer=result.content, latency_ms=elapsed_ms
+        user["user_id"],
+        str(run_context.run_id),
+        answer=result.content,
+        cost_usd=cost_usd,
+        latency_ms=elapsed_ms,
     )
 
     thinking_steps = [
@@ -468,7 +535,7 @@ async def chat(
     ]
 
     # Add image step if image was analyzed
-    if body.image:
+    if images:
         thinking_steps.insert(
             0,
             {
@@ -533,7 +600,7 @@ async def chat(
         tokens_used=result.usage.total_tokens,
         thinking_steps=thinking_steps,
         skills_used=skills_used,
-        image_analyzed=bool(body.image),
+        image_analyzed=bool(images),
         artifacts=saved_artifacts,
     )
 

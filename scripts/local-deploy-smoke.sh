@@ -41,6 +41,18 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+if [[ -z "${ARCHON_SANDBOX_PLATFORM:-}" ]]; then
+  daemon_arch="$(docker info --format '{{.Architecture}}')"
+  case "$daemon_arch" in
+    aarch64 | arm64) ARCHON_SANDBOX_PLATFORM="linux/arm64" ;;
+    x86_64 | amd64) ARCHON_SANDBOX_PLATFORM="linux/amd64" ;;
+    *)
+      printf 'Unsupported Docker daemon architecture: %s\n' "$daemon_arch" >&2
+      exit 1
+      ;;
+  esac
+  export ARCHON_SANDBOX_PLATFORM
+fi
 BASE_URL="http://127.0.0.1:$ARCHON_LOCAL_PORT"
 compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$PROJECT")
 
@@ -93,7 +105,7 @@ unset ACCESS_TOKEN AUTH_HEADER_NAME
 
 curl --fail --silent --show-error "$BASE_URL/metrics" | python3 -c 'import sys; assert sys.stdin.read().strip()'
 migration=$("${compose[@]}" exec -T postgres psql -U archon -d archon -Atqc 'select version_num from alembic_version')
-[[ "$migration" == "20260826_08" ]]
+[[ "$migration" == "20260828_14" ]]
 "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://otel-collector:13133/', timeout=3)"
 
 otel_observed=0
@@ -110,4 +122,4 @@ raise SystemExit(0 if "agent.run" in text and "archon-local" in text else 1)
 done
 [[ "$otel_observed" == "1" ]]
 
-printf 'Local deployment smoke test passed: gateway, DB, Redis, mock embeddings, auth, metrics, migration 08, and exported OTEL span.\n'
+printf 'Local deployment smoke test passed: gateway, DB, Redis, mock embeddings, auth, metrics, migration 14, and exported OTEL span.\n'

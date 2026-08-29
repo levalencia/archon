@@ -15,11 +15,13 @@ from typing import Any, cast
 import structlog
 from sqlalchemy import (
     JSON,
+    BigInteger,
     CheckConstraint,
     Column,
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
@@ -41,6 +43,75 @@ logger = structlog.get_logger()
 
 class Base(DeclarativeBase):
     pass
+
+
+class DelegationNonceRow(Base):
+    """One-time receipt for an authenticated delegation envelope."""
+
+    __tablename__ = "delegation_nonce_receipts"
+    __table_args__ = (
+        CheckConstraint("key_version BETWEEN 1 AND 255", name="ck_delegation_key_version"),
+        Index("ix_delegation_receipts_issued_at", "issued_at"),
+    )
+    nonce = Column(String(255), primary_key=True)
+    key_version = Column(Integer, nullable=False)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    parent_run_id = Column(String(255), nullable=False)
+    child_run_id = Column(String(255), nullable=False)
+    signature_hash = Column(String(64), nullable=False)
+    issued_at = Column(BigInteger, nullable=False)
+    received_at = Column(BigInteger, nullable=False)
+
+
+class BackgroundJobRow(Base):
+    """Restart-safe, owner/project-scoped allowlisted work item."""
+
+    __tablename__ = "background_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','running','succeeded','failed','dead_letter','cancelled')",
+            name="ck_background_jobs_status",
+        ),
+        CheckConstraint("kind IN ('echo','run_export')", name="ck_background_jobs_kind"),
+        CheckConstraint(
+            "attempts >= 0 AND max_attempts BETWEEN 1 AND 10 AND attempts <= max_attempts",
+            name="ck_background_jobs_attempts",
+        ),
+        CheckConstraint("lease_generation >= 0", name="ck_background_jobs_lease_generation"),
+        CheckConstraint(
+            "(status = 'running' AND worker_id IS NOT NULL AND lease_expires_at IS NOT NULL) "
+            "OR (status != 'running' AND worker_id IS NULL AND lease_expires_at IS NULL)",
+            name="ck_background_jobs_lease_state",
+        ),
+        CheckConstraint(
+            "(status IN ('succeeded','failed','dead_letter','cancelled') "
+            "AND completed_at IS NOT NULL) OR "
+            "(status IN ('pending','running') AND completed_at IS NULL)",
+            name="ck_background_jobs_completion_state",
+        ),
+        UniqueConstraint("owner_id", "project_id", "idempotency_key", name="uq_job_idempotency"),
+        Index("ix_jobs_claim", "status", "available_at", "created_at"),
+        Index("ix_jobs_owner_project", "owner_id", "project_id", "created_at"),
+    )
+    job_id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    kind = Column(String(64), nullable=False)
+    payload_json = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=3)
+    lease_generation = Column(Integer, nullable=False, default=0)
+    idempotency_key = Column(String(255), nullable=True)
+    worker_id = Column(String(255), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    available_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    result_json = Column(Text, nullable=True)
+    error_code = Column(String(64), nullable=True)
 
 
 class ConversationRow(Base):
@@ -181,6 +252,14 @@ class RunRow(Base):
             "status IN ('running','completed','failed','cancelled')", name="ck_runs_status"
         ),
         CheckConstraint("next_sequence >= 1", name="ck_runs_next_sequence"),
+        CheckConstraint(
+            "budget_limit_nusd >= 0 AND budget_spent_nusd >= 0 AND budget_reserved_nusd >= 0",
+            name="ck_runs_budget_amounts_nonnegative",
+        ),
+        CheckConstraint(
+            "budget_spent_nusd + budget_reserved_nusd <= budget_limit_nusd",
+            name="ck_runs_budget_within_limit",
+        ),
         Index("ix_runs_owner_started", "user_id", "started_at"),
         Index("ix_runs_owner_project_started", "user_id", "project_id", "started_at"),
         Index("ix_runs_conversation", "conversation_id"),
@@ -210,6 +289,209 @@ class RunRow(Base):
     latency_ms = Column(Float, nullable=True)
     iterations = Column(Integer, nullable=False, default=0)
     next_sequence = Column(Integer, nullable=False, default=1)
+    budget_limit_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
+    budget_spent_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
+    budget_reserved_nusd = Column(BigInteger, nullable=False, default=0, server_default="0")
+    budget_opened_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ContextSnapshotRow(Base):
+    """Redacted effective-context lineage; never stores prompt or source content."""
+
+    __tablename__ = "context_snapshots"
+    __table_args__ = (
+        CheckConstraint("schema_version = 1", name="ck_context_snapshots_schema_version"),
+        CheckConstraint("estimated_tokens >= 0", name="ck_context_snapshots_tokens_nonnegative"),
+        UniqueConstraint("run_id", name="uq_context_snapshots_run"),
+        Index("ix_context_snapshots_owner_run", "owner_id", "run_id"),
+        Index(
+            "ix_context_snapshots_owner_project_created",
+            "owner_id",
+            "project_id",
+            "created_at",
+        ),
+    )
+
+    snapshot_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("runs.run_id", ondelete="CASCADE"), nullable=False
+    )
+    conversation_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    selected_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    summarized_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    memory_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    skill_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    input_asset_fingerprints_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    summary_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    estimated_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    truncation_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RunExportRow(Base):
+    """Immutable, disclosure-scanned run evidence bundle."""
+
+    __tablename__ = "run_exports"
+    __table_args__ = (
+        CheckConstraint("schema_version = 1", name="ck_run_exports_schema_version"),
+        UniqueConstraint("export_id", "owner_id", name="uq_run_exports_export_owner"),
+        UniqueConstraint("owner_id", "run_id", "content_checksum", name="uq_run_exports_content"),
+        Index("ix_run_exports_owner_run", "owner_id", "run_id", "created_at"),
+    )
+    export_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("runs.run_id", ondelete="CASCADE"), nullable=False
+    )
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    bundle_json: Mapped[str] = mapped_column(Text, nullable=False)
+    content_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RunShareGrantRow(Base):
+    """Purpose-bound read grant; only the token digest is durable."""
+
+    __tablename__ = "run_share_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["export_id", "owner_id"],
+            ["run_exports.export_id", "run_exports.owner_id"],
+            ondelete="CASCADE",
+            name="fk_share_export_owner",
+        ),
+        CheckConstraint(
+            "purpose IN ('audit','incident_review','evaluation','support')",
+            name="ck_share_purpose",
+        ),
+        CheckConstraint("expires_at > created_at", name="ck_share_expiry_after_create"),
+        CheckConstraint(
+            "revoked_at IS NULL OR revoked_at >= created_at", name="ck_share_revoked_after_create"
+        ),
+        Index("ix_share_grants_owner_export", "owner_id", "export_id", "created_at"),
+        Index("ix_share_grants_token_hash", "token_hash", unique=True),
+    )
+    grant_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    export_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    recipient_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(120), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EffectRow(Base):
+    """Durable effect tombstone containing hashes and lifecycle metadata only."""
+
+    __tablename__ = "effects"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('reserved','committed','failed','indeterminate')",
+            name="ck_effects_state",
+        ),
+        CheckConstraint("identity_version >= 0", name="ck_effects_identity_version_nonnegative"),
+        CheckConstraint(
+            "output_size IS NULL OR output_size >= 0", name="ck_effects_output_size_nonnegative"
+        ),
+        Index("ix_effects_owner_project_state", "owner_id", "project_id", "state"),
+        Index("ix_effects_owner_run", "owner_id", "run_id"),
+        Index("ix_effects_run_state", "run_id", "state"),
+    )
+
+    effect_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    identity_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    schema_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False)
+    output_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    output_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    review_disposition: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ProjectBudgetRow(Base):
+    """Integer nano-US-dollar budget counters for an owner/project scope."""
+
+    __tablename__ = "project_budgets"
+    __table_args__ = (
+        CheckConstraint(
+            "limit_nusd >= 0 AND spent_nusd >= 0 AND reserved_nusd >= 0",
+            name="ck_project_budgets_amounts_nonnegative",
+        ),
+        CheckConstraint(
+            "spent_nusd + reserved_nusd <= limit_nusd",
+            name="ck_project_budgets_within_limit",
+        ),
+    )
+
+    owner_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    limit_nusd: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    spent_nusd: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    reserved_nusd: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ModelChargeRow(Base):
+    """Safe monetary reservation and reconciliation metadata for one model dispatch."""
+
+    __tablename__ = "model_charges"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('reserved','dispatched','reconciled','released','indeterminate')",
+            name="ck_model_charges_state",
+        ),
+        CheckConstraint("ordinal >= 0", name="ck_model_charges_ordinal_nonnegative"),
+        CheckConstraint("reserved_nusd >= 0", name="ck_model_charges_reserved_nonnegative"),
+        CheckConstraint(
+            "actual_nusd IS NULL OR actual_nusd >= 0",
+            name="ck_model_charges_actual_nonnegative",
+        ),
+        CheckConstraint(
+            "(input_tokens IS NULL OR input_tokens >= 0) AND "
+            "(output_tokens IS NULL OR output_tokens >= 0) AND "
+            "(cache_read_tokens IS NULL OR cache_read_tokens >= 0) AND "
+            "(cache_write_tokens IS NULL OR cache_write_tokens >= 0)",
+            name="ck_model_charges_tokens_nonnegative",
+        ),
+        UniqueConstraint("run_id", "ordinal", name="uq_model_charges_run_ordinal"),
+        Index("ix_model_charges_owner_project_state", "owner_id", "project_id", "state"),
+        Index("ix_model_charges_run_state", "run_id", "state"),
+    )
+
+    charge_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False)
+    reserved_nusd: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    actual_nusd: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cache_read_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cache_write_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class EvalRunRow(Base):
@@ -220,6 +502,7 @@ class EvalRunRow(Base):
         CheckConstraint("status IN ('running','completed','failed')", name="ck_eval_runs_status"),
         CheckConstraint("threshold >= 0 AND threshold <= 1", name="ck_eval_runs_threshold"),
         CheckConstraint("passed IS NULL OR passed IN (0,1)", name="ck_eval_runs_passed"),
+        UniqueConstraint("id", "owner_id", "project_id", name="uq_eval_runs_scope"),
         Index("ix_eval_runs_owner_project_created", "owner_id", "project_id", "created_at"),
     )
 
@@ -237,6 +520,19 @@ class EvalRunRow(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class EvalCohortRevisionRow(Base):
+    """Immutable runtime revision identity for an evaluation cohort."""
+
+    __tablename__ = "eval_cohort_revisions"
+    eval_run_id = Column(
+        String(36), ForeignKey("eval_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    model_revision = Column(String(255), nullable=False)
+    provider_revision = Column(String(255), nullable=False)
+    config_revision = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
 
 
 class EvalCaseResultRow(Base):
@@ -258,6 +554,143 @@ class EvalCaseResultRow(Base):
     score = Column(Float, nullable=False)
     metrics_json = Column(JSON, nullable=False)
     checks_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class EvalDriftReportRow(Base):
+    """Immutable metadata-only comparison of two evaluation cohorts."""
+
+    __tablename__ = "eval_drift_reports"
+    __table_args__ = (
+        UniqueConstraint("id", "owner_id", "project_id", name="uq_drift_scope"),
+        ForeignKeyConstraint(
+            ["baseline_eval_id", "owner_id", "project_id"],
+            ["eval_runs.id", "eval_runs.owner_id", "eval_runs.project_id"],
+            name="fk_drift_baseline_scope",
+        ),
+        ForeignKeyConstraint(
+            ["candidate_eval_id", "owner_id", "project_id"],
+            ["eval_runs.id", "eval_runs.owner_id", "eval_runs.project_id"],
+            name="fk_drift_candidate_scope",
+        ),
+        CheckConstraint("minimum_sample_size BETWEEN 2 AND 10000", name="ck_drift_min_sample"),
+        CheckConstraint(
+            "baseline_eval_id <> candidate_eval_id", name="ck_drift_distinct_evaluations"
+        ),
+        UniqueConstraint(
+            "owner_id",
+            "project_id",
+            "baseline_eval_id",
+            "candidate_eval_id",
+            "minimum_sample_size",
+            name="uq_drift_comparison",
+        ),
+        Index("ix_drift_owner_project_created", "owner_id", "project_id", "created_at"),
+    )
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    baseline_eval_id = Column(String(36), nullable=False)
+    candidate_eval_id = Column(String(36), nullable=False)
+    baseline_identity_json = Column(JSON, nullable=False)
+    candidate_identity_json = Column(JSON, nullable=False)
+    baseline_summary_json = Column(JSON, nullable=False)
+    candidate_summary_json = Column(JSON, nullable=False)
+    deltas_json = Column(JSON, nullable=False)
+    warnings_json = Column(JSON, nullable=False)
+    minimum_sample_size = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class OptimizationCandidateRow(Base):
+    """Bounded recommendation only; promotion records but never applies a revision."""
+
+    __tablename__ = "optimization_candidates"
+    __table_args__ = (
+        UniqueConstraint("id", "owner_id", "project_id", name="uq_candidate_scope"),
+        ForeignKeyConstraint(
+            ["baseline_eval_id", "owner_id", "project_id"],
+            ["eval_runs.id", "eval_runs.owner_id", "eval_runs.project_id"],
+            name="fk_candidate_baseline_scope",
+        ),
+        ForeignKeyConstraint(
+            ["candidate_eval_id", "owner_id", "project_id"],
+            ["eval_runs.id", "eval_runs.owner_id", "eval_runs.project_id"],
+            name="fk_candidate_evidence_scope",
+        ),
+        ForeignKeyConstraint(
+            ["drift_report_id", "owner_id", "project_id"],
+            [
+                "eval_drift_reports.id",
+                "eval_drift_reports.owner_id",
+                "eval_drift_reports.project_id",
+            ],
+            name="fk_candidate_drift_scope",
+        ),
+        CheckConstraint(
+            "candidate_type IN ('prompt','policy','retrieval','config')", name="ck_candidate_type"
+        ),
+        CheckConstraint(
+            "state IN ('proposed','approved','rejected','promoted','rolled_back')",
+            name="ck_candidate_state",
+        ),
+        CheckConstraint("version >= 1", name="ck_candidate_version"),
+        CheckConstraint(
+            "baseline_eval_id <> candidate_eval_id", name="ck_candidate_distinct_evaluations"
+        ),
+        UniqueConstraint("approval_id", name="uq_candidate_approval_single_use"),
+        Index("ix_candidates_owner_project_created", "owner_id", "project_id", "created_at"),
+    )
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    candidate_type = Column(String(20), nullable=False)
+    change_summary = Column(String(1000), nullable=False)
+    proposal_metadata_json = Column(JSON, nullable=False)
+    rollback_plan = Column(String(2000), nullable=False)
+    target_revision = Column(String(255), nullable=False)
+    baseline_eval_id = Column(String(36), nullable=False)
+    candidate_eval_id = Column(String(36), nullable=False)
+    drift_report_id = Column(String(36), nullable=True)
+    state = Column(String(20), nullable=False)
+    version = Column(Integer, nullable=False)
+    approval_id = Column(String(36), ForeignKey("approval_requests.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    promoted_at = Column(DateTime(timezone=True), nullable=True)
+    rolled_back_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class OptimizationCandidateEventRow(Base):
+    """Append-only candidate transition audit record."""
+
+    __tablename__ = "optimization_candidate_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["candidate_id", "owner_id", "project_id"],
+            [
+                "optimization_candidates.id",
+                "optimization_candidates.owner_id",
+                "optimization_candidates.project_id",
+            ],
+            name="fk_candidate_event_scope",
+        ),
+        CheckConstraint(
+            "event_type IN ('proposed','approved','rejected','promoted','rolled_back')",
+            name="ck_candidate_event_type",
+        ),
+        UniqueConstraint("candidate_id", "candidate_version", name="uq_candidate_event_version"),
+    )
+    id = Column(String(36), primary_key=True)
+    candidate_id = Column(String(36), nullable=False)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False)
+    event_type = Column(String(20), nullable=False)
+    from_state = Column(String(20), nullable=True)
+    to_state = Column(String(20), nullable=False)
+    candidate_version = Column(Integer, nullable=False)
+    approval_id = Column(String(36), nullable=True)
+    reason_code = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
 
@@ -351,11 +784,27 @@ class MemoryScopeRow(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class MemoryKeyStateRow(Base):
+    """Global active encryption generation; never stores key material."""
+
+    __tablename__ = "memory_key_state"
+    __table_args__ = (
+        CheckConstraint("active_version BETWEEN 1 AND 255", name="ck_memory_key_state_active"),
+        CheckConstraint("generation >= 1", name="ck_memory_key_state_generation"),
+    )
+
+    singleton_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    active_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class MemoryFactRow(Base):
     """Encrypted memory fact; content and provenance exist only inside ciphertext."""
 
     __tablename__ = "memory_facts"
     __table_args__ = (
+        CheckConstraint("key_version BETWEEN 1 AND 255", name="ck_memory_facts_key_version"),
         Index("ix_memory_facts_owner_project", "user_id", "project_id"),
         Index("ix_memory_facts_owner", "user_id"),
     )
@@ -585,7 +1034,7 @@ class DatabaseStore:
 
     async def store_message(
         self, conversation_id: str, role: str, content: str, user_id: str = "default"
-    ) -> None:
+    ) -> int | None:
         """Store a message and ensure its conversation metadata exists."""
         async with self._session_factory() as session:
             conversation = await session.get(ConversationRow, conversation_id)
@@ -607,7 +1056,10 @@ class DatabaseStore:
                 created_at=now,
             )
             session.add(row)
+            await session.flush()
+            message_id = int(row.id)
             await session.commit()
+            return message_id
 
     async def retrieve(
         self, conversation_id: str, limit: int = 50, user_id: str | None = None
@@ -622,6 +1074,31 @@ class DatabaseStore:
             result = await session.execute(query.order_by(MessageRow.id).limit(limit))
             rows = result.scalars().all()
             return [{"role": r.role, "content": r.content} for r in rows]
+
+    async def retrieve_with_metadata(
+        self, conversation_id: str, limit: int = 50, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Retrieve message content plus stable source IDs for context provenance."""
+        async with self._session_factory() as session:
+            query = select(MessageRow).where(MessageRow.conversation_id == conversation_id)
+            if user_id is not None:
+                query = query.join(
+                    ConversationRow, ConversationRow.id == MessageRow.conversation_id
+                ).where(ConversationRow.user_id == user_id)
+            rows = list(
+                reversed(
+                    (await session.scalars(query.order_by(MessageRow.id.desc()).limit(limit))).all()
+                )
+            )
+            return [
+                {
+                    "id": row.id,
+                    "role": row.role,
+                    "content": row.content,
+                    "created_at": row.created_at,
+                }
+                for row in rows
+            ]
 
     async def retrieve_through(
         self,

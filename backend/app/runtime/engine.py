@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
+import inspect
 import json
 import re
 import time
@@ -12,10 +13,21 @@ from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
+from app.runtime.capabilities import (
+    ProviderCapabilities,
+    UnsupportedProviderCapability,
+    get_provider_capabilities,
+)
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
 from app.runtime.models import Message, Role, TokenUsage, ToolCall
+from app.runtime.monetary_budget import (
+    DuplicateModelCharge,
+    DurableModelChargeStateError,
+    IndeterminateModelCharge,
+    ModelBudgetExhausted,
+)
 from app.runtime.ports import (
     ModelProvider,
     PolicyAwareToolExecutor,
@@ -23,7 +35,9 @@ from app.runtime.ports import (
     ToolAuthorizer,
     ToolExecutor,
 )
+from app.runtime.structured_output import ResponseContract, StructuredOutputError
 from app.security.approvals import AuthorizationOutcome, AuthorizationRequest
+from app.security.compliance import MandatoryComplianceService, default_compliance
 from app.security.policy import (
     PolicyAction,
     PolicyDecision,
@@ -34,6 +48,9 @@ from app.security.policy import (
     canonical_arguments_snapshot,
     canonical_tool_name,
 )
+
+if TYPE_CHECKING:
+    from app.reflection.models import ReflectionPolicy
 
 T = TypeVar("T")
 Clock = Callable[[], float]
@@ -52,6 +69,15 @@ class StopReason(StrEnum):
     POLICY_DENIED = "policy_denied"
     APPROVAL_TIMEOUT = "approval_timeout"
     APPROVAL_UNAVAILABLE = "approval_unavailable"
+    PROVIDER_CAPABILITY_UNSUPPORTED = "provider_capability_unsupported"
+    STRUCTURED_OUTPUT_INVALID = "structured_output_invalid"
+    PROVIDER_LENGTH_LIMIT = "provider_length_limit"
+    PROVIDER_REFUSAL = "provider_refusal"
+    PROVIDER_CONTENT_FILTER = "provider_content_filter"
+    MONETARY_BUDGET_EXHAUSTED = "monetary_budget_exhausted"
+    MODEL_CHARGE_DUPLICATE = "model_charge_duplicate"
+    MODEL_CHARGE_INDETERMINATE = "model_charge_indeterminate"
+    PROVIDER_ERROR = "provider_error"
     ERROR = "error"
 
 
@@ -79,6 +105,7 @@ class AgentResult:
     tool_calls: tuple[dict[str, Any], ...]
     usage: TokenUsage
     error: str | None = None
+    structured_output: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +178,10 @@ class AgentRuntime:
         authorizer: ToolAuthorizer | None = None,
         approval_timeout_seconds: float = 30.0,
         result_recorder: ResultRecorder | None = None,
+        reflection_policy: ReflectionPolicy | None = None,
+        reflection_hash_key: bytes | None = None,
+        reflection_hash_scope: str = "",
+        compliance: MandatoryComplianceService | None = default_compliance,
     ) -> None:
         if approval_timeout_seconds <= 0:
             raise ValueError("approval_timeout_seconds must be positive")
@@ -164,8 +195,27 @@ class AgentRuntime:
         self._authorizer = authorizer
         self._approval_timeout_seconds = approval_timeout_seconds
         self._result_recorder = result_recorder
+        self._compliance = compliance
+        from app.reflection.models import ReflectionPolicy as RuntimeReflectionPolicy
+        from app.reflection.service import BoundedReflectionService
 
-    async def run(self, messages: Sequence[Message]) -> AgentResult:
+        self._reflection_policy = reflection_policy or RuntimeReflectionPolicy()
+        self._reflection = BoundedReflectionService(
+            model,
+            self._reflection_policy,
+            events=self._events,
+            clock=clock,
+            hash_key=reflection_hash_key,
+            hash_scope=reflection_hash_scope,
+        )
+
+    async def run(
+        self,
+        messages: Sequence[Message],
+        *,
+        response_contract: ResponseContract | None = None,
+        required_capabilities: ProviderCapabilities | None = None,
+    ) -> AgentResult:
         history = list(self._snapshot_history(messages))
         started_at = self._clock()
         iterations = 0
@@ -173,6 +223,14 @@ class AgentRuntime:
         seen_calls: set[str] = set()
         usage = TokenUsage()
         content = ""
+        structured_output: object | None = None
+        tool_definitions = tuple(self._tools.definitions())
+        requirements = self._provider_requirements(
+            history,
+            response_contract,
+            required_capabilities,
+            native_tools_required=bool(tool_definitions),
+        )
         await self._emit(AgentEventKind.RUN_STARTED, 0)
         try:
             while iterations < self._budget.max_iterations:
@@ -180,17 +238,60 @@ class AgentRuntime:
                     return await self._stop(
                         StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
                     )
+                missing_capabilities = get_provider_capabilities(self._model).missing(requirements)
+                if missing_capabilities:
+                    return await self._reject_provider_capabilities(
+                        missing_capabilities, content, iterations, calls, usage
+                    )
                 iterations += 1
                 await self._emit(AgentEventKind.ITERATION_STARTED, iterations)
                 remaining_tokens = max(1, self._budget.max_tokens - usage.total_tokens)
-                response = await self._within_deadline(
-                    self._model.complete(
-                        self._snapshot_history(history),
-                        self._tools.definitions(),
-                        max_tokens=min(4096, remaining_tokens),
-                    ),
-                    started_at,
-                )
+                provider_kwargs: dict[str, Any] = {"max_tokens": min(4096, remaining_tokens)}
+                if response_contract is not None:
+                    provider_kwargs["response_contract"] = response_contract
+                if inspect.getattr_static(self._model, "routes_capabilities", False) is True:
+                    provider_kwargs["required_capabilities"] = requirements
+                try:
+                    response = await self._within_deadline(
+                        self._model.complete(
+                            self._snapshot_history(history),
+                            tool_definitions,
+                            **provider_kwargs,
+                        ),
+                        started_at,
+                    )
+                except _RuntimeDeadlineExceededError:
+                    raise
+                except (
+                    ModelBudgetExhausted,
+                    DuplicateModelCharge,
+                    IndeterminateModelCharge,
+                    DurableModelChargeStateError,
+                ) as error:
+                    return await self._stop_for_budget_error(
+                        error,
+                        content=content,
+                        iterations=iterations,
+                        calls=calls,
+                        usage=usage,
+                    )
+                except UnsupportedProviderCapability as error:
+                    return await self._reject_provider_capabilities(
+                        self._safe_missing_capability_names(error),
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                    )
+                except Exception:
+                    return await self._stop(
+                        StopReason.PROVIDER_ERROR,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        "provider_call_failed",
+                    )
                 # This must be the first work after the provider returns: no clock, event sink,
                 # history append, or other collaborator may observe provider-owned calls before
                 # scalar bindings and independent history/execution copies have been captured.
@@ -214,26 +315,32 @@ class AgentRuntime:
                 raw_stop_reason = response.provider_stop_reason
                 provider_stop_reason = raw_stop_reason if isinstance(raw_stop_reason, str) else None
                 response_usage = TokenUsage(
-                    response.usage.input_tokens, response.usage.output_tokens
+                    response.usage.input_tokens,
+                    response.usage.output_tokens,
+                    response.usage.cache_read_input_tokens,
+                    response.usage.cache_write_input_tokens,
                 )
+                raw_actual_provider = getattr(response, "actual_provider", None)
+                actual_provider = (
+                    raw_actual_provider if isinstance(raw_actual_provider, str) else None
+                )
+                raw_actual_model = getattr(response, "actual_model", None)
+                actual_model = raw_actual_model if isinstance(raw_actual_model, str) else None
                 has_tool_calls = bool(tool_calls) or snapshot_error is not None
                 usage += response_usage
-                if response_content:
-                    content = response_content
+                response_event_data = {}
+                if provider_stop_reason is not None:
+                    response_event_data["provider_stop_reason"] = provider_stop_reason
+                if actual_provider is not None:
+                    response_event_data["actual_provider"] = actual_provider
+                if actual_model is not None:
+                    response_event_data["actual_model"] = actual_model
                 await self._emit(
                     AgentEventKind.MODEL_RESPONSE,
                     iterations,
-                    {"provider_stop_reason": provider_stop_reason},
+                    response_event_data,
                     response_usage,
                 )
-                if response_content:
-                    # Text accompanying tool calls is progress, not the final answer.
-                    event_kind = (
-                        AgentEventKind.MODEL_PROGRESS
-                        if has_tool_calls
-                        else AgentEventKind.TEXT_DELTA
-                    )
-                    await self._emit(event_kind, iterations, {"text": response_content})
                 if snapshot_error is not None:
                     failed_call = ToolCall(snapshot_error.tool_call_id, snapshot_error.tool_name)
                     await self._emit(
@@ -250,6 +357,67 @@ class AgentRuntime:
                     return await self._stop(
                         StopReason.POLICY_DENIED, content, iterations, calls, usage
                     )
+                provider_reason = self._normalize_provider_stop_reason(
+                    provider_stop_reason, bool(tool_calls)
+                )
+                if provider_reason not in (None, StopReason.COMPLETED):
+                    return await self._stop(
+                        provider_reason,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        f"provider_stop_reason:{provider_reason.value}",
+                    )
+                if response_content and response_contract is None:
+                    # Preserve the provider draft before optional reflection so a durable
+                    # monetary failure can stop with the best already-produced answer.
+                    content = response_content
+                if response_content and (
+                    not tool_calls and response_contract is None and self._reflection_policy.enabled
+                ):
+                    remaining_seconds = max(
+                        0.0, self._budget.max_seconds - (self._clock() - started_at)
+                    )
+                    reflection = await self._reflection.reflect(
+                        history,
+                        response_content,
+                        iteration=iterations,
+                        timeout_seconds=remaining_seconds,
+                        max_total_tokens=max(0, self._budget.max_tokens - usage.total_tokens),
+                    )
+                    response_content = reflection.content
+                    usage += reflection.usage
+                if response_content and self._compliance is not None:
+                    response_content = self._compliance.enforce_output(response_content)
+                if not tool_calls and response_contract is not None:
+                    try:
+                        structured_output = response_contract.parse_and_validate(
+                            response_content or ""
+                        )
+                    except StructuredOutputError as error:
+                        await self._emit(
+                            AgentEventKind.STRUCTURED_OUTPUT_REJECTED,
+                            iterations,
+                            {"code": error.code},
+                        )
+                        return await self._stop(
+                            StopReason.STRUCTURED_OUTPUT_INVALID,
+                            content,
+                            iterations,
+                            calls,
+                            usage,
+                            f"structured_output_invalid:{error.code}",
+                        )
+                if response_content:
+                    content = response_content
+                    # Text accompanying tool calls is compliant progress, not the final answer.
+                    event_kind = (
+                        AgentEventKind.MODEL_PROGRESS
+                        if has_tool_calls
+                        else AgentEventKind.TEXT_DELTA
+                    )
+                    await self._emit(event_kind, iterations, {"text": response_content})
                 if usage.total_tokens > self._budget.max_tokens:
                     return await self._finalize(
                         StopReason.TOKEN_BUDGET_EXHAUSTED,
@@ -259,9 +427,18 @@ class AgentRuntime:
                         calls,
                         usage,
                         started_at,
+                        response_contract,
+                        requirements,
                     )
                 if not tool_calls:
-                    return await self._stop(StopReason.COMPLETED, content, iterations, calls, usage)
+                    return await self._stop(
+                        StopReason.COMPLETED,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        structured_output=structured_output,
+                    )
 
                 history.append(
                     Message(Role.ASSISTANT, response_content or "", tool_calls=history_tool_calls)
@@ -293,6 +470,8 @@ class AgentRuntime:
                             calls,
                             usage,
                             started_at,
+                            response_contract,
+                            requirements,
                         )
                     preparation = await self._prepare_policy_batch(
                         tool_calls,
@@ -323,6 +502,8 @@ class AgentRuntime:
                                 calls,
                                 usage,
                                 started_at,
+                                response_contract,
+                                requirements,
                             )
                         call_key = json.dumps(
                             [call.name, dict(call.arguments)],
@@ -458,30 +639,36 @@ class AgentRuntime:
                     serialized = json.dumps(
                         output, sort_keys=True, separators=(",", ":"), default=str
                     )
+                    execution_status = (
+                        "duplicate"
+                        if output.get("status") == "duplicate_effect_blocked"
+                        else "success"
+                    )
                     if policy_binding is None:
                         record = {
                             "tool": call.name,
                             "parameters": dict(call.arguments),
                             "result": dict(output),
-                            "status": "success",
+                            "status": execution_status,
                         }
                         completed_data = {
                             "id": call.id,
                             "name": call.name,
                             "arguments": dict(call.arguments),
                             "output": dict(output),
+                            "status": execution_status,
                         }
                     else:
                         record = {
                             "tool": policy_binding.tool_name,
                             "parameters": self._policy_binding_arguments(policy_binding),
                             "result": dict(output),
-                            "status": "success",
+                            "status": execution_status,
                         }
                         completed_data = self._policy_tool_result_data(
                             policy_binding,
                             serialized,
-                            "success",
+                            execution_status,
                         )
                     calls.append(record)
                     await self._emit(
@@ -530,10 +717,25 @@ class AgentRuntime:
                 calls,
                 usage,
                 started_at,
+                response_contract,
+                requirements,
             )
         except (TimeoutError, _RuntimeDeadlineExceededError):
             return await self._stop(
                 StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
+            )
+        except (
+            ModelBudgetExhausted,
+            DuplicateModelCharge,
+            IndeterminateModelCharge,
+            DurableModelChargeStateError,
+        ) as error:
+            return await self._stop_for_budget_error(
+                error,
+                content=content,
+                iterations=iterations,
+                calls=calls,
+                usage=usage,
             )
         except Exception as error:
             return await self._stop(
@@ -542,8 +744,113 @@ class AgentRuntime:
                 iterations,
                 calls,
                 usage,
-                f"{type(error).__name__}: {error}",
+                f"runtime_error:{type(error).__name__}",
             )
+
+    async def _stop_for_budget_error(
+        self,
+        error: (
+            ModelBudgetExhausted
+            | DuplicateModelCharge
+            | IndeterminateModelCharge
+            | DurableModelChargeStateError
+        ),
+        *,
+        content: str,
+        iterations: int,
+        calls: list[dict[str, Any]],
+        usage: TokenUsage,
+    ) -> AgentResult:
+        if isinstance(error, ModelBudgetExhausted):
+            reason = StopReason.MONETARY_BUDGET_EXHAUSTED
+        elif isinstance(error, DuplicateModelCharge):
+            reason = StopReason.MODEL_CHARGE_DUPLICATE
+        else:
+            reason = StopReason.MODEL_CHARGE_INDETERMINATE
+        await self._emit(
+            AgentEventKind.BUDGET_BLOCKED,
+            iterations,
+            {"code": error.code, "stop_reason": reason.value},
+        )
+        return await self._stop(
+            reason,
+            content,
+            iterations,
+            calls,
+            usage,
+            error=error.code,
+        )
+
+    @staticmethod
+    def _provider_requirements(
+        messages: Sequence[Message],
+        response_contract: ResponseContract | None,
+        explicit: ProviderCapabilities | None,
+        *,
+        native_tools_required: bool = False,
+    ) -> ProviderCapabilities:
+        explicit = explicit or ProviderCapabilities()
+        return ProviderCapabilities(
+            native_tools=explicit.native_tools or native_tools_required,
+            images=explicit.images or any(message.images for message in messages),
+            json_mode=explicit.json_mode or response_contract is not None,
+            json_schema=explicit.json_schema,
+            prompt_caching=explicit.prompt_caching,
+            cache_usage=explicit.cache_usage,
+            usage=explicit.usage,
+            stop_reason=explicit.stop_reason,
+            streaming=explicit.streaming,
+        )
+
+    @staticmethod
+    def _safe_missing_capability_names(
+        error: UnsupportedProviderCapability,
+    ) -> tuple[str, ...]:
+        """Copy only names from the closed capability vocabulary; never expose provider text."""
+        reported = frozenset(error.missing_capabilities)
+        return tuple(name for name in ProviderCapabilities.__dataclass_fields__ if name in reported)
+
+    @staticmethod
+    def _normalize_provider_stop_reason(
+        reason: str | None, has_tool_calls: bool
+    ) -> StopReason | None:
+        normalized = reason.strip().lower() if reason else ""
+        if normalized in {"tool_use", "tool_calls"}:
+            return None if has_tool_calls else StopReason.PROVIDER_ERROR
+        if normalized in {"", "stop", "end_turn", "stop_sequence", "completed"}:
+            return StopReason.COMPLETED
+        if normalized in {"max_tokens", "length", "max_output_tokens"}:
+            return StopReason.PROVIDER_LENGTH_LIMIT
+        if normalized == "refusal":
+            return StopReason.PROVIDER_REFUSAL
+        if normalized in {"content_filter", "safety", "blocked"}:
+            return StopReason.PROVIDER_CONTENT_FILTER
+        return StopReason.PROVIDER_ERROR
+
+    async def _reject_provider_capabilities(
+        self,
+        missing: tuple[str, ...],
+        content: str,
+        iterations: int,
+        calls: list[dict[str, Any]],
+        usage: TokenUsage,
+    ) -> AgentResult:
+        await self._emit(
+            AgentEventKind.PROVIDER_CAPABILITY_REJECTED,
+            iterations,
+            {
+                "code": "provider_capability_unsupported",
+                "missing_capabilities": missing,
+            },
+        )
+        return await self._stop(
+            StopReason.PROVIDER_CAPABILITY_UNSUPPORTED,
+            content,
+            iterations,
+            calls,
+            usage,
+            f"provider_capability_unsupported:{','.join(missing)}",
+        )
 
     @staticmethod
     def _snapshot_history(messages: Sequence[Message]) -> tuple[Message, ...]:
@@ -1194,6 +1501,8 @@ class AgentRuntime:
         calls: list[dict[str, Any]],
         usage: TokenUsage,
         started_at: float,
+        response_contract: ResponseContract | None,
+        requirements: ProviderCapabilities,
     ) -> AgentResult:
         """Make one bounded, tool-free synthesis attempt before a budget stop."""
         if self._expired(started_at):
@@ -1205,22 +1514,127 @@ class AgentRuntime:
                 "answer now from the evidence already available. State any missing coverage.",
             )
         )
+        missing_capabilities = get_provider_capabilities(self._model).missing(requirements)
+        if missing_capabilities:
+            return await self._reject_provider_capabilities(
+                missing_capabilities, content, iterations, calls, usage
+            )
         try:
+            provider_kwargs: dict[str, Any] = {"max_tokens": self._budget.final_synthesis_tokens}
+            if response_contract is not None:
+                provider_kwargs["response_contract"] = response_contract
+            if inspect.getattr_static(self._model, "routes_capabilities", False) is True:
+                provider_kwargs["required_capabilities"] = requirements
             response = await self._within_deadline(
                 self._model.complete(
                     self._snapshot_history(history),
                     (),
-                    max_tokens=self._budget.final_synthesis_tokens,
+                    **provider_kwargs,
                 ),
                 started_at,
             )
-            usage += response.usage
-            if response.content:
-                content = response.content
+            response_content = response.content if isinstance(response.content, str) else None
+            has_final_tool_calls = bool(response.tool_calls)
+            raw_stop_reason = response.provider_stop_reason
+            provider_stop_reason = raw_stop_reason if isinstance(raw_stop_reason, str) else None
+            response_usage = TokenUsage(
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+                response.usage.cache_read_input_tokens,
+                response.usage.cache_write_input_tokens,
+            )
+            usage += response_usage
+            response_event_data: dict[str, Any] = {}
+            if provider_stop_reason is not None:
+                response_event_data["provider_stop_reason"] = provider_stop_reason
+            raw_actual_provider = getattr(response, "actual_provider", None)
+            if isinstance(raw_actual_provider, str):
+                response_event_data["actual_provider"] = raw_actual_provider
+            raw_actual_model = getattr(response, "actual_model", None)
+            if isinstance(raw_actual_model, str):
+                response_event_data["actual_model"] = raw_actual_model
+            await self._emit(
+                AgentEventKind.MODEL_RESPONSE,
+                iterations,
+                response_event_data,
+                response_usage,
+            )
+            provider_reason = self._normalize_provider_stop_reason(
+                provider_stop_reason, has_tool_calls=False
+            )
+            if provider_reason not in (None, StopReason.COMPLETED):
+                return await self._stop(
+                    provider_reason,
+                    content,
+                    iterations,
+                    calls,
+                    usage,
+                    f"provider_stop_reason:{provider_reason.value}",
+                )
+            if has_final_tool_calls:
+                return await self._stop(
+                    StopReason.PROVIDER_ERROR,
+                    content,
+                    iterations,
+                    calls,
+                    usage,
+                    "provider_stop_reason:final_synthesis_tool_call",
+                )
+            if response_content and self._compliance is not None:
+                response_content = self._compliance.enforce_output(response_content)
+            structured_output: object | None = None
+            if response_contract is not None:
+                try:
+                    structured_output = response_contract.parse_and_validate(response_content or "")
+                except StructuredOutputError as error:
+                    await self._emit(
+                        AgentEventKind.STRUCTURED_OUTPUT_REJECTED,
+                        iterations,
+                        {"code": error.code},
+                    )
+                    return await self._stop(
+                        StopReason.STRUCTURED_OUTPUT_INVALID,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                        f"structured_output_invalid:{error.code}",
+                    )
+            if response_content:
+                content = response_content
                 await self._emit(AgentEventKind.TEXT_DELTA, iterations, {"text": content})
+            return await self._stop(
+                reason,
+                content,
+                iterations,
+                calls,
+                usage,
+                structured_output=structured_output,
+            )
         except _RuntimeDeadlineExceededError:
             return await self._stop(
                 StopReason.TIME_BUDGET_EXHAUSTED, content, iterations, calls, usage
+            )
+        except (
+            ModelBudgetExhausted,
+            DuplicateModelCharge,
+            IndeterminateModelCharge,
+            DurableModelChargeStateError,
+        ) as error:
+            return await self._stop_for_budget_error(
+                error,
+                content=content,
+                iterations=iterations,
+                calls=calls,
+                usage=usage,
+            )
+        except UnsupportedProviderCapability as error:
+            return await self._reject_provider_capabilities(
+                self._safe_missing_capability_names(error),
+                content,
+                iterations,
+                calls,
+                usage,
             )
         except Exception:
             # Preserve the best content already produced; stop reason remains explicit.
@@ -1264,7 +1678,14 @@ class AgentRuntime:
         data: dict[str, Any] | None = None,
         usage: TokenUsage | None = None,
     ) -> None:
-        await self._events.emit(AgentEvent(kind, iteration, data or {}, usage or TokenUsage()))
+        event_usage = usage or TokenUsage()
+        event_data = dict(data or {})
+        if kind in (AgentEventKind.MODEL_RESPONSE, AgentEventKind.RUN_STOPPED):
+            if event_usage.cache_read_input_tokens is not None:
+                event_data["cache_read_input_tokens"] = event_usage.cache_read_input_tokens
+            if event_usage.cache_write_input_tokens is not None:
+                event_data["cache_write_input_tokens"] = event_usage.cache_write_input_tokens
+        await self._events.emit(AgentEvent(kind, iteration, event_data, event_usage))
 
     async def _stop(
         self,
@@ -1274,8 +1695,11 @@ class AgentRuntime:
         calls: list[dict[str, Any]],
         usage: TokenUsage,
         error: str | None = None,
+        structured_output: object | None = None,
     ) -> AgentResult:
-        # The terminal event finalizes completed_at, so persist the final answer first.
+        # The terminal event finalizes completed_at, so persist the compliant final answer first.
+        if self._compliance is not None:
+            content = self._compliance.enforce_output(content)
         if self._result_recorder is not None:
             await self._result_recorder(content)
         await self._emit(
@@ -1284,4 +1708,6 @@ class AgentRuntime:
             {"reason": reason.value, "error": error},
             usage,
         )
-        return AgentResult(content, reason, iterations, tuple(calls), usage, error)
+        return AgentResult(
+            content, reason, iterations, tuple(calls), usage, error, structured_output
+        )

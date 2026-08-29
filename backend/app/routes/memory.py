@@ -8,15 +8,40 @@ from __future__ import annotations
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field, StrictInt
 
 from app.memory.checkpoints import CheckpointManager
 from app.memory.scoped import MemoryFact, ScopedEncryptedMemoryRepository
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
+from app.services.key_rotation import MemoryKeyRotationService
 
 router = APIRouter(prefix="/api/memory", tags=["memory"], dependencies=[Depends(get_current_user)])
 
 _checkpoint_mgr = CheckpointManager()
+
+
+class RotationRequest(BaseModel):
+    batch_size: StrictInt = Field(default=100, ge=1, le=1000)
+
+
+def _rotation_service(request: Request) -> MemoryKeyRotationService:
+    service = cast(MemoryKeyRotationService | None, request.app.state.memory_key_rotation)
+    if service is None:
+        raise HTTPException(status_code=503, detail="Persistent memory is disabled")
+    return service
+
+
+def _rotation_payload(
+    active_version: int, counts: dict[int, int], remaining: int
+) -> dict[str, Any]:
+    return {
+        "active_version": active_version,
+        "version_counts": {str(version): count for version, count in sorted(counts.items())},
+        "remaining": remaining,
+        "complete": remaining == 0,
+        "retirement_requires_legacy_writer_drain": True,
+    }
 
 
 def _project_id(
@@ -84,6 +109,38 @@ async def delete_memory_facts(
         raise HTTPException(status_code=503, detail="Persistent memory is disabled")
     deleted = await repository.delete_all(user["user_id"], project_id)
     return {"project_id": project_id, "deleted": deleted}
+
+
+@router.get("/rotation")
+async def memory_rotation_status(
+    request: Request,
+    project_id: str = Depends(_project_id),
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await enforce_rate_limit(request, user, "memory_read")
+    service = _rotation_service(request)
+    status = await service.status(user["user_id"], project_id)
+    return {
+        "project_id": project_id,
+        **_rotation_payload(status.active_version, dict(status.version_counts), status.remaining),
+    }
+
+
+@router.post("/rotation")
+async def rotate_memory_keys(
+    body: RotationRequest,
+    request: Request,
+    project_id: str = Depends(_project_id),
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    await enforce_rate_limit(request, user, "memory_mutation")
+    service = _rotation_service(request)
+    result = await service.rotate_scope(user["user_id"], project_id, batch_size=body.batch_size)
+    return {
+        "project_id": project_id,
+        "rotated": result.rotated,
+        **_rotation_payload(result.active_version, dict(result.version_counts), result.remaining),
+    }
 
 
 @router.get("/tiers")

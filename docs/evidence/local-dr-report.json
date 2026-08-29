@@ -1,15 +1,15 @@
 {
   "backup": {
-    "duration_seconds": 0.343,
-    "sha256": "0c6cfa7b50d5c6b9a68bcdc2623cc1556bd53d5e7b3257b5d7d2e42f952ddb36",
-    "snapshot_utc": "2026-08-26T23:29:30.200001Z"
+    "duration_seconds": 0.69,
+    "sha256": "76ed1de1651df5ee7d5ed1eda25cf4361e1518fe6438be59af6548d8d6d793b1",
+    "snapshot_utc": "2026-08-28T19:42:33.432551Z"
   },
   "evidence": {
-    "approval_id": "726da7b1-6aa6-40d9-a987-a81e58f94f51",
-    "conversation_id": "41a9b060-d981-42d5-8919-f85a35c2162c",
-    "document_id": "34e351b4-eb80-4010-8083-ccfc2beab2e4",
-    "run_id": "ea82e2a2-92da-4801-bd1d-cbb609d307b6",
-    "user_id": "74b88a51-7077-4281-af69-58a620b574c8"
+    "approval_id": "3955e69c-fc18-40f9-b0f8-4e6a653abeb5",
+    "conversation_id": "c1ee820f-50cf-45f5-8eb6-5dca8e684bde",
+    "document_id": "c4efa5b0-d3cf-43f3-a0da-ea43f1cdbff1",
+    "run_id": "a3df766f-24e3-4bf3-beb3-2a73bfd94cb8",
+    "user_id": "8256216b-b6df-4687-bdb2-2118d3e07128"
   },
   "restored_counts": {
     "approved_terminal_approvals": 1,
@@ -19,6 +19,6 @@
   },
   "result": "passed",
   "rpo_records": 0,
-  "rto_seconds": 21.586,
-  "schema_revision": "20260826_08"
+  "rto_seconds": 24.787,
+  "schema_revision": "20260828_14"
 }

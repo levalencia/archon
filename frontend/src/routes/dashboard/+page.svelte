@@ -1,5 +1,7 @@
 <script lang="ts">
   import { authenticatedFetch } from '$lib/auth';
+  import JobInspector from '$lib/components/JobInspector.svelte';
+  import SandboxStatus from '$lib/components/SandboxStatus.svelte';
   import { Activity, Shield, Clock, AlertTriangle, Server, RefreshCw, BarChart3, FileText } from 'lucide-svelte';
 
   let metrics: any = $state(null);
@@ -171,6 +173,9 @@
       </section>
     {/if}
   {/if}
+
+  <SandboxStatus />
+  <JobInspector />
 </div>
 
 <style>

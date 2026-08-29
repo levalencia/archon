@@ -20,6 +20,7 @@ from app.runtime import (
     ToolCall,
     ToolDefinition,
 )
+from app.runtime.capabilities import ProviderCapabilities
 from app.tools.registry import SecureToolRegistry
 
 
@@ -187,10 +188,12 @@ async def test_runtime_deadline_detaches_cancellation_resistant_provider_excepti
     """A provider's late exception is consumed instead of becoming an event-loop warning."""
 
     class CancellationResistantProvider:
+        capabilities = ProviderCapabilities(native_tools=True)
+
         def __init__(self) -> None:
             self.late_finished = asyncio.Event()
 
-        async def complete(self, messages, tools=(), *, max_tokens=4096):
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_contract=None):
             try:
                 await asyncio.sleep(10)
             except asyncio.CancelledError:

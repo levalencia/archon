@@ -11,8 +11,14 @@ from typing import Any, TypeVar
 
 import structlog
 
+from app.runtime.capabilities import (
+    ProviderCapabilities,
+    UnsupportedProviderCapability,
+    get_provider_capabilities,
+)
 from app.runtime.models import Message, ModelResponse, ToolDefinition
 from app.runtime.ports import ModelProvider
+from app.runtime.structured_output import ResponseContract
 
 logger = structlog.get_logger()
 _T = TypeVar("_T")
@@ -100,6 +106,10 @@ class CircuitBreaker:
             value = func(*args, **kwargs)
             result = await value if inspect.isawaitable(value) else value
         except asyncio.CancelledError:
+            if is_probe:
+                await self._abandon_probe(probe_token)
+            raise
+        except UnsupportedProviderCapability:
             if is_probe:
                 await self._abandon_probe(probe_token)
             raise
@@ -193,6 +203,10 @@ class CircuitBreakingProvider:
     def __init__(self, delegate: ModelProvider, breaker: CircuitBreaker) -> None:
         self.delegate = delegate
         self.breaker = breaker
+        self.capabilities = get_provider_capabilities(delegate)
+        self.routes_capabilities = (
+            inspect.getattr_static(delegate, "routes_capabilities", False) is True
+        )
 
     async def complete(
         self,
@@ -200,19 +214,30 @@ class CircuitBreakingProvider:
         tools: Sequence[ToolDefinition] = (),
         *,
         max_tokens: int = 4096,
+        response_contract: ResponseContract | None = None,
         response_format: str | None = None,
+        required_capabilities: ProviderCapabilities | None = None,
     ) -> ModelResponse:
+        if response_contract is not None and response_format is not None:
+            raise ValueError("response_contract and response_format are mutually exclusive")
+
         async def invoke() -> ModelResponse:
             kwargs: dict[str, Any] = {"max_tokens": max_tokens}
-            # Legacy typed providers predate the optional JSON-mode keyword. Avoid passing
-            # it on ordinary sync/SSE calls so existing injected providers remain valid.
+            # Legacy typed providers predate optional structured-output keywords. Avoid passing
+            # them on ordinary sync/SSE calls so existing injected providers remain valid.
             if response_format is not None:
                 kwargs["response_format"] = response_format
+            if response_contract is not None:
+                kwargs["response_contract"] = response_contract
+            if self.routes_capabilities and required_capabilities is not None:
+                kwargs["required_capabilities"] = required_capabilities
             return await self.delegate.complete(messages, tools, **kwargs)
 
         try:
             return await self.breaker.call(invoke)
         except CircuitBreakerOpenError as exc:
             raise ProviderUnavailableError("Model provider temporarily unavailable") from exc
+        except UnsupportedProviderCapability:
+            raise
         except Exception as exc:
             raise ProviderUnavailableError("Model provider temporarily unavailable") from exc

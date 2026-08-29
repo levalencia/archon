@@ -28,13 +28,18 @@ from app.routes.chat import (
     get_skills_top_k,
     get_tool_registry,
 )
-from app.runtime import AgentEvent, AgentEventKind
+from app.runtime import AgentEvent, AgentEventKind, EventSink
+from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
-from app.runtime.support import prepare_messages
+from app.runtime.images import ImageValidationError
+from app.runtime.support import prepare_effective_context
 from app.security.auth import get_current_user
+from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 from app.security.live_approvals import ApprovalBroker
 from app.services.artifacts import Artifact, detect_artifact_in_response
+from app.services.context_snapshots import ContextSnapshotRepository
+from app.services.monetary_budget import MonetaryBudgetRepository
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -45,7 +50,7 @@ class StreamRequest(BaseModel):
     project_id: str = Field(
         default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
     )
-    image: str = ""
+    image: str = Field(default="", max_length=7_000_000)
 
 
 class ApprovalBody(BaseModel):
@@ -63,6 +68,70 @@ class QueueEventSink:
         await self.queue.put(event)
 
 
+class ResponseCostEventSink:
+    """Accumulate one cost record per model response and forward every event."""
+
+    def __init__(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        default_provider: str,
+        default_model: str,
+        downstream: EventSink | None = None,
+    ) -> None:
+        self._conversation_id = conversation_id
+        self._user_id = user_id
+        self._default_provider = default_provider
+        self._default_model = default_model
+        self._downstream = downstream
+        self._tracker = CostTracker()
+        self.calls = 0
+
+    async def emit(self, event: AgentEvent) -> None:
+        if event.kind is AgentEventKind.MODEL_RESPONSE:
+            provider = _safe_identity(event.data.get("actual_provider")) or self._default_provider
+            model = _safe_identity(event.data.get("actual_model")) or self._default_model
+            usage = event.usage
+            self._tracker.record(
+                conversation_id=self._conversation_id,
+                user_id=self._user_id,
+                model=model,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_input_tokens=usage.cache_read_input_tokens,
+                cache_write_input_tokens=usage.cache_write_input_tokens,
+                provider=provider,
+            )
+            self.calls += 1
+        if self._downstream is not None:
+            await self._downstream.emit(event)
+
+    @property
+    def totals(self) -> dict[str, float | int | None]:
+        totals = self._tracker.get_conversation_cost(self._conversation_id)
+        savings = totals.get("cache_savings_usd")
+        return {
+            "cost_usd": round(float(totals.get("cost_usd", 0.0)), 6),
+            "cache_read_input_tokens": totals.get("cache_read_input_tokens"),
+            "cache_write_input_tokens": totals.get("cache_write_input_tokens"),
+            "cache_savings_usd": None if savings is None else round(float(savings), 6),
+        }
+
+
+def _safe_identity(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    identity = value.strip()
+    if (
+        not identity
+        or len(identity) > 200
+        or any(unicodedata.category(character) == "Cc" for character in identity)
+    ):
+        return None
+    return identity
+
+
 @router.post("/stream")
 async def chat_stream_real(
     body: StreamRequest,
@@ -71,6 +140,27 @@ async def chat_stream_real(
     app_provider: Any = Depends(get_model_provider),  # noqa: B008
 ) -> StreamingResponse:
     await enforce_rate_limit(request, user, "chat")
+    try:
+        request.app.state.compliance.enforce_input(body.message)
+    except ComplianceViolationError as exc:
+        raise HTTPException(
+            status_code=422, detail="Message rejected by compliance policy"
+        ) from exc
+    images: list[str] | None = None
+    if body.image:
+        try:
+            attachment = request.app.state.image_attachments.add_data_uri(
+                body.image,
+                owner_id=user["user_id"],
+                project_id=body.project_id,
+                filename="chat-image",
+                persist=False,
+            )
+        except ImageValidationError as exc:
+            raise HTTPException(
+                status_code=422, detail="Image rejected by validation policy"
+            ) from exc
+        images = [attachment.data_uri]
     settings = request.app.state.settings
     memory = get_conversation_repository(request)
     conv_id = body.conversation_id or str(uuid.uuid4())
@@ -94,6 +184,7 @@ async def chat_stream_real(
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
+        job_queue=request.app.state.job_queue,
         bound_tools=bound_tools,
     )
     approval_broker: ApprovalBroker = request.app.state.approval_broker
@@ -112,27 +203,58 @@ async def chat_stream_real(
         for skill in skills_used:
             yield _sse("skill", skill)
 
-        persistent_memory_text = (
-            await scoped_memory.context_text(user["user_id"], body.project_id)
-            if scoped_memory is not None
-            else ""
+        if scoped_memory is not None:
+            memory_bundle = await scoped_memory.context_bundle(user["user_id"], body.project_id)
+            persistent_memory_text = memory_bundle.text
+            memory_ids = memory_bundle.fact_ids
+        else:
+            persistent_memory_text = ""
+            memory_ids = ()
+        await memory.runs.ensure_run(
+            run_id=run_context.run_id,
+            user_id=user["user_id"],
+            project_id=body.project_id,
+            conversation_id=conv_id,
+            correlation_id=run_context.correlation_id,
+            provider=settings.llm_provider,
+            model=settings.llm_model,
         )
-        messages = await prepare_messages(
+        current_message_id = await memory.store(conv_id, "user", user_message, user["user_id"])
+        if current_message_id is None:
+            raise RuntimeError("context_message_persistence_failed")
+        effective_context = await prepare_effective_context(
             user_message,
             conv_id,
             memory,
             tools,
             skills_context,
-            [body.image] if body.image else None,
+            images,
             user["user_id"],
             persistent_memory_text,
+            project_id=body.project_id,
+            run_id=run_context.run_id,
+            memory_ids=memory_ids,
+            skill_ids=tuple(skill.name for skill in skills),
+            current_message_id=current_message_id,
+            asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
         )
+        messages = list(effective_context.messages)
 
-        # Auto-compact context if approaching token limit
+        # Auto-compact context if approaching token limit.
         from app.runtime.models import Role as MRole
         from app.services.auto_compact import auto_compact_context
 
-        raw_msgs = [{"role": m.role.value, "content": m.content} for m in messages]
+        raw_msgs = [
+            {
+                "role": message.role.value,
+                "content": message.content,
+                "images": list(message.images),
+                "_source_message_id": source_id,
+            }
+            for message, source_id in zip(
+                messages, effective_context.source_message_ids, strict=True
+            )
+        ]
         raw_msgs, compact_stats = await auto_compact_context(
             raw_msgs,
             llm_chat_fn=None,
@@ -140,13 +262,29 @@ async def chat_stream_real(
         )
         yield _sse("context", compact_stats)
 
+        manifest = effective_context.manifest
         if compact_stats.get("compacted"):
-            # Rebuild typed messages from compacted raw messages
             from app.runtime.models import Message as MMsg
 
-            messages = [MMsg(MRole(m["role"]), m["content"]) for m in raw_msgs]
+            messages = [
+                MMsg(MRole(item["role"]), item["content"], images=tuple(item.get("images", ())))
+                for item in raw_msgs
+            ]
+            manifest = manifest.after_compaction(
+                selected_message_ids=tuple(compact_stats["selected_message_ids"]),
+                summarized_message_ids=tuple(compact_stats["summarized_message_ids"]),
+                estimated_tokens=int(compact_stats["tokens"]),
+            )
+        await ContextSnapshotRepository(memory.session_factory).record(manifest)
 
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
+        cost_sink = ResponseCostEventSink(
+            conversation_id=conv_id,
+            user_id=user["user_id"],
+            default_provider=settings.llm_provider,
+            default_model=settings.llm_model,
+            downstream=QueueEventSink(queue),
+        )
 
         provider = app_provider
         if json_mode:
@@ -154,7 +292,6 @@ async def chat_stream_real(
 
             provider = JsonModeProvider(provider)
 
-        await memory.store(conv_id, "user", body.message, user["user_id"])
         runtime = create_chat_runtime(
             context=run_context,
             provider=provider,
@@ -164,7 +301,7 @@ async def chat_stream_real(
             exporter=request.app.state.otel_exporter,
             redactor=request.app.state.persistence_redactor,
             log_buffer=request.app.state.log_buffer,
-            downstream=QueueEventSink(queue),
+            downstream=cost_sink,
             authorizer=approval_broker.authorizer(run_context),
             result_recorder=lambda answer: memory.store(
                 conv_id, "assistant", answer, user["user_id"]
@@ -241,15 +378,24 @@ async def chat_stream_real(
         if sources:
             yield _sse("sources", sources)
 
-        # Estimate cost
-        cost_tracker = CostTracker()
-        cost_info = cost_tracker.record(
-            conversation_id=conv_id,
-            user_id=user["user_id"],
-            model=settings.llm_model,
-            input_tokens=result.usage.input_tokens,
-            output_tokens=result.usage.output_tokens,
-        )
+        cost_info = cost_sink.totals
+        budget_payload: dict[str, float] = {}
+        if settings.durable_monetary_budget_enabled:
+            summary = await MonetaryBudgetRepository(memory.session_factory).summary(
+                owner_id=user["user_id"],
+                project_id=run_context.project_id,
+                run_id=run_context.run_id,
+            )
+            if summary is not None:
+                cost_info["cost_usd"] = round(summary.run_spent_nusd / 1_000_000_000, 9)
+                budget_payload = {
+                    "budget_limit_usd": summary.run_limit_nusd / 1_000_000_000,
+                    "budget_reserved_usd": summary.run_reserved_nusd / 1_000_000_000,
+                    "budget_remaining_usd": (
+                        summary.run_limit_nusd - summary.run_spent_nusd - summary.run_reserved_nusd
+                    )
+                    / 1_000_000_000,
+                }
 
         elapsed_ms = (time.monotonic() - started) * 1000
         await memory.runs.finalize_metadata(
@@ -260,21 +406,27 @@ async def chat_stream_real(
             latency_ms=elapsed_ms,
         )
 
-        yield _sse(
-            "done",
-            {
-                "iterations": result.iterations,
-                "tools_used": len(result.tool_calls),
-                "skills_used": skills_used,
-                "artifacts": artifacts,
-                "elapsed_ms": round(elapsed_ms, 2),
-                "conversation_id": conv_id,
-                "stop_reason": result.stop_reason.value,
-                "tokens_used": result.usage.total_tokens,
-                "cost_usd": cost_info["cost_usd"],
-                "error": result.error,
-            },
-        )
+        done_payload = {
+            "iterations": result.iterations,
+            "tools_used": len(result.tool_calls),
+            "skills_used": skills_used,
+            "artifacts": artifacts,
+            "elapsed_ms": round(elapsed_ms, 2),
+            "conversation_id": conv_id,
+            "stop_reason": result.stop_reason.value,
+            "tokens_used": result.usage.total_tokens,
+            "cost_usd": cost_info["cost_usd"],
+            "error": result.error,
+        }
+        done_payload.update(budget_payload)
+        for field in (
+            "cache_read_input_tokens",
+            "cache_write_input_tokens",
+            "cache_savings_usd",
+        ):
+            if cost_info[field] is not None:
+                done_payload[field] = cost_info[field]
+        yield _sse("done", done_payload)
 
         # Auto-evaluate response quality
         from app.eval.evaluators import (

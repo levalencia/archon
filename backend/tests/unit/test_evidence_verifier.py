@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -14,11 +15,14 @@ from app.delegation import (
     ChildVerificationRequest,
     ChildVerificationStatus,
     ClaimInput,
+    DelegationEnvelopeService,
     EvidenceSlice,
     EvidenceVerifierSpecialist,
+    InvalidDelegationEnvelope,
     TransientVerifierError,
     VerificationBudget,
     VerificationReasonCode,
+    issue_verifier_delegation,
 )
 from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
 from app.security.persistence_redactor import PersistenceRedactor
@@ -158,6 +162,29 @@ async def test_valid_call_is_isolated_bounded_and_durable(ledger: Any) -> None:
             )
         )
     assert "the claim" not in raw and "the quote" not in raw
+
+
+@pytest.mark.asyncio
+async def test_parent_envelope_is_required_and_binds_actual_content(ledger: Any) -> None:
+    store, repository = ledger
+    envelopes = DelegationEnvelopeService(
+        store.session_factory, {1: b"d" * 32}, active_key_version=1
+    )
+    provider = Provider([response()])
+    verifier = EvidenceVerifierSpecialist(provider, repository, PersistenceRedactor(), envelopes)
+    request = make_request(child_id="bound-child")
+    with pytest.raises(InvalidDelegationEnvelope, match="required"):
+        await verifier.verify(request)
+
+    envelope = issue_verifier_delegation(envelopes, request)
+    mutated_claim = replace(request.claims[0], text="MUTATED")
+    mutated = replace(request, claims=(mutated_claim,))
+    with pytest.raises(InvalidDelegationEnvelope, match="rejected"):
+        await verifier.verify(mutated, envelope)
+
+    result = await verifier.verify(request, envelope)
+    assert result.status is ChildVerificationStatus.COMPLETED
+    assert len(provider.calls) == 1
 
 
 @pytest.mark.asyncio

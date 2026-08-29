@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.delegation import VerificationBudget
 from app.observability.logging import get_correlation_id
 from app.security.auth import get_current_user
+from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 from app.services.db_store import DocumentRow
 from app.services.documents import DocumentResourceLimitError
@@ -78,6 +79,14 @@ async def upload_document(
 ) -> DocumentResponse:
     await enforce_rate_limit(request, user, "documents_upload")
     try:
+        request.app.state.compliance.enforce_input(
+            body.title + "\n" + body.source + "\n" + body.content
+        )
+    except ComplianceViolationError as exc:
+        raise HTTPException(
+            status_code=422, detail="Document rejected by compliance policy"
+        ) from exc
+    try:
         row = await request.app.state.documents.ingest(
             owner_id=user["user_id"],
             project_id=body.project_id,
@@ -97,6 +106,12 @@ async def query_documents(
     user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
 ) -> RAGResponse:
     await enforce_rate_limit(request, user, "documents_query")
+    try:
+        request.app.state.compliance.enforce_input(body.question)
+    except ComplianceViolationError as exc:
+        raise HTTPException(
+            status_code=422, detail="Question rejected by compliance policy"
+        ) from exc
     repository = request.app.state.documents
     if (
         body.document_id is not None
@@ -117,7 +132,9 @@ async def query_documents(
         model=settings.llm_model,
         top_k=body.top_k,
         verifier=request.app.state.evidence_verifier,
+        delegation_envelopes=request.app.state.delegation_envelopes,
         verifier_model=settings.verifier_model,
+        compliance=request.app.state.compliance,
         verifier_budget=(
             VerificationBudget(
                 input_tokens=settings.verifier_input_tokens,
@@ -140,7 +157,8 @@ async def query_documents(
         )
     except GroundedProviderError as exc:
         raise HTTPException(status_code=503, detail="Grounded answer provider unavailable") from exc
-    return RAGResponse(**result.to_dict())
+    payload = request.app.state.compliance.enforce_payload(result.to_dict())
+    return RAGResponse(**cast(dict[str, Any], payload))
 
 
 @router.get("", response_model=list[DocumentResponse])

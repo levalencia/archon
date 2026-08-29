@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from app.config import Settings
 from app.main import create_app
@@ -52,6 +52,7 @@ class TestHealthEndpoints:
                 "rate_limiter": {"backend": "memory", "status": "up"},
                 "telemetry": {"backend": "disabled", "status": "disabled"},
                 "model_provider_circuit": "closed",
+                "background_job_worker": "up",
                 "vector_store": "sql-json-cosine",
                 "evidence_verifier": "disabled",
                 "embeddings": {
@@ -63,6 +64,18 @@ class TestHealthEndpoints:
                 },
             },
         }
+
+    @pytest.mark.unit
+    def test_readiness_probe_reports_worker_failure(self, client: TestClient) -> None:
+        class DeadTask:
+            @staticmethod
+            def done() -> bool:
+                return True
+
+        client.app.state.job_worker_task = DeadTask()
+        response = client.get("/readyz")
+        assert response.status_code == 503
+        assert response.json()["dependencies"]["background_job_worker"] == "down"
 
     @pytest.mark.unit
     def test_readiness_probe_reports_repository_failure(self, client: TestClient) -> None:
@@ -79,6 +92,7 @@ class TestHealthEndpoints:
                 "rate_limiter": {"backend": "memory", "status": "up"},
                 "telemetry": {"backend": "disabled", "status": "disabled"},
                 "model_provider_circuit": "closed",
+                "background_job_worker": "up",
                 "vector_store": "sql-json-cosine",
                 "evidence_verifier": "disabled",
                 "embeddings": {
@@ -153,12 +167,23 @@ def test_verifier_settings_are_disabled_and_bounded_by_default() -> None:
         Settings(verifier_retries=2)
 
 
+def test_enabled_verifier_requires_dedicated_signing_key() -> None:
+    with pytest.raises(ValueError, match="delegation signing key"):
+        Settings(verifier_enabled=True)
+    configured = Settings(verifier_enabled=True, delegation_signing_key=SecretStr("k" * 32))
+    assert "k" * 32 not in repr(configured)
+
+
 def test_enabled_verifier_is_app_scoped_and_readiness_is_safe(tmp_path) -> None:
     settings_a = Settings(
-        database_url=f"sqlite+aiosqlite:///{tmp_path / 'a.db'}", verifier_enabled=True
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'a.db'}",
+        verifier_enabled=True,
+        delegation_signing_key=SecretStr("a" * 32),
     )
     settings_b = Settings(
-        database_url=f"sqlite+aiosqlite:///{tmp_path / 'b.db'}", verifier_enabled=True
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'b.db'}",
+        verifier_enabled=True,
+        delegation_signing_key=SecretStr("b" * 32),
     )
     app_a = create_app(settings_a)
     app_b = create_app(settings_b)

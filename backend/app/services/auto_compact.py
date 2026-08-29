@@ -18,6 +18,14 @@ COMPACT_THRESHOLD = 0.75  # Trigger at 75% full
 KEEP_RECENT = 10  # Always keep last N messages (adjusted down if few messages)
 
 
+def _source_ids(messages: list[dict]) -> list[int]:
+    return [
+        source_id
+        for message in messages
+        if type(source_id := message.get("_source_message_id")) is int and source_id > 0
+    ]
+
+
 async def auto_compact_context(
     messages: list[dict],
     llm_chat_fn=None,
@@ -42,6 +50,10 @@ async def auto_compact_context(
             "budget": max_tokens,
             "utilization_pct": 0,
             "messages": 0,
+            "summarized_messages": 0,
+            "summary_version": None,
+            "selected_message_ids": _source_ids(messages),
+            "summarized_message_ids": [],
         }
 
     # Separate system from conversation messages
@@ -60,6 +72,10 @@ async def auto_compact_context(
             "budget": budget,
             "utilization_pct": round(utilization * 100, 1),
             "messages": len(messages),
+            "summarized_messages": 0,
+            "summary_version": None,
+            "selected_message_ids": _source_ids(messages),
+            "summarized_message_ids": [],
         }
 
     # Need to compact — but need at least 2 conv messages to split
@@ -70,6 +86,10 @@ async def auto_compact_context(
             "budget": budget,
             "utilization_pct": round(utilization * 100, 1),
             "messages": len(messages),
+            "summarized_messages": 0,
+            "summary_version": None,
+            "selected_message_ids": _source_ids(messages),
+            "summarized_message_ids": [],
         }
 
     # Adjust keep_recent down if we have few messages
@@ -130,4 +150,8 @@ async def auto_compact_context(
         "messages_after": len(compacted),
         "messages": len(compacted),
         "tokens": new_tokens,
+        "summarized_messages": len(old_msgs),
+        "summary_version": "auto-compact-v1",
+        "selected_message_ids": _source_ids(compacted),
+        "summarized_message_ids": _source_ids(old_msgs),
     }

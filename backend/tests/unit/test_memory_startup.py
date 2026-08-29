@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import secrets
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from app.routes.chat import get_tool_registry
 from app.runtime.factory import RunContext
 
 VALID_KEY = base64.urlsafe_b64encode(b"1" * 32).decode().rstrip("=")
+VALID_KEY_2 = base64.urlsafe_b64encode(b"2" * 32).decode().rstrip("=")
 
 
 def _settings(tmp_path, **overrides: object) -> Settings:
@@ -64,17 +66,19 @@ def test_startup_rejects_malformed_wrong_length_and_known_weak_keys(tmp_path, we
 
 def test_example_template_key_is_rejected(tmp_path) -> None:
     template = Path(__file__).parents[2] / ".env.example"
-    line = next(
-        line
-        for line in template.read_text().splitlines()
-        if line.startswith("ARCHON_ENCRYPTION_MASTER_KEY=")
-    )
+    lines = template.read_text().splitlines()
+    line = next(line for line in lines if line.startswith("ARCHON_ENCRYPTION_MASTER_KEY="))
+    assert "ARCHON_MEMORY_KEYRING_JSON=" in lines
+    assert "ARCHON_MEMORY_ACTIVE_KEY_VERSION=1" in lines
     error = _startup_error(_settings(tmp_path, encryption_master_key=line.partition("=")[2]))
     assert str(error) == "Encrypted memory startup configuration is invalid"
 
 
 def test_startup_configures_encrypted_memory_with_valid_key(tmp_path) -> None:
-    app = create_app(_settings(tmp_path, encryption_master_key=VALID_KEY))
+    settings = _settings(tmp_path, encryption_master_key=VALID_KEY)
+    assert VALID_KEY not in repr(settings)
+    assert VALID_KEY not in str(settings.model_dump())
+    app = create_app(settings)
     with TestClient(app):
         assert app.state.scoped_memory is not None
 
@@ -83,6 +87,21 @@ def test_startup_accepts_generated_256_bit_urlsafe_key(tmp_path) -> None:
     app = create_app(_settings(tmp_path, encryption_master_key=secrets.token_urlsafe(32)))
     with TestClient(app):
         assert app.state.scoped_memory is not None
+
+
+def test_startup_configures_versioned_keyring_and_rotation_service(tmp_path) -> None:
+    serialized = json.dumps({"1": VALID_KEY, "2": VALID_KEY_2})
+    app = create_app(
+        _settings(
+            tmp_path,
+            encryption_master_key="",
+            memory_keyring_json=serialized,
+            memory_active_key_version=2,
+        )
+    )
+    with TestClient(app):
+        assert app.state.scoped_memory.active_key_version == 2
+        assert app.state.memory_key_rotation is not None
 
 
 def test_explicit_disabled_mode_hides_memory_api_and_live_tool(tmp_path) -> None:

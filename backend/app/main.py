@@ -4,8 +4,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import uuid
 from collections.abc import AsyncGenerator, Callable, Mapping
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from typing import Any
 
 import structlog
 from dotenv import load_dotenv
@@ -17,14 +20,20 @@ load_dotenv()
 
 from app.agents.llm_factory import create_llm_client
 from app.config import Settings, get_settings
-from app.delegation import EvidenceVerifierSpecialist
+from app.delegation import (
+    DelegationEnvelopeService,
+    EvidenceVerifierSpecialist,
+    derive_delegation_hmac_key,
+)
+from app.eval.candidates import OptimizationCandidateService
+from app.eval.drift import DriftService
 from app.eval.persistence import EvaluationRepository
 from app.eval.service import EvaluationService
 from app.mcp.inventory import MCPInventoryService
 from app.mcp.models import ServerProfile
 from app.mcp.repository import MCPRepository
 from app.mcp.runtime import MCPRuntimeToolProvider
-from app.memory.keys import decode_memory_master_key
+from app.memory.keys import load_memory_keyring
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security import CSRFMiddleware, SecurityHeadersMiddleware
@@ -47,15 +56,19 @@ from app.routes.memory import router as memory_router
 from app.routes.multi_agent import router as multi_agent_router
 from app.routes.red_team import router as red_team_router
 from app.routes.runs import router as runs_router
+from app.routes.sandbox import router as sandbox_router
 from app.routes.security_demo import router as security_router
+from app.routes.shares import router as shares_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
+from app.runtime.images import ImageAttachmentStore
 from app.runtime.support import as_model_provider
 from app.security.approval_repository import ApprovalRepository
 from app.security.audit_logger import StructuredAuditLogger
 from app.security.auth import AuthRepository
 from app.security.circuit_breaker import CircuitBreaker, CircuitBreakingProvider
+from app.security.compliance import MandatoryComplianceService
 from app.security.live_approvals import DurableApprovalBroker
 from app.security.persistence_redactor import PersistenceRedactor
 from app.security.rate_limiter import RateLimiter
@@ -64,8 +77,13 @@ from app.services.chunker import EmbeddingService
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 from app.services.documents import DocumentRepository
+from app.services.key_rotation import MemoryKeyRotationService
+from app.services.run_exports import RunExportService
 from app.services.sql_json_vector_store import SqlJsonVectorStore
-from app.tools.sandbox import DockerSandboxConfig, DockerSandboxExecutor, SandboxExecutor
+from app.services.task_queue import ClaimedJob, DurableJobQueue
+from app.tools.sandbox import SandboxExecutor
+from app.tools.sandbox_client import SandboxClientConfig, SandboxRunnerClient
+from app.workers.jobs import JobWorker, PermanentJobError, echo_handler
 
 logger = structlog.get_logger()
 
@@ -74,6 +92,7 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: startup and shutdown."""
     settings = app.state.settings
+    app.state.image_attachments = ImageAttachmentStore()
 
     # Validate embedding capability before opening any application resources.
     app.state.embedding_service = EmbeddingService(
@@ -90,22 +109,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Validate before opening databases or initializing any other application resource.
     if settings.memory_encryption_enabled:
         try:
-            memory_master_key = decode_memory_master_key(settings.encryption_master_key)
+            memory_keyring = load_memory_keyring(
+                settings.memory_keyring_json.get_secret_value(),
+                active_version=settings.memory_active_key_version,
+                legacy_master_key=settings.encryption_master_key.get_secret_value(),
+            )
         except ValueError:
             raise RuntimeError("Encrypted memory startup configuration is invalid") from None
     else:
-        memory_master_key = None
+        memory_keyring = None
 
     app.state.sandbox_executor = None
     if settings.execution_enabled:
-        sandbox_config = DockerSandboxConfig(
-            binary=settings.execution_docker_binary,
-            image=settings.execution_docker_image,
-            platform=settings.execution_docker_platform,
+        sandbox_config = SandboxClientConfig(
+            socket_path=settings.execution_runner_socket,
             timeout_seconds=settings.execution_timeout_seconds,
-            cpus=settings.execution_cpus,
-            memory_mb=settings.execution_memory_mb,
-            pids_limit=settings.execution_pids_limit,
             output_bytes=settings.execution_output_bytes,
         )
         executor = app.state.sandbox_executor_factory(sandbox_config)
@@ -128,6 +146,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.settings = settings
     redactor = app.state.persistence_redactor_factory()
     app.state.persistence_redactor = redactor
+    app.state.compliance = MandatoryComplianceService()
     app.state.log_buffer = OwnerLogBuffer()
     repository = ConversationRepository(settings.database_url, redactor)
     await repository.initialize()
@@ -142,6 +161,41 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.evaluation_repository = EvaluationRepository(repository.session_factory)
     app.state.evaluation_service = EvaluationService(
         repository.runs, app.state.evaluation_repository
+    )
+    app.state.drift_service = DriftService(
+        repository.session_factory, app.state.evaluation_repository
+    )
+    app.state.run_exports = RunExportService(
+        repository.session_factory, repository.runs, token_pepper=settings.secret_key
+    )
+    app.state.job_queue = DurableJobQueue(repository.session_factory)
+    app.state.delegation_envelopes = None
+    if settings.verifier_enabled:
+        app.state.delegation_envelopes = DelegationEnvelopeService(
+            repository.session_factory,
+            {1: derive_delegation_hmac_key(settings.delegation_signing_key.get_secret_value(), 1)},
+            active_key_version=1,
+        )
+
+    async def run_export_job(job: ClaimedJob) -> dict[str, Any]:
+        run_id = str(job.payload["run_id"])
+        run = await repository.runs.get(job.owner_id, run_id)
+        if run is None or run.project_id != job.project_id:
+            raise PermanentJobError("run_scope_unavailable")
+        exported = await app.state.run_exports.create_export(job.owner_id, run_id)
+        if exported is None:
+            raise PermanentJobError("run_scope_unavailable")
+        return {
+            "export_id": exported.export_id,
+            "run_id": exported.run_id,
+            "schema_version": exported.schema_version,
+            "content_checksum": exported.content_checksum,
+        }
+
+    job_worker = JobWorker(
+        app.state.job_queue,
+        f"web-{uuid.uuid4()}",
+        handlers={"echo": echo_handler, "run_export": run_export_job},
     )
     auth_store = DatabaseStore(settings.database_url)
     await auth_store.initialize()
@@ -163,16 +217,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     logger.info("vector_store_initialized", backend="sql-json-cosine")
     if settings.memory_encryption_enabled:
-        assert memory_master_key is not None
+        assert memory_keyring is not None
         app.state.scoped_memory = ScopedEncryptedMemoryRepository(
-            auth_store.session_factory, memory_master_key, redactor=redactor
+            auth_store.session_factory, memory_keyring, redactor=redactor
         )
+        await app.state.scoped_memory.activate_key_version()
+        await app.state.scoped_memory.validate_key_versions()
+        app.state.memory_key_rotation = MemoryKeyRotationService(app.state.scoped_memory)
     else:
         app.state.scoped_memory = None
+        app.state.memory_key_rotation = None
+    app.state.approval_repository = ApprovalRepository(auth_store.session_factory)
     app.state.approval_broker = DurableApprovalBroker(
-        ApprovalRepository(auth_store.session_factory),
+        app.state.approval_repository,
         timeout_seconds=settings.approval_timeout_seconds,
         poll_interval_seconds=settings.approval_poll_interval_seconds,
+    )
+    app.state.optimization_candidates = OptimizationCandidateService(
+        repository.session_factory, app.state.approval_repository
     )
     app.state.artifacts = ArtifactStore(redactor)
     app.state.audit_logger = StructuredAuditLogger(redactor)
@@ -208,7 +270,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         as_model_provider(app.state.model_provider_factory(settings)), breaker
     )
     app.state.evidence_verifier = (
-        EvidenceVerifierSpecialist(app.state.model_provider, repository.runs, redactor)
+        EvidenceVerifierSpecialist(
+            app.state.model_provider,
+            repository.runs,
+            redactor,
+            app.state.delegation_envelopes,
+        )
         if settings.verifier_enabled
         else None
     )
@@ -216,16 +283,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.otel_endpoint:
         exporter = OTLPExporter(settings.otel_service_name, settings.otel_endpoint)
     app.state.otel_exporter = exporter
+    job_worker_task = asyncio.create_task(job_worker.run_forever())
+    app.state.job_worker = job_worker
+    app.state.job_worker_task = job_worker_task
 
-    yield
-
-    await repository.close()
-    await auth_store.close()
-    await app.state.rate_limiter.close()
-    await app.state.embedding_service.close()
-    if exporter:
-        exporter.shutdown()
-    logger.info("archon_shutdown")
+    try:
+        yield
+    finally:
+        job_worker_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await job_worker_task
+        await repository.close()
+        await auth_store.close()
+        await app.state.rate_limiter.close()
+        await app.state.embedding_service.close()
+        if exporter:
+            exporter.shutdown()
+        logger.info("archon_shutdown")
 
 
 def create_app(
@@ -235,8 +309,8 @@ def create_app(
     persistence_redactor_factory: Callable[[], PersistenceRedactor] = PersistenceRedactor,
     model_provider_factory: Callable[[Settings], object] = create_llm_client,
     sandbox_executor_factory: Callable[
-        [DockerSandboxConfig], SandboxExecutor
-    ] = DockerSandboxExecutor,
+        [SandboxClientConfig], SandboxExecutor
+    ] = SandboxRunnerClient,
 ) -> FastAPI:
     """Application factory. Accepts optional settings for testing."""
     if settings is None:
@@ -293,7 +367,9 @@ def create_app(
     app.include_router(compliance_router)
     app.include_router(mcp_router)
     app.include_router(tasks_router)
+    app.include_router(sandbox_router)
     app.include_router(runs_router)
+    app.include_router(shares_router)
     app.include_router(evaluations_router)
 
     @app.get("/metrics")
@@ -315,7 +391,15 @@ def create_app(
 
     @app.get("/readyz")
     async def readyz():
-        """Report readiness based on a live database query."""
+        """Report readiness based on live dependencies and durable-worker health."""
+        worker_task = getattr(app.state, "job_worker_task", None)
+        worker = getattr(app.state, "job_worker", None)
+        worker_ready = (
+            worker_task is not None
+            and not worker_task.done()
+            and worker is not None
+            and worker.last_error_code is None
+        )
         dependencies = {
             "conversation_repository": "up",
             "rate_limiter": {
@@ -330,6 +414,13 @@ def create_app(
                 else {"backend": "disabled", "status": "disabled"}
             ),
             "model_provider_circuit": app.state.provider_breaker.state.value,
+            "background_job_worker": (
+                "up"
+                if worker_ready
+                else worker.last_error_code
+                if worker is not None and worker.last_error_code
+                else "down"
+            ),
             "vector_store": app.state.vector_store.backend,
             "evidence_verifier": (
                 "enabled" if app.state.evidence_verifier is not None else "disabled"
@@ -342,7 +433,9 @@ def create_app(
                 "readiness": app.state.embedding_service.capability.readiness,
             },
         }
-        ready = app.state.otel_exporter is None or app.state.otel_exporter.is_active
+        ready = worker_ready and (
+            app.state.otel_exporter is None or app.state.otel_exporter.is_active
+        )
         try:
             await app.state.conversations.check_health()
         except Exception as error:

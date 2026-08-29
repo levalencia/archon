@@ -19,13 +19,16 @@ from app.delegation import (
     ChildVerificationStatus,
     ClaimInput,
     ClaimVerdictStatus,
+    DelegationEnvelopeService,
     EvidenceSlice,
     EvidenceVerifierSpecialist,
     VerificationBudget,
+    issue_verifier_delegation,
 )
 from app.research.models import Claim
 from app.runtime.models import Message, Role, TokenUsage
 from app.runtime.ports import ModelProvider
+from app.security.compliance import MandatoryComplianceService
 from app.services.chunker import DocumentChunk, EmbeddingService
 from app.services.run_ledger import RunRepository
 from app.services.vector_store import VectorStoreProtocol
@@ -229,19 +232,32 @@ class GroundedDocumentWorkflow:
         model: str,
         top_k: int = 5,
         verifier: EvidenceVerifierSpecialist | None = None,
+        delegation_envelopes: DelegationEnvelopeService | None = None,
         verifier_budget: VerificationBudget | None = None,
         verifier_model: str = "verifier-model",
+        compliance: MandatoryComplianceService | None = None,
     ) -> None:
         self._retriever = DocumentEvidenceRetriever(vector_store, embedding_service, top_k=top_k)
         self._provider = model_provider
         self._runs = runs
         self._provider_name = provider
         self._model_name = model
-        if (verifier is None) != (verifier_budget is None):
-            raise ValueError("verifier and verifier_budget must be configured together")
+        if not (
+            (verifier is None and verifier_budget is None and delegation_envelopes is None)
+            or (
+                verifier is not None
+                and verifier_budget is not None
+                and delegation_envelopes is not None
+            )
+        ):
+            raise ValueError(
+                "verifier, delegation_envelopes, and verifier_budget must be configured together"
+            )
         self._verifier = verifier
+        self._delegation_envelopes = delegation_envelopes
         self._verifier_budget = verifier_budget
         self._verifier_model = verifier_model
+        self._compliance = compliance
 
     async def run(
         self,
@@ -375,6 +391,8 @@ class GroundedDocumentWorkflow:
         )
         if not answer:
             answer = _NO_EVIDENCE_ANSWER
+        if self._compliance is not None:
+            answer = self._compliance.enforce_output(answer)
         grounded = bool(claims)
         await self._append(
             identity,
@@ -448,9 +466,10 @@ class GroundedDocumentWorkflow:
     ]:
         """Delegate only deterministic claims and fail closed on every child failure."""
         verifier = self._verifier
+        envelopes = self._delegation_envelopes
         budget = self._verifier_budget
-        if verifier is None or budget is None:
-            raise RuntimeError("verifier is not configured")
+        if verifier is None or envelopes is None or budget is None:
+            raise RuntimeError("verifier delegation is not configured")
         child_id = str(uuid.uuid4())
         cited_ids = tuple(
             dict.fromkeys(evidence_id for claim in claims for evidence_id in claim.evidence_ids)
@@ -490,7 +509,8 @@ class GroundedDocumentWorkflow:
         latency_ms: float | None = None
         retained: tuple[Claim, ...] = ()
         try:
-            result = await verifier.verify(request)
+            envelope = issue_verifier_delegation(envelopes, request)
+            result = await verifier.verify(request, envelope)
             status = result.status.value
             tokens = result.usage.total_tokens
             latency_ms = result.latency_ms

@@ -24,9 +24,11 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync --extra dev
       - name: Ruff lint
-        run: uv run ruff check app tests
+        run: uv run ruff check app tests ../scripts/validate-course-docs.py
       - name: Ruff format
-        run: uv run ruff format --check app tests
+        run: uv run ruff format --check app tests ../scripts/validate-course-docs.py
+      - name: Course documentation contracts
+        run: uv run python ../scripts/validate-course-docs.py
       - name: Bandit security scan
         run: uv run bandit -r app -ll
       - name: Backend tests

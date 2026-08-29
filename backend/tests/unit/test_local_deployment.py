@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -49,11 +50,13 @@ def test_only_loopback_gateway_is_published() -> None:
         "postgres",
         "redis",
         "otel-collector",
+        "sandbox-runner",
     }
     assert "ports" not in services["postgres"]
     assert "ports" not in services["redis"]
     assert "ports" not in services["backend"]
     assert "ports" not in services["frontend"]
+    assert "ports" not in services["sandbox-runner"]
     assert services["gateway"]["ports"][0]["host_ip"] == "127.0.0.1"
 
 
@@ -67,9 +70,44 @@ def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
     assert "postgres:16-alpine" in text
     assert "pgvector" not in text.lower()
     assert "ARCHON_RATE_LIMIT_BACKEND: redis" in text
-    assert 'ARCHON_EXECUTION_ENABLED: "false"' in text
+    assert 'ARCHON_EXECUTION_ENABLED: "true"' in text
+    assert "ARCHON_EXECUTION_RUNNER_SOCKET" in text
+    assert "docker.sock" not in text
+    services = _compose_config()["services"]
+    security_options = set(services["sandbox-runner"]["security_opt"])
+    assert "no-new-privileges:true" in security_options
+    seccomp_options = [option for option in security_options if option.startswith("seccomp=")]
+    assert len(seccomp_options) == 1
+    assert seccomp_options[0].endswith("/sandbox_runner/seccomp-bootstrap.json")
+    assert all(
+        "seccomp=unconfined" not in service.get("security_opt", [])
+        for name, service in services.items()
+        if name != "sandbox-runner"
+    )
+    profile_path = ROOT / "sandbox_runner" / "seccomp-bootstrap.json"
+    profile_bytes = profile_path.read_bytes()
+    assert hashlib.sha256(profile_bytes).hexdigest() == (
+        "536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74"
+    )
+    profile = json.loads(profile_bytes)
+    assert profile["defaultAction"] == "SCMP_ACT_ERRNO"
+    unconditional = {
+        syscall
+        for rule in profile["syscalls"]
+        if rule["action"] == "SCMP_ACT_ALLOW"
+        and not rule.get("includes")
+        and not rule.get("excludes")
+        for syscall in rule["names"]
+    }
+    assert "seccomp" in unconditional
+    assert not {"clone3", "unshare", "bpf", "keyctl", "perf_event_open"} & unconditional
     assert "OTEL_BSP_SCHEDULE_DELAY" in text
     assert "ARCHON_LOCAL_PLATFORM:-linux/amd64" in text
+    assert "ARCHON_SANDBOX_PLATFORM:-linux/amd64" in text
+    smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
+    assert "docker info --format '{{.Architecture}}'" in smoke
+    assert 'aarch64 | arm64) ARCHON_SANDBOX_PLATFORM="linux/arm64"' in smoke
+    assert 'x86_64 | amd64) ARCHON_SANDBOX_PLATFORM="linux/amd64"' in smoke
     assert text.count("@sha256:") >= 4
 
 
@@ -84,6 +122,8 @@ def test_images_run_nonroot_and_backend_migrates() -> None:
     assert "--frozen --no-dev" in backend
     assert backend.count("@sha256:") >= 3
     assert "alembic upgrade head" in entrypoint
+    smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
+    assert '[[ "$migration" == "20260828_14" ]]' in smoke
     assert "USER node" in frontend
     assert frontend.count("@sha256:") == 2
     assert "adapter-node" in (ROOT / "frontend/svelte.config.js").read_text()

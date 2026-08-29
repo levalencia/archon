@@ -67,9 +67,17 @@ class ToolDefinition:
 class TokenUsage:
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_read_input_tokens: int | None = None
+    cache_write_input_tokens: int | None = None
 
     def __post_init__(self) -> None:
-        if self.input_tokens < 0 or self.output_tokens < 0:
+        counts = (
+            self.input_tokens,
+            self.output_tokens,
+            self.cache_read_input_tokens,
+            self.cache_write_input_tokens,
+        )
+        if any(count is not None and count < 0 for count in counts):
             raise ValueError("token counts cannot be negative")
 
     @property
@@ -77,9 +85,16 @@ class TokenUsage:
         return self.input_tokens + self.output_tokens
 
     def __add__(self, other: TokenUsage) -> TokenUsage:
+        def add_optional(left: int | None, right: int | None) -> int | None:
+            if left is None and right is None:
+                return None
+            return (left or 0) + (right or 0)
+
         return TokenUsage(
             self.input_tokens + other.input_tokens,
             self.output_tokens + other.output_tokens,
+            add_optional(self.cache_read_input_tokens, other.cache_read_input_tokens),
+            add_optional(self.cache_write_input_tokens, other.cache_write_input_tokens),
         )
 
 
@@ -89,6 +104,9 @@ class ModelResponse:
     tool_calls: tuple[ToolCall, ...] = ()
     usage: TokenUsage = field(default_factory=TokenUsage)
     provider_stop_reason: str | None = None
+    structured_output: object | None = None
+    actual_provider: str | None = None
+    actual_model: str | None = None
 
     def __post_init__(self) -> None:
         if self.content is None and not self.tool_calls:

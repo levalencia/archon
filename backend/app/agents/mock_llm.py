@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from app.runtime.capabilities import ProviderCapabilities
 from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
+from app.runtime.structured_output import ResponseContract
 
 
 class MockLLM:
+    capabilities = ProviderCapabilities(native_tools=True, usage=True)
+
     def __init__(self, responses: Sequence[str | ModelResponse] | None = None) -> None:
         self.responses = list(responses) if responses else ["I am a mock LLM."]
         self.call_history: list[dict] = []
@@ -19,9 +23,19 @@ class MockLLM:
         tools: Sequence[ToolDefinition] = (),
         *,
         max_tokens: int = 4096,
+        response_contract: ResponseContract | None = None,
+        response_format: str | None = None,
     ) -> ModelResponse:
+        if response_contract is not None and response_format is not None:
+            raise ValueError("response_contract and response_format are mutually exclusive")
         self.call_history.append(
-            {"messages": tuple(messages), "tools": tuple(tools), "max_tokens": max_tokens}
+            {
+                "messages": tuple(messages),
+                "tools": tuple(tools),
+                "max_tokens": max_tokens,
+                "response_contract": response_contract,
+                "response_format": response_format,
+            }
         )
         response = (
             self.responses[self._call_count]

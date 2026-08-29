@@ -171,36 +171,24 @@ async def test_legacy_code_adapter_has_no_host_fallback() -> None:
         await execute_sandboxed("print('host')")
 
 
-@pytest.mark.parametrize(
-    "image",
-    [
-        "sandbox:latest",
-        "sandbox",
-        "sandbox@sha256:" + "a" * 63,
-        "sandbox@sha256:" + "A" * 64,
-        "sha256:" + "g" * 64,
-    ],
-)
-def test_settings_reject_mutable_or_malformed_image_when_enabled(image: str) -> None:
-    with pytest.raises(ValueError, match="immutable sha256"):
-        Settings(
-            memory_encryption_enabled=False,
-            execution_enabled=True,
-            execution_docker_image=image,
-        )
-
-
-@pytest.mark.parametrize(
-    "image",
-    ["registry.example/archon/sandbox@sha256:" + "a" * 64, "sha256:" + "b" * 64],
-)
-def test_settings_accept_immutable_registry_digest_or_local_image_id(image: str) -> None:
+def test_live_runner_settings_do_not_depend_on_legacy_docker_image() -> None:
     settings = Settings(
         memory_encryption_enabled=False,
         execution_enabled=True,
-        execution_docker_image=image,
+        execution_docker_image="sandbox:latest",
+        execution_runner_socket="/run/archon-sandbox/runner.sock",
     )
-    assert settings.execution_docker_image == image
+    assert settings.execution_enabled is True
+    assert settings.execution_runner_socket == "/run/archon-sandbox/runner.sock"
+
+
+def test_live_runner_settings_reject_relative_socket() -> None:
+    with pytest.raises(ValueError):
+        Settings(
+            memory_encryption_enabled=False,
+            execution_enabled=True,
+            execution_runner_socket="relative.sock",
+        )
 
 
 @pytest.mark.asyncio

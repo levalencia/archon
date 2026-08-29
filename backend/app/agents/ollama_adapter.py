@@ -1,142 +1,492 @@
-"""Ollama adapter with vision support. Handles text + image input."""
+"""Ollama adapter for the native, non-streaming ``/api/chat`` API."""
 
 from __future__ import annotations
 
+import base64
+import binascii
+import copy
+import hashlib
 import json
+import math
+import re
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal
 
 import httpx
 import structlog
 
+from app.observability.logging import safe_value_metadata
+from app.runtime.capabilities import ProviderCapabilities, UnsupportedProviderCapability
+from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall, ToolDefinition
+from app.runtime.structured_output import ResponseContract
+
 logger = structlog.get_logger()
+
+_MODEL_IDENTITY_RE = re.compile(r"[A-Za-z0-9._:/-]{1,128}\Z")
+_DATA_IMAGE_RE = re.compile(r"\Adata:image/(?:png|jpeg|jpg|webp|gif);base64,(.*)\Z", re.DOTALL)
+OllamaAdapterErrorCode = Literal[
+    "invalid_response", "invalid_tool_arguments", "invalid_image", "invalid_tool_definition"
+]
+
+
+class OllamaAdapterError(ValueError):
+    """A stable, sanitized Ollama boundary validation failure."""
+
+    def __init__(self, code: OllamaAdapterErrorCode) -> None:
+        self.code = code
+        message = {
+            "invalid_response": "Invalid Ollama response",
+            "invalid_tool_arguments": "Invalid Ollama tool arguments",
+            "invalid_image": "Invalid Ollama image",
+            "invalid_tool_definition": "Invalid Ollama tool definition",
+        }[code]
+        super().__init__(message)
+
+
+def _invalid_response() -> OllamaAdapterError:
+    return OllamaAdapterError("invalid_response")
+
+
+def _model_identity(value: object, *, fallback: object = "unknown") -> str:
+    """Return a bounded model identifier safe for metadata and logs."""
+    if type(value) is str and _MODEL_IDENTITY_RE.fullmatch(value):
+        return value
+    if type(fallback) is str and _MODEL_IDENTITY_RE.fullmatch(fallback):
+        return fallback
+    return "unknown"
+
+
+def _plain_json(value: Any, *, seen: frozenset[int] = frozenset()) -> Any:
+    """Copy a recursively finite JSON value into only plain Python containers."""
+    if value is None or type(value) in {str, bool, int}:
+        return value
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise TypeError("JSON numbers must be finite")
+        return value
+    if isinstance(value, (Mapping, list, tuple)):
+        identity = id(value)
+        if identity in seen:
+            raise TypeError("JSON value must not contain cycles")
+        nested_seen = seen | {identity}
+        if isinstance(value, Mapping):
+            if any(type(key) is not str for key in value):
+                raise TypeError("JSON object keys must be strings")
+            return {key: _plain_json(item, seen=nested_seen) for key, item in value.items()}
+        return [_plain_json(item, seen=nested_seen) for item in value]
+    raise TypeError("unsupported JSON value")
+
+
+def _canonical_json(value: Any) -> str:
+    return json.dumps(
+        _plain_json(value),
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _image_data(image: str) -> str:
+    if type(image) is not str:
+        raise OllamaAdapterError("invalid_image")
+    match = _DATA_IMAGE_RE.fullmatch(image)
+    encoded = match.group(1) if match is not None else image
+    if image.startswith("data:") and match is None:
+        raise OllamaAdapterError("invalid_image")
+    if not encoded:
+        raise OllamaAdapterError("invalid_image")
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise OllamaAdapterError("invalid_image") from None
+    if base64.b64encode(decoded).decode("ascii") != encoded:
+        raise OllamaAdapterError("invalid_image")
+    return encoded
+
+
+def _tool_payload(tool: ToolDefinition) -> dict[str, Any]:
+    if type(tool.name) is not str or not tool.name.strip():
+        raise OllamaAdapterError("invalid_tool_definition")
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": _plain_json(tool.input_schema),
+        },
+    }
+
+
+def _legacy_tool_payload(tool: object) -> dict[str, Any]:
+    if not isinstance(tool, Mapping):
+        raise OllamaAdapterError("invalid_tool_definition")
+    name = tool.get("name")
+    if type(name) is not str or not name.strip():
+        raise OllamaAdapterError("invalid_tool_definition")
+    description = tool.get("description", "")
+    parameters = tool.get("parameters", {"type": "object", "properties": {}})
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description if isinstance(description, str) else "",
+            "parameters": _plain_json(parameters),
+        },
+    }
+
+
+def _typed_messages(messages: Sequence[Message]) -> tuple[list[dict[str, Any]], bool]:
+    """Convert typed history, retaining tool-result identity through ``tool_name``."""
+    payloads: list[dict[str, Any]] = []
+    historical_tools: dict[str, str] = {}
+    has_images = False
+
+    for message in messages:
+        if message.images and message.role is not Role.USER:
+            raise ValueError("Ollama images are only supported on user messages")
+        if message.tool_calls and message.role is not Role.ASSISTANT:
+            raise ValueError("Ollama tool_calls are only supported on assistant messages")
+        if message.tool_call_id is not None and message.role is not Role.TOOL:
+            raise ValueError("Ollama tool_call_id is only supported on tool messages")
+        if message.role is Role.TOOL and (
+            type(message.tool_call_id) is not str or not message.tool_call_id.strip()
+        ):
+            raise ValueError("Ollama tool results require a tool_call_id")
+
+        payload: dict[str, Any] = {"role": message.role.value, "content": message.content}
+        if message.images:
+            has_images = True
+            payload["images"] = [_image_data(image) for image in message.images]
+
+        if message.role is Role.ASSISTANT and message.tool_calls:
+            calls: list[dict[str, Any]] = []
+            for call in message.tool_calls:
+                if type(call.id) is not str or not call.id.strip():
+                    raise ValueError("Ollama tool call IDs must not be blank")
+                if not call.name.strip():
+                    raise ValueError("Ollama tool call names must not be blank")
+                if call.id in historical_tools:
+                    raise ValueError("Ollama tool call history contains duplicate IDs")
+                historical_tools[call.id] = call.name
+                calls.append(
+                    {
+                        "function": {
+                            "name": call.name,
+                            "arguments": _plain_json(call.arguments),
+                        }
+                    }
+                )
+            payload["tool_calls"] = calls
+
+        if message.role is Role.TOOL:
+            if not message.tool_call_id or message.tool_call_id not in historical_tools:
+                raise ValueError("Ollama tool results require a known prior tool_call_id")
+            payload["tool_name"] = historical_tools[message.tool_call_id]
+
+        payloads.append(payload)
+    return payloads, has_images
+
+
+def _nonnegative_count(value: object) -> int:
+    if type(value) is not int or value < 0:
+        raise _invalid_response()
+    return value
+
+
+def _tool_arguments(value: object) -> dict[str, Any]:
+    try:
+        decoded: object
+        if type(value) is str:
+            decoded = json.loads(
+                value,
+                parse_constant=lambda _value: (_ for _ in ()).throw(ValueError()),
+            )
+        else:
+            decoded = value
+        if not isinstance(decoded, Mapping):
+            raise TypeError
+        plain = _plain_json(decoded)
+        if type(plain) is not dict:
+            raise TypeError
+        return plain
+    except (json.JSONDecodeError, TypeError, ValueError):
+        raise OllamaAdapterError("invalid_tool_arguments") from None
+
+
+def _request_namespace(messages: Sequence[Mapping[str, Any]]) -> str:
+    canonical_history = _canonical_json(list(messages))
+    return hashlib.sha256(canonical_history.encode()).hexdigest()[:16]
+
+
+def _generated_call_id(
+    name: str, arguments: Mapping[str, Any], index: int, *, request_namespace: str
+) -> str:
+    source = f"{index}\0{name}\0{_canonical_json(arguments)}"
+    digest = hashlib.sha256(source.encode()).hexdigest()[:20]
+    return f"ollama_call_{request_namespace}_{digest}"
+
+
+def _parse_tool_calls(payload: object, *, request_namespace: str) -> tuple[ToolCall, ...]:
+    if payload is None:
+        return ()
+    if type(payload) is not list:
+        raise _invalid_response()
+
+    calls: list[ToolCall] = []
+    call_ids: set[str] = set()
+    for index, item in enumerate(payload):
+        if type(item) is not dict:
+            raise _invalid_response()
+        if "type" in item and item["type"] != "function":
+            raise _invalid_response()
+        function = item.get("function")
+        if type(function) is not dict:
+            raise _invalid_response()
+        name = function.get("name")
+        if type(name) is not str or not name.strip():
+            raise _invalid_response()
+        arguments = _tool_arguments(function.get("arguments"))
+
+        supplied_id = item.get("id")
+        if "id" in item:
+            if type(supplied_id) is not str or not supplied_id.strip():
+                raise _invalid_response()
+            call_id = supplied_id
+        else:
+            call_id = _generated_call_id(
+                name, arguments, index, request_namespace=request_namespace
+            )
+            suffix = 1
+            base_id = call_id
+            while call_id in call_ids:
+                call_id = f"{base_id}_{suffix}"
+                suffix += 1
+        if call_id in call_ids:
+            raise _invalid_response()
+        call_ids.add(call_id)
+        calls.append(ToolCall(call_id, name, arguments))
+    return tuple(calls)
+
+
+def _parse_response(data: object, *, selected_model: str, request_namespace: str) -> ModelResponse:
+    try:
+        if type(data) is not dict:
+            raise _invalid_response()
+        message = data.get("message")
+        if type(message) is not dict or message.get("role") != "assistant":
+            raise _invalid_response()
+        content = message.get("content")
+        if content is not None and type(content) is not str:
+            raise _invalid_response()
+        tool_calls = _parse_tool_calls(
+            message.get("tool_calls"), request_namespace=request_namespace
+        )
+        if content is None and not tool_calls:
+            raise _invalid_response()
+        done_reason = data.get("done_reason")
+        if done_reason is not None and type(done_reason) is not str:
+            raise _invalid_response()
+        prompt_tokens = _nonnegative_count(data.get("prompt_eval_count", 0))
+        completion_tokens = _nonnegative_count(data.get("eval_count", 0))
+        return ModelResponse(
+            content=content,
+            tool_calls=tool_calls,
+            usage=TokenUsage(prompt_tokens, completion_tokens),
+            provider_stop_reason=done_reason,
+            actual_provider="ollama",
+            actual_model=_model_identity(data.get("model"), fallback=selected_model),
+        )
+    except OllamaAdapterError:
+        raise
+    except (KeyError, TypeError, ValueError):
+        raise _invalid_response() from None
 
 
 class OllamaAdapter:
-    """Ollama adapter for local LLMs. Supports text and vision models.
+    """Typed Ollama adapter with explicit, model-dependent capability opt-ins.
 
-    For text: llama3.1:8b
-    For vision: llava:7b (accepts base64 images)
+    Ollama's current chat request can carry both ``tools`` and user-message
+    ``images``. The adapter sends that combination only when text tools, a
+    vision model, and vision-model native tools are all explicitly enabled.
+    It never infers combined support from text-model tool support.
     """
 
     def __init__(
         self,
         model: str = "llama3.1:8b",
         base_url: str = "http://localhost:11434",
+        *,
+        native_tools_enabled: bool = False,
+        vision_model: str | None = None,
+        vision_native_tools_enabled: bool = False,
+        json_mode_enabled: bool = False,
+        json_schema_enabled: bool = False,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(timeout=120.0)
+        self.vision_model = vision_model.strip() if vision_model and vision_model.strip() else None
+        self.vision_native_tools_enabled = vision_native_tools_enabled
+        self.capabilities = ProviderCapabilities(
+            native_tools=native_tools_enabled,
+            images=self.vision_model is not None,
+            json_mode=json_mode_enabled or json_schema_enabled,
+            json_schema=json_schema_enabled,
+            prompt_caching=False,
+            cache_usage=False,
+            usage=True,
+            stop_reason=True,
+            streaming=False,
+        )
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=120.0)
+        logger.info(
+            "ollama_adapter_init",
+            model=_model_identity(model),
+            vision_configured=self.vision_model is not None,
+            vision_native_tools_enabled=self.vision_native_tools_enabled,
+            **safe_value_metadata("base_url", self.base_url),
+        )
+
+    def _require(self, capability: str, available: bool) -> None:
+        if not available:
+            raise UnsupportedProviderCapability("ollama", (capability,))
+
+    async def _send(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        response = await self._client.post("/api/chat", json=payload)
+        response.raise_for_status()
+        try:
+            data = response.json()
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+            raise _invalid_response() from None
+        if type(data) is not dict:
+            raise _invalid_response()
+        return data
+
+    async def complete(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[ToolDefinition] = (),
+        *,
+        max_tokens: int = 2048,
+        response_contract: ResponseContract | None = None,
+        response_format: str | None = None,
+    ) -> ModelResponse:
+        """Complete a typed request using Ollama's non-streaming chat endpoint."""
+        if response_contract is not None and response_format is not None:
+            raise ValueError("response_contract and response_format are mutually exclusive")
+
+        uses_native_tools = bool(tools) or any(
+            message.tool_calls or message.role is Role.TOOL or message.tool_call_id is not None
+            for message in messages
+        )
+        if uses_native_tools:
+            self._require("native_tools", self.capabilities.native_tools)
+        has_images_requested = any(message.images for message in messages)
+        if has_images_requested:
+            self._require("images", self.capabilities.images)
+        converted_messages, has_images = _typed_messages(messages)
+        if has_images and uses_native_tools:
+            self._require("vision_native_tools", self.vision_native_tools_enabled)
+        if response_contract is not None:
+            self._require("json_schema", self.capabilities.json_schema)
+        elif response_format is not None:
+            self._require("json_mode", self.capabilities.json_mode)
+
+        selected_model = self.vision_model if has_images else self.model
+        if selected_model is None:  # narrowed by the explicit image capability check above
+            raise UnsupportedProviderCapability("ollama", ("images",))
+        payload: dict[str, Any] = {
+            "model": selected_model,
+            "messages": converted_messages,
+            "stream": False,
+            "options": {"num_predict": max_tokens},
+        }
+        if tools:
+            payload["tools"] = [_tool_payload(tool) for tool in tools]
+        if response_contract is not None:
+            payload["format"] = _plain_json(response_contract.json_schema)
+        elif response_format is not None:
+            payload["format"] = "json"
+
+        request_namespace = _request_namespace(converted_messages)
+        result = _parse_response(
+            await self._send(payload),
+            selected_model=selected_model,
+            request_namespace=request_namespace,
+        )
+        if result.tool_calls:
+            self._require("native_tools", self.capabilities.native_tools)
+        logger.info(
+            "ollama_complete",
+            model=result.actual_model,
+            input_messages=len(messages),
+            tool_calls=len(result.tool_calls),
+            has_images=has_images,
+        )
+        return result
 
     async def chat(
         self,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         max_tokens: int = 2048,
-        tools: list[dict] | None = None,
+        tools: list[dict[str, Any]] | None = None,
         images: list[str] | None = None,
     ) -> str:
-        """Call Ollama chat API with optional tools and images.
+        """Preserve the legacy dict/string API without mutating caller messages."""
+        converted = copy.deepcopy(messages)
+        uses_native_tools = bool(tools) or any(
+            message.get("tool_calls")
+            or message.get("role") == "tool"
+            or message.get("tool_call_id") is not None
+            for message in converted
+        )
+        if uses_native_tools:
+            self._require("native_tools", self.capabilities.native_tools)
+        has_images = bool(images) or any(bool(message.get("images")) for message in converted)
+        if has_images and self.vision_model is None:
+            raise UnsupportedProviderCapability("ollama", ("images",))
+        if images:
+            for message in reversed(converted):
+                if message.get("role") == "user":
+                    message["images"] = [_image_data(image) for image in images]
+                    break
+            else:
+                raise ValueError("Ollama images require a user message")
+        for message in converted:
+            message_images = message.get("images")
+            if message_images:
+                if message.get("role") != "user":
+                    raise ValueError("Ollama images are only supported on user messages")
+                message["images"] = [_image_data(image) for image in message_images]
 
-        Args:
-            messages: Chat messages
-            max_tokens: Max tokens to generate
-            tools: Tool definitions for function calling
-            images: List of base64-encoded images to analyze
-        """
-        # Check if any message contains images → switch to vision model
-        model = self.model
-        has_images = images or any("images" in m for m in messages)
-        if has_images:
-            model = await self._get_vision_model()
-            # If images passed as parameter, add to last user message
-            if images:
-                for msg in reversed(messages):
-                    if msg["role"] == "user":
-                        msg["images"] = images
-                        break
-
-        payload: dict = {
-            "model": model,
-            "messages": messages,
+        selected_model = self.vision_model if has_images else self.model
+        if selected_model is None:
+            raise UnsupportedProviderCapability("ollama", ("images",))
+        if has_images and uses_native_tools:
+            self._require("vision_native_tools", self.vision_native_tools_enabled)
+        payload: dict[str, Any] = {
+            "model": selected_model,
+            "messages": converted,
             "stream": False,
-            "options": {
-                "num_predict": max_tokens,
-            },
+            "options": {"num_predict": max_tokens},
         }
+        if tools:
+            payload["tools"] = [_legacy_tool_payload(tool) for tool in tools]
 
-        # Add tools if provided (not supported with vision models)
-        if tools and not images:
-            ollama_tools = []
-            for tool in tools:
-                ollama_tools.append(
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": tool["name"],
-                            "description": tool.get("description", ""),
-                            "parameters": tool.get(
-                                "parameters",
-                                {
-                                    "type": "object",
-                                    "properties": {},
-                                },
-                            ),
-                        },
-                    }
-                )
-            payload["tools"] = ollama_tools
-
-        response = await self._client.post(
-            f"{self.base_url}/api/chat",
-            json=payload,
+        result = _parse_response(
+            await self._send(payload),
+            selected_model=selected_model,
+            request_namespace=_request_namespace(converted),
         )
-        response.raise_for_status()
-        data = response.json()
-
-        msg = data.get("message", {})
-
-        if msg.get("tool_calls"):
-            tool_calls = []
-            for tc in msg["tool_calls"]:
-                fn = tc.get("function", {})
-                tool_calls.append(
-                    {
-                        "tool": fn.get("name", ""),
-                        "args": fn.get("arguments", {}),
-                    }
-                )
-
-            logger.info(
-                "ollama_tool_call",
-                model=model,
-                tool_calls=len(tool_calls),
+        if result.tool_calls:
+            self._require("native_tools", self.capabilities.native_tools)
+        if result.tool_calls:
+            return json.dumps(
+                {
+                    "tool_calls": [
+                        {"tool": call.name, "args": dict(call.arguments)}
+                        for call in result.tool_calls
+                    ]
+                }
             )
-            return json.dumps({"tool_calls": tool_calls})
-
-        content = msg.get("content", "")
-
-        logger.info(
-            "ollama_chat",
-            model=model,
-            tokens=data.get("eval_count", 0),
-            duration_ms=round(data.get("total_duration", 0) / 1_000_000, 2),
-            has_images=bool(images),
-        )
-
-        return content
-
-    async def _get_vision_model(self) -> str:
-        """Check if a vision model is available, return its name."""
-        try:
-            r = await self._client.get(f"{self.base_url}/api/tags")
-            models = r.json().get("models", [])
-            vision_models = ["llava", "llava:7b", "llava:13b", "bakllava"]
-            for vm in vision_models:
-                for m in models:
-                    if vm in m.get("name", ""):
-                        logger.info("vision_model_found", model=m["name"])
-                        return m["name"]
-        except Exception:
-            pass
-
-        # Fallback to current model (may not support images)
-        logger.warning("no_vision_model", fallback=self.model)
-        return self.model
+        return result.content or ""

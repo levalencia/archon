@@ -18,6 +18,7 @@ from app.runtime import (
     TokenUsage,
     ToolCall,
 )
+from app.runtime.capabilities import ProviderCapabilities
 from app.tools.registry import SecureToolRegistry
 
 
@@ -106,7 +107,10 @@ async def test_explicit_budget_stop_reasons(budget, response, reason, calls) -> 
 @pytest.mark.asyncio
 async def test_timeout_stop_reason() -> None:
     class Slow:
-        async def complete(self, messages, tools=(), *, max_tokens=4096):
+        capabilities = ProviderCapabilities(native_tools=True)
+
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_contract=None):
+            del response_contract
             await asyncio.sleep(0.1)
             return ModelResponse("late")
 

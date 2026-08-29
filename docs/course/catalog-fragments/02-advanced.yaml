@@ -1,0 +1,235 @@
+- id: bounded-delegation
+  title: "Bounded delegation"
+  status: implemented
+  module: docs/course/modules/11-bounded-delegation/README.md
+  sources:
+    - backend/app/delegation/models.py
+    - backend/app/delegation/service.py
+  tests:
+    - backend/tests/unit/test_delegation_contract.py
+    - backend/tests/unit/test_evidence_verifier.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "One evidence-only no-tools child; no dynamic swarm or generic reflection."
+
+- id: verifier-child
+  title: "Evidence-only verifier child"
+  status: implemented
+  module: docs/course/modules/11-bounded-delegation/README.md
+  sources:
+    - backend/app/delegation/service.py
+    - backend/app/services/grounded_rag.py
+  tests:
+    - backend/tests/unit/test_evidence_verifier.py
+    - backend/tests/integration/test_verifier_benefit.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Final external providers were not verified; deterministic/local evidence does not establish reviewer truth."
+
+- id: parent-child-lineage
+  title: "Parent-child run lineage"
+  status: implemented
+  module: docs/course/modules/11-bounded-delegation/README.md
+  sources:
+    - backend/app/services/run_ledger.py
+    - backend/app/services/db_store.py
+  tests:
+    - backend/tests/unit/test_run_lineage.py
+    - backend/tests/integration/test_run_parent_migration.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "A persisted lineage edge supports inspection but does not prove causal quality improvement."
+
+- id: mcp
+  title: "Model Context Protocol"
+  status: implemented
+  module: docs/course/modules/12-governed-mcp/README.md
+  sources:
+    - backend/app/mcp/runtime.py
+    - backend/app/routes/chat.py
+  tests:
+    - backend/tests/integration/test_mcp_runtime.py
+    - backend/tests/integration/test_mcp_api.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Governed MCP stdio only; HTTP/OAuth and arbitrary user-supplied processes are not supported claims."
+
+- id: mcp-transports-inventory
+  title: "MCP transports and inventory"
+  status: implemented
+  module: docs/course/modules/12-governed-mcp/README.md
+  sources:
+    - backend/app/mcp/client.py
+    - backend/app/mcp/inventory.py
+    - backend/app/mcp/repository.py
+  tests:
+    - backend/tests/integration/test_mcp_stdio.py
+    - backend/tests/integration/test_mcp_inventory.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Official MCP 2.1.1 stdio was verified locally; durable metadata is not authorization or live health proof."
+
+- id: authentication
+  title: "Authentication"
+  status: implemented
+  module: docs/course/modules/13-auth-ui-observability/README.md
+  sources:
+    - backend/app/security/auth.py
+    - backend/app/security/auth.py
+  tests:
+    - backend/tests/integration/test_auth_persistence.py
+    - backend/tests/unit/test_agent_auth.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Local scrypt/JWT/API-key auth has no external IdP, automated signing-key rotation, or production certification."
+
+- id: authorization-ownership
+  title: "Authorization and ownership"
+  status: implemented
+  module: docs/course/modules/13-auth-ui-observability/README.md
+  sources:
+    - backend/app/security/auth.py
+    - backend/app/routes/stream.py
+  tests:
+    - backend/tests/security/test_conversation_ownership.py
+    - backend/tests/integration/test_security_boundaries.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Tested owner/project paths do not eliminate the need to review every new query and side effect."
+
+- id: sse
+  title: "Server-Sent Events"
+  status: implemented
+  module: docs/course/modules/13-auth-ui-observability/README.md
+  sources:
+    - backend/app/routes/stream.py
+    - frontend/src/lib/sse.ts
+  tests:
+    - backend/tests/unit/test_runtime_sse.py
+    - frontend/src/lib/sse.test.ts
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "One-way transient delivery has no durable client acknowledgement or cross-connection replay guarantee."
+
+- id: structured-logging
+  title: "Structured logging"
+  status: implemented
+  module: docs/course/modules/13-auth-ui-observability/README.md
+  sources:
+    - backend/app/observability/logging.py
+    - backend/app/observability/runtime_events.py
+  tests:
+    - backend/tests/unit/test_logging.py
+    - backend/tests/unit/test_operational_log_privacy.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Redaction is defense in depth, not proof that every future payload is free of sensitive data."
+
+- id: metrics
+  title: "Metrics"
+  status: implemented
+  module: docs/course/modules/13-auth-ui-observability/README.md
+  sources:
+    - backend/app/observability/metrics.py
+    - backend/app/main.py
+  tests:
+    - backend/tests/unit/test_runtime_observability.py
+    - backend/tests/unit/test_health.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Registry and samples are process-local; no durable multi-replica aggregation, alerts, or SLO evidence."
+
+- id: tracing-opentelemetry
+  title: "Tracing and OpenTelemetry"
+  status: implemented
+  module: docs/course/modules/13-auth-ui-observability/README.md
+  sources:
+    - backend/app/observability/runtime_events.py
+    - backend/app/observability/otel_exporter.py
+  tests:
+    - backend/tests/unit/test_otel_tracing_wire.py
+    - backend/tests/unit/test_tracing.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "A local collector observed agent.run; no hosted backend, production sampling, retention, or SLO."
+
+- id: liveness-readiness
+  title: "Liveness and readiness"
+  status: implemented
+  module: docs/course/modules/14-local-operations/README.md
+  sources:
+    - backend/app/main.py
+  tests:
+    - backend/tests/unit/test_health.py
+    - backend/tests/unit/test_local_deployment.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Dependency probes establish local traffic eligibility, not every provider workflow or an availability SLA."
+
+- id: docker-compose
+  title: "Docker and Compose"
+  status: implemented
+  module: docs/course/modules/14-local-operations/README.md
+  sources:
+    - docker-compose.local.yml
+    - deploy/nginx.local.conf
+  tests:
+    - backend/tests/unit/test_local_deployment.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Verified target is loopback-only local Compose; public deployment remains deferred."
+
+- id: migrations
+  title: "Database migrations"
+  status: implemented
+  module: docs/course/modules/14-local-operations/README.md
+  sources:
+    - backend/alembic/versions/20260826_08_mcp_inventory.py
+    - backend/alembic/env.py
+  tests:
+    - backend/tests/integration/test_mcp_inventory_migration.py
+    - backend/tests/integration/test_run_parent_migration.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Revision 20260826_08 was locally observed; rollback and zero-downtime mixed-version operation are unverified."
+
+- id: ci
+  title: "Continuous integration"
+  status: implemented
+  module: docs/course/modules/14-local-operations/README.md
+  sources:
+    - .github/workflows/ci.yml
+    - scripts/verify.sh
+  tests:
+    - backend/tests/unit/test_verify_script.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "The canonical evidence page records a green revision-scoped run; it does not prove later revisions, deployment, or provider quality. Exact run/revision evidence is centralized in docs/IMPLEMENTATION-EVIDENCE.md and does not prove deployment or provider quality."
+
+- id: backup-restore
+  title: "Backup and restore"
+  status: implemented
+  module: docs/course/modules/14-local-operations/README.md
+  sources:
+    - scripts/local-backup.sh
+    - scripts/local-restore.sh
+    - scripts/local-dr-smoke.sh
+  tests:
+    - backend/tests/unit/test_local_dr.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+    - docs/evidence/local-dr-report.json
+  limitations: "Local checksummed clean restore is verified; scheduling, off-site storage, PITR, and cloud failover are absent."
+
+- id: rto-rpo
+  title: "RTO and RPO"
+  status: partial
+  module: docs/course/modules/14-local-operations/README.md
+  sources:
+    - scripts/local-dr-smoke.sh
+  tests:
+    - backend/tests/unit/test_local_dr.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+    - docs/evidence/local-dr-report.json
+  limitations: "Recovery timing and record-difference values are one local measured observation, not adopted RTO/RPO objectives. Measured recovery values from one local drill are observations, not adopted objectives or guarantees."
