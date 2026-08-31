@@ -74,8 +74,9 @@ test('Present, Listen, and Study expose prepared NotebookLM recipes', async ({ p
 
   await page.getByRole('link', { name: /Study/ }).click();
   await expect(page.getByRole('heading', { name: 'Practice retrieval and comprehension' })).toBeVisible();
-  await expect(page.getByText('Flashcards')).toBeVisible();
-  await expect(page.getByText('Quiz')).toBeVisible();
+  await expect(page.getByText('Flashcards', { exact: true })).toBeVisible();
+  await expect(page.getByText('Quiz', { exact: true })).toBeVisible();
+  await expect(page.getByText('Report', { exact: true })).toBeVisible();
 });
 
 test('browser history restores the previous studio mode', async ({ page }) => {

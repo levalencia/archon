@@ -19,7 +19,7 @@ notebooks:
       - docs/course/concept-map.md
       - docs/course/modules/00-agent-anatomy/README.md
       - docs/course/modules/15-capstone/README.md
-    artifacts: [audio, video, slide-deck, infographic, mind-map]
+    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: request-lifecycle
     title: Archon — Request Lifecycle and Governed Tools
@@ -39,7 +39,7 @@ notebooks:
       - docs/course/concepts/tool-contracts.md
       - docs/course/concepts/policy-engine.md
       - docs/course/concepts/durable-approvals.md
-    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz]
+    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: memory-rag-evaluation
     title: Archon — Memory, RAG, and Evaluation
@@ -60,7 +60,7 @@ notebooks:
       - docs/course/concepts/groundedness.md
       - docs/course/concepts/faithfulness.md
       - docs/course/concepts/citations.md
-    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz]
+    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: reliability-operations
     title: Archon — Reliability, Security, and Operations
@@ -76,7 +76,7 @@ notebooks:
       - docs/course/modules/12-governed-mcp/README.md
       - docs/course/modules/13-auth-ui-observability/README.md
       - docs/course/modules/14-local-operations/README.md
-    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz]
+    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: interview-demo
     title: Archon — Interview and Demo Preparation
@@ -90,4 +90,4 @@ notebooks:
       - docs/course/reference/code-bookmarks.md
       - docs/DEMO-SCRIPT.md
       - docs/INTERVIEW-ANSWER-BANK.md
-    artifacts: [audio, video, slide-deck, infographic, flashcards, quiz]
+    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]

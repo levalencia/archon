@@ -151,8 +151,20 @@ def test_notebooklm_recipes_and_committed_manifest_are_current() -> None:
         "reliability-operations",
         "interview-demo",
     }
+    expected_artifacts = {
+        "audio",
+        "video",
+        "slide-deck",
+        "infographic",
+        "mind-map",
+        "flashcards",
+        "quiz",
+        "report",
+    }
     for notebook in studio["notebooklm"]["notebooks"]:
         assert notebook["source_count"] == len(notebook["sources"])
-        assert notebook["artifacts"]
+        assert set(notebook["artifacts"]) == expected_artifacts
+        assert len(notebook["artifacts"]) == 8
+    assert sum(len(item["artifacts"]) for item in studio["notebooklm"]["notebooks"]) == 40
     assert OUTPUT.is_file()
     assert json.loads(OUTPUT.read_text(encoding="utf-8")) == studio

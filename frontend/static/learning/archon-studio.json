@@ -4224,7 +4224,10 @@
           "video",
           "slide-deck",
           "infographic",
-          "mind-map"
+          "mind-map",
+          "flashcards",
+          "quiz",
+          "report"
         ],
         "source_count": 9
       },
@@ -4258,7 +4261,8 @@
           "infographic",
           "mind-map",
           "flashcards",
-          "quiz"
+          "quiz",
+          "report"
         ],
         "source_count": 17
       },
@@ -4293,7 +4297,8 @@
           "infographic",
           "mind-map",
           "flashcards",
-          "quiz"
+          "quiz",
+          "report"
         ],
         "source_count": 18
       },
@@ -4322,7 +4327,8 @@
           "infographic",
           "mind-map",
           "flashcards",
-          "quiz"
+          "quiz",
+          "report"
         ],
         "source_count": 12
       },
@@ -4347,8 +4353,10 @@
           "video",
           "slide-deck",
           "infographic",
+          "mind-map",
           "flashcards",
-          "quiz"
+          "quiz",
+          "report"
         ],
         "source_count": 10
       }

@@ -18,8 +18,8 @@
     },
     study: {
       eyebrow: 'Study', title: 'Practice retrieval and comprehension',
-      description: 'Generate focused mind maps, flashcards, and scenario quizzes for one domain at a time.',
-      artifacts: ['mind-map', 'flashcards', 'quiz'], icon: BookOpen,
+      description: 'Generate focused mind maps, flashcards, scenario quizzes, and study-guide reports for one domain at a time.',
+      artifacts: ['mind-map', 'flashcards', 'quiz', 'report'], icon: BookOpen,
     },
   } as const;
 

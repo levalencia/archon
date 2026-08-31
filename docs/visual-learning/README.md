@@ -22,7 +22,7 @@ The legacy `/learn/map` route redirects to the structured Stories view.
 | Evidence | What is actually implemented and proven? | Searchable status/proof matrix |
 | Present | How do I explain Archon visually? | NotebookLM slide/video/infographic recipes |
 | Listen | How can I review through audio? | NotebookLM Audio Overview recipes |
-| Study | How can I test comprehension? | NotebookLM mind-map/flashcard/quiz recipes |
+| Study | How can I test comprehension? | NotebookLM mind-map/flashcard/quiz/report recipes |
 
 The rejected force-directed overview is intentionally removed. The Studio never displays all 66 concepts as an unlabeled physics graph.
 
@@ -96,7 +96,9 @@ Notebook definitions:
 - Reliability, Security, and Operations
 - Interview and Demo Preparation
 
-Use [`notebooklm-promptbook.md`](notebooklm-promptbook.md) for Audio Overview, Video Overview, slide deck, infographic, mind map, flashcard, and quiz prompts. Follow [`notebooklm-runbook.md`](notebooklm-runbook.md) for upload order, validation, download storage, and artifact review.
+All five recipes expose the same eight artifact types—Audio Overview, Video Overview, Slide Deck, Infographic, Mind Map, Flashcards, Quiz, and Study Guide/Report—for a planned total of **40 first-pass artifacts**.
+
+Use [`notebooklm-promptbook.md`](notebooklm-promptbook.md) for all eight prompts. Follow [`notebooklm-runbook.md`](notebooklm-runbook.md) for upload order, validation, download storage, and artifact review.
 
 ## Honesty boundaries
 
