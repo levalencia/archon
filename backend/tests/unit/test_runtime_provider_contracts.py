@@ -239,6 +239,20 @@ class Answer:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_context_budget_fails_before_provider_dispatch():
+    provider = Provider([ModelResponse("must not run")])
+    result = await AgentRuntime(
+        provider,
+        NoTools(),
+        budget=RuntimeBudget(max_context_tokens=32, context_output_reserve_tokens=8),
+    ).run([Message(Role.USER, "x" * 500)])
+
+    assert result.stop_reason is StopReason.CONTEXT_BUDGET_EXHAUSTED
+    assert provider.calls == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_terminal_structured_content_is_locally_validated_and_returned():
     provider_value = {"value": 999}
     provider = Provider(
@@ -270,9 +284,9 @@ async def test_invalid_structured_output_is_rejected(content, validator, code):
     provider = Provider([ModelResponse(content)], ProviderCapabilities(json_mode=True))
     sink = RecordingEventSink()
 
-    result = await AgentRuntime(provider, NoTools(), events=sink).run(
-        [Message(Role.USER, "answer")], response_contract=contract(validator)
-    )
+    result = await AgentRuntime(
+        provider, NoTools(), events=sink, budget=RuntimeBudget(max_structured_retries=0)
+    ).run([Message(Role.USER, "answer")], response_contract=contract(validator))
 
     assert result.stop_reason is StopReason.STRUCTURED_OUTPUT_INVALID
     assert result.error == f"structured_output_invalid:{code}"
@@ -280,7 +294,34 @@ async def test_invalid_structured_output_is_rejected(content, validator, code):
     assert result.structured_output is None
     assert all(event.kind is not AgentEventKind.TEXT_DELTA for event in sink.events)
     rejection = next(e for e in sink.events if e.kind is AgentEventKind.STRUCTURED_OUTPUT_REJECTED)
-    assert rejection.data == {"code": code}
+    assert rejection.data == {"code": code, "retry": False}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_invalid_structured_output_retries_once_without_leaking_invalid_text():
+    provider = Provider(
+        [ModelResponse("invalid secret draft"), ModelResponse('{"value": 7}')],
+        ProviderCapabilities(json_mode=True),
+    )
+    sink = RecordingEventSink()
+    response_contract = contract(lambda value: Answer(value=value["value"]))
+
+    result = await AgentRuntime(provider, NoTools(), events=sink).run(
+        [Message(Role.USER, "answer")], response_contract=response_contract
+    )
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert result.structured_output == Answer(7)
+    assert result.content == '{"value": 7}'
+    assert len(provider.calls) == 2
+    retry_history = provider.calls[1][0]
+    assert retry_history[-1].role is Role.USER
+    assert "invalid secret draft" not in " ".join(message.content for message in retry_history)
+    emitted = " ".join(str(event.data) for event in sink.events)
+    assert "invalid secret draft" not in emitted
+    rejection = next(e for e in sink.events if e.kind is AgentEventKind.STRUCTURED_OUTPUT_REJECTED)
+    assert rejection.data == {"code": "malformed_json", "retry": True}
 
 
 @pytest.mark.unit

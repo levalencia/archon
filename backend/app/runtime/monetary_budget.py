@@ -10,6 +10,7 @@ import asyncio
 import copy
 import hashlib
 import inspect
+import json
 import re
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
@@ -49,6 +50,34 @@ def _amount(value: int, label: str) -> int:
     if type(value) is not int or not 0 <= value <= _MAX_BIGINT:
         raise ValueError(f"{label} must be an integer within the BIGINT range")
     return value
+
+
+def estimate_request_input_tokens(
+    messages: Sequence[Message], tools: Sequence[ToolDefinition]
+) -> int:
+    """Conservatively bound request tokens without persisting request content."""
+
+    total = 0
+    for message in messages:
+        total += 16 + (len(message.content.encode("utf-8")) + 3) // 4
+        total += len(message.images) * 2_048
+        for call in message.tool_calls:
+            encoded = json.dumps(
+                [call.id, call.name, dict(call.arguments)],
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ).encode("utf-8")
+            total += 16 + (len(encoded) + 3) // 4
+    for tool in tools:
+        encoded = json.dumps(
+            [tool.name, tool.description, dict(tool.input_schema)],
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+        total += 32 + (len(encoded) + 3) // 4
+    return total
 
 
 def usd_limit_to_nusd(value: Decimal) -> int:
@@ -407,6 +436,8 @@ class DurableBudgetedProvider:
             raise ValueError("response_contract and response_format are mutually exclusive")
 
         # Validate and calculate before opening/allocating so malformed calls have no ledger effect.
+        if estimate_request_input_tokens(messages, tools) > self._max_input_tokens:
+            raise ModelBudgetExhausted
         quote, quoted_candidate = self._quoted_candidate(max_tokens)
         kwargs: dict[str, Any] = {"max_tokens": max_tokens}
         if response_contract is not None:

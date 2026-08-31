@@ -1,6 +1,6 @@
 # Faithfulness
 
-**Status:** partial
+**Status:** implemented for the bounded grounded-RAG path
 
 ## Beginner definition
 
@@ -48,7 +48,7 @@ flowchart TD
   CC -. explicit link .-> GR
 ```
 
-## Two operational proxies in Archon
+## Three operational checks in Archon
 
 The stronger answer-path proxy is `backend/app/services/grounded_rag.py::_supports_claim`.
 It works on atomic claims and explicitly cited `DocumentEvidence`.
@@ -70,6 +70,9 @@ No substantive sentence returns one.
 Its docstring recommends an LLM-as-judge for production.
 The implementation calls the metric `faithfulness`, while its reason text says sentences are “grounded.”
 Always identify which proxy produced a score.
+
+A third, bounded online check delegates already deterministic-filtered claims and exact evidence slices to `EvidenceVerifierSpecialist`. The child receives no tools or parent history, has token/attempt/deadline limits, must return an exact verdict schema, retries malformed output once with a corrective instruction, and fails closed. The grounded response records `faithfulness_score` and `faithfulness_method`; the live Foundry sentinel completed with one supported claim and score `1.0`.
+This adds semantic model judgment at the accepted RAG boundary, but one model and one sentinel do not constitute broad calibration.
 
 ## Why scores can mislead
 
@@ -130,14 +133,11 @@ Ensembles can reduce individual blind spots but require explicit disagreement ha
 
 ## Lab versus production
 
-The keyword evaluator is suitable for smoke tests and obvious regressions.
-The deterministic grounded verifier is suitable for reproducible, near-extractive acceptance controls.
-Neither establishes calibrated semantic faithfulness in production.
-The final acceptance evidence uses mock embeddings/provider and therefore tests control flow, not real generation quality.
-Production evaluation needs real model outputs and representative claim/context labels.
-Annotators need written guidance for partial support, common knowledge, multi-hop evidence, and contradiction.
-Set thresholds from risk and measured error costs, not convenience.
-Retain hard adversarial cases for negation, numbers, attribution, and copied-word attacks.
+The keyword evaluator remains suitable for smoke tests and obvious regressions.
+The deterministic claim check provides reproducible citation, number, and polarity enforcement before delegation.
+The bounded Foundry verifier adds semantic judgment and passed the managed live sentinel with one supported claim and score `1.0`.
+That evidence establishes the accepted RAG path, not calibrated production faithfulness across domains.
+Production evaluation still needs representative claim/context labels, written annotation guidance, false-positive/negative measurement, and adversarial slices for negation, numbers, attribution, copied-word attacks, and multilingual inputs.
 
 ## Evidence in this repository
 
@@ -151,7 +151,9 @@ Retain hard adversarial cases for negation, numbers, attribution, and copied-wor
 - `backend/tests/unit/test_new_features.py::TestEvaluators.test_relevance_relevant`
 - `backend/tests/unit/test_grounded_rag.py::test_claim_support_is_conservative_about_negation_numbers_and_partial_claims`
 - `backend/tests/unit/test_grounded_rag.py::test_partial_unknown_and_missing_citations_are_unsupported`
-- `backend/tests/unit/test_remaining.py::TestBatchEval.test_batch_eval_runs`
+- `backend/app/delegation/service.py::EvidenceVerifierSpecialist`
+- `backend/tests/unit/test_evidence_verifier.py`
+- `docs/evidence/live-rag-hardening.json` records the sanitized Foundry verifier result.
 
 ## Exercise
 
@@ -164,7 +166,7 @@ Then ask an unrelated question and explain why a faithful restatement can still 
 
 ## 30-second interview answer
 
-“Faithfulness means the answer stays within the supplied context without contradictions or unsupported additions. Archon has a lightweight answer/context keyword heuristic and a stricter citation-aware deterministic claim check for overlap, numbers, and polarity. Both are regression proxies, not semantic truth. I would report the exact evaluator and dataset, calibrate against human labels, and keep retrieval relevance, groundedness, citation correctness, and answer relevance separate.”
+“Faithfulness means the answer stays within supplied evidence without contradictions or unsupported additions. Archon first applies deterministic citation, number, and polarity checks, then delegates surviving claims and exact evidence slices to a bounded no-tools Foundry verifier. The response exposes claim-level outcomes, method, and score; the managed sentinel passed at `1.0`. That proves the accepted RAG path, not universal semantic truth, so production claims still require representative human-labeled calibration.”
 
 ## Self-checks
 

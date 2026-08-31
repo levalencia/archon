@@ -25,7 +25,7 @@ from app.routes.skills import get_skill_registry
 from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.images import ImageValidationError
-from app.runtime.support import prepare_effective_context
+from app.runtime.support import compact_effective_context, prepare_effective_context
 from app.security.auth import get_current_user
 from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
@@ -84,23 +84,6 @@ def get_tool_registry(
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-
-
-class _NoOpContextOptimizer:
-    """Lightweight stand-in after context_optimizer module was removed."""
-
-    def __init__(self, max_tokens: int = 200000, reserve_for_response: int = 4096):
-        self.max_tokens = max_tokens
-        self.reserve_for_response = reserve_for_response
-
-    def optimize(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return messages  # pass-through
-
-    def get_stats(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
-        return {"total_tokens": 0, "utilization_pct": 0.0}
-
-
-_context_optimizer = _NoOpContextOptimizer(max_tokens=200000, reserve_for_response=4096)
 
 
 def get_conversation_repository(request: Request) -> ConversationRepository:
@@ -441,17 +424,6 @@ async def chat(
     )
 
     # Run the agent with the validated image tuple prepared above.
-    # Optimize context window before running agent
-    history = await memory.retrieve(conv_id, limit=50, user_id=user["user_id"])
-    if len(history) > 10:
-        optimized = _context_optimizer.optimize(history)
-        stats = _context_optimizer.get_stats(optimized)
-        logger.info(
-            "context_optimized",
-            original=len(history),
-            optimized=len(optimized),
-            utilization_pct=stats["utilization_pct"],
-        )
 
     if scoped_memory is not None:
         memory_bundle = await scoped_memory.context_bundle(user["user_id"], body.project_id)
@@ -487,6 +459,14 @@ async def chat(
         skill_ids=tuple(skill.name for skill in relevant_skills),
         current_message_id=current_message_id,
         asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
+    )
+    effective_context, compact_stats = await compact_effective_context(
+        effective_context, max_tokens=settings.context_length
+    )
+    logger.info(
+        "context_prepared",
+        compacted=bool(compact_stats.get("compacted")),
+        estimated_tokens=int(compact_stats.get("tokens", 0)),
     )
     await ContextSnapshotRepository(memory.session_factory).record(effective_context.manifest)
     messages = list(effective_context.messages)

@@ -225,6 +225,19 @@ async def test_budget_prevents_call_and_retry_is_bounded(ledger: Any) -> None:
     assert len(retrying.calls) == 2
     assert [call[2] for call in retrying.calls] == [123, 123]
 
+    malformed = Provider([ModelResponse("not-json"), response()])
+    result = await EvidenceVerifierSpecialist(malformed, repository, PersistenceRedactor()).verify(
+        make_request(
+            child_id="malformed-retry-child",
+            budget=VerificationBudget(4_000, 123, 1.0, retries=1),
+        )
+    )
+    assert result.status is ChildVerificationStatus.COMPLETED
+    assert len(malformed.calls) == 2
+    retry_messages = malformed.calls[1][0]
+    assert "prior verifier response was invalid" in retry_messages[-1].content.lower()
+    assert "not-json" not in " ".join(message.content for message in retry_messages)
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(

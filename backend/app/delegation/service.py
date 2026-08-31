@@ -6,7 +6,7 @@ import asyncio
 import json
 import math
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from app.delegation.envelope import (
@@ -23,6 +23,7 @@ from app.delegation.models import (
     VerificationReasonCode,
     validate_verdict_evidence_subset,
 )
+from app.runtime.deadline import await_before_deadline
 from app.runtime.events import AgentEventKind
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage
 from app.runtime.ports import ModelProvider
@@ -219,8 +220,10 @@ class EvidenceVerifierSpecialist:
         runs: RunRepository,
         redactor: PersistenceRedactor,
         envelopes: DelegationEnvelopeService | None = None,
+        provider_factory: Callable[[ChildVerificationRequest], ModelProvider] | None = None,
     ) -> None:
         self._provider = provider
+        self._provider_factory = provider_factory
         self._runs = runs
         self._redactor = redactor
         self._envelopes = envelopes
@@ -249,7 +252,7 @@ class EvidenceVerifierSpecialist:
                 context_hash=context_hash,
             )
         started = time.monotonic()
-        messages = _messages(request)
+        messages = list(_messages(request))
         estimate = estimate_input_tokens(messages)
         usage = TokenUsage()
         attempts = 0
@@ -260,6 +263,11 @@ class EvidenceVerifierSpecialist:
             project_id=request.project_id,
             provider="verifier",
             model=request.model,
+        )
+        provider = (
+            self._provider_factory(request)
+            if self._provider_factory is not None
+            else self._provider
         )
         await self._append(
             request,
@@ -282,21 +290,25 @@ class EvidenceVerifierSpecialist:
         async def execute() -> tuple[ClaimVerdict, ...]:
             nonlocal usage, attempts
             while True:
+                current_estimate = estimate_input_tokens(messages)
                 remaining_input = request.budget.input_tokens - usage.input_tokens
                 remaining_output = request.budget.output_tokens - usage.output_tokens
                 # The estimate is only a pre-call guard. Provider-reported usage is the
                 # authority after a call and is accumulated across every response.
                 if (
-                    remaining_input < estimate
+                    remaining_input < current_estimate
                     or remaining_output <= 0
-                    or usage.total_tokens + estimate
+                    or usage.total_tokens + current_estimate
                     > request.budget.input_tokens + request.budget.output_tokens
                 ):
                     raise _BudgetExhaustedError
                 attempts += 1
                 try:
-                    response = await self._provider.complete(
-                        messages, tools=(), max_tokens=remaining_output
+                    response = await provider.complete(
+                        messages,
+                        tools=(),
+                        max_tokens=remaining_output,
+                        response_format="json",
                     )
                     usage = usage + response.usage
                     if (
@@ -306,13 +318,27 @@ class EvidenceVerifierSpecialist:
                         > request.budget.input_tokens + request.budget.output_tokens
                     ):
                         raise _BudgetExhaustedError
-                    return _parse_response(response, request)
+                    try:
+                        return _parse_response(response, request)
+                    except _MalformedResponseError:
+                        if attempts > request.budget.retries:
+                            raise
+                        messages.append(
+                            Message(
+                                Role.USER,
+                                "The prior verifier response was invalid. Return one JSON object "
+                                "with only the verdicts array and the exact required fields; "
+                                "include no prose or markdown.",
+                            )
+                        )
                 except (TransientVerifierError, ConnectionError, OSError):
                     if attempts > request.budget.retries:
                         raise
 
         try:
-            verdicts = await asyncio.wait_for(execute(), timeout=request.budget.timeout_seconds)
+            verdicts = await await_before_deadline(
+                execute(), deadline=started + request.budget.timeout_seconds
+            )
         except asyncio.CancelledError:
             await asyncio.shield(self._cancel(request, usage, started, attempts))
             raise

@@ -26,7 +26,7 @@ def test_studio_preserves_catalog_and_view_counts() -> None:
         "stories": 5,
         "architecture_layers": 5,
         "notebooks": 5,
-        "statuses": {"deferred": 6, "implemented": 46, "partial": 14},
+        "statuses": {"deferred": 6, "implemented": 53, "partial": 7},
     }
 
 

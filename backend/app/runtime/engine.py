@@ -20,6 +20,7 @@ from app.runtime.capabilities import (
     UnsupportedProviderCapability,
     get_provider_capabilities,
 )
+from app.runtime.deadline import DeadlineExceededError, await_before_deadline
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
 from app.runtime.models import Message, Role, TokenUsage, ToolCall
 from app.runtime.monetary_budget import (
@@ -27,6 +28,7 @@ from app.runtime.monetary_budget import (
     DurableModelChargeStateError,
     IndeterminateModelCharge,
     ModelBudgetExhausted,
+    estimate_request_input_tokens,
 )
 from app.runtime.ports import (
     ModelProvider,
@@ -65,6 +67,7 @@ class StopReason(StrEnum):
     ITERATION_BUDGET_EXHAUSTED = "iteration_budget_exhausted"
     TOOL_BUDGET_EXHAUSTED = "tool_budget_exhausted"
     TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
+    CONTEXT_BUDGET_EXHAUSTED = "context_budget_exhausted"
     TIME_BUDGET_EXHAUSTED = "time_budget_exhausted"
     POLICY_DENIED = "policy_denied"
     APPROVAL_TIMEOUT = "approval_timeout"
@@ -89,12 +92,22 @@ class RuntimeBudget:
     max_seconds: float = 90.0
     max_tool_result_chars: int = 12_000
     final_synthesis_tokens: int = 2_048
+    max_structured_retries: int = 1
+    max_context_tokens: int = 200_000
+    context_output_reserve_tokens: int = 4_096
 
     def __post_init__(self) -> None:
         if self.max_iterations < 1:
             raise ValueError("max_iterations must be at least one")
         if self.max_tool_calls < 0 or self.max_tokens < 0 or self.max_seconds <= 0:
             raise ValueError("tool/token/time budgets cannot be negative or zero")
+        if not 0 <= self.max_structured_retries <= 2:
+            raise ValueError("max_structured_retries must be between zero and two")
+        if (
+            self.max_context_tokens < 1
+            or not 0 <= self.context_output_reserve_tokens < self.max_context_tokens
+        ):
+            raise ValueError("context token budget and output reserve are invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,8 +173,7 @@ class _ProviderToolCallSnapshotError(Exception):
         self.tool_name = tool_name
 
 
-class _RuntimeDeadlineExceededError(Exception):
-    """Internal control-flow signal for a terminal wall-clock budget expiry."""
+_RuntimeDeadlineExceededError = DeadlineExceededError
 
 
 class AgentRuntime:
@@ -224,6 +236,7 @@ class AgentRuntime:
         usage = TokenUsage()
         content = ""
         structured_output: object | None = None
+        structured_retries = 0
         tool_definitions = tuple(self._tools.definitions())
         requirements = self._provider_requirements(
             history,
@@ -245,6 +258,17 @@ class AgentRuntime:
                     )
                 iterations += 1
                 await self._emit(AgentEventKind.ITERATION_STARTED, iterations)
+                context_allowance = (
+                    self._budget.max_context_tokens - self._budget.context_output_reserve_tokens
+                )
+                if estimate_request_input_tokens(history, tool_definitions) > context_allowance:
+                    return await self._stop(
+                        StopReason.CONTEXT_BUDGET_EXHAUSTED,
+                        content,
+                        iterations,
+                        calls,
+                        usage,
+                    )
                 remaining_tokens = max(1, self._budget.max_tokens - usage.total_tokens)
                 provider_kwargs: dict[str, Any] = {"max_tokens": min(4096, remaining_tokens)}
                 if response_contract is not None:
@@ -399,8 +423,30 @@ class AgentRuntime:
                         await self._emit(
                             AgentEventKind.STRUCTURED_OUTPUT_REJECTED,
                             iterations,
-                            {"code": error.code},
+                            {
+                                "code": error.code,
+                                "retry": structured_retries < self._budget.max_structured_retries,
+                            },
                         )
+                        can_retry = (
+                            structured_retries < self._budget.max_structured_retries
+                            and iterations < self._budget.max_iterations
+                            and usage.total_tokens < self._budget.max_tokens
+                            and not self._expired(started_at)
+                        )
+                        if can_retry:
+                            structured_retries += 1
+                            history.append(
+                                Message(
+                                    Role.USER,
+                                    "The previous response was invalid. Return exactly one "
+                                    "JSON value matching schema "
+                                    f"{response_contract.schema_id} version "
+                                    f"{response_contract.schema_version}. Include no prose or "
+                                    "markdown.",
+                                )
+                            )
+                            continue
                         return await self._stop(
                             StopReason.STRUCTURED_OUTPUT_INVALID,
                             content,
@@ -409,7 +455,7 @@ class AgentRuntime:
                             usage,
                             f"structured_output_invalid:{error.code}",
                         )
-                if response_content:
+                if response_content and (response_contract is None or not tool_calls):
                     content = response_content
                     # Text accompanying tool calls is compliant progress, not the final answer.
                     event_kind = (
@@ -441,7 +487,11 @@ class AgentRuntime:
                     )
 
                 history.append(
-                    Message(Role.ASSISTANT, response_content or "", tool_calls=history_tool_calls)
+                    Message(
+                        Role.ASSISTANT,
+                        "" if response_contract is not None else response_content or "",
+                        tool_calls=history_tool_calls,
+                    )
                 )
                 prepared_policy_calls: (
                     tuple[tuple[ToolCall, _PolicyExecutionBinding] | None, ...] | None
@@ -1428,12 +1478,6 @@ class AgentRuntime:
             "status": status,
         }
 
-    @staticmethod
-    def _consume_background_task(task: asyncio.Task[Any]) -> None:
-        """Retrieve the terminal state of a timed-out task without delaying the runtime."""
-        with suppress(BaseException):
-            task.exception()
-
     async def _emit_policy_failure(
         self,
         call: ToolCall,
@@ -1645,31 +1689,11 @@ class AgentRuntime:
         return self._clock() - started_at >= self._budget.max_seconds
 
     async def _within_deadline(self, awaitable: Coroutine[Any, Any, T], started_at: float) -> T:
-        deadline = started_at + self._budget.max_seconds
-        remaining = deadline - self._clock()
-        if remaining <= 0:
-            awaitable.close()
-            raise _RuntimeDeadlineExceededError
-
-        task = asyncio.create_task(awaitable)
-        try:
-            done, _ = await asyncio.wait(
-                {task},
-                timeout=max(0.0, deadline - self._clock()),
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if task not in done or self._clock() >= deadline:
-                # Cancellation is advisory for in-process coroutines. Detach immediately so a
-                # tool/provider that suppresses CancelledError cannot extend the runtime budget;
-                # its eventual outcome is consumed and can never enter runtime bookkeeping.
-                task.cancel()
-                task.add_done_callback(self._consume_background_task)
-                raise _RuntimeDeadlineExceededError
-            return task.result()
-        except asyncio.CancelledError:
-            task.cancel()
-            task.add_done_callback(self._consume_background_task)
-            raise
+        return await await_before_deadline(
+            awaitable,
+            deadline=started_at + self._budget.max_seconds,
+            clock=self._clock,
+        )
 
     async def _emit(
         self,

@@ -32,7 +32,11 @@ from app.runtime import AgentEvent, AgentEventKind, EventSink
 from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.images import ImageValidationError
-from app.runtime.support import prepare_effective_context
+from app.runtime.support import (
+    JsonModeProvider,
+    compact_effective_context,
+    prepare_effective_context,
+)
 from app.security.auth import get_current_user
 from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
@@ -238,44 +242,12 @@ async def chat_stream_real(
             current_message_id=current_message_id,
             asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
         )
-        messages = list(effective_context.messages)
-
-        # Auto-compact context if approaching token limit.
-        from app.runtime.models import Role as MRole
-        from app.services.auto_compact import auto_compact_context
-
-        raw_msgs = [
-            {
-                "role": message.role.value,
-                "content": message.content,
-                "images": list(message.images),
-                "_source_message_id": source_id,
-            }
-            for message, source_id in zip(
-                messages, effective_context.source_message_ids, strict=True
-            )
-        ]
-        raw_msgs, compact_stats = await auto_compact_context(
-            raw_msgs,
-            llm_chat_fn=None,
-            max_tokens=settings.context_length,
+        effective_context, compact_stats = await compact_effective_context(
+            effective_context, max_tokens=settings.context_length
         )
+        messages = list(effective_context.messages)
         yield _sse("context", compact_stats)
-
-        manifest = effective_context.manifest
-        if compact_stats.get("compacted"):
-            from app.runtime.models import Message as MMsg
-
-            messages = [
-                MMsg(MRole(item["role"]), item["content"], images=tuple(item.get("images", ())))
-                for item in raw_msgs
-            ]
-            manifest = manifest.after_compaction(
-                selected_message_ids=tuple(compact_stats["selected_message_ids"]),
-                summarized_message_ids=tuple(compact_stats["summarized_message_ids"]),
-                estimated_tokens=int(compact_stats["tokens"]),
-            )
-        await ContextSnapshotRepository(memory.session_factory).record(manifest)
+        await ContextSnapshotRepository(memory.session_factory).record(effective_context.manifest)
 
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
         cost_sink = ResponseCostEventSink(
@@ -288,8 +260,6 @@ async def chat_stream_real(
 
         provider = app_provider
         if json_mode:
-            from app.runtime.support import JsonModeProvider
-
             provider = JsonModeProvider(provider)
 
         runtime = create_chat_runtime(

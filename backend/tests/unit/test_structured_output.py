@@ -126,3 +126,52 @@ def test_contract_and_schema_are_immutable_detached_copies() -> None:
         contract.json_schema["properties"]["answer"]["type"] = "number"  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
         contract.schema_id = "changed"  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_json_schema_is_authoritative_even_when_domain_validator_is_permissive() -> None:
+    contract = ResponseContract(
+        "answer",
+        "1",
+        {
+            "type": "object",
+            "properties": {"answer": {"type": "string"}},
+            "required": ["answer"],
+            "additionalProperties": False,
+        },
+        lambda value: value,
+    )
+
+    with pytest.raises(StructuredOutputError) as raised:
+        contract.parse_and_validate('{"answer": 42}')
+    assert raised.value.code == "schema_mismatch"
+
+
+@pytest.mark.unit
+def test_contract_rejects_invalid_schema_and_remote_reference() -> None:
+    with pytest.raises(ValueError, match="json_schema is invalid"):
+        ResponseContract("bad", "1", {"type": "not-a-json-type"}, lambda value: value)
+    with pytest.raises(ValueError, match="remote JSON Schema references"):
+        ResponseContract(
+            "remote", "1", {"$ref": "https://example.invalid/schema.json"}, lambda value: value
+        )
+
+
+@pytest.mark.unit
+def test_duplicate_keys_and_resource_limits_fail_closed() -> None:
+    contract = ResponseContract("bounded", "1", {"type": "object"}, lambda value: value)
+    with pytest.raises(StructuredOutputError) as duplicate:
+        contract.parse_and_validate('{"answer": 1, "answer": 2}')
+    assert duplicate.value.code == "malformed_json"
+
+    tiny = ResponseContract(
+        "tiny", "1", {"type": "object"}, lambda value: value, max_output_bytes=8
+    )
+    with pytest.raises(StructuredOutputError) as oversized:
+        tiny.parse_and_validate('{"value": true}')
+    assert oversized.value.code == "malformed_json"
+
+    shallow = ResponseContract("shallow", "1", {"type": "array"}, lambda value: value, max_depth=2)
+    with pytest.raises(StructuredOutputError) as deep:
+        shallow.parse_and_validate("[[[]]]")
+    assert deep.value.code == "malformed_json"

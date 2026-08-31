@@ -45,31 +45,31 @@
       "id": "validated-structured-output",
       "owner_module": "docs/course/modules/02-typed-runtime/README.md",
       "status": "implemented",
-      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "na", "live_provider": "no", "deployed": "no"},
-      "sources": ["backend/app/runtime/structured_output.py", "backend/app/runtime/engine.py", "backend/app/agents/openai_adapter.py", "backend/app/agents/ollama_adapter.py", "backend/scripts/provider_acceptance.py"],
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "na", "live_provider": "yes", "deployed": "no"},
+      "sources": ["backend/app/runtime/structured_output.py", "backend/app/runtime/engine.py", "backend/app/runtime/anthropic.py", "backend/app/agents/foundry_adapter.py", "backend/app/agents/openai_adapter.py", "backend/app/agents/ollama_adapter.py", "backend/scripts/provider_acceptance.py"],
       "tests": ["backend/tests/unit/test_structured_output.py", "backend/tests/unit/test_runtime_provider_contracts.py", "backend/tests/unit/test_openai_typed_adapter.py", "backend/tests/unit/test_ollama_typed_adapter.py", "backend/tests/unit/test_provider_acceptance_scripts.py"],
-      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-provider-acceptance-summary.json"],
-      "limitation": "Terminal output is parsed and schema-validated locally with fail-closed errors; the native JSON Schema probe is reviewed and opt-in but has no recorded live-provider acceptance."
+      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-rag-hardening.json"],
+      "limitation": "Foundry JSON prompting passed live and terminal output is bounded, duplicate-key checked, Draft 2020-12 validated and decoded locally before trust; native provider-side JSON Schema is not claimed."
     },
     {
       "id": "prompt-cache-accounting",
       "owner_module": "docs/course/modules/02-typed-runtime/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "partial", "deployed": "no"},
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "yes", "deployed": "no"},
       "sources": ["backend/app/runtime/anthropic.py", "backend/app/observability/cost_tracker.py", "backend/app/observability/runtime_events.py", "backend/app/routes/stream.py", "backend/scripts/provider_acceptance.py"],
       "tests": ["backend/tests/unit/test_prompt_cache_accounting.py", "backend/tests/unit/test_runtime_observability.py", "backend/tests/unit/test_runtime_sse.py", "backend/tests/unit/test_provider_acceptance_scripts.py"],
-      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-provider-acceptance-summary.json"],
-      "limitation": "A live Foundry response transported zero-valued cache counters, proving metric wiring only; no cache hit, nonzero savings, or billing comparison is recorded."
+      "evidence": ["docs/course/concepts/structured-output-prompt-caching.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-rag-hardening.json"],
+      "limitation": "Cache controls, provider counters, pricing, events and SSE projection are implemented and exercised live; the repeated-prefix probe reported zero cache tokens, so no hit, savings or billing-parity claim is made."
     },
     {
       "id": "effect-idempotency",
       "owner_module": "docs/course/modules/05-policy-and-approvals/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "na", "deployed": "no"},
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "na", "deployed": "no"},
       "sources": ["backend/app/runtime/effect_ledger.py", "backend/app/services/effect_ledger.py", "backend/app/runtime/effect_executor.py", "backend/app/tools/registry.py"],
       "tests": ["backend/tests/unit/test_effect_ledger.py", "backend/tests/unit/test_durable_effect_executor.py", "backend/tests/integration/test_run_replay_api.py"],
-      "evidence": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/concepts/idempotency.md"],
-      "limitation": "Archon provides durable at-most-once orchestration and optional downstream idempotency-key handoff; universal exactly-once execution, live PostgreSQL contention, and deployed external-service reconciliation are not claimed."
+      "evidence": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/concepts/idempotency.md", "docs/evidence/live-rag-hardening.json"],
+      "limitation": "PostgreSQL contention proves one durable reservation winner and optional downstream key handoff; universal exactly-once execution and deployed external-service reconciliation are not claimed."
     },
     {
       "id": "context-provenance",
@@ -94,12 +94,12 @@
     {
       "id": "durable-monetary-budgets",
       "owner_module": "docs/course/modules/07-run-ledger/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "no", "deployed": "no"},
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "yes", "deployed": "no"},
       "sources": ["backend/app/services/monetary_budget.py", "backend/app/runtime/monetary_budget.py", "backend/app/runtime/factory.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py"],
       "tests": ["backend/tests/unit/test_monetary_budget.py", "backend/tests/unit/test_budgeted_provider.py", "backend/tests/unit/test_durable_budget_wiring.py", "backend/tests/integration/test_effect_budget_migration.py"],
-      "evidence": ["docs/course/concepts/cost-usage-budgets.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
-      "limitation": "Atomic run/project reservation and exact nUSD reconciliation are wired locally; provider price tables require maintenance and live PostgreSQL/provider/deployment evidence remains absent."
+      "evidence": ["docs/course/concepts/cost-usage-budgets.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-rag-hardening.json"],
+      "limitation": "Atomic run/project reservation, input-bound admission and reconciliation are proven with PostgreSQL contention and live Foundry calls; price-book lifecycle, invoice parity and public deployment remain outside the claim."
     },
     {
       "id": "multimodal-e2e",
@@ -154,12 +154,12 @@
     {
       "id": "live-embedding-provider",
       "owner_module": "docs/course/modules/08-rag-grounding/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "partial", "tested": "yes", "observed": "no", "ui": "partial", "live_provider": "no", "deployed": "no"},
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "yes", "deployed": "no"},
       "sources": ["backend/app/services/chunker.py", "backend/scripts/embedding_smoke.py", "backend/scripts/acceptance_support.py"],
       "tests": ["backend/tests/unit/test_embedding_hardening.py", "backend/tests/unit/test_embedding_config.py", "backend/tests/unit/test_provider_acceptance_scripts.py"],
-      "evidence": ["docs/course/concepts/embeddings.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-provider-acceptance-summary.json"],
-      "limitation": "A hardened external endpoint path and reviewed opt-in ingest/query probe exist, but final acceptance used deterministic fake embeddings and no live semantic-quality acceptance was observed."
+      "evidence": ["docs/course/concepts/embeddings.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-rag-hardening.json"],
+      "limitation": "Azure Foundry text-embedding-3-small passed live finite-vector and persisted ingest/query acceptance in the development deployment; broad semantic-quality benchmarking and public deployment are not claimed."
     }
   ]
 }

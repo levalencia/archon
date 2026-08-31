@@ -1,6 +1,6 @@
 # Embeddings
 
-**Status:** partial
+**Status:** implemented for the Azure Foundry development boundary
 
 ## Beginner definition
 
@@ -54,7 +54,7 @@ flowchart TD
 
 The source of truth is `backend/app/services/chunker.py`.
 `EmbeddingCapability` reports provider, model, dimensions, mock status, and readiness.
-`EmbeddingService` accepts only `mock` and `openai` providers at construction.
+`EmbeddingService` accepts `mock`, `openai`, and `foundry` providers at construction. Foundry uses the Azure AI model-inference `/embeddings` shape with explicit API version and `api-key` authentication while retaining the same endpoint allowlist, DNS pinning, redirect, timeout, dimension, finite-number, and index checks.
 Dimensions must be between 1 and 4,096.
 `EmbeddingService.embed` embeds one string.
 `EmbeddingService.embed_batch` embeds a list and preserves provider response order.
@@ -124,31 +124,20 @@ Task-specific fine-tuning may improve domain matching but requires representativ
 
 ## Lab versus production
 
-The mock provider is suitable for deterministic plumbing, scope, persistence, and failure tests.
-It has no demonstrated semantic geometry and cannot establish real retrieval quality.
-The final repository acceptance evidence uses mock embeddings/provider.
-Therefore it proves deterministic control flow, not model quality or production readiness.
-Production validation requires a real configured provider, representative corpus, labeled queries, and measured recall.
-It also requires migration, re-indexing, rollback, privacy, quota, and model-version procedures.
-Do not relabel `non-production` readiness merely because the mock tests pass.
+The deterministic mock remains appropriate for cost-free plumbing tests and is explicitly `non-production`.
+The managed live acceptance uses Azure Foundry `text-embedding-3-small`, validates 1,536 finite non-zero coordinates, persists document vectors, embeds the query independently, and retrieves the expected evidence before grounded generation.
+This proves one development deployment and one sentinel retrieval contract—not broad semantic quality, production SLA, domain recall, privacy approval, or migration readiness.
+Production evaluation still requires a representative labeled corpus, recall/precision slices, latency/cost tracking, re-indexing, rollback, quota, and model-version procedures.
 
 ## Evidence in this repository
 
 - `backend/app/services/chunker.py::EmbeddingCapability`
 - `backend/app/services/chunker.py::EmbeddingService`
 - `backend/app/services/chunker.py::EmbeddingService.capability`
-- `backend/app/services/chunker.py::EmbeddingService._openai_embed`
-- `backend/app/services/chunker.py::EmbeddingService._mock_embed`
-- `backend/app/services/chunker.py::validate_embedding`
-- `backend/app/services/chunker.py::validate_embedding_endpoint`
-- `backend/app/services/vector_store.py::cosine_similarity`
-- `backend/tests/unit/test_embedding_config.py::TestEmbeddingServiceMock.test_mock_embed_deterministic`
-- `backend/tests/unit/test_embedding_config.py::TestEmbeddingServiceOpenAI.test_openai_embed_calls_api`
-- `backend/tests/unit/test_embedding_hardening.py::test_embedding_validation_is_strict`
-- `backend/tests/unit/test_embedding_hardening.py::test_provider_pins_request_dns_and_preserves_host_and_sni`
-- `backend/tests/unit/test_embedding_hardening.py::test_provider_rejects_dns_rebinding_before_sending_credentials`
-- `backend/tests/integration/test_durable_documents.py::test_readiness_is_honest_about_mock_and_json_backend`
-- `docs/evidence/local-portfolio-benchmark.json` is final deterministic mock evidence, not live provider evidence.
+- `backend/app/services/chunker.py::EmbeddingService._foundry_embed`
+- `backend/scripts/embedding_smoke.py`
+- `docs/evidence/live-rag-hardening.json` records sanitized live vector and ingest/query results.
+- The older `docs/evidence/local-portfolio-benchmark.json` remains deterministic mock evidence only.
 
 ## Exercise
 
@@ -161,7 +150,7 @@ Record provider, model, dimensions, dataset version, recall, latency, and cost.
 
 ## 30-second interview answer
 
-“Embeddings map text into a shared vector space so a retriever can rank similarity. Archon validates dimensions and finite numeric values, hardens OpenAI endpoint access, and honestly marks its SHA-256-derived mock as non-production. Cosine similarity is a ranking signal, not truth or entailment. I would validate a real provider with labeled retrieval recall and versioned re-indexing before making production quality claims.”
+“Embeddings map text into a shared vector space so a retriever can rank similarity. Archon validates dimensions and finite numeric values, hardens provider endpoint access, and keeps its deterministic mock explicitly non-production. The managed development target also passed Azure Foundry `text-embedding-3-small` vector and persisted ingest/query acceptance. Cosine similarity remains a ranking signal, not truth or entailment; broad production quality still requires labeled retrieval benchmarks and versioned re-indexing.”
 
 ## Self-checks
 

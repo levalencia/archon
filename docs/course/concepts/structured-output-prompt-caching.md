@@ -1,7 +1,7 @@
 # Structured output and prompt caching
 
-> **Implementation status:** structured output `implemented`; prompt-cache accounting `partial`
-> **Status boundary:** Archon validates terminal structured output locally and fails closed. Anthropic/Foundry cache counters, per-response pricing, events, and SSE reporting are wired and tested. Provider-native schema features remain explicit opt-ins, and no real-provider schema/cache-hit or billing comparison has been recorded.
+> **Implementation status:** `implemented`
+> **Status boundary:** terminal structured output is bounded and validated locally against JSON Schema Draft 2020-12 before trust, with duplicate-key/fence handling and one corrective retry. Anthropic/Foundry cache controls, counters, events, and pricing are wired. Live Foundry structured output passed; the cache probe reported explicit zero read/write tokens, so no cache-savings claim is made.
 > **Reviewed revision:** current S8 provider-contract branch
 > **Used by module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
 > **Catalog ID:** `structured-output-prompt-caching`
@@ -107,13 +107,13 @@ sequenceDiagram
 
 ## Evidence boundary
 
-The executable [capability acceptance manifest](../../implementation/CAPABILITY-ACCEPTANCE.yaml) is canonical for dimensions and limitations. Deterministic tests prove local code, wiring, and arithmetic. They do **not** prove:
+The executable [capability acceptance manifest](../../implementation/CAPABILITY-ACCEPTANCE.yaml) is canonical for dimensions and limitations. Deterministic tests prove local code, wiring, and arithmetic; the sanitized live-hardening report records Foundry transport evidence. The current boundary is:
 
-- a real provider honored JSON Schema;
-- a real cache hit occurred;
-- provider invoices match local estimated prices;
-- every configured OpenAI-compatible or Ollama model supports enabled capabilities;
-- public deployment or production SLOs.
+- real Foundry JSON prompting passed, followed by authoritative local Draft 2020-12 validation;
+- native provider-side JSON Schema is not claimed for Foundry Claude;
+- a dedicated repeated-prefix cache probe ran, but reported zero cache read/write tokens, so no savings claim is made;
+- provider invoices are not reconciled against local estimated prices;
+- public deployment and production SLOs remain unproved.
 
 ## Failure and security analysis
 
@@ -146,11 +146,11 @@ The executable [capability acceptance manifest](../../implementation/CAPABILITY-
 
 ## Lab vs production
 
-Structured validation is implemented and observed under local deterministic tests. Cache accounting is partial because the collection, pricing, event, and SSE paths are wired and tested, but no real-provider cache hit or invoice comparison is recorded. Neither capability has deployment evidence.
+Structured validation, corrective retry, invalid-text suppression, cache accounting, and Foundry transport are implemented and observed. The live repeated-prefix probe reported explicit zero cache-read/write tokens, so this repository proves the measurement path but does not claim a cache hit or savings. Native provider-side schema enforcement, invoice parity, public deployment, and production SLOs remain outside the accepted boundary.
 
 ## 30-second interview answer
 
-> Archon treats provider JSON features as generation aids, not trust. A typed `ResponseContract` is routed only to a compatible provider, then the terminal text is parsed and validated locally before emission or persistence. Cache accounting is separate: Anthropic-style counters preserve absent versus zero values, every model response is priced using its actual fallback winner, and unknown providers receive no assumed discount. The local contracts are tested; live schema/cache and billing evidence remain explicit gaps.
+> Archon treats provider JSON features as generation aids, not trust. Foundry receives an explicit JSON instruction, and the response must pass bounded parsing, duplicate-key checks, Draft 2020-12 validation, and the application decoder before emission or persistence; one corrective retry is allowed. Prompt-cache accounting separately preserves absent versus zero counters. The live Foundry probe passed structured output but observed zero cache tokens, so the implementation is proven while savings and native provider schema are not claimed.
 
 ## Self-check
 

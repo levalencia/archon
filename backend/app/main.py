@@ -62,6 +62,7 @@ from app.routes.shares import router as shares_router
 from app.routes.skills import router as skills_router
 from app.routes.stream import router as stream_router
 from app.routes.tasks import router as tasks_router
+from app.runtime.factory import budget_model_provider
 from app.runtime.images import ImageAttachmentStore
 from app.runtime.support import as_model_provider
 from app.security.approval_repository import ApprovalRepository
@@ -103,6 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         base_url=settings.embedding_base_url,
         allowed_hosts=settings.embedding_allowed_hosts,
         allow_private_endpoint=settings.embedding_allow_private_endpoint,
+        api_version=settings.embedding_api_version,
     )
     app.state.embedding_service.validate_configuration()
 
@@ -275,6 +277,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             repository.runs,
             redactor,
             app.state.delegation_envelopes,
+            provider_factory=lambda request: budget_model_provider(
+                app.state.model_provider,
+                settings=settings,
+                repository=repository,
+                user_id=request.user_id,
+                project_id=request.project_id,
+                run_id=request.child_id,
+            ),
         )
         if settings.verifier_enabled
         else None
@@ -425,6 +435,16 @@ def create_app(
             "evidence_verifier": (
                 "enabled" if app.state.evidence_verifier is not None else "disabled"
             ),
+            "runtime_controls": {
+                "durable_monetary_budget": (
+                    "enabled" if app.state.settings.durable_monetary_budget_enabled else "disabled"
+                ),
+                "durable_effect_ledger": (
+                    "enabled" if app.state.settings.durable_effect_ledger_enabled else "disabled"
+                ),
+                "agent_deadline_seconds": app.state.settings.agent_deadline_seconds,
+                "rag_deadline_seconds": app.state.settings.rag_deadline_seconds,
+            },
             "embeddings": {
                 "provider": app.state.embedding_service.capability.provider,
                 "model": app.state.embedding_service.capability.model,

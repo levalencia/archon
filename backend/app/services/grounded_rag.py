@@ -7,9 +7,9 @@ import hashlib
 import json
 import re
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Any
 
 from app.delegation import (
@@ -26,8 +26,10 @@ from app.delegation import (
     issue_verifier_delegation,
 )
 from app.research.models import Claim
+from app.runtime.deadline import DeadlineExceededError, await_before_deadline
 from app.runtime.models import Message, Role, TokenUsage
 from app.runtime.ports import ModelProvider
+from app.runtime.structured_output import ResponseContract, StructuredOutputError
 from app.security.compliance import MandatoryComplianceService
 from app.services.chunker import DocumentChunk, EmbeddingService
 from app.services.run_ledger import RunRepository
@@ -81,6 +83,15 @@ _MIN_SUBSTANTIVE_OVERLAP = 0.9
 
 class GroundedProviderError(RuntimeError):
     """The grounded workflow failed after the durable run was safely finalized."""
+
+
+class GroundedDeadlineExceededError(GroundedProviderError):
+    """The grounded workflow exhausted its end-to-end deadline."""
+
+    code = "grounded_deadline_exceeded"
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,9 +247,12 @@ class GroundedDocumentWorkflow:
         verifier_budget: VerificationBudget | None = None,
         verifier_model: str = "verifier-model",
         compliance: MandatoryComplianceService | None = None,
+        deadline_seconds: float = 60.0,
+        provider_factory: Callable[[str, str, str], ModelProvider] | None = None,
     ) -> None:
         self._retriever = DocumentEvidenceRetriever(vector_store, embedding_service, top_k=top_k)
         self._provider = model_provider
+        self._provider_factory = provider_factory
         self._runs = runs
         self._provider_name = provider
         self._model_name = model
@@ -258,6 +272,9 @@ class GroundedDocumentWorkflow:
         self._verifier_budget = verifier_budget
         self._verifier_model = verifier_model
         self._compliance = compliance
+        if not 0 < deadline_seconds <= 300:
+            raise ValueError("deadline_seconds must be between 0 and 300")
+        self._deadline_seconds = float(deadline_seconds)
 
     async def run(
         self,
@@ -270,6 +287,7 @@ class GroundedDocumentWorkflow:
         document_ids: set[str],
     ) -> GroundedResult:
         started = perf_counter()
+        deadline = monotonic() + self._deadline_seconds
         identity = _RunIdentity(
             run_id=str(uuid.uuid4()),
             user_id=owner_id,
@@ -280,14 +298,22 @@ class GroundedDocumentWorkflow:
             model=self._model_name,
         )
         await self._runs.ensure_run(**asdict(identity))
+        provider = (
+            self._provider_factory(owner_id, project_id, identity.run_id)
+            if self._provider_factory is not None
+            else self._provider
+        )
         usage = TokenUsage()
         try:
-            evidence = await self._retriever.retrieve(
-                question,
-                owner_id=owner_id,
-                project_id=project_id,
-                document_id=document_id,
-                document_ids=document_ids,
+            evidence = await await_before_deadline(
+                self._retriever.retrieve(
+                    question,
+                    owner_id=owner_id,
+                    project_id=project_id,
+                    document_id=document_id,
+                    document_ids=document_ids,
+                ),
+                deadline=deadline,
             )
             await self._append(
                 identity,
@@ -313,9 +339,9 @@ class GroundedDocumentWorkflow:
                     provider_calls=0,
                 )
 
-            response = await self._provider.complete(_prompt(question, evidence), max_tokens=2048)
-            usage = response.usage
-            parsed = _parse_claims(response.content or "")
+            parsed, usage, provider_calls = await self._complete_claims(
+                provider, question, evidence, deadline=deadline
+            )
             claims, citations, unsupported = await _verify_document_claims(parsed, evidence)
             child_id: str | None = None
             child_status: str | None = None
@@ -332,7 +358,9 @@ class GroundedDocumentWorkflow:
                     child_tokens,
                     child_latency_ms,
                     child_rejected_count,
-                ) = await self._verify_with_child(identity, claims, evidence, unsupported)
+                ) = await self._verify_with_child(
+                    identity, claims, evidence, unsupported, deadline=deadline
+                )
             return await self._finish(
                 identity,
                 started=started,
@@ -341,19 +369,61 @@ class GroundedDocumentWorkflow:
                 citations=citations,
                 unsupported=unsupported,
                 usage=usage,
-                provider_calls=1,
+                provider_calls=provider_calls,
                 child_run_id=child_id,
                 verification_status=child_status,
                 verification_tokens=child_tokens,
                 verification_latency_ms=child_latency_ms,
                 verification_rejected_count=child_rejected_count,
             )
+        except DeadlineExceededError:
+            await asyncio.shield(
+                self._stop(identity, usage=usage, error=True, reason="deadline_exceeded")
+            )
+            raise GroundedDeadlineExceededError from None
         except asyncio.CancelledError:
             await asyncio.shield(self._stop(identity, usage=usage, error=False, reason="cancelled"))
             raise
         except Exception as exc:
             await self._stop(identity, usage=usage, error=True, reason="provider_error")
             raise GroundedProviderError("Grounded answer unavailable") from exc
+
+    async def _complete_claims(
+        self,
+        provider: ModelProvider,
+        question: str,
+        evidence: tuple[DocumentEvidence, ...],
+        *,
+        deadline: float,
+    ) -> tuple[tuple[Claim, ...], TokenUsage, int]:
+        messages = list(_prompt(question, evidence))
+        contract = _claims_contract()
+        usage = TokenUsage()
+        for attempt in range(2):
+            response = await await_before_deadline(
+                provider.complete(tuple(messages), max_tokens=2048, response_contract=contract),
+                deadline=deadline,
+            )
+            usage += response.usage
+            if not response.content:
+                return (), usage, attempt + 1
+            try:
+                claims = contract.parse_and_validate(response.content)
+            except StructuredOutputError:
+                if attempt:
+                    if self._provider_name == "mock":
+                        return (), usage, attempt + 1
+                    raise
+                messages.append(
+                    Message(
+                        Role.USER,
+                        "The previous response was invalid. Return exactly one JSON object "
+                        "matching the declared claims schema; include no prose or markdown.",
+                    )
+                )
+                continue
+            return claims, usage, attempt + 1
+        raise AssertionError("unreachable structured-output retry state")
 
     async def _finish(
         self,
@@ -394,6 +464,11 @@ class GroundedDocumentWorkflow:
         if self._compliance is not None:
             answer = self._compliance.enforce_output(answer)
         grounded = bool(claims)
+        candidate_count = len(claims) + len(unsupported)
+        faithfulness_score = round(len(claims) / candidate_count, 4) if candidate_count else 0.0
+        faithfulness_method = (
+            "live_bounded_verifier" if child_run_id is not None else "deterministic_claim_support"
+        )
         await self._append(
             identity,
             "grounded_answer",
@@ -402,6 +477,8 @@ class GroundedDocumentWorkflow:
                 "citation_ids": [item.id for item in citations],
                 "supported_count": len(claims),
                 "unsupported_count": len(unsupported),
+                "faithfulness_score": faithfulness_score,
+                "faithfulness_method": faithfulness_method,
             },
         )
         await self._stop(identity, usage=usage, error=False, reason="completed")
@@ -440,6 +517,8 @@ class GroundedDocumentWorkflow:
                 "evidence_count": len(evidence),
                 "supported_count": len(claims),
                 "unsupported_count": len(unsupported),
+                "faithfulness_score": faithfulness_score,
+                "faithfulness_method": faithfulness_method,
             },
             child_run_id=child_run_id,
             verification_status=verification_status,
@@ -454,6 +533,8 @@ class GroundedDocumentWorkflow:
         claims: tuple[Claim, ...],
         evidence: tuple[DocumentEvidence, ...],
         unsupported: tuple[str, ...],
+        *,
+        deadline: float,
     ) -> tuple[
         tuple[Claim, ...],
         tuple[DocumentEvidence, ...],
@@ -510,7 +591,9 @@ class GroundedDocumentWorkflow:
         retained: tuple[Claim, ...] = ()
         try:
             envelope = issue_verifier_delegation(envelopes, request)
-            result = await verifier.verify(request, envelope)
+            result = await await_before_deadline(
+                verifier.verify(request, envelope), deadline=deadline
+            )
             status = result.status.value
             tokens = result.usage.total_tokens
             latency_ms = result.latency_ms
@@ -523,6 +606,8 @@ class GroundedDocumentWorkflow:
                 retained = tuple(
                     claim for index, claim in enumerate(claims, 1) if f"C{index}" in supported_ids
                 )
+        except DeadlineExceededError:
+            raise
         except Exception:
             # The grounded answer remains available, but no unverified claim may pass.
             retained = ()
@@ -585,6 +670,50 @@ def _prompt(question: str, evidence: tuple[DocumentEvidence, ...]) -> tuple[Mess
         f"EVIDENCE:\n{context}"
     )
     return (Message(Role.SYSTEM, system), Message(Role.USER, question))
+
+
+def _claims_contract() -> ResponseContract:
+    schema = {
+        "type": "object",
+        "properties": {
+            "claims": {
+                "type": "array",
+                "maxItems": _MAX_CLAIMS,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": _MAX_CLAIM_LENGTH,
+                        },
+                        "evidence_ids": {
+                            "type": "array",
+                            "maxItems": _MAX_CITATIONS_PER_CLAIM,
+                            "items": {"type": "string", "pattern": r"^E[1-9][0-9]*$"},
+                        },
+                    },
+                    "required": ["text", "evidence_ids"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["claims"],
+        "additionalProperties": False,
+    }
+
+    def validate(value: Any) -> tuple[Claim, ...]:
+        return tuple(
+            Claim(
+                item["text"].strip(),
+                tuple(dict.fromkeys(item["evidence_ids"])),
+            )
+            for item in value["claims"]
+        )
+
+    return ResponseContract(
+        "grounded-claims", "1", schema, validate, max_output_bytes=_MAX_MODEL_OUTPUT
+    )
 
 
 def _parse_claims(raw: str) -> tuple[Claim, ...]:

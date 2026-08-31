@@ -161,14 +161,16 @@
 
 - id: idempotency
   title: Idempotency and exactly-once claim boundaries
-  status: partial
+  status: implemented
   module: docs/course/modules/05-policy-and-approvals/README.md
   sources:
-    - backend/app/runtime/engine.py
-    - backend/app/security/approval_repository.py
+    - backend/app/runtime/effect_ledger.py
+    - backend/app/runtime/effect_executor.py
+    - backend/app/services/effect_ledger.py
   tests:
-    - backend/tests/unit/test_runtime_policy.py
-    - backend/tests/unit/test_durable_live_approvals.py
+    - backend/tests/unit/test_durable_effect_executor.py
+    - backend/tests/integration/test_effect_budget_migration.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: Local duplicate blocking and one-shot approval do not guarantee exactly-once external effects.
+    - docs/evidence/live-rag-hardening.json
+  limitations: Durable HMAC-bound first-writer-wins effect reservations are proven under PostgreSQL contention; universal exactly-once behavior in arbitrary external systems is explicitly not claimed.

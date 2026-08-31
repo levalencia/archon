@@ -14,7 +14,62 @@ from app.agents.mock_llm import MockLLM
 from app.agents.ollama_adapter import OllamaAdapter
 from app.agents.openai_adapter import OpenAIAdapter
 from app.agents.protocols import LLMClient
+from app.runtime.anthropic import anthropic_request, anthropic_response
 from app.runtime.models import Message, Role, TokenUsage, ToolCall, ToolDefinition
+
+
+@pytest.mark.unit
+def test_anthropic_json_prefill_is_reconstructed_for_local_validation() -> None:
+    response = SimpleNamespace(
+        content=[SimpleNamespace(type="text", text='"answer":"ok"}')],
+        usage=SimpleNamespace(
+            input_tokens=3,
+            output_tokens=2,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
+        ),
+        stop_reason="end_turn",
+    )
+
+    parsed = anthropic_response(response, json_prefill=True)
+
+    assert parsed.content == '{"answer":"ok"}'
+
+
+@pytest.mark.unit
+def test_json_mode_removes_only_an_exact_json_fence() -> None:
+    fenced = SimpleNamespace(
+        content=[SimpleNamespace(type="text", text='```json\n{"answer":"ok"}\n```')],
+        usage=SimpleNamespace(
+            input_tokens=3,
+            output_tokens=2,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
+        ),
+        stop_reason="end_turn",
+    )
+    prose = SimpleNamespace(
+        content=[SimpleNamespace(type="text", text='prefix {"answer":"ok"}')],
+        usage=fenced.usage,
+        stop_reason="end_turn",
+    )
+
+    assert anthropic_response(fenced, json_mode=True).content == '{"answer":"ok"}'
+    assert anthropic_response(prose, json_mode=True).content == 'prefix {"answer":"ok"}'
+
+
+@pytest.mark.unit
+def test_foundry_json_mode_uses_instruction_without_assistant_prefill() -> None:
+    request = anthropic_request(
+        [Message(Role.USER, "answer")],
+        (),
+        64,
+        response_format="json",
+        json_prefill_enabled=False,
+    )
+
+    assert "Respond with valid JSON only" in request["system"]
+    assert all(message["role"] != "assistant" for message in request["messages"])
 
 
 class TestAdapterProtocolCompliance:

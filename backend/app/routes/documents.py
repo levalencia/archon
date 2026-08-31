@@ -10,12 +10,17 @@ from pydantic import BaseModel, Field
 
 from app.delegation import VerificationBudget
 from app.observability.logging import get_correlation_id
+from app.runtime.factory import budget_model_provider
 from app.security.auth import get_current_user
 from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 from app.services.db_store import DocumentRow
 from app.services.documents import DocumentResourceLimitError
-from app.services.grounded_rag import GroundedDocumentWorkflow, GroundedProviderError
+from app.services.grounded_rag import (
+    GroundedDeadlineExceededError,
+    GroundedDocumentWorkflow,
+    GroundedProviderError,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -145,6 +150,15 @@ async def query_documents(
             if request.app.state.evidence_verifier is not None
             else None
         ),
+        deadline_seconds=settings.rag_deadline_seconds,
+        provider_factory=lambda owner_id, project_id, run_id: budget_model_provider(
+            request.app.state.model_provider,
+            settings=settings,
+            repository=request.app.state.conversations,
+            user_id=owner_id,
+            project_id=project_id,
+            run_id=run_id,
+        ),
     )
     try:
         result = await workflow.run(
@@ -155,6 +169,8 @@ async def query_documents(
             project_id=body.project_id,
             correlation_id=get_correlation_id(),
         )
+    except GroundedDeadlineExceededError as exc:
+        raise HTTPException(status_code=504, detail="Grounded answer deadline exceeded") from exc
     except GroundedProviderError as exc:
         raise HTTPException(status_code=503, detail="Grounded answer provider unavailable") from exc
     payload = request.app.state.compliance.enforce_payload(result.to_dict())

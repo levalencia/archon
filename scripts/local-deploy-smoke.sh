@@ -96,13 +96,23 @@ assert d["llm_model"] == os.environ["ARCHON_LLM_MODEL"]
 '
 
 curl --fail --silent --show-error "$BASE_URL/readyz" | python3 -c '
-import json, sys
+import json, os, sys
 d=json.load(sys.stdin); deps=d["dependencies"]
 assert d["status"] == "ready"
 assert deps["conversation_repository"] == "up"
 assert deps["rate_limiter"] == {"backend": "redis", "status": "up"}
-assert deps["embeddings"]["mock"] is True
-assert deps["embeddings"]["readiness"] == "non-production"
+if os.environ["ARCHON_RUNTIME_MODE"] == "live-foundry":
+    assert deps["embeddings"]["mock"] is False
+    assert deps["embeddings"]["readiness"] == "ready"
+    assert deps["evidence_verifier"] == "enabled"
+else:
+    assert deps["embeddings"]["mock"] is True
+    assert deps["embeddings"]["readiness"] == "non-production"
+    assert deps["evidence_verifier"] == "disabled"
+assert deps["runtime_controls"]["durable_monetary_budget"] == "enabled"
+assert deps["runtime_controls"]["durable_effect_ledger"] == "enabled"
+assert deps["runtime_controls"]["agent_deadline_seconds"] == 90.0
+assert deps["runtime_controls"]["rag_deadline_seconds"] == 60.0
 assert deps["telemetry"] == {"backend": "otlp-grpc", "status": "up"}
 '
 
@@ -130,11 +140,43 @@ curl --fail --silent --show-error -X POST "$BASE_URL/api/chat" \
   -H "${AUTH_HEADER_NAME}: Bearer ${ACCESS_TOKEN}" \
   --data '{"message":"local telemetry smoke"}' \
   | python3 -c 'import json,sys; assert json.load(sys.stdin)["response"]'
+
+if [[ "$ARCHON_RUNTIME_MODE" == "live-foundry" ]]; then
+  upload_response=$(curl --fail --silent --show-error -X POST "$BASE_URL/api/documents/upload" \
+    -H 'Content-Type: application/json' \
+    -H "${AUTH_HEADER_NAME}: Bearer ${ACCESS_TOKEN}" \
+    --data '{"title":"Live RAG acceptance","source":"managed-smoke","content":"The cobalt launch code is SEVEN. The project uses Python for data processing."}')
+  document_id=$(printf '%s' "$upload_response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  query_payload=$(python3 -c 'import json,sys; print(json.dumps({"question":"What is the cobalt launch code?","document_id":sys.argv[1]}))' "$document_id")
+  curl --fail --silent --show-error -X POST "$BASE_URL/api/documents/query" \
+    -H 'Content-Type: application/json' \
+    -H "${AUTH_HEADER_NAME}: Bearer ${ACCESS_TOKEN}" \
+    --data "$query_payload" \
+    | python3 -c '
+import json,sys
+result=json.load(sys.stdin)
+print("LIVE_RAG_DIAGNOSTIC grounded={} claims={} unsupported={} verify={} rejected={} faithfulness={} method={} has_seven={}".format(
+    result.get("grounded"),len(result.get("claims",[])),len(result.get("unsupported",[])),
+    result.get("verification_status"),result.get("verification_rejected_count"),
+    result.get("metrics",{}).get("faithfulness_score"),result.get("metrics",{}).get("faithfulness_method"),
+    "SEVEN" in result.get("answer","").upper(),
+))
+assert result["chunks_retrieved"] >= 1
+assert result["grounded"] is True
+assert "SEVEN" in result["answer"].upper()
+assert result["verification_status"] == "completed"
+assert result["verification_tokens"] > 0
+assert result["metrics"]["faithfulness_method"] == "live_bounded_verifier"
+assert result["metrics"]["faithfulness_score"] == 1.0
+'
+  unset upload_response document_id query_payload
+fi
 unset ACCESS_TOKEN AUTH_HEADER_NAME
 
 curl --fail --silent --show-error "$BASE_URL/metrics" | python3 -c 'import sys; assert sys.stdin.read().strip()'
 migration=$("${compose[@]}" exec -T postgres psql -U archon -d archon -Atqc 'select version_num from alembic_version')
 [[ "$migration" == "20260828_14" ]]
+"${compose[@]}" exec -T backend python -m app.acceptance.control_plane
 "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://otel-collector:13133/', timeout=3)"
 
 otel_observed=0
@@ -151,5 +193,5 @@ print(sum(1 for line in sys.stdin if "\tTraces\t" in line and "resource spans" i
 done
 [[ "$otel_observed" == "1" ]]
 
-printf 'Local deployment smoke test passed: gateway, DB, Redis, mock embeddings, auth, metrics, migration 14, and a newly exported OTEL trace batch.\n'
+printf 'Local deployment smoke test passed: gateway, DB, Redis, configured embeddings, durable controls, PostgreSQL contention, auth, metrics, migration 14, and a newly exported OTEL trace batch.\n'
 printf 'RUNTIME_MODE=%s\nLLM_PROVIDER=%s\nLLM_MODEL=%s\n' "$ARCHON_RUNTIME_MODE" "$ARCHON_LLM_PROVIDER" "$ARCHON_LLM_MODEL"

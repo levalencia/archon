@@ -51,6 +51,33 @@ def _pricing_candidates(settings: Any) -> tuple[PricingCandidate, ...]:
     return tuple(candidates)
 
 
+def budget_model_provider(
+    provider: ModelProvider,
+    *,
+    settings: Any,
+    repository: Any,
+    user_id: str,
+    project_id: str,
+    run_id: str,
+) -> ModelProvider:
+    """Wrap one run's provider with durable monetary enforcement when enabled."""
+
+    if not settings.durable_monetary_budget_enabled:
+        return provider
+    session_factory = getattr(repository, "session_factory", None)
+    if session_factory is None:
+        raise RuntimeError("durable budget requires a repository session factory")
+    return DurableBudgetedProvider(
+        provider,
+        MonetaryBudgetRepository(session_factory),
+        BudgetRunContext(user_id, project_id, run_id),
+        usd_limit_to_nusd(settings.agent_run_budget_usd),
+        usd_limit_to_nusd(settings.agent_project_budget_usd),
+        settings.agent_model_input_reservation_tokens,
+        _pricing_candidates(settings),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class RunContext:
     """Immutable owner and tracing identity for one runtime invocation."""
@@ -101,19 +128,14 @@ def create_chat_runtime(
         exporter=exporter,
         downstream=downstream,
     )
-    if settings.durable_monetary_budget_enabled:
-        session_factory = getattr(repository, "session_factory", None)
-        if session_factory is None:
-            raise RuntimeError("durable budget requires a repository session factory")
-        provider = DurableBudgetedProvider(
-            provider,
-            MonetaryBudgetRepository(session_factory),
-            BudgetRunContext(context.user_id, context.project_id, context.run_id),
-            usd_limit_to_nusd(settings.agent_run_budget_usd),
-            usd_limit_to_nusd(settings.agent_project_budget_usd),
-            settings.agent_model_input_reservation_tokens,
-            _pricing_candidates(settings),
-        )
+    provider = budget_model_provider(
+        provider,
+        settings=settings,
+        repository=repository,
+        user_id=context.user_id,
+        project_id=context.project_id,
+        run_id=context.run_id,
+    )
 
     runtime_tools: Any = tools
     if settings.durable_effect_ledger_enabled:
@@ -135,7 +157,10 @@ def create_chat_runtime(
             max_iterations=settings.agent_max_iterations,
             max_tool_calls=8,
             max_tokens=settings.agent_token_budget,
-            max_seconds=90,
+            max_seconds=settings.agent_deadline_seconds,
+            max_structured_retries=settings.structured_output_retries,
+            max_context_tokens=settings.context_length,
+            context_output_reserve_tokens=4_096,
         ),
         policy_engine=default_policy_engine(),
         authorizer=authorizer,

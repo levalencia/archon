@@ -116,6 +116,44 @@ async def test_provider_pins_request_dns_and_preserves_host_and_sni(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_foundry_provider_uses_api_key_and_explicit_api_version(monkeypatch) -> None:
+    response = MagicMock()
+    response.raise_for_status = MagicMock()
+    response.json.return_value = {"data": [{"index": 0, "embedding": [0.1, 0.2]}]}
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ],
+    )
+    service = EmbeddingService(
+        provider="foundry",
+        api_key="test-key",
+        dimensions=2,
+        base_url="https://foundry.example/models",
+        allowed_hosts="foundry.example",
+        api_version="2024-05-01-preview",
+    )
+    with patch("httpx.AsyncClient") as client_class:
+        client = AsyncMock()
+        client.send.return_value = response
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client_class.return_value = client
+        assert await service.embed("hello") == [0.1, 0.2]
+
+    request = client.send.call_args.args[0]
+    assert str(request.url) == (
+        "https://93.184.216.34/models/embeddings?api-version=2024-05-01-preview"
+    )
+    assert request.headers["host"] == "foundry.example"
+    assert request.headers["api-key"] == "test-key"
+    assert "authorization" not in request.headers
+    assert request.extensions["sni_hostname"] == "foundry.example"
+
+
+@pytest.mark.asyncio
 async def test_provider_rejects_dns_rebinding_before_sending_credentials(monkeypatch) -> None:
     resolutions = iter(
         [

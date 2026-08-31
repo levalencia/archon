@@ -41,6 +41,12 @@ def test_default_values_are_mock_and_contain_valid_generated_secrets() -> None:
     assert len(values["POSTGRES_PASSWORD"]) == 64
     assert values["ARCHON_SECRET_KEY"]
     assert values["ARCHON_ENCRYPTION_MASTER_KEY"]
+    assert values["ARCHON_EFFECT_IDENTITY_SECRET"]
+    assert values["ARCHON_DELEGATION_SIGNING_KEY"]
+    assert values["ARCHON_DURABLE_MONETARY_BUDGET_ENABLED"] == "true"
+    assert values["ARCHON_DURABLE_EFFECT_LEDGER_ENABLED"] == "true"
+    assert values["ARCHON_AGENT_DEADLINE_SECONDS"] == "90"
+    assert values["ARCHON_VERIFIER_ENABLED"] == "false"
     assert 18_000 <= int(values["ARCHON_LOCAL_PORT"]) < 38_000
 
 
@@ -52,7 +58,33 @@ def test_live_values_import_only_allowlisted_foundry_configuration(tmp_path: Pat
     assert values["ARCHON_LLM_MODEL"] == "claude-opus-4-6"
     assert values["ARCHON_LLM_API_KEY"] == "test-provider-key"
     assert values["ARCHON_LLM_BASE_URL"].startswith("https://")
+    assert values["ARCHON_VERIFIER_ENABLED"] == "true"
+    assert values["ARCHON_VERIFIER_MODEL"] == "claude-opus-4-6"
     assert "UNRELATED_SECRET" not in values
+
+
+def test_live_values_import_complete_embedding_group(tmp_path: Path) -> None:
+    values = generator.generate_values(
+        _provider_env(
+            tmp_path,
+            ARCHON_EMBEDDING_PROVIDER="foundry",
+            ARCHON_EMBEDDING_MODEL="text-embedding-3-small",
+            ARCHON_EMBEDDING_BASE_URL="https://foundry.example.test/models",
+            ARCHON_EMBEDDING_ALLOWED_HOSTS="foundry.example.test",
+            ARCHON_EMBEDDING_DIMENSIONS="1536",
+            ARCHON_EMBEDDING_API_VERSION="2024-05-01-preview",
+        )
+    )
+
+    assert values["ARCHON_EMBEDDING_PROVIDER"] == "foundry"
+    assert values["ARCHON_EMBEDDING_MODEL"] == "text-embedding-3-small"
+    assert values["ARCHON_EMBEDDING_API_KEY"] == "test-provider-key"
+    assert values["ARCHON_EMBEDDING_DIMENSIONS"] == "1536"
+
+
+def test_live_values_reject_incomplete_embedding_group(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="embedding configuration"):
+        generator.generate_values(_provider_env(tmp_path, ARCHON_EMBEDDING_PROVIDER="foundry"))
 
 
 def test_provider_env_rejects_group_or_world_access(tmp_path: Path) -> None:

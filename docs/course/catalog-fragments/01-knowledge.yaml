@@ -1,16 +1,18 @@
 - id: context-windows
   title: "Context windows"
-  status: partial
+  status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/runtime/context.py
+    - backend/app/runtime/support.py
     - backend/app/services/auto_compact.py
   tests:
-    - backend/tests/unit/test_conversations.py
-    - backend/tests/unit/test_memory_startup.py
+    - backend/tests/unit/test_context_provenance.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Fixed message selection is not a token guarantee; full live compaction and effective-context provenance are not established."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Sync and SSE share token-aware compaction with output reserve and each runtime iteration fails closed before oversized dispatch; estimates remain provider-approximate and provenance is initial-context rather than per-call."
 
 - id: conversation-lifecycle
   title: "Conversation lifecycle"
@@ -96,16 +98,17 @@
 
 - id: embeddings
   title: "Embeddings"
-  status: partial
+  status: implemented
   module: docs/course/modules/08-rag-grounding/README.md
   sources:
     - backend/app/services/chunker.py
+    - scripts/generate-local-env.py
   tests:
     - backend/tests/unit/test_embedding_hardening.py
     - backend/tests/unit/test_embedding_config.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Final acceptance used deterministic mock embeddings; no external semantic-quality acceptance is claimed."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Azure Foundry text-embedding-3-small is live-proven for vector generation and ingest/query retrieval in a development deployment; broad domain retrieval and production SLA are not claimed."
 
 - id: retrieval
   title: "Scoped SQL JSON cosine retrieval"
@@ -149,17 +152,19 @@
 
 - id: faithfulness
   title: "Faithfulness"
-  status: partial
+  status: implemented
   module: docs/course/modules/08-rag-grounding/README.md
   sources:
     - backend/app/services/grounded_rag.py
+    - backend/app/delegation/service.py
     - backend/app/eval/evaluators.py
   tests:
     - backend/tests/unit/test_grounded_rag.py
+    - backend/tests/unit/test_evidence_verifier.py
     - backend/tests/unit/test_eval.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Current metrics are deterministic proxies/keyword heuristics without calibrated semantic-judge validation."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Faithfulness combines deterministic citation checks with a bounded no-tools Foundry verifier and exposes method and score; one live sentinel is not a broad calibrated benchmark."
 
 - id: citations
   title: "Citations"
@@ -205,19 +210,24 @@
 
 - id: retries-timeouts-cancellation
   title: "Retries, timeouts, and cancellation"
-  status: partial
+  status: implemented
   module: docs/course/modules/10-resilience/README.md
   sources:
+    - backend/app/runtime/deadline.py
+    - backend/app/runtime/engine.py
     - backend/app/agents/resilient_coordinator.py
     - backend/app/services/grounded_rag.py
     - backend/app/tools/registry.py
   tests:
+    - backend/tests/unit/test_deadline.py
+    - backend/tests/unit/test_runtime_budget_regressions.py
     - backend/tests/unit/test_evidence_verifier.py
     - backend/tests/unit/test_grounded_rag.py
     - backend/tests/unit/test_tools.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Policies are path-specific; there is no universal end-to-end deadline/retry layer and coordinator degradation is prototype-grade."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Managed chat, RAG, verifier, provider, tool, approval and synthesis waits share monotonic bounded deadlines; arbitrary in-process code still requires process isolation for hard termination."
 
 - id: circuit-breaker
   title: "Circuit breaker"

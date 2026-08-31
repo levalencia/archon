@@ -82,16 +82,38 @@ async def repository(path: Path, run_id: str = "run-1"):
     return MonetaryBudgetRepository(sessions), engine
 
 
-def wrapper(delegate, repo, *, run_id="run-1", candidates=None, limit=1_000_000_000):
+def wrapper(
+    delegate,
+    repo,
+    *,
+    run_id="run-1",
+    candidates=None,
+    limit=1_000_000_000,
+    max_input=1_000,
+):
     return DurableBudgetedProvider(
         delegate,
         repo,
         BudgetRunContext("alice", "project", run_id),
         run_limit_nusd=limit,
         project_limit_nusd=limit,
-        max_input_tokens=1_000,
+        max_input_tokens=max_input,
         pricing_candidates=candidates or (PricingCandidate("openai", "gpt-4o"),),
     )
+
+
+@pytest.mark.asyncio
+async def test_oversized_request_fails_before_open_reserve_or_dispatch(tmp_path: Path) -> None:
+    repo, engine = await repository(tmp_path / "oversized.db")
+    delegate = FakeProvider()
+    budgeted = wrapper(delegate, repo, max_input=20)
+
+    with pytest.raises(ModelBudgetExhausted):
+        await budgeted.complete([Message(Role.USER, "x" * 500)], max_tokens=10)
+
+    assert delegate.calls == []
+    assert await repo.summary(owner_id="alice", project_id="project", run_id="run-1") is None
+    await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -248,7 +270,7 @@ async def test_capabilities_contract_tools_images_and_marker_forwarded_unchanged
 ) -> None:
     repo, engine = await repository(tmp_path / "forward.db")
     delegate = RoutedProvider()
-    budgeted = wrapper(delegate, repo)
+    budgeted = wrapper(delegate, repo, max_input=4_000)
     messages = (Message(Role.USER, "look", images=("image",)),)
     tools = (ToolDefinition("tool", input_schema={"type": "object"}),)
     required = ProviderCapabilities(images=True, native_tools=True)

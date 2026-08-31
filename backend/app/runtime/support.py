@@ -13,9 +13,10 @@ from app.runtime.capabilities import (
 )
 from app.runtime.context import build_effective_context, build_messages
 from app.runtime.context_provenance import EffectiveContext
-from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
+from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolDefinition
 from app.runtime.ports import ModelProvider
 from app.runtime.structured_output import ResponseContract
+from app.services.auto_compact import auto_compact_context
 
 
 class JsonModeProvider:
@@ -118,6 +119,48 @@ async def prepare_effective_context(
         current_message_id=current_message_id,
         asset_hmac_key=asset_hmac_key,
     )
+
+
+async def compact_effective_context(
+    context: EffectiveContext,
+    *,
+    max_tokens: int,
+    reserve_for_response: int = 4_096,
+) -> tuple[EffectiveContext, dict[str, Any]]:
+    """Apply one shared token-aware compaction policy to sync and SSE context."""
+
+    raw_messages = [
+        {
+            "role": message.role.value,
+            "content": message.content,
+            "images": list(message.images),
+            "_source_message_id": source_id,
+        }
+        for message, source_id in zip(context.messages, context.source_message_ids, strict=True)
+    ]
+    compacted, stats = await auto_compact_context(
+        raw_messages,
+        llm_chat_fn=None,
+        max_tokens=max(1, max_tokens - reserve_for_response),
+    )
+    if not stats.get("compacted"):
+        return context, stats
+
+    messages = tuple(
+        Message(
+            Role(item["role"]),
+            item["content"],
+            images=tuple(item.get("images", ())),
+        )
+        for item in compacted
+    )
+    source_ids = tuple(item.get("_source_message_id") for item in compacted)
+    manifest = context.manifest.after_compaction(
+        selected_message_ids=tuple(stats["selected_message_ids"]),
+        summarized_message_ids=tuple(stats["summarized_message_ids"]),
+        estimated_tokens=int(stats["tokens"]),
+    )
+    return EffectiveContext(messages, source_ids, manifest), stats
 
 
 async def prepare_messages(

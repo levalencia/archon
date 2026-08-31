@@ -78,13 +78,17 @@ class Settings(BaseSettings):
         return self
 
     # Embeddings
-    embedding_provider: str = "mock"  # mock | openai
+    embedding_provider: str = "mock"  # mock | openai | foundry
     embedding_model: str = "text-embedding-3-small"
     embedding_api_key: str = ""  # falls back to llm_api_key if empty
     embedding_dimensions: int = Field(default=256, ge=1, le=4096)
     embedding_base_url: str = "https://api.openai.com/v1"
     embedding_allowed_hosts: str = "api.openai.com"
     embedding_allow_private_endpoint: bool = False
+    embedding_api_version: str = Field(
+        default="2024-05-01-preview",
+        pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?$",
+    )
 
     # Bounded document/vector resources
     document_max_characters: int = Field(default=1_000_000, ge=1, le=20_000_000)
@@ -180,6 +184,9 @@ class Settings(BaseSettings):
     # Agent
     agent_max_iterations: int = 5
     agent_token_budget: int = 64_000
+    agent_deadline_seconds: float = Field(default=90.0, ge=1.0, le=600.0)
+    rag_deadline_seconds: float = Field(default=60.0, ge=1.0, le=300.0)
+    structured_output_retries: int = Field(default=1, ge=0, le=2)
     durable_monetary_budget_enabled: bool = False
     durable_effect_ledger_enabled: bool = False
     effect_identity_secret: SecretStr = SecretStr("")

@@ -16,14 +16,28 @@ import stat
 from pathlib import Path
 from urllib.parse import urlparse
 
-ALLOWED_PROVIDER_KEYS = frozenset(
+EMBEDDING_PROVIDER_KEYS = frozenset(
     {
-        "ARCHON_LLM_PROVIDER",
-        "ARCHON_LLM_MODEL",
-        "ARCHON_LLM_API_KEY",
-        "ARCHON_LLM_BASE_URL",
-        "ARCHON_PROMPT_CACHING_ENABLED",
+        "ARCHON_EMBEDDING_PROVIDER",
+        "ARCHON_EMBEDDING_MODEL",
+        "ARCHON_EMBEDDING_API_KEY",
+        "ARCHON_EMBEDDING_BASE_URL",
+        "ARCHON_EMBEDDING_ALLOWED_HOSTS",
+        "ARCHON_EMBEDDING_DIMENSIONS",
+        "ARCHON_EMBEDDING_API_VERSION",
     }
+)
+ALLOWED_PROVIDER_KEYS = (
+    frozenset(
+        {
+            "ARCHON_LLM_PROVIDER",
+            "ARCHON_LLM_MODEL",
+            "ARCHON_LLM_API_KEY",
+            "ARCHON_LLM_BASE_URL",
+            "ARCHON_PROMPT_CACHING_ENABLED",
+        }
+    )
+    | EMBEDDING_PROVIDER_KEYS
 )
 REQUIRED_PROVIDER_KEYS = frozenset(
     {
@@ -75,12 +89,67 @@ def read_provider_env(path: Path) -> dict[str, str]:
     if missing:
         raise ValueError("provider env is missing required keys: " + ", ".join(missing))
     if values["ARCHON_LLM_PROVIDER"].lower() != "foundry":
-        raise ValueError("managed live mode currently requires ARCHON_LLM_PROVIDER=foundry")
+        raise ValueError(
+            "managed live mode currently requires ARCHON_LLM_PROVIDER=foundry"
+        )
     if not MODEL_PATTERN.fullmatch(values["ARCHON_LLM_MODEL"]):
         raise ValueError("invalid managed live model name")
     endpoint = urlparse(values["ARCHON_LLM_BASE_URL"])
     if endpoint.scheme != "https" or not endpoint.hostname:
         raise ValueError("managed Foundry endpoint must be an absolute HTTPS URL")
+
+    supplied_embeddings = {key for key in EMBEDDING_PROVIDER_KEYS if values.get(key)}
+    if supplied_embeddings:
+        required_embeddings = {
+            "ARCHON_EMBEDDING_PROVIDER",
+            "ARCHON_EMBEDDING_MODEL",
+            "ARCHON_EMBEDDING_BASE_URL",
+            "ARCHON_EMBEDDING_ALLOWED_HOSTS",
+            "ARCHON_EMBEDDING_DIMENSIONS",
+            "ARCHON_EMBEDDING_API_VERSION",
+        }
+        if missing_embeddings := sorted(
+            key for key in required_embeddings if not values.get(key)
+        ):
+            raise ValueError(
+                "embedding configuration is incomplete: "
+                + ", ".join(missing_embeddings)
+            )
+        if values["ARCHON_EMBEDDING_PROVIDER"].lower() != "foundry":
+            raise ValueError("managed embeddings currently require provider=foundry")
+        if not MODEL_PATTERN.fullmatch(values["ARCHON_EMBEDDING_MODEL"]):
+            raise ValueError("invalid managed embedding model name")
+        embedding_endpoint = urlparse(values["ARCHON_EMBEDDING_BASE_URL"])
+        if (
+            embedding_endpoint.scheme != "https"
+            or not embedding_endpoint.hostname
+            or embedding_endpoint.username
+            or embedding_endpoint.password
+            or embedding_endpoint.query
+            or embedding_endpoint.fragment
+        ):
+            raise ValueError("managed embedding endpoint must be an absolute HTTPS URL")
+        allowed_hosts = {
+            host.strip().lower()
+            for host in values["ARCHON_EMBEDDING_ALLOWED_HOSTS"].split(",")
+            if host.strip()
+        }
+        if embedding_endpoint.hostname.lower() not in allowed_hosts:
+            raise ValueError(
+                "managed embedding endpoint host must be explicitly allowed"
+            )
+        try:
+            dimensions = int(values["ARCHON_EMBEDDING_DIMENSIONS"])
+        except ValueError:
+            raise ValueError("embedding dimensions must be an integer") from None
+        if not 1 <= dimensions <= 4096:
+            raise ValueError("embedding dimensions must be between 1 and 4096")
+        if not re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?",
+            values["ARCHON_EMBEDDING_API_VERSION"],
+        ):
+            raise ValueError("invalid embedding API version")
+        values.setdefault("ARCHON_EMBEDDING_API_KEY", values["ARCHON_LLM_API_KEY"])
     return values
 
 
@@ -93,6 +162,12 @@ def generate_values(provider_env: Path | None = None) -> dict[str, str]:
         )
         .decode()
         .rstrip("="),
+        "ARCHON_EFFECT_IDENTITY_SECRET": secrets.token_urlsafe(48),
+        "ARCHON_DELEGATION_SIGNING_KEY": secrets.token_urlsafe(48),
+        "ARCHON_DURABLE_MONETARY_BUDGET_ENABLED": "true",
+        "ARCHON_DURABLE_EFFECT_LEDGER_ENABLED": "true",
+        "ARCHON_AGENT_DEADLINE_SECONDS": "90",
+        "ARCHON_VERIFIER_ENABLED": "false",
         "ARCHON_LOCAL_PORT": str(18_000 + secrets.randbelow(20_000)),
         "ARCHON_RUNTIME_MODE": "mock",
         "ARCHON_LLM_PROVIDER": "mock",
@@ -101,6 +176,8 @@ def generate_values(provider_env: Path | None = None) -> dict[str, str]:
     if provider_env is not None:
         values.update(read_provider_env(provider_env))
         values["ARCHON_RUNTIME_MODE"] = "live-foundry"
+        values["ARCHON_VERIFIER_ENABLED"] = "true"
+        values["ARCHON_VERIFIER_MODEL"] = values["ARCHON_LLM_MODEL"]
     return values
 
 

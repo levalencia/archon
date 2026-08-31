@@ -25,6 +25,7 @@ from app.services.chunker import DocumentChunk
 from app.services.db_store import DatabaseStore, DocumentRow, RuntimeEventRow, VectorChunkRow
 from app.services.grounded_rag import (
     DocumentEvidence,
+    GroundedDeadlineExceededError,
     GroundedDocumentWorkflow,
     GroundedProviderError,
     _verify_document_claims,
@@ -558,3 +559,45 @@ async def test_owner_scope_restart_ledger_and_no_raw_database_content(harness: H
     assert quote not in raw
     assert answer not in raw
     assert "private-roadmap" not in raw
+
+
+@pytest.mark.asyncio
+async def test_grounded_deadline_detaches_cancellation_resistant_provider(
+    harness: Harness,
+) -> None:
+    finished = asyncio.Event()
+
+    class StubbornProvider:
+        async def complete(self, messages: Any, tools: Any = (), **kwargs: Any) -> Any:
+            del messages, tools, kwargs
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.05)
+            finished.set()
+            return ModelResponse(json.dumps({"claims": [{"text": "late", "evidence_ids": ["E1"]}]}))
+
+    workflow = GroundedDocumentWorkflow(
+        vector_store=FakeVectors([_row()]),  # type: ignore[arg-type]
+        embedding_service=FakeEmbeddings(),  # type: ignore[arg-type]
+        model_provider=StubbornProvider(),  # type: ignore[arg-type]
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+        deadline_seconds=0.01,
+    )
+    started = asyncio.get_running_loop().time()
+    with pytest.raises(GroundedDeadlineExceededError, match="grounded_deadline_exceeded"):
+        await workflow.run(
+            "What does Alpha use?",
+            owner_id="alice",
+            project_id="project-a",
+            correlation_id="deadline-correlation",
+            document_id=None,
+            document_ids={"doc-1"},
+        )
+    assert asyncio.get_running_loop().time() - started < 0.04
+    await asyncio.wait_for(finished.wait(), timeout=0.2)
+    run = (await harness.runs.list("alice")).items[0]
+    assert run.status == "failed"
+    assert run.stop_reason == "deadline_exceeded"
