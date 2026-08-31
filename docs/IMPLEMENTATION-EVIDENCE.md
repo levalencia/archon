@@ -61,6 +61,8 @@ The end-to-end document path then passed `upload → embedding → persisted ret
 
 The seven hardening concepts therefore close as implemented within their stated local-development boundaries: durable budgets, context-window enforcement, deadlines/cancellation, validated structured output/cache accounting, live embeddings, bounded faithfulness verification, and durable at-most-once effects. Cache savings, native Foundry JSON Schema, provider invoice parity, broad semantic benchmarks, public deployment, and universal exactly-once semantics remain explicitly outside those claims.
 
+Post-review deadline/context hardening replaced the former four-bytes-per-token average with a fail-closed upper bound of one token per UTF-8 byte plus framing and a 22,000-token reserve per validated image. `AgentRuntime`, grounded RAG, and the verifier now wrap run creation, event persistence, approval preparation, provider/tool waits, and normal finalization in one absolute deadline. Terminal persistence receives a separate bounded cleanup; failure to record terminal state is logged as indeterminate rather than blocking indefinitely or being reported as durable success.
+
 ### S8.10 benchmark and documentation candidate
 
 The S8.10 candidate adds the explicit [remaining deferred-gap register](REMAINING-DEFERRED-GAPS.md), aligns course navigation/catalog boundaries, expands the deterministic benchmark to twelve production-control-plane scenarios, and hardens the integrated verification script. For each intentional omission, the register states the architecture and evidence required before reconsidering status.
@@ -130,7 +132,7 @@ Evidence files:
 | Evidence-first Workbench | Yes | Yes | Yes | Yes | Yes | No | Full-width responsive shell, contextual inspector, inline evidence, mobile/tablet focus containment, route coverage. |
 | OpenTelemetry | Yes | Yes | Yes | Yes | No | No | Real SDK/exporter in the local image; readiness and collector logs prove export. Archon has no hosted trace backend or embedded trace UI. |
 | Local container target | Yes | Yes | Yes | Yes | N/A | No | Digest-pinned, loopback-only gateway, non-root/read-only app containers, internal PostgreSQL/Redis/OTEL. Local evidence is not deployment. |
-| Backup/restore | Yes | Yes | Yes | Yes | No | No | SHA-256 verified custom dump, clean-target guard, full restore and exact record/hash checks with measured RTO/RPO. |
+| Backup/restore | Yes | Yes | Yes | Yes | No | No | SHA-256 verified custom dump, clean-target guard, full restore and exact record/hash checks with an observed restore-to-ready measurement and selected-record snapshot comparison. |
 | Portfolio benchmark | Yes | Yes | Yes | Yes | No | No | Deterministic local control-plane benchmark; not model quality, load, cost, or production latency evidence. |
 | Public/cloud deployment | No | No | No | No | No | No | Historical manifests are non-authoritative artifacts; public deployment is explicitly deferred and no live public endpoint is claimed. |
 | Remote CI | Yes | Yes | Yes | Yes | No | No | GitHub Actions backend, frontend and backend-image jobs passed in run `33042478912` at `9696ad8`. CI evidence is not deployment. |

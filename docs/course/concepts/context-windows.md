@@ -1,7 +1,7 @@
 # Context windows
 
 > **Implementation status:** `implemented`
-> **Boundary:** sync and SSE share token-aware compaction with output reserve, and every runtime iteration fails closed before dispatch when its conservative request estimate exceeds the configured context allowance. Estimates remain provider-approximate and persisted provenance describes initial effective context rather than every later tool/model call.
+> **Boundary:** sync and SSE share token-aware compaction with output reserve, and every runtime iteration fails closed before dispatch when its request bound exceeds the configured context allowance. Without a provider tokenizer, Archon counts each UTF-8 byte as one token plus framing and reserves 22k tokens per validated image; this is intentionally conservative, not an exact usage estimate. Persisted provenance describes initial effective context rather than every later tool/model call.
 
 ## Beginner explanation
 
@@ -61,7 +61,7 @@ sequenceDiagram
 ```
 
 Sync and streaming now call the same `compact_effective_context` helper after `prepare_effective_context`, so their initial selection, compaction, source-ID partition, and manifest update share one implementation.
-`AgentRuntime` also estimates the full messages-plus-tools request before every provider call and returns `context_budget_exhausted` before dispatch when the configured allowance minus output reserve would be exceeded.
+`AgentRuntime` also bounds the full messages-plus-tools request before every provider call and returns `context_budget_exhausted` before dispatch when the configured allowance minus output reserve would be exceeded. The fallback bound is one token per UTF-8 byte plus explicit framing and 22,000 tokens per validated image; it intentionally sacrifices usable context rather than undercounting adversarial text when an exact provider tokenizer is unavailable.
 This per-iteration gate prevents late overflow after tool results, but it does not persist a separate provenance manifest for every later model call.
 
 ## Compaction

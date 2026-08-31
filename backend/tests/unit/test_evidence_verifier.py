@@ -270,6 +270,38 @@ async def test_actual_provider_usage_over_budget_discards_verdict(
 
 
 @pytest.mark.asyncio
+async def test_slow_child_run_creation_is_bounded_before_provider(ledger: Any) -> None:
+    _, repository = ledger
+    finished = asyncio.Event()
+
+    async def slow_ensure(**kwargs: Any) -> None:
+        del kwargs
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.15)
+        finished.set()
+
+    repository.ensure_child_run = slow_ensure  # type: ignore[method-assign]
+    provider = Provider([response()])
+    request = make_request(
+        child_id="slow-create-child",
+        budget=VerificationBudget(2_000, 10, 0.1),
+    )
+    started = asyncio.get_running_loop().time()
+
+    result = await EvidenceVerifierSpecialist(provider, repository, PersistenceRedactor()).verify(
+        request
+    )
+
+    assert asyncio.get_running_loop().time() - started < 0.4
+    assert result.status is ChildVerificationStatus.TIMEOUT
+    assert provider.calls == []
+    await asyncio.wait_for(finished.wait(), timeout=0.8)
+    assert provider.calls == []
+
+
+@pytest.mark.asyncio
 async def test_timeout_and_cancellation_are_terminal(ledger: Any) -> None:
     _, repository = ledger
     timeout_provider = BlockingProvider()

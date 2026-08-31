@@ -184,6 +184,51 @@ async def test_runtime_deadline_detaches_cancellation_resistant_tool_and_stops_b
 
 
 @pytest.mark.asyncio
+async def test_adversarial_text_exceeding_context_bound_never_reaches_provider() -> None:
+    provider = MockLLM([ModelResponse("must not run")])
+    content = "!@#$%^&*()_+-=[]{};:,.<>?/" * 700
+
+    result = await AgentRuntime(
+        provider,
+        _registry({}),
+        budget=RuntimeBudget(max_context_tokens=6_000, context_output_reserve_tokens=500),
+    ).run([Message(Role.USER, content)])
+
+    assert result.stop_reason is StopReason.CONTEXT_BUDGET_EXHAUSTED
+    assert provider.call_history == []
+
+
+@pytest.mark.asyncio
+async def test_runtime_deadline_bounds_cancellation_resistant_event_sink_before_provider() -> None:
+    finished = asyncio.Event()
+
+    class SlowSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            if event.kind is AgentEventKind.RUN_STARTED:
+                try:
+                    await asyncio.sleep(10)
+                except asyncio.CancelledError:
+                    await asyncio.sleep(0.08)
+                finished.set()
+            await super().emit(event)
+
+    provider = MockLLM([ModelResponse("must not run")])
+    started = asyncio.get_running_loop().time()
+    result = await AgentRuntime(
+        provider,
+        _registry({}),
+        events=SlowSink(),
+        budget=RuntimeBudget(max_seconds=0.01),
+    ).run([Message(Role.USER, "answer")])
+
+    assert asyncio.get_running_loop().time() - started < 0.08
+    assert result.stop_reason is StopReason.TIME_BUDGET_EXHAUSTED
+    assert provider.call_history == []
+    await asyncio.wait_for(finished.wait(), timeout=0.3)
+    assert provider.call_history == []
+
+
+@pytest.mark.asyncio
 async def test_runtime_deadline_detaches_cancellation_resistant_provider_exception() -> None:
     """A provider's late exception is consumed instead of becoming an event-loop warning."""
 

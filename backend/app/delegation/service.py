@@ -9,6 +9,8 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+import structlog
+
 from app.delegation.envelope import (
     DelegationEnvelope,
     DelegationEnvelopeService,
@@ -23,7 +25,7 @@ from app.delegation.models import (
     VerificationReasonCode,
     validate_verdict_evidence_subset,
 )
-from app.runtime.deadline import await_before_deadline
+from app.runtime.deadline import DeadlineExceededError, await_before_deadline
 from app.runtime.events import AgentEventKind
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage
 from app.runtime.ports import ModelProvider
@@ -37,6 +39,8 @@ claim_id, status, reason_code, confidence, evidence_ids. status is supported, re
 escalate. reason_code is evidence_supports, evidence_contradicts, insufficient_evidence, or
 invalid_citation. Include every claim exactly once and cite only supplied evidence IDs."""
 _VERDICT_KEYS = frozenset({"claim_id", "status", "reason_code", "confidence", "evidence_ids"})
+_TERMINAL_CLEANUP_SECONDS = 0.25
+logger = structlog.get_logger()
 
 
 class TransientVerifierError(RuntimeError):
@@ -233,6 +237,51 @@ class EvidenceVerifierSpecialist:
         request: ChildVerificationRequest,
         envelope: DelegationEnvelope | None = None,
     ) -> ChildVerificationResult:
+        started = time.monotonic()
+        deadline = started + request.budget.timeout_seconds
+        try:
+            return await await_before_deadline(
+                self._verify(request, envelope, started=started),
+                deadline=deadline,
+            )
+        except DeadlineExceededError:
+            verdicts = _fail_closed(request, VerificationReasonCode.TIMEOUT)
+            await self._bounded_finish(
+                request,
+                ChildVerificationStatus.TIMEOUT,
+                verdicts,
+                TokenUsage(),
+                started,
+                VerificationReasonCode.TIMEOUT,
+                0,
+            )
+            return ChildVerificationResult(
+                request.child_id,
+                request.parent_run_id,
+                ChildVerificationStatus.TIMEOUT,
+                TokenUsage(),
+                (time.monotonic() - started) * 1000,
+                verdicts,
+            )
+        except asyncio.CancelledError:
+            await self._bounded_finish(
+                request,
+                ChildVerificationStatus.CANCELLED,
+                _fail_closed(request, VerificationReasonCode.PROVIDER_ERROR),
+                TokenUsage(),
+                started,
+                VerificationReasonCode.PROVIDER_ERROR,
+                0,
+            )
+            raise
+
+    async def _verify(
+        self,
+        request: ChildVerificationRequest,
+        envelope: DelegationEnvelope | None,
+        *,
+        started: float,
+    ) -> ChildVerificationResult:
         # Keep redaction as an explicit dependency of this persistence boundary.
         # RunRepository performs the actual allow-listing and redaction.
         _ = self._redactor
@@ -251,7 +300,8 @@ class EvidenceVerifierSpecialist:
                 child_run_id=request.child_id,
                 context_hash=context_hash,
             )
-        started = time.monotonic()
+            if time.monotonic() >= started + request.budget.timeout_seconds:
+                raise DeadlineExceededError
         messages = list(_messages(request))
         estimate = estimate_input_tokens(messages)
         usage = TokenUsage()
@@ -264,6 +314,8 @@ class EvidenceVerifierSpecialist:
             provider="verifier",
             model=request.model,
         )
+        if time.monotonic() >= started + request.budget.timeout_seconds:
+            raise DeadlineExceededError
         provider = (
             self._provider_factory(request)
             if self._provider_factory is not None
@@ -276,6 +328,8 @@ class EvidenceVerifierSpecialist:
             self._request_payload(request, estimate),
             usage,
         )
+        if time.monotonic() >= started + request.budget.timeout_seconds:
+            raise DeadlineExceededError
         if estimate > request.budget.input_tokens:
             return await self._finish(
                 request,
@@ -401,6 +455,29 @@ class EvidenceVerifierSpecialist:
             None,
             attempts,
         )
+
+    async def _bounded_finish(
+        self,
+        request: ChildVerificationRequest,
+        status: ChildVerificationStatus,
+        verdicts: tuple[ClaimVerdict, ...],
+        usage: TokenUsage,
+        started: float,
+        reason: VerificationReasonCode | None,
+        attempts: int,
+    ) -> None:
+        try:
+            await await_before_deadline(
+                self._finish(request, status, verdicts, usage, started, reason, attempts),
+                deadline=time.monotonic() + _TERMINAL_CLEANUP_SECONDS,
+            )
+        except BaseException as cleanup_error:
+            logger.warning(
+                "verifier_terminal_persistence_indeterminate",
+                child_run_id=request.child_id,
+                status=status.value,
+                error_type=type(cleanup_error).__name__,
+            )
 
     async def _finish(
         self,

@@ -208,6 +208,7 @@ async def test_enabled_verifier_filters_and_records_child_lineage(
     assert result.verification_status == "completed"
     assert result.verification_tokens == 18
     assert result.verification_rejected_count == rejected
+    assert result.metrics["faithfulness_method"] == "live_bounded_verifier"
     assert result.child_run_id is not None
     assert child.calls == 1
     child_input = child.messages[1].content
@@ -240,6 +241,7 @@ async def test_verifier_failure_fails_closed_and_no_evidence_never_delegates(
     assert result.unsupported == ("Alpha project uses Python",)
     assert result.verification_status == "failed"
     assert result.verification_rejected_count == 1
+    assert result.metrics["faithfulness_method"] == "bounded_verifier_fail_closed"
 
     unused = FakeProvider("must not be called")
     empty, _ = await _run(harness, FakeProvider("must not be called"), [], verifier_provider=unused)
@@ -601,3 +603,47 @@ async def test_grounded_deadline_detaches_cancellation_resistant_provider(
     run = (await harness.runs.list("alice")).items[0]
     assert run.status == "failed"
     assert run.stop_reason == "deadline_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_grounded_deadline_bounds_slow_run_creation_before_provider(
+    harness: Harness,
+) -> None:
+    original_ensure = harness.runs.ensure_run
+    finished = asyncio.Event()
+
+    async def slow_ensure(**kwargs: Any) -> Any:
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.08)
+        result = await original_ensure(**kwargs)
+        finished.set()
+        return result
+
+    harness.runs.ensure_run = slow_ensure  # type: ignore[method-assign]
+    provider = FakeProvider('{"claims":[]}')
+    workflow = GroundedDocumentWorkflow(
+        vector_store=FakeVectors([_row()]),  # type: ignore[arg-type]
+        embedding_service=FakeEmbeddings(),  # type: ignore[arg-type]
+        model_provider=provider,
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+        deadline_seconds=0.01,
+    )
+
+    started = asyncio.get_running_loop().time()
+    with pytest.raises(GroundedDeadlineExceededError, match="grounded_deadline_exceeded"):
+        await workflow.run(
+            "What does Alpha use?",
+            owner_id="alice",
+            project_id="project-a",
+            correlation_id="slow-run-creation",
+            document_id=None,
+            document_ids={"doc-1"},
+        )
+    assert asyncio.get_running_loop().time() - started < 0.08
+    assert provider.calls == 0
+    await asyncio.wait_for(finished.wait(), timeout=0.3)
+    assert provider.calls == 0

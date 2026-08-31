@@ -37,6 +37,14 @@ from app.services.monetary_budget import (
 
 _MAX_BIGINT = 2**63 - 1
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
+# A byte-pair token always represents at least one input byte. Counting every UTF-8
+# byte as one token is deliberately conservative when no provider tokenizer is available.
+_TEXT_FRAME_TOKENS = 16
+_TOOL_FRAME_TOKENS = 32
+# Image validation permits at most 16M pixels. Claude's documented approximation is
+# roughly pixels/750 tokens, so 22k includes framing headroom and is also conservative
+# for the other currently supported image adapters.
+_MAX_IMAGE_INPUT_TOKENS = 22_000
 _T = TypeVar("_T")
 
 
@@ -59,8 +67,8 @@ def estimate_request_input_tokens(
 
     total = 0
     for message in messages:
-        total += 16 + (len(message.content.encode("utf-8")) + 3) // 4
-        total += len(message.images) * 2_048
+        total += _TEXT_FRAME_TOKENS + len(message.content.encode("utf-8"))
+        total += len(message.images) * _MAX_IMAGE_INPUT_TOKENS
         for call in message.tool_calls:
             encoded = json.dumps(
                 [call.id, call.name, dict(call.arguments)],
@@ -68,7 +76,7 @@ def estimate_request_input_tokens(
                 separators=(",", ":"),
                 default=str,
             ).encode("utf-8")
-            total += 16 + (len(encoded) + 3) // 4
+            total += _TEXT_FRAME_TOKENS + len(encoded)
     for tool in tools:
         encoded = json.dumps(
             [tool.name, tool.description, dict(tool.input_schema)],
@@ -76,7 +84,7 @@ def estimate_request_input_tokens(
             separators=(",", ":"),
             default=str,
         ).encode("utf-8")
-        total += 32 + (len(encoded) + 3) // 4
+        total += _TOOL_FRAME_TOKENS + len(encoded)
     return total
 
 

@@ -960,7 +960,7 @@
       "content_source": "concept",
       "summary": "A context window is everything sent to the model for one invocation. It can include system instructions, tool descriptions, selected durable facts, recent conversation messages, images, and the current user turn. The window is temporary: it is constructed for a request and is not itself a durable memory store. A model can only condition its answer on content that fits and is selected, even if much more data exists in the database. Three layers must stay distinct: 1. Conversation rows are durable ordered…",
       "mental_model": "Think of a packing list, not a brain: the database owns history and facts; build messages chooses what enters this model call. Facts are an encrypted, quota-bounded notebook keyed by (user id, project id) . A checkpoint freezes state for restoration/forking; it is not automatically replayed model execution.",
-      "limitations": "Sync and SSE share token-aware compaction with output reserve and each runtime iteration fails closed before oversized dispatch; estimates remain provider-approximate and provenance is initial-context rather than per-call.",
+      "limitations": "Sync and SSE share compaction with output reserve; the pre-dispatch fallback bound counts each UTF-8 byte as one token plus framing and reserves 22k per validated image. It is deliberately conservative rather than provider-exact, and provenance remains initial-context rather than per-call.",
       "sources": [
         {
           "path": "backend/app/runtime/context.py",
@@ -988,6 +988,11 @@
           "path": "backend/tests/unit/test_runtime_provider_contracts.py",
           "label": "test_runtime_provider_contracts.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_runtime_provider_contracts.py"
+        },
+        {
+          "path": "backend/tests/unit/test_budgeted_provider.py",
+          "label": "test_budgeted_provider.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_budgeted_provider.py"
         }
       ],
       "evidence": [
@@ -1695,7 +1700,7 @@
       "content_source": "concept",
       "summary": "Failures are normal: providers time out, clients disconnect, retries duplicate work, and traffic spikes. Resilience means bounding damage and preserving a truthful terminal state—not merely “trying again.” Archon demonstrates idempotent creation/finalization guards, bounded retries in selected paths, timeout/cancellation handling, a concurrency-safe circuit breaker, fallback adapters, and sliding-window rate limiting.",
       "mental_model": "Use layered bulkheads: idempotency prevents duplicate state; deadlines bound time; cancellation stops unwanted work and finalizes evidence; retries handle classified transient failures within a budget; a breaker stops hammering an unhealthy dependency; fallback changes the service path; rate limiting controls admission. Each layer has different semantics.",
-      "limitations": "Managed chat, RAG, verifier, provider, tool, approval and synthesis waits share monotonic bounded deadlines; arbitrary in-process code still requires process isolation for hard termination.",
+      "limitations": "Managed chat, RAG and verifier operations—including run/event persistence and approval preparation—share absolute monotonic deadlines. Terminal persistence has a separate bounded cleanup and logs indeterminate state if it cannot finish; detached work may still consume resources or finish an already-started side effect.",
       "sources": [
         {
           "path": "backend/app/runtime/deadline.py",

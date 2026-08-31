@@ -79,9 +79,8 @@ sequenceDiagram
 
 ## Archon: shared managed-runtime deadline
 
-`backend/app/runtime/deadline.py` creates a monotonic absolute deadline and awaits nested work only for the remaining budget. If a coroutine absorbs cancellation, the request parent stops waiting, a done-callback drains the detached result, and late output is not returned to the caller.
-`AgentRuntime`, grounded RAG, provider generation, the child verifier, delegation, tool execution, approvals, and final synthesis consume bounded portions of that shared request budget. Grounded-document timeout maps to a typed terminal run reason and HTTP 504.
-This controls the managed request paths; it cannot forcibly terminate arbitrary synchronous code or roll back a committed remote effect.
+`backend/app/runtime/deadline.py` creates a monotonic absolute deadline and awaits nested work only for the remaining budget. `AgentRuntime`, grounded RAG, and the child verifier wrap their complete managed operation—including run creation, event persistence, approval preparation, provider/tool waits, and normal finalization—inside that absolute deadline. If a collaborator absorbs cancellation, an immediate post-await fence prevents later provider/tool dispatch.
+Terminal recording uses a separate bounded cleanup budget (50 ms for runtime/RAG and 250 ms for the verifier). If it cannot finish, Archon logs an explicit `*_terminal_persistence_indeterminate` state rather than waiting indefinitely or claiming persistence. Detached operations may still consume resources or complete their own already-started side effect; their result cannot re-enter the request.
 
 ## Archon: legacy resilient coordinator
 

@@ -11,9 +11,12 @@ import re
 import time
 from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from contextlib import suppress
+from contextvars import ContextVar
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, TypeVar
+
+import structlog
 
 from app.runtime.capabilities import (
     ProviderCapabilities,
@@ -57,6 +60,8 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 Clock = Callable[[], float]
 ResultRecorder = Callable[[str], Awaitable[None]]
+logger = structlog.get_logger()
+_RUNTIME_TERMINAL_CLEANUP_SECONDS = 0.05
 
 # Approval hook: (tool_name, tool_call_id, arguments) -> approved?
 ApprovalHook = Callable[[str, str, dict[str, Any]], Coroutine[Any, Any, bool]]
@@ -119,6 +124,22 @@ class AgentResult:
     usage: TokenUsage
     error: str | None = None
     structured_output: object | None = None
+
+
+@dataclass(slots=True)
+class _RuntimeDeadlineState:
+    deadline: float
+    terminal_started: bool = False
+    terminal_persisted: bool = False
+    content: str = ""
+    iterations: int = 0
+    calls: tuple[dict[str, Any], ...] = ()
+    usage: TokenUsage | None = None
+
+
+_RUNTIME_DEADLINE_STATE: ContextVar[_RuntimeDeadlineState | None] = ContextVar(
+    "runtime_deadline_state", default=None
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,8 +249,34 @@ class AgentRuntime:
         response_contract: ResponseContract | None = None,
         required_capabilities: ProviderCapabilities | None = None,
     ) -> AgentResult:
-        history = list(self._snapshot_history(messages))
         started_at = self._clock()
+        state = _RuntimeDeadlineState(deadline=started_at + self._budget.max_seconds)
+        token = _RUNTIME_DEADLINE_STATE.set(state)
+        try:
+            return await await_before_deadline(
+                self._run(
+                    messages,
+                    response_contract=response_contract,
+                    required_capabilities=required_capabilities,
+                    started_at=started_at,
+                ),
+                deadline=state.deadline,
+                clock=self._clock,
+            )
+        except DeadlineExceededError:
+            return await self._deadline_result(state)
+        finally:
+            _RUNTIME_DEADLINE_STATE.reset(token)
+
+    async def _run(
+        self,
+        messages: Sequence[Message],
+        *,
+        response_contract: ResponseContract | None,
+        required_capabilities: ProviderCapabilities | None,
+        started_at: float,
+    ) -> AgentResult:
+        history = list(self._snapshot_history(messages))
         iterations = 0
         calls: list[dict[str, Any]] = []
         seen_calls: set[str] = set()
@@ -1256,6 +1303,8 @@ class AgentRuntime:
                     event_call, iteration, calls, "approval_unavailable", arguments_hash
                 )
                 return StopReason.APPROVAL_UNAVAILABLE
+            if self._expired(started_at):
+                raise DeadlineExceededError
             if authorization_request != cleanup_request:
                 await preparatory_authorizer.cancel(cleanup_request)
                 await self._emit_approval_failure(
@@ -1685,6 +1734,57 @@ class AgentRuntime:
             pass
         return await self._stop(reason, content, iterations, calls, usage)
 
+    async def _deadline_result(self, state: _RuntimeDeadlineState) -> AgentResult:
+        """Return promptly and attempt terminal persistence on a separate short budget."""
+
+        usage = state.usage or TokenUsage()
+        result = AgentResult(
+            state.content,
+            StopReason.TIME_BUDGET_EXHAUSTED,
+            state.iterations,
+            state.calls,
+            usage,
+            "deadline_exceeded",
+        )
+        if state.terminal_started:
+            if not state.terminal_persisted:
+                logger.warning(
+                    "runtime_terminal_persistence_indeterminate",
+                    error_type="deadline_interrupted",
+                    stop_reason=StopReason.TIME_BUDGET_EXHAUSTED.value,
+                )
+            return result
+
+        async def persist_terminal_state() -> None:
+            if self._result_recorder is not None:
+                await self._result_recorder(state.content)
+            await self._events.emit(
+                AgentEvent(
+                    AgentEventKind.RUN_STOPPED,
+                    state.iterations,
+                    {
+                        "reason": StopReason.TIME_BUDGET_EXHAUSTED.value,
+                        "error": "deadline_exceeded",
+                    },
+                    usage,
+                )
+            )
+            state.terminal_persisted = True
+
+        try:
+            await await_before_deadline(
+                persist_terminal_state(),
+                deadline=time.monotonic() + _RUNTIME_TERMINAL_CLEANUP_SECONDS,
+                clock=time.monotonic,
+            )
+        except BaseException as error:
+            logger.warning(
+                "runtime_terminal_persistence_indeterminate",
+                error_type=type(error).__name__,
+                stop_reason=StopReason.TIME_BUDGET_EXHAUSTED.value,
+            )
+        return result
+
     def _expired(self, started_at: float) -> bool:
         return self._clock() - started_at >= self._budget.max_seconds
 
@@ -1710,6 +1810,12 @@ class AgentRuntime:
             if event_usage.cache_write_input_tokens is not None:
                 event_data["cache_write_input_tokens"] = event_usage.cache_write_input_tokens
         await self._events.emit(AgentEvent(kind, iteration, event_data, event_usage))
+        state = _RUNTIME_DEADLINE_STATE.get()
+        if state is not None:
+            if kind is AgentEventKind.RUN_STOPPED:
+                state.terminal_persisted = True
+            elif self._clock() >= state.deadline:
+                raise DeadlineExceededError
 
     async def _stop(
         self,
@@ -1724,6 +1830,13 @@ class AgentRuntime:
         # The terminal event finalizes completed_at, so persist the compliant final answer first.
         if self._compliance is not None:
             content = self._compliance.enforce_output(content)
+        state = _RUNTIME_DEADLINE_STATE.get()
+        if state is not None:
+            state.terminal_started = True
+            state.content = content
+            state.iterations = iterations
+            state.calls = tuple(calls)
+            state.usage = usage
         if self._result_recorder is not None:
             await self._result_recorder(content)
         await self._emit(
@@ -1732,6 +1845,8 @@ class AgentRuntime:
             {"reason": reason.value, "error": error},
             usage,
         )
+        if state is not None:
+            state.terminal_persisted = True
         return AgentResult(
             content, reason, iterations, tuple(calls), usage, error, structured_output
         )

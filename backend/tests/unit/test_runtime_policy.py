@@ -989,6 +989,56 @@ async def test_authorizer_exception_is_unavailable() -> None:
 
 
 @pytest.mark.asyncio
+async def test_slow_approval_prepare_is_bounded_by_runtime_deadline() -> None:
+    finished = asyncio.Event()
+
+    class SlowPreparatoryAuthorizer:
+        def __init__(self) -> None:
+            self.authorize_calls = 0
+
+        async def prepare(self, request: AuthorizationRequest) -> None:
+            del request
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.08)
+            finished.set()
+
+        async def authorize(self, request: AuthorizationRequest) -> AuthorizationOutcome:
+            self.authorize_calls += 1
+            return AuthorizationOutcome(
+                True,
+                request.tool_call_id,
+                request.tool_name,
+                request.arguments_hash,
+                "user_approved",
+            )
+
+        async def cancel(self, request: AuthorizationRequest) -> None:
+            del request
+
+    tools = PolicyTools(frozenset({RiskClass.WRITE}))
+    authorizer = SlowPreparatoryAuthorizer()
+    started = asyncio.get_running_loop().time()
+    result = await AgentRuntime(
+        provider(),
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ASK),
+        authorizer=authorizer,
+        approval_timeout_seconds=1,
+        budget=RuntimeBudget(max_seconds=0.01),
+    ).run([Message(Role.USER, "write")])
+
+    assert asyncio.get_running_loop().time() - started < 0.08
+    assert result.stop_reason is StopReason.TIME_BUDGET_EXHAUSTED
+    assert authorizer.authorize_calls == 0
+    assert tools.executed == []
+    await asyncio.wait_for(finished.wait(), timeout=0.3)
+    assert authorizer.authorize_calls == 0
+    assert tools.executed == []
+
+
+@pytest.mark.asyncio
 async def test_authorizer_timeout_is_bounded_and_explicit() -> None:
     class SlowAuthorizer:
         async def authorize(self, request):

@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass, field
 from time import monotonic, perf_counter
 from typing import Any
 
+import structlog
+
 from app.delegation import (
     MAX_QUOTE_CHARS,
     MAX_TEXT_CHARS,
@@ -36,6 +38,8 @@ from app.services.run_ledger import RunRepository
 from app.services.vector_store import VectorStoreProtocol
 
 _NO_EVIDENCE_ANSWER = "I could not find relevant information to answer your question."
+_TERMINAL_CLEANUP_SECONDS = 0.05
+logger = structlog.get_logger()
 _MAX_QUOTE = 1_200
 _MAX_MODEL_OUTPUT = 65_536
 _MAX_CLAIMS = 20
@@ -297,7 +301,42 @@ class GroundedDocumentWorkflow:
             provider=self._provider_name,
             model=self._model_name,
         )
+        try:
+            return await await_before_deadline(
+                self._run(
+                    question,
+                    owner_id=owner_id,
+                    project_id=project_id,
+                    document_id=document_id,
+                    document_ids=document_ids,
+                    identity=identity,
+                    started=started,
+                    deadline=deadline,
+                ),
+                deadline=deadline,
+            )
+        except DeadlineExceededError:
+            await self._bounded_terminal_cleanup(identity, reason="deadline_exceeded", error=True)
+            raise GroundedDeadlineExceededError from None
+        except asyncio.CancelledError:
+            await self._bounded_terminal_cleanup(identity, reason="cancelled", error=False)
+            raise
+
+    async def _run(
+        self,
+        question: str,
+        *,
+        owner_id: str,
+        project_id: str,
+        document_id: str | None,
+        document_ids: set[str],
+        identity: _RunIdentity,
+        started: float,
+        deadline: float,
+    ) -> GroundedResult:
         await self._runs.ensure_run(**asdict(identity))
+        if monotonic() >= deadline:
+            raise DeadlineExceededError
         provider = (
             self._provider_factory(owner_id, project_id, identity.run_id)
             if self._provider_factory is not None
@@ -327,6 +366,8 @@ class GroundedDocumentWorkflow:
                     "evidence_count": len(evidence),
                 },
             )
+            if monotonic() >= deadline:
+                raise DeadlineExceededError
             if not evidence:
                 return await self._finish(
                     identity,
@@ -337,6 +378,7 @@ class GroundedDocumentWorkflow:
                     unsupported=(),
                     usage=usage,
                     provider_calls=0,
+                    deadline=deadline,
                 )
 
             parsed, usage, provider_calls = await self._complete_claims(
@@ -375,14 +417,9 @@ class GroundedDocumentWorkflow:
                 verification_tokens=child_tokens,
                 verification_latency_ms=child_latency_ms,
                 verification_rejected_count=child_rejected_count,
+                deadline=deadline,
             )
         except DeadlineExceededError:
-            await asyncio.shield(
-                self._stop(identity, usage=usage, error=True, reason="deadline_exceeded")
-            )
-            raise GroundedDeadlineExceededError from None
-        except asyncio.CancelledError:
-            await asyncio.shield(self._stop(identity, usage=usage, error=False, reason="cancelled"))
             raise
         except Exception as exc:
             await self._stop(identity, usage=usage, error=True, reason="provider_error")
@@ -436,6 +473,7 @@ class GroundedDocumentWorkflow:
         unsupported: tuple[str, ...],
         usage: TokenUsage,
         provider_calls: int,
+        deadline: float,
         child_run_id: str | None = None,
         verification_status: str | None = None,
         verification_tokens: int = 0,
@@ -455,6 +493,8 @@ class GroundedDocumentWorkflow:
                 "unsupported_count": len(unsupported),
             },
         )
+        if monotonic() >= deadline:
+            raise DeadlineExceededError
         answer = "\n".join(
             f"{claim.text} " + " ".join(f"[{item}]" for item in claim.evidence_ids)
             for claim in claims
@@ -466,9 +506,12 @@ class GroundedDocumentWorkflow:
         grounded = bool(claims)
         candidate_count = len(claims) + len(unsupported)
         faithfulness_score = round(len(claims) / candidate_count, 4) if candidate_count else 0.0
-        faithfulness_method = (
-            "live_bounded_verifier" if child_run_id is not None else "deterministic_claim_support"
-        )
+        if child_run_id is None:
+            faithfulness_method = "deterministic_claim_support"
+        elif verification_status == ChildVerificationStatus.COMPLETED.value:
+            faithfulness_method = "live_bounded_verifier"
+        else:
+            faithfulness_method = "bounded_verifier_fail_closed"
         await self._append(
             identity,
             "grounded_answer",
@@ -481,6 +524,8 @@ class GroundedDocumentWorkflow:
                 "faithfulness_method": faithfulness_method,
             },
         )
+        if monotonic() >= deadline:
+            raise DeadlineExceededError
         await self._stop(identity, usage=usage, error=False, reason="completed")
         latency_ms = round((perf_counter() - started) * 1000, 3)
         scores = [item.score for item in evidence]
@@ -638,6 +683,22 @@ class GroundedDocumentWorkflow:
             latency_ms,
             len(child_rejected),
         )
+
+    async def _bounded_terminal_cleanup(
+        self, identity: _RunIdentity, *, reason: str, error: bool
+    ) -> None:
+        try:
+            await await_before_deadline(
+                self._stop(identity, usage=TokenUsage(), error=error, reason=reason),
+                deadline=monotonic() + _TERMINAL_CLEANUP_SECONDS,
+            )
+        except BaseException as cleanup_error:
+            logger.warning(
+                "grounded_run_terminal_persistence_indeterminate",
+                run_id=identity.run_id,
+                reason=reason,
+                error_type=type(cleanup_error).__name__,
+            )
 
     async def _append(self, identity: _RunIdentity, kind: str, payload: Mapping[str, Any]) -> None:
         await self._runs.append(**asdict(identity), kind=kind, iteration=1, payload=payload)

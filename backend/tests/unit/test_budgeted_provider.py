@@ -22,6 +22,7 @@ from app.runtime.monetary_budget import (
     IndeterminateModelCharge,
     ModelBudgetExhausted,
     PricingCandidate,
+    estimate_request_input_tokens,
 )
 from app.services.db_store import Base, RunRow
 from app.services.monetary_budget import ChargeState, MonetaryBudgetRepository
@@ -100,6 +101,29 @@ def wrapper(
         max_input_tokens=max_input,
         pricing_candidates=candidates or (PricingCandidate("openai", "gpt-4o"),),
     )
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "0123456789abcdef" * 1_250,
+        "!@#$%^&*()_+-=[]{};:,.<>?/" * 700,
+        "aZ9_" * 5_000,
+        "🙂" * 5_000,
+    ],
+)
+def test_request_estimate_is_at_least_utf8_bytes_plus_framing(content: str) -> None:
+    estimate = estimate_request_input_tokens([Message(Role.USER, content)], ())
+
+    assert estimate >= len(content.encode("utf-8")) + 16
+
+
+def test_request_estimate_reserves_worst_case_validated_image_tokens() -> None:
+    estimate = estimate_request_input_tokens(
+        [Message(Role.USER, "describe", images=("attachment://one",))], ()
+    )
+
+    assert estimate >= 22_000 + len("describe") + 16
 
 
 @pytest.mark.asyncio
@@ -270,7 +294,7 @@ async def test_capabilities_contract_tools_images_and_marker_forwarded_unchanged
 ) -> None:
     repo, engine = await repository(tmp_path / "forward.db")
     delegate = RoutedProvider()
-    budgeted = wrapper(delegate, repo, max_input=4_000)
+    budgeted = wrapper(delegate, repo, max_input=30_000)
     messages = (Message(Role.USER, "look", images=("image",)),)
     tools = (ToolDefinition("tool", input_schema={"type": "object"}),)
     required = ProviderCapabilities(images=True, native_tools=True)
