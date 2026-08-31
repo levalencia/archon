@@ -71,6 +71,7 @@ It is lost on restart and is not the durable fork API.
 `backend/app/services/run_ledger.py::RunRepository.fork` is database-backed and owner-scoped.
 It persists `RunCheckpointRow`, creates a new `ConversationRow`, copies `MessageRow` items, and creates `ForkDraftRow` atomically.
 `RunRepository.ensure_run` consumes a matching draft with `DELETE ... RETURNING` and stamps one newly created run with lineage.
+A supported user initiates this contract from the Run Ledger's **Fork from latest event** action. The Memory page intentionally exposes no checkpoint restore control; the in-memory teaching utility is not presented as durable product behavior.
 A fork can therefore exist before any child run begins.
 
 ## Invariants

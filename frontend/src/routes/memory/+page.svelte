@@ -1,11 +1,10 @@
 <script lang="ts">
   import { authenticatedFetch } from '$lib/auth';
-  import { Brain, Database, Thermometer, Archive, RotateCcw, HardDrive, KeyRound, ShieldCheck } from 'lucide-svelte';
+  import { Brain, Database, Thermometer, Archive, RotateCcw, KeyRound, ShieldCheck } from 'lucide-svelte';
   import { getMemoryRotation, rotateMemoryKeys, type MemoryRotationStatus } from '$lib/memory';
 
   let tiers: any = $state(null);
   let context: any = $state(null);
-  let checkpoints: any[] = $state([]);
   let rotation: MemoryRotationStatus | null = $state(null);
   let rotationBusy = $state(false);
   let rotationError = $state('');
@@ -27,10 +26,9 @@
     error = '';
     rotationError = '';
     try {
-      const [tiersRes, contextRes, checkpointsRes, rotationRes] = await Promise.allSettled([
+      const [tiersRes, contextRes, rotationRes] = await Promise.allSettled([
         authenticatedFetch('/api/memory/tiers'),
         authenticatedFetch('/api/memory/context'),
-        authenticatedFetch('/api/memory/checkpoints'),
         getMemoryRotation(),
       ]);
 
@@ -38,19 +36,12 @@
         tiers = await tiersRes.value.json();
       if (contextRes.status === 'fulfilled' && contextRes.value.ok)
         context = await contextRes.value.json();
-      if (checkpointsRes.status === 'fulfilled' && checkpointsRes.value.ok)
-        checkpoints = await checkpointsRes.value.json();
       if (rotationRes.status === 'fulfilled') rotation = rotationRes.value;
       else rotationError = 'Rotation status unavailable';
     } catch {
       error = 'Failed to load memory data';
     }
     loading = false;
-  }
-
-  async function restoreCheckpoint(id: string) {
-    await authenticatedFetch(`/api/memory/checkpoints/${id}/restore`, { method: 'POST' });
-    await loadMemory();
   }
 
   async function rotateBatch() {
@@ -245,48 +236,4 @@
     {/if}
   </section>
 
-  <!-- Checkpoints -->
-  <section class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
-    <div class="flex items-center gap-2 mb-4">
-      <HardDrive size={16} class="text-[var(--accent)]" />
-      <h2 class="text-base font-semibold text-[var(--text-primary)]">Checkpoints</h2>
-    </div>
-
-    {#if checkpoints.length === 0}
-      <div class="text-center py-6 text-[var(--text-muted)]">
-        <Archive size={28} class="mx-auto mb-2 opacity-40" />
-        <p class="text-sm">No checkpoints yet</p>
-        <p class="text-xs mt-1">Checkpoints are created automatically every 10 messages</p>
-      </div>
-    {:else}
-      <div class="space-y-2">
-        {#each checkpoints as cp}
-          <div class="flex items-center justify-between px-4 py-3 bg-[var(--bg-tertiary)] rounded-lg
-            border border-transparent hover:border-[var(--border)] transition-colors group">
-            <div>
-              <span class="text-sm text-[var(--text-primary)]">{cp.label || `Checkpoint ${cp.id}`}</span>
-              <span class="text-xs text-[var(--text-muted)] ml-2">
-                {cp.message_count ?? '?'} messages
-              </span>
-              {#if cp.created_at}
-                <span class="text-[10px] text-[var(--text-muted)] ml-2">
-                  {new Date(cp.created_at).toLocaleString()}
-                </span>
-              {/if}
-            </div>
-            <button
-              onclick={() => restoreCheckpoint(cp.id)}
-              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs
-                text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-glow)]
-                transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-              title="Restore checkpoint"
-            >
-              <RotateCcw size={12} />
-              Restore
-            </button>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </section>
 </div>

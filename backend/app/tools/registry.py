@@ -45,6 +45,10 @@ logger = structlog.get_logger()
 DEFAULT_TOOL_TIMEOUT = 30
 
 ResourceResolver = Callable[[Mapping[str, Any]], tuple[ResourcePattern, ...]]
+_SUPPORTED_ROOT_SCHEMA_KEYWORDS = frozenset(
+    {"type", "properties", "required", "additionalProperties"}
+)
+_SUPPORTED_PROPERTY_SCHEMA_KEYWORDS = frozenset({"type", "enum", "description"})
 _SUPPORTED_PROPERTY_TYPES = frozenset({"string", "integer", "number", "boolean", "object", "array"})
 _EFFECTFUL_RISKS = frozenset({RiskClass.WRITE, RiskClass.EXECUTE, RiskClass.EXTERNAL_SIDE_EFFECT})
 
@@ -72,6 +76,11 @@ def _validate_input_schema(schema: Any) -> Mapping[str, Any]:
     """Validate trusted registration metadata for the supported schema subset."""
     if not isinstance(schema, Mapping):
         raise TypeError("invalid input schema: expected a mapping")
+    unsupported_root = set(schema) - _SUPPORTED_ROOT_SCHEMA_KEYWORDS
+    if unsupported_root:
+        raise ValueError(
+            f"invalid input schema: unsupported root keyword '{sorted(unsupported_root)[0]}'"
+        )
 
     schema_type = schema.get("type")
     if schema_type is not None and schema_type != "object":
@@ -99,6 +108,12 @@ def _validate_input_schema(schema: Any) -> Mapping[str, Any]:
     for field, declaration in properties.items():
         if not isinstance(declaration, Mapping):
             raise TypeError(f"invalid input schema for field '{field}': expected an object")
+        unsupported_property = set(declaration) - _SUPPORTED_PROPERTY_SCHEMA_KEYWORDS
+        if unsupported_property:
+            raise ValueError(
+                f"invalid input schema for field '{field}': unsupported keyword "
+                f"'{sorted(unsupported_property)[0]}'"
+            )
         declared_type = declaration.get("type")
         if declared_type not in _SUPPORTED_PROPERTY_TYPES:
             raise ValueError(f"invalid input schema for field '{field}': unsupported type")

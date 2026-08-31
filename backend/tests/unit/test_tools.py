@@ -355,6 +355,11 @@ class TestToolInputValidation:
             {"properties": {"query": {"type": "string", "enum": "secret"}}},
             {"properties": {"query": {"type": "integer", "enum": [True]}}},
             {"additionalProperties": "yes"},
+            {"pattern": "secret"},
+            {"$ref": "https://example.invalid/schema.json"},
+            {"oneOf": []},
+            {"properties": {"query": {"type": "string", "pattern": "secret"}}},
+            {"properties": {"items": {"type": "array", "items": {"type": "string"}}}},
         ],
     )
     def test_malformed_trusted_schema_fails_registration(self, schema: dict[str, object]) -> None:

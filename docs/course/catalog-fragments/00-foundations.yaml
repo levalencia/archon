@@ -127,7 +127,7 @@
     - backend/tests/unit/test_tools.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: The documented object/property/type/enum validation subset is fail-closed and tested; recursive or remote full-spec JSON Schema is intentionally outside this tool-contract boundary.
+  limitations: The documented object/property/type/enum validation subset is fail-closed, rejects unknown schema keywords, and is tested; recursive or remote full-spec JSON Schema is intentionally outside this tool-contract boundary.
 
 - id: policy-engine
   title: Deterministic policy engine

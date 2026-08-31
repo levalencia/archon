@@ -73,11 +73,11 @@ Unknown fields fail unless `additionalProperties` is exactly `true`.
 
 Archon does not claim recursive validation of nested object properties or array items.
 It does not implement `$ref`, `$defs`, `oneOf`, `allOf`, `anyOf`, `not`, formats, regex patterns, lengths, numeric ranges, or the complete standard's meta-schema behavior.
-A declaration containing an ignored keyword should not be treated as an enforced security rule.
+Any unrecognized root/property keyword is rejected during tool registration, so unsupported constraints cannot masquerade as enforced policy.
 
 ## Behavior-focused tests—and their limits
 
-- [`test_tools.py`](../../../backend/tests/unit/test_tools.py) covers registration rejection, required/unknown fields, supported types, enum matching, and metadata snapshots. It does not certify full JSON Schema conformance.
+- [`test_tools.py`](../../../backend/tests/unit/test_tools.py) covers registration rejection (including unknown keywords), required/unknown fields, supported types, enum matching, and metadata snapshots. It does not certify full JSON Schema conformance.
 - [`test_policy_rejects_non_json_arguments_before_execution`](../../../backend/tests/unit/test_runtime_policy.py) proves policy mode rejects selected non-JSON provider values. It does not recursively validate business meaning.
 - [`test_metadata_error_fails_closed_without_leaking_exception`](../../../backend/tests/unit/test_runtime_policy.py) proves malformed policy metadata blocks execution with sanitized evidence. It does not prove every handler is injection-safe.
 

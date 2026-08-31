@@ -1,6 +1,6 @@
-"""Memory API routes: tiers, context window, and checkpoints.
+"""Memory API routes: tiers, context window, and encrypted facts.
 
-Exposes the memory subsystem to the frontend dashboard.
+Exposes the supported memory subsystem to the frontend dashboard.
 """
 
 from __future__ import annotations
@@ -10,15 +10,12 @@ from typing import Any, cast
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, StrictInt
 
-from app.memory.checkpoints import CheckpointManager
 from app.memory.scoped import MemoryFact, ScopedEncryptedMemoryRepository
 from app.security.auth import get_current_user
 from app.security.dependencies import enforce_rate_limit
 from app.services.key_rotation import MemoryKeyRotationService
 
 router = APIRouter(prefix="/api/memory", tags=["memory"], dependencies=[Depends(get_current_user)])
-
-_checkpoint_mgr = CheckpointManager()
 
 
 class RotationRequest(BaseModel):
@@ -194,13 +191,3 @@ async def get_context_window() -> dict[str, Any]:
             {"label": "Tools", "tokens": 320},
         ],
     }
-
-
-@router.get("/checkpoints")
-async def list_checkpoints() -> dict[str, Any]:
-    """Return all saved checkpoints across conversations."""
-    all_cps: list[dict[str, Any]] = []
-    for cps in _checkpoint_mgr._checkpoints.values():
-        all_cps.extend(cp.to_dict() for cp in cps)
-    all_cps.sort(key=lambda c: c["created_at"], reverse=True)
-    return {"checkpoints": all_cps}
