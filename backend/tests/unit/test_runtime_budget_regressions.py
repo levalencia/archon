@@ -199,6 +199,32 @@ async def test_adversarial_text_exceeding_context_bound_never_reaches_provider()
 
 
 @pytest.mark.asyncio
+async def test_repeated_large_tool_call_id_is_counted_for_both_messages() -> None:
+    repeated_id = "é" * 50_000
+    provider = MockLLM([ModelResponse("must not run")])
+    history = [
+        Message(
+            Role.ASSISTANT,
+            "",
+            tool_calls=(ToolCall(repeated_id, "web_search", {"query": "x"}),),
+        ),
+        Message(Role.TOOL, "ok", tool_call_id=repeated_id),
+    ]
+
+    result = await AgentRuntime(
+        provider,
+        _registry({}),
+        budget=RuntimeBudget(
+            max_context_tokens=150_000,
+            context_output_reserve_tokens=500,
+        ),
+    ).run(history)
+
+    assert result.stop_reason is StopReason.CONTEXT_BUDGET_EXHAUSTED
+    assert provider.call_history == []
+
+
+@pytest.mark.asyncio
 async def test_runtime_deadline_bounds_cancellation_resistant_event_sink_before_provider() -> None:
     finished = asyncio.Event()
 
@@ -226,6 +252,36 @@ async def test_runtime_deadline_bounds_cancellation_resistant_event_sink_before_
     assert provider.call_history == []
     await asyncio.wait_for(finished.wait(), timeout=0.3)
     assert provider.call_history == []
+
+
+@pytest.mark.asyncio
+async def test_terminal_event_absorbing_cancellation_keeps_one_consistent_reason() -> None:
+    finished = asyncio.Event()
+
+    class SlowTerminalSink(RecordingEventSink):
+        async def emit(self, event) -> None:
+            if event.kind is AgentEventKind.RUN_STOPPED:
+                try:
+                    await asyncio.sleep(10)
+                except asyncio.CancelledError:
+                    await asyncio.sleep(0.08)
+                finished.set()
+            await super().emit(event)
+
+    sink = SlowTerminalSink()
+    result = await AgentRuntime(
+        MockLLM([ModelResponse("completed answer")]),
+        _registry({}),
+        events=sink,
+        budget=RuntimeBudget(max_seconds=0.01),
+    ).run([Message(Role.USER, "answer")])
+
+    assert result.stop_reason is StopReason.COMPLETED
+    assert result.error == "terminal_persistence_indeterminate"
+    await asyncio.wait_for(finished.wait(), timeout=0.3)
+    terminal = [event for event in sink.events if event.kind is AgentEventKind.RUN_STOPPED]
+    assert len(terminal) == 1
+    assert terminal[0].data["reason"] == result.stop_reason.value
 
 
 @pytest.mark.asyncio

@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.observability.cost_tracker import quote_model_call_nusd
 from app.runtime.capabilities import ProviderCapabilities
+from app.runtime.images import ImageValidationError
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall, ToolDefinition
 from app.runtime.monetary_budget import (
     BudgetRunContext,
@@ -24,8 +28,15 @@ from app.runtime.monetary_budget import (
     PricingCandidate,
     estimate_request_input_tokens,
 )
+from app.runtime.structured_output import ResponseContract
 from app.services.db_store import Base, RunRow
 from app.services.monetary_budget import ChargeState, MonetaryBudgetRepository
+
+
+def valid_image_data_uri() -> str:
+    output = io.BytesIO()
+    Image.new("RGB", (1, 1), color=(255, 0, 0)).save(output, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode("ascii")
 
 
 class FakeProvider:
@@ -120,10 +131,54 @@ def test_request_estimate_is_at_least_utf8_bytes_plus_framing(content: str) -> N
 
 def test_request_estimate_reserves_worst_case_validated_image_tokens() -> None:
     estimate = estimate_request_input_tokens(
-        [Message(Role.USER, "describe", images=("attachment://one",))], ()
+        [Message(Role.USER, "describe", images=(valid_image_data_uri(),))], ()
     )
 
     assert estimate >= 22_000 + len("describe") + 16
+
+
+def test_unvalidated_image_is_rejected_by_request_boundary() -> None:
+    with pytest.raises(ImageValidationError, match="image_encoding_invalid"):
+        estimate_request_input_tokens(
+            [Message(Role.USER, "describe", images=("attachment://untrusted",))], ()
+        )
+
+
+def test_request_estimate_counts_tool_result_id_and_response_contract() -> None:
+    repeated_id = "é" * 50_000
+    contract = ResponseContract(
+        "large-contract",
+        "1",
+        {"type": "object", "description": "x" * 5_000},
+        lambda value: value,
+    )
+    messages = [Message(Role.TOOL, "ok", tool_call_id=repeated_id)]
+
+    without_contract = estimate_request_input_tokens(messages, ())
+    with_contract = estimate_request_input_tokens(messages, (), response_contract=contract)
+
+    assert without_contract >= len(repeated_id.encode("utf-8"))
+    assert with_contract >= without_contract + 5_000
+
+
+@pytest.mark.asyncio
+async def test_large_response_contract_fails_before_ledger_or_dispatch(tmp_path: Path) -> None:
+    repo, engine = await repository(tmp_path / "large-contract.db")
+    delegate = FakeProvider()
+    budgeted = wrapper(delegate, repo, max_input=2_000)
+    contract = ResponseContract(
+        "large-contract",
+        "1",
+        {"type": "object", "description": "x" * 5_000},
+        lambda value: value,
+    )
+
+    with pytest.raises(ModelBudgetExhausted):
+        await budgeted.complete([Message(Role.USER, "small")], response_contract=contract)
+
+    assert delegate.calls == []
+    assert await repo.summary(owner_id="alice", project_id="project", run_id="run-1") is None
+    await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -295,7 +350,7 @@ async def test_capabilities_contract_tools_images_and_marker_forwarded_unchanged
     repo, engine = await repository(tmp_path / "forward.db")
     delegate = RoutedProvider()
     budgeted = wrapper(delegate, repo, max_input=30_000)
-    messages = (Message(Role.USER, "look", images=("image",)),)
+    messages = (Message(Role.USER, "look", images=(valid_image_data_uri(),)),)
     tools = (ToolDefinition("tool", input_schema={"type": "object"}),)
     required = ProviderCapabilities(images=True, native_tools=True)
     await budgeted.complete(

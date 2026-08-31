@@ -61,7 +61,7 @@ T = TypeVar("T")
 Clock = Callable[[], float]
 ResultRecorder = Callable[[str], Awaitable[None]]
 logger = structlog.get_logger()
-_RUNTIME_TERMINAL_CLEANUP_SECONDS = 0.05
+_RUNTIME_TERMINAL_CLEANUP_SECONDS = 0.025
 
 # Approval hook: (tool_name, tool_call_id, arguments) -> approved?
 ApprovalHook = Callable[[str, str, dict[str, Any]], Coroutine[Any, Any, bool]]
@@ -131,10 +131,14 @@ class _RuntimeDeadlineState:
     deadline: float
     terminal_started: bool = False
     terminal_persisted: bool = False
+    terminal_reason: StopReason | None = None
+    terminal_error: str | None = None
     content: str = ""
     iterations: int = 0
     calls: tuple[dict[str, Any], ...] = ()
     usage: TokenUsage | None = None
+    structured_output: object | None = None
+    terminal_task: asyncio.Task[None] | None = None
 
 
 _RUNTIME_DEADLINE_STATE: ContextVar[_RuntimeDeadlineState | None] = ContextVar(
@@ -308,7 +312,14 @@ class AgentRuntime:
                 context_allowance = (
                     self._budget.max_context_tokens - self._budget.context_output_reserve_tokens
                 )
-                if estimate_request_input_tokens(history, tool_definitions) > context_allowance:
+                if (
+                    estimate_request_input_tokens(
+                        history,
+                        tool_definitions,
+                        response_contract=response_contract,
+                    )
+                    > context_allowance
+                ):
                     return await self._stop(
                         StopReason.CONTEXT_BUDGET_EXHAUSTED,
                         content,
@@ -1738,42 +1749,54 @@ class AgentRuntime:
         """Return promptly and attempt terminal persistence on a separate short budget."""
 
         usage = state.usage or TokenUsage()
-        result = AgentResult(
-            state.content,
-            StopReason.TIME_BUDGET_EXHAUSTED,
-            state.iterations,
-            state.calls,
-            usage,
-            "deadline_exceeded",
-        )
         if state.terminal_started:
+            if state.terminal_task is not None and not state.terminal_task.done():
+
+                async def wait_for_existing_terminal() -> None:
+                    await asyncio.shield(state.terminal_task)
+
+                with suppress(BaseException):
+                    await await_before_deadline(
+                        wait_for_existing_terminal(),
+                        deadline=time.monotonic() + _RUNTIME_TERMINAL_CLEANUP_SECONDS,
+                        clock=time.monotonic,
+                    )
+                if not state.terminal_task.done():
+                    state.terminal_task.cancel()
+                    with suppress(BaseException):
+                        await await_before_deadline(
+                            wait_for_existing_terminal(),
+                            deadline=time.monotonic() + _RUNTIME_TERMINAL_CLEANUP_SECONDS,
+                            clock=time.monotonic,
+                        )
+            error = state.terminal_error
             if not state.terminal_persisted:
                 logger.warning(
                     "runtime_terminal_persistence_indeterminate",
                     error_type="deadline_interrupted",
-                    stop_reason=StopReason.TIME_BUDGET_EXHAUSTED.value,
+                    stop_reason=(state.terminal_reason or StopReason.TIME_BUDGET_EXHAUSTED).value,
                 )
-            return result
-
-        async def persist_terminal_state() -> None:
-            if self._result_recorder is not None:
-                await self._result_recorder(state.content)
-            await self._events.emit(
-                AgentEvent(
-                    AgentEventKind.RUN_STOPPED,
-                    state.iterations,
-                    {
-                        "reason": StopReason.TIME_BUDGET_EXHAUSTED.value,
-                        "error": "deadline_exceeded",
-                    },
-                    usage,
-                )
+                error = error or "terminal_persistence_indeterminate"
+            return AgentResult(
+                state.content,
+                state.terminal_reason or StopReason.TIME_BUDGET_EXHAUSTED,
+                state.iterations,
+                state.calls,
+                usage,
+                error,
+                state.structured_output,
             )
-            state.terminal_persisted = True
 
         try:
-            await await_before_deadline(
-                persist_terminal_state(),
+            return await await_before_deadline(
+                self._stop(
+                    StopReason.TIME_BUDGET_EXHAUSTED,
+                    state.content,
+                    state.iterations,
+                    [dict(item) for item in state.calls],
+                    usage,
+                    "deadline_exceeded",
+                ),
                 deadline=time.monotonic() + _RUNTIME_TERMINAL_CLEANUP_SECONDS,
                 clock=time.monotonic,
             )
@@ -1783,7 +1806,14 @@ class AgentRuntime:
                 error_type=type(error).__name__,
                 stop_reason=StopReason.TIME_BUDGET_EXHAUSTED.value,
             )
-        return result
+            return AgentResult(
+                state.content,
+                StopReason.TIME_BUDGET_EXHAUSTED,
+                state.iterations,
+                state.calls,
+                usage,
+                "terminal_persistence_indeterminate",
+            )
 
     def _expired(self, started_at: float) -> bool:
         return self._clock() - started_at >= self._budget.max_seconds
@@ -1831,20 +1861,43 @@ class AgentRuntime:
         if self._compliance is not None:
             content = self._compliance.enforce_output(content)
         state = _RUNTIME_DEADLINE_STATE.get()
+        terminal_task: asyncio.Task[None] | None = None
         if state is not None:
-            state.terminal_started = True
-            state.content = content
-            state.iterations = iterations
-            state.calls = tuple(calls)
-            state.usage = usage
-        if self._result_recorder is not None:
-            await self._result_recorder(content)
-        await self._emit(
-            AgentEventKind.RUN_STOPPED,
-            iterations,
-            {"reason": reason.value, "error": error},
-            usage,
-        )
+            if state.terminal_started:
+                reason = state.terminal_reason or reason
+                error = state.terminal_error
+                structured_output = state.structured_output
+                content = state.content
+                iterations = state.iterations
+                calls = [dict(item) for item in state.calls]
+                usage = state.usage or usage
+                terminal_task = state.terminal_task
+            else:
+                state.terminal_started = True
+                state.terminal_reason = reason
+                state.terminal_error = error
+                state.structured_output = structured_output
+                state.content = content
+                state.iterations = iterations
+                state.calls = tuple(calls)
+                state.usage = usage
+
+        async def persist_terminal() -> None:
+            if self._result_recorder is not None:
+                await self._result_recorder(content)
+            await self._emit(
+                AgentEventKind.RUN_STOPPED,
+                iterations,
+                {"reason": reason.value, "error": error},
+                usage,
+            )
+
+        if terminal_task is None:
+            terminal_task = asyncio.create_task(persist_terminal())
+            terminal_task.add_done_callback(consume_detached_task)
+            if state is not None:
+                state.terminal_task = terminal_task
+        await asyncio.shield(terminal_task)
         if state is not None:
             state.terminal_persisted = True
         return AgentResult(

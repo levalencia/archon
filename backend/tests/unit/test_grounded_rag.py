@@ -647,3 +647,47 @@ async def test_grounded_deadline_bounds_slow_run_creation_before_provider(
     assert provider.calls == 0
     await asyncio.wait_for(finished.wait(), timeout=0.3)
     assert provider.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_grounded_terminal_persistence_race_keeps_one_completed_reason(
+    harness: Harness,
+) -> None:
+    original_append = harness.runs.append
+    terminal_records: list[str] = []
+    terminal_finished = asyncio.Event()
+
+    async def slow_terminal_append(**kwargs: Any) -> Any:
+        if kwargs.get("kind") == "run_stopped":
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.15)
+            terminal_records.append(str(kwargs["payload"]["reason"]))
+            terminal_finished.set()
+            return None
+        return await original_append(**kwargs)
+
+    harness.runs.append = slow_terminal_append  # type: ignore[method-assign]
+    workflow = GroundedDocumentWorkflow(
+        vector_store=FakeVectors([_row()]),  # type: ignore[arg-type]
+        embedding_service=FakeEmbeddings(),  # type: ignore[arg-type]
+        model_provider=FakeProvider('{"claims":[]}'),
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+        deadline_seconds=0.1,
+    )
+
+    result = await workflow.run(
+        "What does Alpha use?",
+        owner_id="alice",
+        project_id="project-a",
+        correlation_id="terminal-race",
+        document_id=None,
+        document_ids={"doc-1"},
+    )
+
+    assert result.answer
+    await asyncio.wait_for(terminal_finished.wait(), timeout=0.5)
+    assert terminal_records == ["completed"]

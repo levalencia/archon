@@ -24,6 +24,7 @@ from app.delegation import (
     VerificationReasonCode,
     issue_verifier_delegation,
 )
+from app.runtime.events import AgentEventKind
 from app.runtime.models import Message, ModelResponse, TokenUsage, ToolDefinition
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.db_store import DatabaseStore, RunRow, RuntimeEventRow
@@ -299,6 +300,51 @@ async def test_slow_child_run_creation_is_bounded_before_provider(ledger: Any) -
     assert provider.calls == []
     await asyncio.wait_for(finished.wait(), timeout=0.8)
     assert provider.calls == []
+
+
+@pytest.mark.asyncio
+async def test_terminal_persistence_race_keeps_one_verifier_sequence(ledger: Any) -> None:
+    _, repository = ledger
+    records: list[tuple[str, str | None]] = []
+    terminal_finished = asyncio.Event()
+
+    async def recording_append(**kwargs: Any) -> None:
+        kind = str(kwargs["kind"])
+        payload = kwargs["payload"]
+        if kind == AgentEventKind.DELEGATION_COMPLETED.value:
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.15)
+        records.append((kind, payload.get("status") or payload.get("reason")))
+        if kind == AgentEventKind.RUN_STOPPED.value:
+            terminal_finished.set()
+
+    async def recording_finalize(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        records.append(("finalize", None))
+
+    repository.append = recording_append  # type: ignore[method-assign]
+    repository.finalize_metadata = recording_finalize  # type: ignore[method-assign]
+    provider = Provider([response()])
+    request = make_request(
+        child_id="terminal-race-child",
+        budget=VerificationBudget(2_000, 10, 0.1),
+    )
+
+    result = await EvidenceVerifierSpecialist(provider, repository, PersistenceRedactor()).verify(
+        request
+    )
+
+    assert result.status is ChildVerificationStatus.COMPLETED
+    await asyncio.wait_for(terminal_finished.wait(), timeout=0.5)
+    await asyncio.sleep(0)
+    assert records == [
+        (AgentEventKind.DELEGATION_REQUESTED.value, "requested"),
+        (AgentEventKind.DELEGATION_COMPLETED.value, "completed"),
+        (AgentEventKind.RUN_STOPPED.value, "completed"),
+        ("finalize", None),
+    ]
 
 
 @pytest.mark.asyncio

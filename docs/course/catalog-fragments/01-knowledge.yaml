@@ -13,7 +13,7 @@
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
     - docs/evidence/live-rag-hardening.json
-  limitations: "Sync and SSE share compaction with output reserve; the pre-dispatch fallback bound counts each UTF-8 byte as one token plus framing and reserves 22k per validated image. It is deliberately conservative rather than provider-exact, and provenance remains initial-context rather than per-call."
+  limitations: "The fail-closed bound covers roles/content, image refs, tool_call_id, tool-call JSON, tool definitions, response format and response-contract schema; images are revalidated and reserve 22k tokens each. It is deliberately conservative rather than provider-exact, and provenance remains initial-context rather than per-call."
 
 - id: conversation-lifecycle
   title: "Conversation lifecycle"
@@ -228,7 +228,7 @@
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
     - docs/evidence/live-rag-hardening.json
-  limitations: "Managed chat, RAG and verifier operations—including run/event persistence and approval preparation—share absolute monotonic deadlines. Terminal persistence has a separate bounded cleanup and logs indeterminate state if it cannot finish; detached work may still consume resources or finish an already-started side effect."
+  limitations: "Managed chat, RAG and verifier operations—including run/event persistence and approval preparation—share absolute monotonic deadlines. One shielded first-terminal-wins task prevents competing terminal sequences; bounded cleanup logs indeterminate state if it cannot finish. Detached non-terminal work may still consume resources or finish an already-started side effect."
 
 - id: circuit-breaker
   title: "Circuit breaker"

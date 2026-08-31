@@ -8,6 +8,7 @@ import json
 import re
 import uuid
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from dataclasses import asdict, dataclass, field
 from time import monotonic, perf_counter
 from typing import Any
@@ -28,7 +29,7 @@ from app.delegation import (
     issue_verifier_delegation,
 )
 from app.research.models import Claim
-from app.runtime.deadline import DeadlineExceededError, await_before_deadline
+from app.runtime.deadline import DeadlineExceededError, await_before_deadline, consume_detached_task
 from app.runtime.models import Message, Role, TokenUsage
 from app.runtime.ports import ModelProvider
 from app.runtime.structured_output import ResponseContract, StructuredOutputError
@@ -38,7 +39,7 @@ from app.services.run_ledger import RunRepository
 from app.services.vector_store import VectorStoreProtocol
 
 _NO_EVIDENCE_ANSWER = "I could not find relevant information to answer your question."
-_TERMINAL_CLEANUP_SECONDS = 0.05
+_TERMINAL_CLEANUP_SECONDS = 0.025
 logger = structlog.get_logger()
 _MAX_QUOTE = 1_200
 _MAX_MODEL_OUTPUT = 65_536
@@ -157,6 +158,15 @@ class GroundedResult:
             "verification_latency_ms": self.verification_latency_ms,
             "verification_rejected_count": self.verification_rejected_count,
         }
+
+
+@dataclass(slots=True)
+class _GroundedTerminalState:
+    started: bool = False
+    persisted: bool = False
+    reason: str | None = None
+    result: GroundedResult | None = None
+    task: asyncio.Task[None] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,6 +311,7 @@ class GroundedDocumentWorkflow:
             provider=self._provider_name,
             model=self._model_name,
         )
+        terminal = _GroundedTerminalState()
         try:
             return await await_before_deadline(
                 self._run(
@@ -310,16 +321,59 @@ class GroundedDocumentWorkflow:
                     document_id=document_id,
                     document_ids=document_ids,
                     identity=identity,
+                    terminal=terminal,
                     started=started,
                     deadline=deadline,
                 ),
                 deadline=deadline,
             )
         except DeadlineExceededError:
-            await self._bounded_terminal_cleanup(identity, reason="deadline_exceeded", error=True)
+            if terminal.started:
+                if terminal.task is not None and not terminal.task.done():
+
+                    async def wait_for_existing_terminal() -> None:
+                        await asyncio.shield(terminal.task)
+
+                    with suppress(BaseException):
+                        await await_before_deadline(
+                            wait_for_existing_terminal(),
+                            deadline=monotonic() + _TERMINAL_CLEANUP_SECONDS,
+                        )
+                    if not terminal.task.done():
+                        terminal.task.cancel()
+                        with suppress(BaseException):
+                            await await_before_deadline(
+                                wait_for_existing_terminal(),
+                                deadline=monotonic() + _TERMINAL_CLEANUP_SECONDS,
+                            )
+                if not terminal.persisted:
+                    logger.warning(
+                        "grounded_run_terminal_persistence_indeterminate",
+                        run_id=identity.run_id,
+                        reason=terminal.reason,
+                        error_type="deadline_interrupted",
+                    )
+                if terminal.result is not None:
+                    return terminal.result
+                if terminal.reason == "provider_error":
+                    raise GroundedProviderError("Grounded answer unavailable") from None
+            else:
+                await self._bounded_terminal_cleanup(
+                    identity, terminal, reason="deadline_exceeded", error=True
+                )
             raise GroundedDeadlineExceededError from None
         except asyncio.CancelledError:
-            await self._bounded_terminal_cleanup(identity, reason="cancelled", error=False)
+            if not terminal.started:
+                await self._bounded_terminal_cleanup(
+                    identity, terminal, reason="cancelled", error=False
+                )
+            elif not terminal.persisted:
+                logger.warning(
+                    "grounded_run_terminal_persistence_indeterminate",
+                    run_id=identity.run_id,
+                    reason=terminal.reason,
+                    error_type="cancelled",
+                )
             raise
 
     async def _run(
@@ -331,6 +385,7 @@ class GroundedDocumentWorkflow:
         document_id: str | None,
         document_ids: set[str],
         identity: _RunIdentity,
+        terminal: _GroundedTerminalState,
         started: float,
         deadline: float,
     ) -> GroundedResult:
@@ -379,6 +434,7 @@ class GroundedDocumentWorkflow:
                     usage=usage,
                     provider_calls=0,
                     deadline=deadline,
+                    terminal=terminal,
                 )
 
             parsed, usage, provider_calls = await self._complete_claims(
@@ -418,11 +474,18 @@ class GroundedDocumentWorkflow:
                 verification_latency_ms=child_latency_ms,
                 verification_rejected_count=child_rejected_count,
                 deadline=deadline,
+                terminal=terminal,
             )
         except DeadlineExceededError:
             raise
         except Exception as exc:
-            await self._stop(identity, usage=usage, error=True, reason="provider_error")
+            await self._stop(
+                identity,
+                terminal,
+                usage=usage,
+                error=True,
+                reason="provider_error",
+            )
             raise GroundedProviderError("Grounded answer unavailable") from exc
 
     async def _complete_claims(
@@ -474,6 +537,7 @@ class GroundedDocumentWorkflow:
         usage: TokenUsage,
         provider_calls: int,
         deadline: float,
+        terminal: _GroundedTerminalState,
         child_run_id: str | None = None,
         verification_status: str | None = None,
         verification_tokens: int = 0,
@@ -526,7 +590,6 @@ class GroundedDocumentWorkflow:
         )
         if monotonic() >= deadline:
             raise DeadlineExceededError
-        await self._stop(identity, usage=usage, error=False, reason="completed")
         latency_ms = round((perf_counter() - started) * 1000, 3)
         scores = [item.score for item in evidence]
         sources = tuple(
@@ -539,7 +602,7 @@ class GroundedDocumentWorkflow:
             }
             for item in evidence
         )
-        return GroundedResult(
+        result = GroundedResult(
             run_id=identity.run_id,
             answer=answer,
             sources=sources,
@@ -571,6 +634,15 @@ class GroundedDocumentWorkflow:
             verification_latency_ms=verification_latency_ms,
             verification_rejected_count=verification_rejected_count,
         )
+        terminal.result = result
+        await self._stop(
+            identity,
+            terminal,
+            usage=usage,
+            error=False,
+            reason="completed",
+        )
+        return result
 
     async def _verify_with_child(
         self,
@@ -685,18 +757,38 @@ class GroundedDocumentWorkflow:
         )
 
     async def _bounded_terminal_cleanup(
-        self, identity: _RunIdentity, *, reason: str, error: bool
+        self,
+        identity: _RunIdentity,
+        terminal: _GroundedTerminalState,
+        *,
+        reason: str,
+        error: bool,
     ) -> None:
+        if terminal.started:
+            if not terminal.persisted:
+                logger.warning(
+                    "grounded_run_terminal_persistence_indeterminate",
+                    run_id=identity.run_id,
+                    reason=terminal.reason,
+                    error_type="terminal_already_started",
+                )
+            return
         try:
             await await_before_deadline(
-                self._stop(identity, usage=TokenUsage(), error=error, reason=reason),
+                self._stop(
+                    identity,
+                    terminal,
+                    usage=TokenUsage(),
+                    error=error,
+                    reason=reason,
+                ),
                 deadline=monotonic() + _TERMINAL_CLEANUP_SECONDS,
             )
         except BaseException as cleanup_error:
             logger.warning(
                 "grounded_run_terminal_persistence_indeterminate",
                 run_id=identity.run_id,
-                reason=reason,
+                reason=terminal.reason or reason,
                 error_type=type(cleanup_error).__name__,
             )
 
@@ -704,17 +796,36 @@ class GroundedDocumentWorkflow:
         await self._runs.append(**asdict(identity), kind=kind, iteration=1, payload=payload)
 
     async def _stop(
-        self, identity: _RunIdentity, *, usage: TokenUsage, error: bool, reason: str
+        self,
+        identity: _RunIdentity,
+        terminal: _GroundedTerminalState,
+        *,
+        usage: TokenUsage,
+        error: bool,
+        reason: str,
     ) -> None:
-        await self._runs.append(
-            **asdict(identity),
-            kind="run_stopped",
-            iteration=1,
-            payload={"reason": reason, "error": error},
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            total_tokens=usage.total_tokens,
-        )
+        if terminal.started:
+            if terminal.task is not None:
+                await asyncio.shield(terminal.task)
+            return
+        terminal.started = True
+        terminal.reason = reason
+
+        async def persist_terminal() -> None:
+            await self._runs.append(
+                **asdict(identity),
+                kind="run_stopped",
+                iteration=1,
+                payload={"reason": reason, "error": error},
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                total_tokens=usage.total_tokens,
+            )
+            terminal.persisted = True
+
+        terminal.task = asyncio.create_task(persist_terminal())
+        terminal.task.add_done_callback(consume_detached_task)
+        await asyncio.shield(terminal.task)
 
 
 def _prompt(question: str, evidence: tuple[DocumentEvidence, ...]) -> tuple[Message, ...]:

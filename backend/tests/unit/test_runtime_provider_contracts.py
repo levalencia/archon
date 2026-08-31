@@ -23,6 +23,11 @@ from app.runtime import (
 from app.runtime.capabilities import ProviderCapabilities, UnsupportedProviderCapability
 from app.runtime.structured_output import ResponseContract
 
+_VALID_IMAGE = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+)
+
 
 class NoTools:
     def definitions(self):
@@ -160,7 +165,7 @@ async def test_runtime_maps_combined_no_compatible_fallback_to_capability_reject
     chain = FallbackLLMChain([tools_only, images_only])
 
     result = await AgentRuntime(chain, DefinedTools(), events=sink).run(
-        [Message(Role.USER, "inspect", images=("safe-image",))]
+        [Message(Role.USER, "inspect", images=(_VALID_IMAGE,))]
     )
 
     assert result.stop_reason is StopReason.PROVIDER_CAPABILITY_UNSUPPORTED
