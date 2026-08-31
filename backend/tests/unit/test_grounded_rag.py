@@ -567,11 +567,13 @@ async def test_owner_scope_restart_ledger_and_no_raw_database_content(harness: H
 async def test_grounded_deadline_detaches_cancellation_resistant_provider(
     harness: Harness,
 ) -> None:
+    started_provider = asyncio.Event()
     finished = asyncio.Event()
 
     class StubbornProvider:
         async def complete(self, messages: Any, tools: Any = (), **kwargs: Any) -> Any:
             del messages, tools, kwargs
+            started_provider.set()
             try:
                 await asyncio.sleep(10)
             except asyncio.CancelledError:
@@ -586,11 +588,11 @@ async def test_grounded_deadline_detaches_cancellation_resistant_provider(
         runs=harness.runs,
         provider="fake-provider",
         model="fake-model",
-        deadline_seconds=0.01,
+        deadline_seconds=0.5,
     )
     started = asyncio.get_running_loop().time()
-    with pytest.raises(GroundedDeadlineExceededError, match="grounded_deadline_exceeded"):
-        await workflow.run(
+    run_task = asyncio.create_task(
+        workflow.run(
             "What does Alpha use?",
             owner_id="alice",
             project_id="project-a",
@@ -598,8 +600,14 @@ async def test_grounded_deadline_detaches_cancellation_resistant_provider(
             document_id=None,
             document_ids={"doc-1"},
         )
-    assert asyncio.get_running_loop().time() - started < 0.04
-    await asyncio.wait_for(finished.wait(), timeout=0.2)
+    )
+    await asyncio.wait_for(started_provider.wait(), timeout=1.0)
+    with pytest.raises(GroundedDeadlineExceededError, match="grounded_deadline_exceeded"):
+        await run_task
+    assert asyncio.get_running_loop().time() - started < 0.6
+    # Full Linux coverage runs can delay scheduling of the already-detached task;
+    # this wait observes eventual exception consumption and is not the request deadline.
+    await asyncio.wait_for(finished.wait(), timeout=1.0)
     run = (await harness.runs.list("alice")).items[0]
     assert run.status == "failed"
     assert run.stop_reason == "deadline_exceeded"
