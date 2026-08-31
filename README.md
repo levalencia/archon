@@ -36,7 +36,7 @@ Archon is a serious local portfolio system. It is not a public production servic
 | Frontend | Svelte **0 errors / 0 warnings**, **48 Vitest**, production build, **30 Playwright** |
 | Capability manifest | **16 entries validated** |
 | Portfolio benchmark | **12 scenarios, 120/120 iterations passed**, zero external cost |
-| Disaster recovery | **RPO 0 records**, measured **RTO 24.787 seconds** |
+| Disaster recovery | **0 selected-record differences at snapshot**, observed **restore-to-ready 24.787 seconds** |
 | Live provider evidence | Foundry Claude tool call, cache-metric transport, and multimodal probe passed |
 | Public/cloud deployment | **No. Deliberately deferred.** |
 

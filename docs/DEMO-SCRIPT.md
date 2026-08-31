@@ -93,9 +93,9 @@ Say:
 
 Then show DR metrics:
 
-- backup: 0.343 s;
-- clean restore RTO: 21.586 s;
-- RPO: 0 record differences at snapshot;
+- backup: 0.69 s;
+- observed clean restore-to-ready: 24.787 s;
+- zero selected-record differences at the snapshot boundary;
 - restored conversation, run/events, document/chunk and terminal approval.
 
 Clarify that these are one development-machine observation, not production SLOs.

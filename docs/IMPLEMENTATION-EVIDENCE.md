@@ -89,7 +89,7 @@ S8.10 local acceptance is complete for the declared local-only target. This does
 |---|---|
 | Local Compose smoke | Backend/frontend/gateway/PostgreSQL/Redis/OTEL healthy; auth, migration 08, metrics, and exported `agent.run` span verified |
 | DR focused tests | 18 passed before S7.2 commit |
-| DR real run | Backup 0.343 s; RTO 21.586 s; RPO 0 records at snapshot; exact evidence restored |
+| DR real run | Backup 0.69 s; observed restore-to-ready 24.787 s; zero selected-record differences at snapshot; exact evidence restored |
 | Benchmark focused tests | 6 passed, including direct CLI subprocess |
 | Benchmark strict Mypy | Pass for `scripts/portfolio_benchmark.py` |
 | Benchmark real run | 30/30 deterministic scenario iterations, 420 synthetic tokens, external cost $0, workspace unchanged |
@@ -143,7 +143,7 @@ The verified target built and started digest-pinned app/dependency images, migra
 
 ### Disaster recovery
 
-The DR run created synthetic user, conversation, run/events, document/chunk and approved terminal approval data. It produced a checksummed custom PostgreSQL dump, removed the source volume, restored into a fresh Compose project, started the application, authenticated with the restored account, and compared exact IDs/counts/hashes. The final development-machine observation was backup 0.343 s, RTO 21.586 s, and zero changed records at the backup boundary.
+The DR run created synthetic user, conversation, run/events, document/chunk and approved terminal approval data. It produced a checksummed custom PostgreSQL dump, removed the source volume, restored into a fresh Compose project, started the application, authenticated with the restored account, and compared exact IDs/counts/hashes. The final development-machine observation was backup 0.69 s, restore-to-ready 24.787 s, and zero selected-record differences at the backup boundary.
 
 ### Portfolio benchmark
 
