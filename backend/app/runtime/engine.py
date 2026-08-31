@@ -20,7 +20,7 @@ from app.runtime.capabilities import (
     UnsupportedProviderCapability,
     get_provider_capabilities,
 )
-from app.runtime.deadline import DeadlineExceededError, await_before_deadline
+from app.runtime.deadline import DeadlineExceededError, await_before_deadline, consume_detached_task
 from app.runtime.events import AgentEvent, AgentEventKind, EventSink, NullEventSink
 from app.runtime.models import Message, Role, TokenUsage, ToolCall
 from app.runtime.monetary_budget import (
@@ -1299,7 +1299,7 @@ class AgentRuntime:
             )
             if authorization_task not in done or loop.time() >= deadline:
                 authorization_task.cancel()
-                authorization_task.add_done_callback(self._consume_background_task)
+                authorization_task.add_done_callback(consume_detached_task)
                 await self._emit_approval_failure(
                     event_call, iteration, arguments_hash, "approval_timeout"
                 )
@@ -1311,7 +1311,7 @@ class AgentRuntime:
         except asyncio.CancelledError:
             if not authorization_task.done():
                 authorization_task.cancel()
-                authorization_task.add_done_callback(self._consume_background_task)
+                authorization_task.add_done_callback(consume_detached_task)
             raise
         except Exception:
             await self._emit_approval_failure(

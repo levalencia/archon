@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.runtime.capabilities import ProviderCapabilities
-from app.runtime.engine import AgentRuntime, StopReason
+from app.runtime.engine import AgentRuntime, RuntimeBudget, StopReason
 from app.runtime.events import AgentEventKind, RecordingEventSink
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage, ToolCall, ToolDefinition
 from app.runtime.structured_output import ResponseContract
@@ -103,9 +103,9 @@ async def test_structured_output_is_remediated_before_validation() -> None:
         {"type": "object", "required": ["answer"]},
         lambda value: value,
     )
-    result = await AgentRuntime(provider, _NoTools()).run(
-        [Message(Role.USER, "safe")], response_contract=contract
-    )
+    result = await AgentRuntime(
+        provider, _NoTools(), budget=RuntimeBudget(max_structured_retries=0)
+    ).run([Message(Role.USER, "safe")], response_contract=contract)
 
     assert result.stop_reason is StopReason.STRUCTURED_OUTPUT_INVALID
     assert result.structured_output is None

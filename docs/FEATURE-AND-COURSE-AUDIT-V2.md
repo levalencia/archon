@@ -4,6 +4,8 @@
 **Audited revision:** `27952f4`  
 **Purpose:** compare Archon feature-by-feature with Hermes Agent, OpenAI Codex, Claude Code, OpenCode, and the AIAMastery curriculum. This is a capability audit, not a production-readiness audit.
 
+> **Historical snapshot — superseded:** These labels describe revision `27952f4` only. Current status lives in `docs/course/concept-catalog.yaml`, `docs/implementation/CAPABILITY-ACCEPTANCE.yaml`, and the generated Studio manifest. Former `Partial` labels are rendered below as `Historical gap` so they cannot be mistaken for current status.
+
 ## Why this v2 exists
 
 The prior `FEATURE_MATRIX.md` is not a defensible audit:
@@ -20,7 +22,7 @@ This audit uses six Archon states:
 | State | Meaning |
 |---|---|
 | **Strong** | Meaningful implementation is wired into a live path, tested, and demonstrable |
-| **Partial** | Useful implementation exists, but integration, safety, persistence, or UX is incomplete |
+| **Historical gap** | Useful implementation exists, but integration, safety, persistence, or UX is incomplete |
 | **Scaffold** | Interface/route/class exists, but behavior is mock, stub, placeholder, or test-only |
 | **Missing** | No meaningful implementation |
 | **Configurable** | Code can activate it, but the audited demo/runtime was not configured to use it |
@@ -39,14 +41,14 @@ Legend: `●` documented capability, `◐` limited/scope-specific, `—` not a c
 | Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Agent execution loop | ● | ● | ● | ● | **Strong** | Typed loop with explicit stop reasons and budgets |
-| Native structured tool calls | ● | ● | ● | ● | **Partial** | Native for Anthropic/Foundry; OpenAI/Ollama degrade to text-only adapter |
+| Native structured tool calls | ● | ● | ● | ● | **Historical gap** | Native for Anthropic/Foundry; OpenAI/Ollama degrade to text-only adapter |
 | Streaming response/events | ● | ● | ● | ● | **Strong** | Live SSE with model/tool/progress events |
 | Iteration/tool/time/token budgets | ● | ● | ● | ◐ | **Strong** for primary runtime | Main loop enforces budgets; specialist budget does not |
-| Cancellation | ● | ● | ● | ● | **Partial** | Browser abort exists; durable server-side cancellation state is incomplete |
-| Provider-neutral abstraction | ● | — | ◐ | ● | **Partial** | Protocol/factory exists, but provider capability parity is not real |
-| Provider fallback | ◐ | — | — | ◐ | **Partial** | Fallback exists but loses typed tools and returns text errors |
-| Structured output | ● | ● | ● | ● | **Partial** | `/json` instruction/prefill; no schema validation or guaranteed parse |
-| Prompt caching | ● | ● | ● | ◐ | **Partial** | Anthropic cache-control emitted; no hit/savings verification |
+| Cancellation | ● | ● | ● | ● | **Historical gap** | Browser abort exists; durable server-side cancellation state is incomplete |
+| Provider-neutral abstraction | ● | — | ◐ | ● | **Historical gap** | Protocol/factory exists, but provider capability parity is not real |
+| Provider fallback | ◐ | — | — | ◐ | **Historical gap** | Fallback exists but loses typed tools and returns text errors |
+| Structured output | ● | ● | ● | ● | **Historical gap** | `/json` instruction/prefill; no schema validation or guaranteed parse |
+| Prompt caching | ● | ● | ● | ◐ | **Historical gap** | Anthropic cache-control emitted; no hit/savings verification |
 | Reflexion/self-correction | ● | ◐ | ● | ◐ | **Strong/limited** | Tool errors return to model; not a general reflection/eval loop |
 
 ### Recommendation
@@ -58,13 +60,13 @@ Do not add providers. First implement a provider capability matrix and typed fal
 | Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Persistent session history | ● | ● | ● | ● | **Strong** | Conversation messages survive restart |
-| Resume a session | ● | ● | ● | ● | **Partial** | Messages reload; run evidence does not |
+| Resume a session | ● | ● | ● | ● | **Historical gap** | Messages reload; run evidence does not |
 | Fork/branch from prior state | — | ● | ● | ◐ undo/redo | **Missing** | No run fork semantics |
-| Context compaction | ● | ● | ● | ● | **Partial** | Code exists; coverage and effective live behavior need stronger proof |
-| Project instructions | ● skills/memory | ● `AGENTS.md` | ● `CLAUDE.md` | ● `AGENTS.md` | **Partial** | Skills are injected; precedence/effective-context view is incomplete |
-| Durable user/project memory | ● | ◐ | ● auto-memory | ◐ instructions | **Partial/unsafe** | Global plaintext memory is cross-user and lacks provenance |
+| Context compaction | ● | ● | ● | ● | **Historical gap** | Code exists; coverage and effective live behavior need stronger proof |
+| Project instructions | ● skills/memory | ● `AGENTS.md` | ● `CLAUDE.md` | ● `AGENTS.md` | **Historical gap** | Skills are injected; precedence/effective-context view is incomplete |
+| Durable user/project memory | ● | ◐ | ● auto-memory | ◐ instructions | **Historical gap/unsafe** | Global plaintext memory is cross-user and lacks provenance |
 | Memory provenance/scope/expiry | ◐ | ◐ | ◐ | ◐ | **Missing** | No owner/source/expiry contract for persistent facts |
-| Inspect effective context | ● usage/search | ◐ | ● | ◐ | **Partial** | Live token estimate exists, but hardcoded Memory UI and incomplete provenance |
+| Inspect effective context | ● usage/search | ◐ | ● | ◐ | **Historical gap** | Live token estimate exists, but hardcoded Memory UI and incomplete provenance |
 | Checkpoint conversation state | ◐ session history | ● fork/history | ● checkpoint/rewind | ● undo/redo | **Scaffold** | Checkpoint manager exists; UI/API response shape is broken and not run-integrated |
 | Deterministic read-only replay | — | — | — | — | **Missing** | Messages reload, trajectory disappears |
 
@@ -76,17 +78,17 @@ Archon's unique opportunity is stronger than competitors: expose exact instructi
 
 | Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
-| `allow / ask / deny` policy | ● | ● | ● | ● | **Partial** | `requires_approval` boolean, not a full policy engine |
+| `allow / ask / deny` policy | ● | ● | ● | ● | **Historical gap** | `requires_approval` boolean, not a full policy engine |
 | Pattern/path-specific rules | ● | ● | ● | ● | **Missing** | Workspace read boundary exists, but no general pattern policy |
 | Approval scopes: once/session/persistent | ● | ● | ● | ● | **Missing** | Single yes/no decision only |
-| Human approval UI | ● | ● | ● | ● | **Partial/unsafe** | SSE UI exists; sync path bypasses and ownership is missing |
+| Human approval UI | ● | ● | ● | ● | **Historical gap/unsafe** | SSE UI exists; sync path bypasses and ownership is missing |
 | Approval audit receipt | ● | ● | ● hooks | ◐ | **Missing** | Decision is transient and not owner-scoped/persisted |
 | OS/container sandbox | ◐ Docker | ● | ◐ | — | **False claim** | Host subprocess execution is called sandboxed but is not isolated |
 | Worktree/disposable workspace | — | ● | ◐ | — | **Missing** | No per-run filesystem isolation |
-| Filesystem scope | ● | ● | ● | ● | **Partial** | `read_file` boundary is useful; shell/Python can bypass it |
+| Filesystem scope | ● | ● | ● | ● | **Historical gap** | `read_file` boundary is useful; shell/Python can bypass it |
 | Network scope | ● policy | ● sandbox | ● permissions/hooks | ● permissions | **Missing** | No per-run network policy |
-| PII controls | — | — | — | — | **Partial** | Detector exists, but raw user input is persisted first |
-| API auth/ownership | ◐ gateway | ◐ account/workspace | ◐ enterprise | ◐ server | **Partial/strong core** | Conversations/artifacts strong; memory/tasks/MCP/approvals have gaps |
+| PII controls | — | — | — | — | **Historical gap** | Detector exists, but raw user input is persisted first |
+| API auth/ownership | ◐ gateway | ◐ account/workspace | ◐ enterprise | ◐ server | **Historical gap/strong core** | Conversations/artifacts strong; memory/tasks/MCP/approvals have gaps |
 | Rate limiting | ◐ gateway | ◐ cloud | ◐ service | ◐ server | **Scaffold** | Class/tests exist; not in live middleware/routes |
 
 ### Recommendation
@@ -98,16 +100,16 @@ This is the highest-value gap for employment: model Archon after explicit compet
 | Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Tool registry/contracts | ● | ● | ● | ● | **Strong** | Typed definitions, schemas, execution records |
-| Skills/reusable procedures | ● | ● | ● | ● | **Partial/strong** | Search/injection/admin exist; provenance/version/permissions are weak |
+| Skills/reusable procedures | ● | ● | ● | ● | **Historical gap/strong** | Search/injection/admin exist; provenance/version/permissions are weak |
 | Real MCP client/server integration | ● | ● | ● | ● | **Scaffold** | JSON-RPC route exists; tools are explicit stubs and public |
 | MCP OAuth/scoped configuration | ● | ● | ● | ● | **Missing** | No real server lifecycle, OAuth, inventory, or per-tool permission |
 | Web search | ● | ● | ● | ● | **Strong** | Brave-backed live search observed |
-| Claim-level citations/evidence | ◐ | ◐ | ◐ | ◐ | **Partial** | Source list exists; live answer verification is not consistently claim-level |
-| File read/write | ● | ● | ● | ● | **Partial** | Useful boundaries for read/write; approval model is unsafe |
-| Terminal/shell | ● | ● | ● | ● | **Partial/unsafe** | Real host shell with blocklist, not isolation |
-| Python/code execution | ● | ● | ● | ● | **Partial/unsafe** | Host Python subprocess, no enforced memory/network/filesystem sandbox |
+| Claim-level citations/evidence | ◐ | ◐ | ◐ | ◐ | **Historical gap** | Source list exists; live answer verification is not consistently claim-level |
+| File read/write | ● | ● | ● | ● | **Historical gap** | Useful boundaries for read/write; approval model is unsafe |
+| Terminal/shell | ● | ● | ● | ● | **Historical gap/unsafe** | Real host shell with blocklist, not isolation |
+| Python/code execution | ● | ● | ● | ● | **Historical gap/unsafe** | Host Python subprocess, no enforced memory/network/filesystem sandbox |
 | Streaming tool progress | ● | ● | ● | ● | **Strong** | SSE tool progress and sources exist |
-| Multimodal input | ● | ● | ● | ● | **Partial** | Plumbing/tests exist; live E2E provider proof is weak |
+| Multimodal input | ● | ● | ● | ● | **Historical gap** | Plumbing/tests exist; live E2E provider proof is weak |
 | Background jobs | ● cron | ● cloud tasks | ● background agents | ● sessions/tasks | **Scaffold** | Public placeholder task queue; no durable agent work |
 | Scheduled automations | ● | ● | ◐ | ◐ | **Missing / defer** | Do not add until isolation, idempotency, approvals, and replay are trustworthy |
 
@@ -115,14 +117,14 @@ This is the highest-value gap for employment: model Archon after explicit compet
 
 | Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
-| Specialist/subagent delegation | ● | ● | ● | ● | **Partial** | Four specialist classes and route exist |
+| Specialist/subagent delegation | ● | ● | ● | ● | **Historical gap** | Four specialist classes and route exist |
 | Independent child context | ● | ● | ● | ● | **Missing** | Specialists are serial calls in one request context |
 | Child-specific tools/policy/model | ● | ● | ● | ● | **Scaffold** | Classes support some fields; live route does not activate security contracts |
 | Bounded concurrency | ● | ● | ● | ◐ | **Missing** | Pipeline is sequential |
 | Parent-child trace graph | ◐ | ◐ | ◐ | ◐ | **Missing** | No durable delegation DAG in Workbench |
-| Structured child result contract | ● | ● | ● | ● | **Partial** | Dict result exists, but no validated schema integrated with primary runtime |
+| Structured child result contract | ● | ● | ● | ● | **Historical gap** | Dict result exists, but no validated schema integrated with primary runtime |
 | Worktree isolation per child | — | ● | ◐ | — | **Missing** | No workspace lineage/diff |
-| Retry/fallback per specialist | ● | ● | ● | ◐ | **Partial** | Retry exists; fallback can silently approve skipped validation |
+| Retry/fallback per specialist | ● | ● | ● | ◐ | **Historical gap** | Retry exists; fallback can silently approve skipped validation |
 | Per-agent token/cost budgets | ● | ● | ● | ◐ | **Scaffold** | Tokens recorded after calls; budget check is not enforced |
 | Real agentic RAG delegation | — | — | — | — | **Scaffold** | Retriever is another LLM prompt, not RAG/search |
 
@@ -135,32 +137,32 @@ Do not add dynamic spawning yet. First make one specialist run measurable: indep
 | Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Live ordered event timeline | ◐ | ● hooks/events | ● hooks | ● plugins/events | **Strong live / weak durable** | Excellent during run; disappears on reload |
-| Durable owner-scoped run ledger | ◐ sessions | ● history | ● sessions/checkpoints | ● sessions | **Partial** | Runtime events persisted, but no owner-scoped API/UI trajectory |
-| Logs/metrics/correlation IDs | ● | ● | ● | ● | **Strong/partial** | Runtime logs and metrics exist; some dashboards are fake or admin-inaccessible |
+| Durable owner-scoped run ledger | ◐ sessions | ● history | ● sessions/checkpoints | ● sessions | **Historical gap** | Runtime events persisted, but no owner-scoped API/UI trajectory |
+| Logs/metrics/correlation IDs | ● | ● | ● | ● | **Strong/historical gap** | Runtime logs and metrics exist; some dashboards are fake or admin-inaccessible |
 | OTEL export | — | ◐ | ◐ | ◐ | **Configurable** | Code/tests exist; audited demo has exporter disabled |
-| Cost/usage | ● usage | ● usage | ● usage | ● usage | **Partial** | Per-response estimate; tracker is recreated per request |
-| Quality eval scenarios | — | ● workflows | ◐ hooks/tests | ◐ | **Scaffold/partial** | Deterministic research cases exist; UI batch harness uses a mock agent |
-| Safety/approval evals | ◐ | ● | ● | ◐ | **Partial** | Security probes exist; no integrated scenario comparison |
+| Cost/usage | ● usage | ● usage | ● usage | ● usage | **Historical gap** | Per-response estimate; tracker is recreated per request |
+| Quality eval scenarios | — | ● workflows | ◐ hooks/tests | ◐ | **Scaffold/historical gap** | Deterministic research cases exist; UI batch harness uses a mock agent |
+| Safety/approval evals | ◐ | ● | ● | ◐ | **Historical gap** | Security probes exist; no integrated scenario comparison |
 | A/B model comparison | — | ◐ | ◐ | ◐ | **Scaffold** | Endpoint fabricates responses |
 | Checkpoint restore | ◐ | ● worktree/history | ● rewind | ● undo/redo | **Scaffold** | Not connected to run/filesystem/tool side effects |
 | Fork and compare runs | — | ● | ● | ◐ | **Missing** | High-value differentiator to build |
 | Export/share redacted run | ◐ | ● reports | ◐ share | ● share | **Missing** | Useful later, after secret redaction and access control |
-| Verification evidence channels | ◐ | ● tests/diffs | ● hooks/LSP/tests | ● LSP/tools | **Partial** | Backend tests exist; Workbench does not unify test/lint/policy/eval evidence |
+| Verification evidence channels | ◐ | ● tests/diffs | ● hooks/LSP/tests | ● LSP/tools | **Historical gap** | Backend tests exist; Workbench does not unify test/lint/policy/eval evidence |
 
 ## 1.7 UX and product surface
 
 | Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
-| Multi-session navigation | ● | ● | ● | ● | **Strong/partial** | Conversations exist; run identity is missing |
-| Permission inbox/dialog | ● | ● | ● | ● | **Partial** | Modal exists only for current SSE run |
-| Diff/artifact review | ● staged skills | ● | ● | ● | **Partial** | Artifact preview exists; no generalized diff/review workflow |
+| Multi-session navigation | ● | ● | ● | ● | **Strong/historical gap** | Conversations exist; run identity is missing |
+| Permission inbox/dialog | ● | ● | ● | ● | **Historical gap** | Modal exists only for current SSE run |
+| Diff/artifact review | ● staged skills | ● | ● | ● | **Historical gap** | Artifact preview exists; no generalized diff/review workflow |
 | Run comparison | — | ◐ | ◐ | ◐ | **Missing** | Essential for evaluation-oriented positioning |
 | Mobile/messaging UX | ● | ◐ | ◐ remote | ◐ web | **Broken mobile web** | Global AppShell sidebar compresses chat |
 | Health/readiness UX | ◐ | ◐ | ◐ | ◐ | **Misleading** | `403` appears as `Down`; hardcoded Healthy states |
-| Context/memory inspector | ● usage/search | ◐ | ● context | ◐ | **Partial/fake** | Hardcoded Memory page and incomplete live context provenance |
+| Context/memory inspector | ● usage/search | ◐ | ● context | ◐ | **Historical gap/fake** | Hardcoded Memory page and incomplete live context provenance |
 | Evaluation dashboard | — | ◐ | — | — | **Scaffold** | Two action cards, no real run configuration/history/comparison |
 | Keyboard-first operation | ● TUI | ● | ● | ● | **Missing / optional** | Not necessary unless Archon becomes a coding-agent UI |
-| Accessibility and responsive tests | ◐ | ● product | ● product | ● product | **Partial** | Basic semantics; no broad a11y/visual regression coverage |
+| Accessibility and responsive tests | ◐ | ● product | ● product | ● product | **Historical gap** | Basic semantics; no broad a11y/visual regression coverage |
 
 ---
 
@@ -223,8 +225,8 @@ Status columns:
 | Day | Course concept | Code | Live | Tests | UI | Honest verdict / gap |
 |---:|---|:---:|:---:|:---:|:---:|---|
 | 1 | Enterprise agent architecture | ✅ | ✅ | ✅ | ✅ | **Strong.** Typed runtime, DI, lifecycle, explicit contracts |
-| 2 | Secure memory and context | ⚠️ | ⚠️ | ⚠️ | ⚠️ | **Partial/unsafe.** Global plaintext cross-user memory; fake inspector metrics; no provenance |
-| 3 | Secure tool integration | ✅ | ⚠️ | ✅ | ⚠️ | **Partial.** Typed registry is good; sync approval bypass and host execution invalidate secure claim |
+| 2 | Secure memory and context | ⚠️ | ⚠️ | ⚠️ | ⚠️ | **Historical gap/unsafe.** Global plaintext cross-user memory; fake inspector metrics; no provenance |
+| 3 | Secure tool integration | ✅ | ⚠️ | ✅ | ⚠️ | **Historical gap.** Typed registry is good; sync approval bypass and host execution invalidate secure claim |
 | 4 | Resilient web agent | ✅ | ⚠️ | ✅ isolated | ⚠️ | Circuit/rate classes exist; not protecting live provider path |
 | 5 | Secure document processing | ✅ | ⚠️ | ✅ mock/unit | ✅ partial | Upload/chunk/query UI exists; metadata volatile, default embeddings mock, PII/storage gaps |
 | 6 | Agent communication security | ✅ | ❌ | ✅ unit | ❌ | HMAC/token classes exist; live multi-agent route does not activate them |
@@ -275,20 +277,20 @@ That is still a strong learning portfolio; it is simply a different claim.
 | Concept group | Code | Live | Tests | Honest status |
 |---|:---:|:---:|:---:|---|
 | Provider protocols and adapters | ✅ | ✅ | ✅ | **Strong for Anthropic/Foundry; partial across all providers** |
-| Context/state management | ✅ | ✅ | ✅ | **Partial:** messages strong; memory provenance/compaction evidence incomplete |
+| Context/state management | ✅ | ✅ | ✅ | **Historical gap:** messages strong; memory provenance/compaction evidence incomplete |
 | Tool schemas and execution loop | ✅ | ✅ | ✅ | **Strong core** |
-| RAG chunk/embed/retrieve | ✅ | ⚠️ | ✅ mock/unit | **Partial:** default mock/in-memory; pseudo-pgvector path incompatible |
-| RAG evaluation | ✅ | ⚠️ offline | ✅ | **Partial:** deterministic research fixtures useful; live claim verification incomplete |
+| RAG chunk/embed/retrieve | ✅ | ⚠️ | ✅ mock/unit | **Historical gap:** default mock/in-memory; pseudo-pgvector path incompatible |
+| RAG evaluation | ✅ | ⚠️ offline | ✅ | **Historical gap:** deterministic research fixtures useful; live claim verification incomplete |
 | ReAct planning/budgets | ✅ | ✅ | ✅ | **Strong typed runtime** |
-| Reflexion/error recovery | ✅ | ✅ | ✅ | **Partial/strong:** tool-error feedback, not full learning/reflection |
+| Reflexion/error recovery | ✅ | ✅ | ✅ | **Historical gap/strong:** tool-error feedback, not full learning/reflection |
 | Agentic RAG | ✅ classes | ❌ genuine retrieval | ✅ mock/unit | **Scaffold:** retriever is another LLM prompt |
 | Multi-agent orchestration | ✅ | ⚠️ separate route | ✅ mock/unit | **Prototype:** serial calls, no isolation/security/budget enforcement |
 | Coordination economics | ✅ tracker classes | ❌ | ⚠️ | **Scaffold:** no durable per-agent cost/benefit evaluation |
 | Subagent architecture | ✅ specialist classes | ❌ independent child | ⚠️ | **Scaffold:** no child context/toolset/workspace lifecycle |
-| Observability | ✅ | ⚠️ | ✅ | **Partial:** live SSE/logs strong; OTEL/replay not proven in demo |
-| Guardrails/governance | ✅ | ⚠️ | ✅ | **Partial:** not consistently before persistence/tool execution |
+| Observability | ✅ | ⚠️ | ✅ | **Historical gap:** live SSE/logs strong; OTEL/replay not proven in demo |
+| Guardrails/governance | ✅ | ⚠️ | ✅ | **Historical gap:** not consistently before persistence/tool execution |
 | Evaluation and A/B | ✅ | ⚠️ mocks | ✅ | **Scaffold/partial:** UI harness does not evaluate real runs |
-| MLOps/CI/CD | ✅ files | ❌ deployed | ⚠️ local | **Partial artifact:** local Docker; remote CI red; no deployment |
+| MLOps/CI/CD | ✅ files | ❌ deployed | ⚠️ local | **Historical gap artifact:** local Docker; remote CI red; no deployment |
 | High-throughput serving | ❌ | ❌ | ❌ | **Missing/defer** |
 | Drift/data versioning | ❌ | ❌ | ❌ | **Missing; add only if tied to real eval datasets** |
 | Fine-tuning/vertical adaptation | ❌ | ❌ | ❌ | **Missing/defer** |

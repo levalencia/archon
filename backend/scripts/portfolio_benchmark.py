@@ -404,8 +404,9 @@ class _GroundingProvider:
         *,
         max_tokens: int = 4096,
         response_format: str | None = None,
+        response_contract: Any = None,
     ) -> ModelResponse:
-        del messages, tools, max_tokens, response_format
+        del messages, tools, max_tokens, response_format, response_contract
         self.calls += 1
         content = json.dumps(
             {
