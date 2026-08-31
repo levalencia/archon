@@ -85,6 +85,7 @@ Pilot order:
 5. Mind Map.
 6. Flashcards — hard, more.
 7. Quiz — hard, more.
+8. Study Guide / Report — detailed custom report.
 
 Generate only one version of each before reviewing. Multiple variants make comparison harder.
 
@@ -100,7 +101,8 @@ Use this external directory:
 ├── infographics/
 ├── mind-maps/
 ├── flashcards/
-└── quizzes/
+├── quizzes/
+└── reports/
 ```
 
 Large generated media does not belong in the Git repository. Copy [`notebooklm-artifact-review-template.json`](notebooklm-artifact-review-template.json) beside each downloaded artifact and complete:

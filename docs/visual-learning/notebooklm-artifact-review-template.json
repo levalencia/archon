@@ -3,7 +3,7 @@
   "version": 1,
   "source_commit": "<40-character git commit>",
   "notebook_id": "<notebook recipe id>",
-  "artifact_type": "<audio|video|slide-deck|infographic|mind-map|flashcards|quiz>",
+  "artifact_type": "<audio|video|slide-deck|infographic|mind-map|flashcards|quiz|report>",
   "artifact_path": "<external local path>",
   "promptbook_section": "<section title>",
   "selected_sources": [],

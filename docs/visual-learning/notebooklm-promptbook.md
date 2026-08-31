@@ -143,6 +143,29 @@ Cover request lifecycle, governance, idempotency, memory boundaries, RAG groundi
 
 Settings: `Hard`, `More`.
 
+## Study Guide / Report
+
+Recommended notebook: every focused notebook.
+
+```text
+Create a structured technical study guide for the selected Archon source pack.
+
+Include:
+1. purpose and learning outcomes;
+2. key concepts and responsibilities;
+3. one labeled end-to-end flow;
+4. important terminology and contrasts;
+5. implementation evidence and reality boundaries;
+6. five common misconceptions;
+7. ten self-check questions with concise answers;
+8. three interview-ready explanations;
+9. a final “Not established by these sources” section.
+
+Cite the selected sources throughout. Keep implemented, partial, deferred, mock, local, and live states distinct. Do not invent deployment, provider, performance, or test evidence.
+```
+
+Settings: create a custom `Report` or `Study Guide`; use a detailed format.
+
 ## Artifact acceptance rubric
 
 Score every generated artifact from 1–5:
