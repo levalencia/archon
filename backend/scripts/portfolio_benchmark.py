@@ -649,7 +649,7 @@ async def _scenario_budget_failure() -> dict[str, Any]:
             BudgetRunContext("owner", "project", "run"),
             run_limit_nusd=1_000_000_000,
             project_limit_nusd=1_000_000_000,
-            max_input_tokens=100,
+            max_input_tokens=1_000,
             pricing_candidates=(PricingCandidate("openai", "gpt-4o"),),
         )
         propagated_by_identity = False
