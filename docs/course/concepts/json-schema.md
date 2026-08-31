@@ -1,10 +1,12 @@
 # JSON Schema for Archon tools
 
+> **Implementation status:** `implemented` for the documented tool-input subset
+
 ## Beginner explanation
 
 JSON Schema is a vocabulary for describing the shape of JSON data.
 Archon uses a deliberately small, custom-validated subset to reject malformed tool arguments before permissions or handler code run.
-It is **partial support**, not compliance with the full JSON Schema specification.
+It is an intentionally bounded contract—not a claim of compliance with the full JSON Schema specification.
 
 ## Prerequisites and vocabulary
 
@@ -125,7 +127,7 @@ Treat unsupported keywords as design errors rather than documentation decoration
 
 ## Self-check questions
 
-1. **Is Archon a full JSON Schema validator?** No; support is intentionally partial.
+1. **Is Archon a full JSON Schema validator?** No; it implements and tests an intentionally bounded fail-closed subset for tool arguments.
 2. **Are booleans valid integers?** No, despite Python's `bool` subclassing `int`.
 3. **What is the default unknown-field behavior?** Fail closed unless `additionalProperties` is true.
 4. **Are nested object properties recursively checked?** No.

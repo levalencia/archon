@@ -119,7 +119,7 @@
 
 - id: json-schema-subset
   title: Tool input JSON Schema subset
-  status: partial
+  status: implemented
   module: docs/course/modules/04-tools-and-schemas/README.md
   sources:
     - backend/app/tools/registry.py
@@ -127,7 +127,7 @@
     - backend/tests/unit/test_tools.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: Compact object/property/type/enum subset; not full JSON Schema.
+  limitations: The documented object/property/type/enum validation subset is fail-closed and tested; recursive or remote full-spec JSON Schema is intentionally outside this tool-contract boundary.
 
 - id: policy-engine
   title: Deterministic policy engine

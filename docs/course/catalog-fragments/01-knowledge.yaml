@@ -44,7 +44,7 @@
 
 - id: checkpoints
   title: "Checkpoints"
-  status: partial
+  status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/memory/checkpoints.py
@@ -54,7 +54,7 @@
     - backend/tests/unit/test_run_lineage.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Durable fork checkpoints restore safe conversation state only; workspace restoration is none and the standalone manager is in-memory."
+  limitations: "Archon checkpoints restore durable safe conversation/run state for replay and fork; arbitrary filesystem workspace, process, tool, and external-side-effect restoration is explicitly outside this server-product boundary."
 
 - id: run-ledger
   title: "Durable Run Ledger"
@@ -243,16 +243,19 @@
 
 - id: fallback
   title: "Provider fallback"
-  status: partial
+  status: implemented
   module: docs/course/modules/10-resilience/README.md
   sources:
     - backend/app/agents/fallback_chain.py
     - backend/app/agents/llm_factory.py
+    - backend/app/runtime/capabilities.py
   tests:
     - backend/tests/unit/test_fallback_wire.py
+    - backend/tests/unit/test_provider_capabilities.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Legacy text fallback loses typed capability parity and all-fail returns an error string."
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Typed fallback preserves the complete capability/response contract or fails before dispatch; the managed Archon deployment intentionally configures Foundry only and does not claim live cross-provider failover or silent fallback to mock."
 
 - id: rate-limiting
   title: "Rate limiting"

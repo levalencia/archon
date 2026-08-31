@@ -105,3 +105,10 @@ def test_real_manifest_is_complete_and_valid() -> None:
         == {"exists", "wired", "tested", "observed", "ui", "live_provider", "deployed"}
         for item in manifest.capabilities
     )
+    assert [item.id for item in manifest.capabilities if item.status == "partial"] == []
+    assert [
+        (item.id, key)
+        for item in manifest.capabilities
+        for key, value in item.dimensions.model_dump().items()
+        if value == "partial"
+    ] == []

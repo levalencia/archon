@@ -34,12 +34,12 @@
     {
       "id": "provider-capability-parity",
       "owner_module": "docs/course/modules/02-typed-runtime/README.md",
-      "status": "partial",
-      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "na", "live_provider": "partial", "deployed": "no"},
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "na", "live_provider": "yes", "deployed": "no"},
       "sources": ["backend/app/runtime/capabilities.py", "backend/app/agents/fallback_chain.py", "backend/app/agents/openai_adapter.py", "backend/app/agents/ollama_adapter.py", "backend/scripts/provider_acceptance.py", "backend/scripts/acceptance_support.py"],
       "tests": ["backend/tests/unit/test_provider_capabilities.py", "backend/tests/unit/test_fallback_wire.py", "backend/tests/unit/test_openai_typed_adapter.py", "backend/tests/unit/test_ollama_typed_adapter.py", "backend/tests/unit/test_provider_acceptance_scripts.py"],
-      "evidence": ["docs/course/concepts/provider-adapters-capability-parity.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-provider-acceptance-summary.json"],
-      "limitation": "Foundry Anthropic native tool calling and provider-reported cache counters were observed live; native JSON Schema was unsupported and provider-wide parity or deployment evidence is not claimed."
+      "evidence": ["docs/course/concepts/provider-adapters-capability-parity.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-rag-hardening.json"],
+      "limitation": "Capability-aware routing preserves complete requirements or fails before dispatch; Foundry has live tool/JSON/cache-counter evidence, while identical vendor features and live cross-provider equivalence are not claimed."
     },
     {
       "id": "validated-structured-output",
@@ -125,7 +125,7 @@
       "id": "mandatory-compliance",
       "owner_module": "docs/course/modules/09-evaluation-harness/README.md",
       "status": "implemented",
-      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "na", "deployed": "no"},
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "no", "live_provider": "na", "deployed": "no"},
       "sources": ["backend/app/security/compliance.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py", "backend/app/routes/documents.py", "backend/app/runtime/engine.py", "backend/app/runtime/effect_executor.py", "backend/app/tools/registry.py"],
       "tests": ["backend/tests/unit/test_compliance.py", "backend/tests/integration/test_mandatory_compliance.py", "backend/tests/unit/test_durable_effect_executor.py"],
       "evidence": ["docs/course/concepts/compliance-red-teaming.md", "docs/IMPLEMENTATION-EVIDENCE.md"],

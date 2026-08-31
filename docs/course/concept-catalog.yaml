@@ -121,7 +121,7 @@
 
 - id: json-schema-subset
   title: Tool input JSON Schema subset
-  status: partial
+  status: implemented
   module: docs/course/modules/04-tools-and-schemas/README.md
   sources:
     - backend/app/tools/registry.py
@@ -129,7 +129,7 @@
     - backend/tests/unit/test_tools.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: Compact object/property/type/enum subset; not full JSON Schema.
+  limitations: The documented object/property/type/enum validation subset is fail-closed and tested; recursive or remote full-spec JSON Schema is intentionally outside this tool-contract boundary.
 
 - id: policy-engine
   title: Deterministic policy engine
@@ -222,7 +222,7 @@
 
 - id: checkpoints
   title: "Checkpoints"
-  status: partial
+  status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/memory/checkpoints.py
@@ -232,7 +232,7 @@
     - backend/tests/unit/test_run_lineage.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Durable fork checkpoints restore safe conversation state only; workspace restoration is none and the standalone manager is in-memory."
+  limitations: "Archon checkpoints restore durable safe conversation/run state for replay and fork; arbitrary filesystem workspace, process, tool, and external-side-effect restoration is explicitly outside this server-product boundary."
 
 - id: run-ledger
   title: "Durable Run Ledger"
@@ -421,16 +421,19 @@
 
 - id: fallback
   title: "Provider fallback"
-  status: partial
+  status: implemented
   module: docs/course/modules/10-resilience/README.md
   sources:
     - backend/app/agents/fallback_chain.py
     - backend/app/agents/llm_factory.py
+    - backend/app/runtime/capabilities.py
   tests:
     - backend/tests/unit/test_fallback_wire.py
+    - backend/tests/unit/test_provider_capabilities.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Legacy text fallback loses typed capability parity and all-fail returns an error string."
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Typed fallback preserves the complete capability/response contract or fails before dispatch; the managed Archon deployment intentionally configures Foundry only and does not claim live cross-provider failover or silent fallback to mock."
 
 - id: rate-limiting
   title: "Rate limiting"
@@ -670,7 +673,7 @@
 
 - id: rto-rpo
   title: "RTO and RPO"
-  status: partial
+  status: deferred
   module: docs/course/modules/14-local-operations/README.md
   sources:
     - scripts/local-dr-smoke.sh
@@ -679,23 +682,28 @@
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
     - docs/evidence/local-dr-report.json
-  limitations: "Recovery timing and record-difference values are one local measured observation, not adopted RTO/RPO objectives. Measured recovery values from one local drill are observations, not adopted objectives or guarantees."
+  limitations: "Local restore time and record difference are measured observations. Organization-approved RTO/RPO, off-site retention, PITR and cloud failover are deferred with public/cloud deployment and cannot be inferred from one local drill."
 - id: provider-adapters-capability-parity
   title: "Provider adapters and capability parity"
-  status: partial
+  status: implemented
   module: docs/course/modules/02-typed-runtime/README.md
   sources:
     - backend/app/runtime/ports.py
+    - backend/app/runtime/capabilities.py
+    - backend/app/agents/fallback_chain.py
     - backend/app/agents/llm_factory.py
   tests:
     - backend/tests/unit/test_adapters.py
+    - backend/tests/unit/test_provider_capabilities.py
     - backend/tests/unit/test_fallback_wire.py
-  evidence: []
-  limitations: "Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Parity means capability-aware non-degradation, not identical vendor features: requirements are negotiated and preserved through fallback or rejected before dispatch. Only Foundry has current live evidence; cross-provider live equivalence is not claimed."
 
 - id: skills-project-instructions
   title: "Skills and project instructions"
-  status: partial
+  status: deferred
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/skills/registry.py
@@ -704,7 +712,7 @@
   tests:
     - backend/tests/unit/test_skills_security.py
   evidence: []
-  limitations: "Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract."
+  limitations: "Keyword-selected skills are wired into sync/SSE and selected skill IDs appear in effective-context provenance. Filesystem project instructions, immutable content versions, scope ownership and a precedence resolver are deferred until Archon has an authorized project-workspace model."
 
 - id: pii-redaction-data-boundaries
   title: "PII redaction and data boundaries"
@@ -809,16 +817,22 @@
 
 - id: compliance-red-teaming
   title: "Compliance controls and red teaming"
-  status: partial
+  status: implemented
   module: docs/course/modules/09-evaluation-harness/README.md
   sources:
     - backend/app/security/compliance.py
+    - backend/app/runtime/engine.py
+    - backend/app/routes/chat.py
+    - backend/app/routes/stream.py
+    - backend/app/routes/documents.py
     - backend/app/routes/red_team.py
   tests:
     - backend/tests/unit/test_compliance.py
+    - backend/tests/integration/test_mandatory_compliance.py
     - backend/tests/security/test_resource_security.py
-  evidence: []
-  limitations: "Rule-based compliance checks plus admin-only guardrail red-team and bounded fuzz routes exist and are unit-tested, but compliance is not a mandatory chat boundary and the probes do not execute full agent trajectories. No mandatory compliance call in both chat paths, versioned policy approvals, full-trajectory attacks, regression gate, or compliance certification."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Mandatory deterministic compliance runs before supported chat, document, structured-output and effect boundaries, with admin-only guardrail/fuzz tests. This is a local technical baseline, not legal certification or an exhaustive external red-team program."
 
 - id: agent-communication-security
   title: "Agent communication security"

@@ -18,6 +18,8 @@ For every gap, distinguish architecture artifacts from exercised capability. Sta
 | Public/cloud/Kubernetes deployment | Hardened loopback Compose; historical K8s/Helm artifacts | A working public or cloud deployment |
 | Public anonymous sharing | Immutable scanned exports and authenticated recipient-bound grants | Anonymous Internet disclosure |
 | Autonomous unapproved production optimization | Drift reports and human-approved recommendation records | Automatic production mutation |
+| Filesystem project instructions | Keyword-selected runtime skills with selected IDs in context provenance | Trusted project workspace, immutable instruction versions, scope ownership and precedence |
+| Organization-approved RTO/RPO and cloud recovery | Checksummed local backup/restore drill with measured observations | Adopted objectives, off-site/PITR/cloud topology, repeated drills and accountable owner |
 
 ## 1. Distributed multi-node agent network
 
@@ -152,6 +154,26 @@ Required evidence includes pre-registered success and safety criteria; represent
 ### Why omission strengthens the capstone
 
 Human approval and non-mutating promotion make the safety boundary obvious: the system recommends and records, while accountable operators change production. This directly reinforces the capstone thesis that model- or metric-generated text never grants mutable authority.
+
+## 7. Filesystem project instructions
+
+### Why it is out of scope
+
+Archon is currently a multi-user server application without an authorized project-workspace filesystem boundary. Treating arbitrary repository files as instructions would add path ownership, trust, injection, precedence, revision, and disclosure risks. Runtime skills remain implemented and their selected IDs are visible in effective-context provenance.
+
+### Architecture and evidence required
+
+A status review requires an owner/project-bound workspace model; allowlisted instruction filenames; descriptor-relative path containment; immutable content hashes and revisions; deterministic precedence across system, organization, project, skill, and user instructions; conflict/failure behavior; context-provenance exposure; cross-user isolation tests; and sync/SSE acceptance. Merely reading `AGENTS.md` from the process working directory is insufficient.
+
+## 8. Organization-approved RTO/RPO and cloud recovery
+
+### Why it is out of scope
+
+The local DR drill measures one checksummed dump/restore path, but observations are not business objectives. Public/cloud deployment remains deferred, so there is no selected production topology, failure domain, data-loss window, or accountable service owner against which an RTO/RPO promise could be adopted.
+
+### Architecture and evidence required
+
+A status review requires Luis or a service owner to adopt scoped objectives; select a production database/backup/PITR topology; define outage start and recovery completion; run repeated representative-volume drills including post-snapshot writes, key recovery, regional/provider failure, alerting and rollback; and retain signed drill history demonstrating compliance distributions rather than one local number.
 
 ## Candidate acceptance boundary
 

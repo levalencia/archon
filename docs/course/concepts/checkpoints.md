@@ -1,7 +1,7 @@
 # Checkpoints
 
-> **Implementation status:** `partial`
-> **Boundary:** Archon can snapshot conversation messages for inspection or a fork; it does not restore a process, arbitrary workspace files, tool state, or external side effects.
+> **Implementation status:** `implemented`
+> **Boundary:** Archon durably snapshots safe conversation/run state for inspection, replay, and fork. Restoring arbitrary workspace files, process memory, tool state, or external side effects is explicitly outside this server-product checkpoint contract.
 
 ## Beginner explanation
 

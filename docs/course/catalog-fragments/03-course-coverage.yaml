@@ -1,19 +1,24 @@
 - id: provider-adapters-capability-parity
   title: "Provider adapters and capability parity"
-  status: partial
+  status: implemented
   module: docs/course/modules/02-typed-runtime/README.md
   sources:
     - backend/app/runtime/ports.py
+    - backend/app/runtime/capabilities.py
+    - backend/app/agents/fallback_chain.py
     - backend/app/agents/llm_factory.py
   tests:
     - backend/tests/unit/test_adapters.py
+    - backend/tests/unit/test_provider_capabilities.py
     - backend/tests/unit/test_fallback_wire.py
-  evidence: []
-  limitations: "Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Parity means capability-aware non-degradation, not identical vendor features: requirements are negotiated and preserved through fallback or rejected before dispatch. Only Foundry has current live evidence; cross-provider live equivalence is not claimed."
 
 - id: skills-project-instructions
   title: "Skills and project instructions"
-  status: partial
+  status: deferred
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/skills/registry.py
@@ -22,7 +27,7 @@
   tests:
     - backend/tests/unit/test_skills_security.py
   evidence: []
-  limitations: "Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract."
+  limitations: "Keyword-selected skills are wired into sync/SSE and selected skill IDs appear in effective-context provenance. Filesystem project instructions, immutable content versions, scope ownership and a precedence resolver are deferred until Archon has an authorized project-workspace model."
 
 - id: pii-redaction-data-boundaries
   title: "PII redaction and data boundaries"
@@ -127,16 +132,22 @@
 
 - id: compliance-red-teaming
   title: "Compliance controls and red teaming"
-  status: partial
+  status: implemented
   module: docs/course/modules/09-evaluation-harness/README.md
   sources:
     - backend/app/security/compliance.py
+    - backend/app/runtime/engine.py
+    - backend/app/routes/chat.py
+    - backend/app/routes/stream.py
+    - backend/app/routes/documents.py
     - backend/app/routes/red_team.py
   tests:
     - backend/tests/unit/test_compliance.py
+    - backend/tests/integration/test_mandatory_compliance.py
     - backend/tests/security/test_resource_security.py
-  evidence: []
-  limitations: "Rule-based compliance checks plus admin-only guardrail red-team and bounded fuzz routes exist and are unit-tested, but compliance is not a mandatory chat boundary and the probes do not execute full agent trajectories. No mandatory compliance call in both chat paths, versioned policy approvals, full-trajectory attacks, regression gate, or compliance certification."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Mandatory deterministic compliance runs before supported chat, document, structured-output and effect boundaries, with admin-only guardrail/fuzz tests. This is a local technical baseline, not legal certification or an exhaustive external red-team program."
 
 - id: agent-communication-security
   title: "Agent communication security"

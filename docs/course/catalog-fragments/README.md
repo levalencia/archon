@@ -24,9 +24,9 @@ fragment: foundations
 concepts:
   - id: example-concept
     title: Example concept
-    status: partial
+    status: implemented
     status_boundary: >-
-      Useful behavior exists, but the named live-path or evidence boundary is incomplete.
+      The documented bounded behavior is wired and verified; broader production claims remain explicit limitations.
     canonical_page: docs/course/concepts/example-concept.md
     modules:
       - docs/course/modules/00-example/README.md

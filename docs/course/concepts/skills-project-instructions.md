@@ -1,8 +1,8 @@
 # Skills and project instructions
 
-> **Implementation status:** `partial`
-> **Status boundary:** Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector.
-> **Reviewed revision:** `6e3e13f`
+> **Implementation status:** `deferred`
+> **Status boundary:** Keyword-selected skills are injected into sync and streaming chat, and selected skill IDs appear in effective-context provenance. Filesystem project instructions, immutable content versions, scope ownership, and a precedence resolver are deferred until Archon has an authorized project-workspace model.
+> **Reviewed revision:** current hardening branch
 > **Used by module:** [Module 06-context-and-memory](../modules/06-context-and-memory/README.md)
 > **Catalog ID:** `skills-project-instructions`
 
@@ -22,7 +22,7 @@ flowchart LR
     Skills[SkillRegistry] --> Resolver[Context assembly]
     User[User message] --> Resolver
     Resolver --> Model
-    Provenance[Effective-context view: absent] -.-> Resolver
+    Resolver --> Provenance[Effective-context manifest with selected skill IDs]
 ```
 
 ## Startup and request sequence
@@ -32,12 +32,13 @@ sequenceDiagram
     Caller->>Registry: search(user message)
     Registry-->>Context: top-k skill text
     Context->>Model: system + selected skills + history + user
-    Note over Context,Model: No durable version/precedence receipt
+    Context-->>Caller: metadata-only selected skill IDs
+    Note over Context,Model: Project-file precedence remains deferred
 ```
 
 ## Archon implementation and source walkthrough
 
-At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract.
+The mapped symbols implement keyword skill selection in sync/SSE and record selected skill IDs in the effective-context manifest. Remote loading and mutable global registry remain bounded by existing URL/content checks. A filesystem project-instruction convention, immutable content revision, owner/project binding, and explicit precedence resolver are deferred until a trusted workspace model exists.
 
 ### Source symbols
 
@@ -46,12 +47,14 @@ At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. 
 | [`backend/app/skills/registry.py:SkillRegistry.search`](../../../backend/app/skills/registry.py) | Ranks registered skills by keyword matches. |
 | [`backend/app/routes/chat.py:chat`](../../../backend/app/routes/chat.py) | Adds relevant skill content to the synchronous request path. |
 | [`backend/app/routes/stream.py:chat_stream_real`](../../../backend/app/routes/stream.py) | Searches skills and adds their content to streaming context. |
+| [`backend/app/runtime/context_provenance.py:EffectiveContextManifest`](../../../backend/app/runtime/context_provenance.py) | Records selected skill IDs without persisting skill content. |
 
 ### Tests
 
 | Test | Contract proved and limit |
 |---|---|
-| [`backend/tests/unit/test_skills_security.py::TestSkillRegistry`](../../../backend/tests/unit/test_skills_security.py) | Proves registry/search behavior, not project precedence or provenance. |
+| [`backend/tests/unit/test_skills_security.py::TestSkillRegistry`](../../../backend/tests/unit/test_skills_security.py) | Proves registry/search and remote-loading boundaries. |
+| [`backend/tests/unit/test_context_provenance.py`](../../../backend/tests/unit/test_context_provenance.py) | Proves metadata-only selected skill IDs in effective-context evidence. |
 
 ### Evidence boundary
 
@@ -74,11 +77,11 @@ From the repository root, inspect the mapped source and test, then run the named
 
 ## Lab vs production
 
-The status remains **partial** at `6e3e13f`. Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status is **deferred** for project-file instructions. Skill selection/injection and selected skill IDs are wired, but Archon has no trusted filesystem workspace to which AGENTS-style files could safely bind. Versioned content, owner/project scope, and precedence resolution resume only when that workspace model is authorized; this is not silently counted as implemented.
 
 ## Interview answer
 
-> Instructions tell an agent how to behave; a skill is a reusable packet of task guidance selected when relevant. A production system must state which instruction wins when system, organization, project, skill, and user directions conflict. Merely concatenating matching text is not an instruction governance model. In Archon the honest status is **partial**: Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector.
+> Instructions tell an agent how to behave; a skill is a reusable packet of task guidance selected when relevant. Archon wires keyword-selected skills into sync/SSE context and records selected skill IDs. Filesystem project instructions are explicitly **deferred** because the server product has no trusted project-workspace model yet; versioned content, ownership, and precedence must be designed together rather than implied by concatenation.
 
 ## Self-check
 

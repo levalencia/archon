@@ -105,21 +105,21 @@ Evidence files:
 | Capability | Exists | Wired | Tested | Observed | UI | Deployed | Evidence and limits |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|---|
 | Typed budgeted runtime | Yes | Yes | Yes | Yes | Yes | No | Native tool calls, explicit stop reasons, iteration/tool/token/time budgets on sync and SSE paths. |
-| Provider capability negotiation | Yes | Yes | Yes | Yes | N/A | No | Conjunctive requirements, fail-before-call, typed fallback, and conservative OpenAI/Ollama opt-ins. No real-provider parity run. |
+| Provider capability negotiation | Yes | Yes | Yes | Yes | N/A | No | Conjunctive requirements, fail-before-call, typed fallback, and conservative provider opt-ins. Foundry is live-observed; identical cross-provider behavior is not claimed. |
 | Validated structured output | Yes | Yes | Yes | Yes | N/A | No | Foundry JSON prompting passed live and terminal output is bounded, duplicate-key checked, Draft 2020-12 validated and decoded locally before trust. Native provider schema is not claimed. |
 | Prompt-cache accounting | Yes | Yes | Yes | Yes | Yes | No | Provider counters, per-response pricing, events, tracing and SSE are wired and live-exercised. The repeated-prefix probe reported zero cache tokens, so no savings claim is made. |
-| Policy matching | Yes | Yes | Yes | Yes | Partial | No | Deterministic allow/ask/deny rules; unknown side effects fail closed. Decisions visible in run evidence. |
+| Policy matching | Yes | Yes | Yes | Yes | Yes | No | Deterministic allow/ask/deny rules; unknown side effects fail closed. Decisions are visible in run evidence rather than a dedicated policy editor. |
 | Durable approvals | Yes | Yes | Yes | Yes | Yes | No | Exact user/run/tool-call/name/argument-hash binding, expiry, cancellation, atomic one-shot decisions. |
 | Tool registry contracts | Yes | Yes | Yes | Yes | Yes | No | Validated schemas, risk/resource metadata, permissions, bounded execution and sanitized errors. |
-| Filesystem containment | Yes | Yes | Yes | Yes | Partial | No | Descriptor-relative traversal rejects escape, symlink, hard-link and unsafe targets. |
-| Code/shell isolation | Yes | Partial | Yes | Yes | Yes | No | Optional Docker-only path; no network/mounts/capabilities, read-only, non-root, resource limits, no host fallback. Disabled in verified local target. |
+| Filesystem containment | Yes | Yes | Yes | Yes | N/A | No | Descriptor-relative traversal rejects escape, symlink, hard-link and unsafe targets; this backend boundary has no dedicated UI requirement. |
+| Code/shell isolation | Yes | Yes | Yes | Yes | Yes | No | Optional Docker-only path is fully wired when enabled: no network/mounts/capabilities, read-only, non-root, resource limits, and no host fallback. It is intentionally disabled in the retained default target. |
 | Authentication/ownership | Yes | Yes | Yes | Yes | Yes | No | Conversations, runs, approvals, memory, documents, evals and MCP use owner/project scope where applicable. |
-| Encrypted persistent memory | Yes | Yes | Yes | Yes | Partial | No | AES-GCM with derived owner/project context and fail-closed startup key. No online key rotation. |
-| PII/secret redaction | Yes | Yes | Yes | Yes | Partial | No | Redaction precedes supported persistence/log paths; tests cover nested credential-like data. Not a production data audit. |
-| Rate limiting | Yes | Yes | Yes | Yes | Partial | No | Per-user/IP controls with Redis-backed verified target; readiness checks Redis. |
-| Circuit breaker/fallback | Yes | Yes | Yes | Yes | Partial | No | App-scoped breaker; deterministic benchmark proves open/fail-fast/half-open/recovery plus secondary fallback. External-provider recovery not observed. |
+| Encrypted persistent memory | Yes | Yes | Yes | Yes | Yes | No | AES-GCM with derived owner/project context, fail-closed startup key, online rotation, and a rotation-status UI. External KMS remains unclaimed. |
+| PII/secret redaction | Yes | Yes | Yes | Yes | N/A | No | Redaction precedes supported persistence/log paths; tests cover nested credential-like data. It is a backend boundary, not a dedicated UI or production data-audit claim. |
+| Rate limiting | Yes | Yes | Yes | Yes | N/A | No | Per-user/IP controls with Redis-backed verified target; readiness checks Redis. No dedicated UI is required. |
+| Circuit breaker/fallback | Yes | Yes | Yes | Yes | N/A | No | App-scoped breaker and typed capability-aware fallback are tested; the managed target intentionally configures Foundry only and no live cross-provider failover is claimed. |
 | Durable Run Ledger | Yes | Yes | Yes | Yes | Yes | No | Ordered owner-scoped events, terminal metadata, retention, reload, replay, fork, compare and child lineage. |
-| Executable resume | Partial | No | Yes | No | Partial | No | Replay is intentionally stored-only. Fork does not restore arbitrary external workspace state. |
+| Executable resume | No | No | Yes | No | No | No | Replay/fork checkpoints intentionally restore safe stored conversation state only; arbitrary executable workspace restoration is outside the current server-product contract. |
 | Durable document ingestion | Yes | Yes | Yes | Yes | Yes | No | PostgreSQL metadata/chunks survive restart and verified backup/restore. PostgreSQL advisory-lock path directly observed. |
 | Vector retrieval | Yes | Yes | Yes | Yes | Yes | No | JSON embeddings and cosine in Python (`sql-json-cosine`). **Not pgvector** and not a high-scale indexed claim. |
 | Grounded claims/citations | Yes | Yes | Yes | Yes | Yes | No | Unsupported, unknown, missing, negated, numeric and partial claims fail conservatively. |
@@ -128,11 +128,11 @@ Evidence files:
 | Bounded verifier child | Yes | Yes | Yes | Yes | Yes | No | Evidence-only context, no tools, real token/time/retry budgets, durable parent-child runs and benefit fixture. One specialist, not a swarm. |
 | MCP stdio integration | Yes | Yes | Yes | Yes | Yes | No | Official MCP 2.1.1 client/server tests, cursor pagination, allowlisted profiles, durable inventory, per-tool policy/approval and Skills & Integrations UI. No production OAuth/HTTP transport claim. |
 | Evidence-first Workbench | Yes | Yes | Yes | Yes | Yes | No | Full-width responsive shell, contextual inspector, inline evidence, mobile/tablet focus containment, route coverage. |
-| OpenTelemetry | Yes | Yes | Yes | Yes | Partial | No | Real SDK/exporter in local image; readiness reports active state; collector logs proved `agent.run`. No hosted trace backend. |
+| OpenTelemetry | Yes | Yes | Yes | Yes | No | No | Real SDK/exporter in the local image; readiness and collector logs prove export. Archon has no hosted trace backend or embedded trace UI. |
 | Local container target | Yes | Yes | Yes | Yes | N/A | No | Digest-pinned, loopback-only gateway, non-root/read-only app containers, internal PostgreSQL/Redis/OTEL. Local evidence is not deployment. |
 | Backup/restore | Yes | Yes | Yes | Yes | No | No | SHA-256 verified custom dump, clean-target guard, full restore and exact record/hash checks with measured RTO/RPO. |
 | Portfolio benchmark | Yes | Yes | Yes | Yes | No | No | Deterministic local control-plane benchmark; not model quality, load, cost, or production latency evidence. |
-| Public/cloud deployment | Partial | No | No | No | No | No | Historical manifests exist but were not selected or verified. User explicitly chose local-only. No Azure resources were created. |
+| Public/cloud deployment | No | No | No | No | No | No | Historical manifests are non-authoritative artifacts; public deployment is explicitly deferred and no live public endpoint is claimed. |
 | Remote CI | Yes | Yes | Yes | Yes | No | No | GitHub Actions backend, frontend and backend-image jobs passed in run `33042478912` at `9696ad8`. CI evidence is not deployment. |
 
 ## Directly observed local scenarios

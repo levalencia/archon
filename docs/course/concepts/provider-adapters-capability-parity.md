@@ -1,7 +1,7 @@
 # Provider adapters and capability parity
 
-> **Implementation status:** `partial`
-> **Status boundary:** Archon declares capabilities, automatically enforces native tools/images/JSON requirements, validates structured terminal output locally, and preserves typed contracts through fallback. OpenAI and Ollama have typed adapters, but model/endpoint-dependent capabilities are conservatively disabled unless explicitly configured. Full parity remains partial because cache billing semantics and cross-provider behavior are not live-verified.
+> **Implementation status:** `implemented`
+> **Status boundary:** Archon declares capabilities, fails before dispatch when a required feature is unavailable, validates terminal output locally, and preserves the complete typed contract through fallback. “Parity” means non-degradation through negotiation, not identical vendor features; only Foundry has current live evidence.
 > **Reviewed revision:** current S8 provider-contract branch
 > **Used by module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
 > **Catalog ID:** `provider-adapters-capability-parity`
@@ -71,7 +71,7 @@ Current implementation dimensions are centralized in [Implementation Evidence](.
 
 ## Try it: bounded study exercise
 
-From the repository root, inspect the mapped source and run the focused tests. Confirm both the passing contract and the remaining gap: typed negotiation/fallback and hardened OpenAI and Ollama boundaries exist, while live cache-accounting verification and live cross-provider evidence remain incomplete.
+From the repository root, inspect the mapped source and run the focused tests. Confirm the passing contract: one provider candidate must satisfy every requested capability, incompatible candidates are skipped without invocation, and total failure is typed and sanitized. Then state the evidence boundary: only Foundry has current live acceptance, so identical cross-provider behavior is not claimed.
 
 **Done criteria:** identify the trust boundary, one proved behavior, and one unproved behavior without changing repository state.
 
@@ -86,11 +86,11 @@ From the repository root, inspect the mapped source and run the focused tests. C
 
 ## Lab vs production
 
-The status remains **partial**. Typed capability negotiation, local structured validation, stop normalization, fallback contract preservation, and strict OpenAI/Ollama response validation are implemented and unit-tested. Model/endpoint-dependent features remain opt-in; unit tests do not prove live external-provider parity, cache billing semantics, sustained load, public deployment, legal compliance, or a production SLO.
+The status is **implemented** for capability-aware non-degradation. Typed requirements, local validation, stop normalization, and fallback contract preservation are tested; provider/model-dependent features remain explicit and unsupported requirements fail before dispatch. Only Foundry currently has live evidence, so cross-provider live equivalence, sustained load, public deployment, legal compliance, and production SLOs are not claimed.
 
 ## Interview answer
 
-> A provider adapter translates Archon’s typed request into one vendor API and translates the reply back. Capability parity means changing providers cannot silently remove required tools, images, or structured output. Archon declares and enforces capabilities and preserves typed contracts through fallback. OpenAI and Ollama model-dependent capabilities are explicit opt-ins, and parity remains **partial** because endpoint compatibility, cache accounting, and live cross-provider evidence are incomplete.
+> A provider adapter translates Archon’s typed request into one vendor API and translates the reply back. Capability parity here means a provider change cannot silently remove required tools, images, JSON mode, or response validation. Archon advertises and enforces capabilities and preserves the complete contract through fallback, otherwise it fails before dispatch. This is implemented as non-degradation; identical vendor features and live cross-provider equivalence are not claimed.
 
 ## Self-check
 
