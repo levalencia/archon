@@ -1,0 +1,112 @@
+version: 1
+
+tours:
+  - id: lifecycle
+    title: Agent lifecycle
+    description: Follow one request from the agent boundary through the bounded runtime, policy, tools, durable evidence, and evaluation.
+    concept_ids:
+      - agent-anatomy
+      - python-protocols-di
+      - typed-runtime
+      - runtime-state-machine
+      - react-loop
+      - policy-engine
+      - durable-approvals
+      - tool-contracts
+      - run-ledger
+      - evaluation-harness
+
+  - id: tool-execution
+    title: Governed tool execution
+    description: See how schemas, policy, approvals, isolation, MCP, and idempotency constrain a model-proposed effect.
+    concept_ids:
+      - react-loop
+      - tool-contracts
+      - json-schema-subset
+      - policy-engine
+      - durable-approvals
+      - idempotency
+      - execution-isolation-sandbox
+      - mcp
+      - mcp-transports-inventory
+      - run-ledger
+
+  - id: memory-rag
+    title: Memory and grounded RAG
+    description: Separate conversation history, encrypted memory, retrieval, grounding, faithfulness, and citations.
+    concept_ids:
+      - context-windows
+      - conversation-lifecycle
+      - encrypted-memory
+      - checkpoints
+      - chunking
+      - embeddings
+      - retrieval
+      - rag
+      - groundedness
+      - faithfulness
+      - citations
+
+  - id: observability
+    title: Evidence and observability
+    description: Trace operational signals from the run ledger through logs, metrics, traces, evaluation, drift, and readiness.
+    concept_ids:
+      - run-ledger
+      - cost-usage-budgets
+      - structured-logging
+      - metrics
+      - tracing-opentelemetry
+      - evaluation-harness
+      - learning-optimization-drift
+      - liveness-readiness
+      - ci
+
+connections:
+  - source: agent-anatomy
+    target: python-protocols-di
+    label: architecture foundation
+  - source: async-python
+    target: runtime-state-machine
+    label: cancellation boundary
+  - source: provider-adapters-capability-parity
+    target: react-loop
+    label: model contract
+  - source: structured-output-prompt-caching
+    target: json-schema-subset
+    label: structured contracts
+  - source: skills-project-instructions
+    target: react-loop
+    label: runtime guidance
+  - source: pii-redaction-data-boundaries
+    target: run-ledger
+    label: safe persistence
+  - source: citations
+    target: evaluation-harness
+    label: evidence scoring
+  - source: compliance-red-teaming
+    target: policy-engine
+    label: control feedback
+  - source: retries-timeouts-cancellation
+    target: circuit-breaker
+    label: resilience chain
+  - source: fallback
+    target: provider-adapters-capability-parity
+    label: provider resilience
+  - source: bounded-delegation
+    target: verifier-child
+    label: bounded verification
+  - source: agent-communication-security
+    target: authorization-ownership
+    label: identity boundary
+  - source: authentication
+    target: authorization-ownership
+    label: identity to scope
+  - source: sse
+    target: structured-logging
+    label: observable execution
+  - source: docker-compose
+    target: liveness-readiness
+    label: runtime operation
+  - source: backup-restore
+    target: rto-rpo
+    label: recovery evidence
