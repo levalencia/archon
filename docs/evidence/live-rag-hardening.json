@@ -1,8 +1,8 @@
 {
   "schema": "archon.live-rag-hardening.v1",
-  "generated_at": "2026-08-31T18:57:55Z",
+  "generated_at": "2026-08-31T19:43:42Z",
   "base_commit": "a48737634c8022e32aeed0c7b4b5b1f670c1766b",
-  "candidate_commit": "ed786a10367ebf7d82c8d05df519d2bec38dedac",
+  "candidate_commit": "86dbca1deb68637f9daa548a74660c696e98725f",
   "runtime": {
     "mode": "live-foundry",
     "llm_provider": "foundry",
@@ -18,7 +18,7 @@
       "status": "pass"
     },
     "full_verification": {
-      "backend_passed": 1450,
+      "backend_passed": 1457,
       "backend_skipped": 2,
       "frontend_unit_passed": 48,
       "playwright_passed": 30,
@@ -26,10 +26,13 @@
     },
     "post_review_hardening": {
       "utf8_byte_upper_bound": "pass",
+      "tool_call_id_and_response_contract_bound": "pass",
+      "provider_bound_image_revalidation": "pass",
       "adversarial_context_rejected_before_provider": "pass",
       "absolute_runtime_deadline": "pass",
       "absolute_rag_deadline": "pass",
       "absolute_verifier_deadline": "pass",
+      "single_terminal_task_consistency": "pass",
       "terminal_cleanup_indeterminate_signal": "pass"
     },
     "provider": {
@@ -71,9 +74,9 @@
     "Foundry Claude uses JSON prompting plus strict local Draft 2020-12 validation; native provider JSON Schema is not claimed.",
     "Prompt-cache controls and usage accounting are wired, but this acceptance observed zero cache read/write tokens and makes no savings claim.",
     "Durable idempotency provides first-writer-wins effect reservation; universal exactly-once behavior for arbitrary external systems is not claimed.",
-    "Context admission uses a fail-closed upper bound of one token per UTF-8 byte plus framing and a 22,000-token reserve per validated image when no exact provider tokenizer is available; it may reject usable context rather than undercount.",
+    "Context admission counts every known provider-visible field, including tool_call_id and response-contract schema, using one token per UTF-8 byte plus framing; provider-bound images are revalidated and reserve 22,000 tokens each, so the bound may reject usable context rather than undercount.",
     "Context provenance describes the initial effective context; per-model-call provenance remains future hardening.",
-    "Runtime, RAG and verifier operations use absolute deadlines; terminal persistence has a separate bounded cleanup and logs an indeterminate state if it cannot finish.",
+    "Runtime, RAG and verifier operations use absolute deadlines; one shielded first-terminal-wins persistence task prevents competing terminal sequences, and bounded cleanup logs an indeterminate state if it cannot finish.",
     "The embedding deployment is a development Azure Foundry GlobalStandard deployment, not a production SLA claim."
   ]
 }
