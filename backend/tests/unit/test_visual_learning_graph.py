@@ -1,4 +1,4 @@
-"""Contracts for the generated visual-learning graph."""
+"""Contracts for the generated Visual Learning Studio manifest."""
 
 from __future__ import annotations
 
@@ -8,53 +8,56 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[3]
 SCRIPT = ROOT / "scripts" / "build-visual-learning.py"
-OUTPUT = ROOT / "frontend" / "static" / "learning" / "archon-graph.json"
+OUTPUT = ROOT / "frontend/static/learning/archon-studio.json"
 SPEC = importlib.util.spec_from_file_location("build_visual_learning", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 builder = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(builder)
 
 
-def test_graph_preserves_catalog_status_and_module_counts() -> None:
-    graph = builder.build_graph()
+def test_studio_preserves_catalog_and_view_counts() -> None:
+    studio = builder.build_studio()
 
-    assert graph["schema"] == "archon.visual-learning-graph"
-    assert graph["stats"] == {
+    assert studio["schema"] == "archon.visual-learning-studio"
+    assert studio["version"] == 2
+    assert studio["stats"] == {
         "concepts": 66,
-        "modules": 15,
-        "edges": graph["stats"]["edges"],
-        "tours": 4,
+        "modules": 16,
+        "stories": 5,
+        "architecture_layers": 5,
+        "notebooks": 5,
         "statuses": {"deferred": 6, "implemented": 46, "partial": 14},
     }
-    assert graph["stats"]["edges"] >= 65
 
 
-def test_every_node_has_learning_copy_and_valid_evidence_links() -> None:
-    graph = builder.build_graph()
+def test_every_concept_has_truthful_learning_and_proof_metadata() -> None:
+    studio = builder.build_studio()
 
-    for node in graph["nodes"]:
-        assert node["title"]
-        assert node["summary"]
-        assert node["limitations"]
-        assert node["detail_href"].startswith("https://github.com/levalencia/archon/blob/main/")
-        assert node["content_source"] in {"concept", "module"}
-        assert node["module_href"].startswith("https://github.com/levalencia/archon/blob/main/")
-        assert any(node[group] for group in ("sources", "tests", "evidence"))
-        if node["status"] != "deferred":
-            assert node["sources"]
-            assert node["tests"]
+    for concept in studio["concepts"]:
+        assert concept["title"]
+        assert concept["summary"]
+        assert concept["limitations"]
+        assert concept["detail_href"].startswith("https://github.com/levalencia/archon/blob/main/")
+        assert concept["content_source"] in {"concept", "module"}
+        assert concept["proof"] == {
+            "code": bool(concept["sources"]),
+            "tests": bool(concept["tests"]),
+            "evidence": bool(concept["evidence"]),
+        }
+        if concept["status"] != "deferred":
+            assert concept["sources"]
+            assert concept["tests"]
         for group in ("sources", "tests", "evidence"):
-            for link in node[group]:
+            for link in concept[group]:
                 assert (ROOT / link["path"]).is_file()
-                assert link["href"].endswith(link["path"])
 
 
-def test_concept_page_aliases_and_module_fallbacks_are_explicit() -> None:
-    graph = builder.build_graph()
-    by_id = {node["id"]: node for node in graph["nodes"]}
+def test_aliases_fallbacks_and_roadmap_are_explicit() -> None:
+    studio = builder.build_studio()
+    by_id = {concept["id"]: concept for concept in studio["concepts"]}
 
-    assert sum(node["content_source"] == "concept" for node in graph["nodes"]) == 64
-    assert {node["id"] for node in graph["nodes"] if node["content_source"] == "module"} == {
+    assert sum(item["content_source"] == "concept" for item in studio["concepts"]) == 64
+    assert {item["id"] for item in studio["concepts"] if item["content_source"] == "module"} == {
         "public-anonymous-sharing",
         "autonomous-unapproved-production-optimization",
     }
@@ -64,32 +67,92 @@ def test_concept_page_aliases_and_module_fallbacks_are_explicit() -> None:
     assert by_id["runtime-state-machine"]["detail_href"].endswith(
         "docs/course/concepts/state-machines.md"
     )
-    assert by_id["react-loop"]["detail_href"].endswith("docs/course/concepts/react.md")
-    assert by_id["json-schema-subset"]["detail_href"].endswith(
-        "docs/course/concepts/json-schema.md"
-    )
+    roadmap_modules = [
+        module_id for phase in studio["roadmap"] for module_id in phase["module_ids"]
+    ]
+    assert len(roadmap_modules) == len(set(roadmap_modules)) == 16
+    assert set(roadmap_modules) == {module["id"] for module in studio["modules"]}
 
 
-def test_tours_and_edges_reference_known_concepts_and_connect_the_graph() -> None:
-    graph = builder.build_graph()
-    known = {node["id"] for node in graph["nodes"]}
+def test_stories_use_small_directional_scenes() -> None:
+    studio = builder.build_studio()
+    known = {concept["id"] for concept in studio["concepts"]}
 
-    assert {tour["id"] for tour in graph["tours"]} == {
-        "lifecycle",
-        "tool-execution",
+    assert {story["id"] for story in studio["stories"]} == {
+        "request-lifecycle",
+        "governed-tool",
         "memory-rag",
         "observability",
+        "local-startup",
     }
-    for tour in graph["tours"]:
-        assert len(tour["concept_ids"]) >= 8
-        assert set(tour["concept_ids"]) <= known
-    for edge in graph["edges"]:
-        assert edge["source"] in known
-        assert edge["target"] in known
-        assert edge["source"] != edge["target"]
-        assert edge["kinds"]
+    for story in studio["stories"]:
+        assert 4 <= len(story["steps"]) <= 8
+        assert [step["number"] for step in story["steps"]] == list(
+            range(1, len(story["steps"]) + 1)
+        )
+        for step in story["steps"]:
+            assert step["from"] != step["to"]
+            assert step["relationship"].strip()
+            assert "+" not in step["relationship"]
+            assert set(step["concept_ids"]) <= known
 
 
-def test_committed_graph_matches_the_generator() -> None:
+def test_architecture_relations_are_typed_and_not_implicit() -> None:
+    architecture = builder.build_studio()["architecture"]
+    components = {
+        component["id"] for layer in architecture["layers"] for component in layer["components"]
+    }
+
+    assert len(architecture["layers"]) == 5
+    assert len(components) == 17
+    assert len(architecture["relations"]) == 14
+    allowed_types = {
+        "CALLS",
+        "ROUTES",
+        "AUTHORIZES",
+        "BUILDS_CONTEXT_FOR",
+        "PROPOSES",
+        "GATES",
+        "PERSISTS_TO",
+        "READS",
+        "EMITS",
+        "SUPPLIES_RUNS_TO",
+        "CONSTRAINS",
+        "PROVES_READY",
+    }
+    assert {relation["type"] for relation in architecture["relations"]} <= allowed_types
+    for relation in architecture["relations"]:
+        assert relation["source"] in components
+        assert relation["target"] in components
+        assert relation["source"] != relation["target"]
+        assert relation["type"]
+        assert relation["label"]
+
+
+def test_force_map_is_retired_and_legacy_route_redirects() -> None:
+    package = json.loads((ROOT / "frontend/package.json").read_text())
+    dependencies = package.get("dependencies", {}) | package.get("devDependencies", {})
+
+    assert "d3" not in dependencies
+    assert "@types/d3" not in dependencies
+    assert not (ROOT / "frontend/src/lib/components/VisualLearningMap.svelte").exists()
+    assert not (ROOT / "frontend/static/learning/archon-graph.json").exists()
+    redirect = (ROOT / "frontend/src/routes/learn/map/+page.ts").read_text()
+    assert "redirect(307, '/learn?view=stories')" in redirect
+
+
+def test_notebooklm_recipes_and_committed_manifest_are_current() -> None:
+    studio = builder.build_studio()
+
+    assert {notebook["id"] for notebook in studio["notebooklm"]["notebooks"]} == {
+        "system-overview",
+        "request-lifecycle",
+        "memory-rag-evaluation",
+        "reliability-operations",
+        "interview-demo",
+    }
+    for notebook in studio["notebooklm"]["notebooks"]:
+        assert notebook["source_count"] == len(notebook["sources"])
+        assert notebook["artifacts"]
     assert OUTPUT.is_file()
-    assert json.loads(OUTPUT.read_text(encoding="utf-8")) == builder.build_graph()
+    assert json.loads(OUTPUT.read_text(encoding="utf-8")) == studio

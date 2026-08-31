@@ -1,0 +1,93 @@
+version: 1
+source_priority:
+  - docs/IMPLEMENTATION-EVIDENCE.md
+  - docs/implementation/CAPABILITY-ACCEPTANCE.yaml
+  - docs/REMAINING-DEFERRED-GAPS.md
+  - docs/ARCHITECTURE-DIAGRAMS.md
+  - docs/course/README.md
+
+notebooks:
+  - id: system-overview
+    title: Archon — System Overview
+    purpose: Understand Archon's mission, architecture, evidence posture, and explicit boundaries.
+    sources:
+      - README.md
+      - docs/ARCHITECTURE-DIAGRAMS.md
+      - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/REMAINING-DEFERRED-GAPS.md
+      - docs/course/README.md
+      - docs/course/concept-map.md
+      - docs/course/modules/00-agent-anatomy/README.md
+      - docs/course/modules/15-capstone/README.md
+    artifacts: [audio, video, slide-deck, infographic, mind-map]
+
+  - id: request-lifecycle
+    title: Archon — Request Lifecycle and Governed Tools
+    purpose: Follow one request through runtime, model, policy, approval, execution, and evidence.
+    sources:
+      - docs/ARCHITECTURE-DIAGRAMS.md
+      - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/course/modules/00-agent-anatomy/README.md
+      - docs/course/modules/02-typed-runtime/README.md
+      - docs/course/modules/03-react-loop/README.md
+      - docs/course/modules/04-tools-and-schemas/README.md
+      - docs/course/modules/05-policy-and-approvals/README.md
+      - docs/course/modules/07-run-ledger/README.md
+      - docs/course/concepts/agent-anatomy.md
+      - docs/course/concepts/state-machines.md
+      - docs/course/concepts/react.md
+      - docs/course/concepts/tool-contracts.md
+      - docs/course/concepts/policy-engine.md
+      - docs/course/concepts/durable-approvals.md
+    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz]
+
+  - id: memory-rag-evaluation
+    title: Archon — Memory, RAG, and Evaluation
+    purpose: Distinguish transient context, durable memory, retrieval, grounding, citations, and evaluation.
+    sources:
+      - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/REMAINING-DEFERRED-GAPS.md
+      - docs/course/modules/06-context-and-memory/README.md
+      - docs/course/modules/08-rag-grounding/README.md
+      - docs/course/modules/09-evaluation-harness/README.md
+      - docs/course/concepts/context-windows.md
+      - docs/course/concepts/conversation-lifecycle.md
+      - docs/course/concepts/encrypted-memory.md
+      - docs/course/concepts/chunking.md
+      - docs/course/concepts/embeddings.md
+      - docs/course/concepts/retrieval.md
+      - docs/course/concepts/rag.md
+      - docs/course/concepts/groundedness.md
+      - docs/course/concepts/faithfulness.md
+      - docs/course/concepts/citations.md
+    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz]
+
+  - id: reliability-operations
+    title: Archon — Reliability, Security, and Operations
+    purpose: Understand failure containment, delegation, MCP, observability, and local operations.
+    sources:
+      - docs/ARCHITECTURE-DIAGRAMS.md
+      - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/REMAINING-DEFERRED-GAPS.md
+      - docs/CI-PIPELINES-AND-LOCAL-RUN.md
+      - docs/DR-RUNBOOK.md
+      - docs/course/modules/10-resilience/README.md
+      - docs/course/modules/11-bounded-delegation/README.md
+      - docs/course/modules/12-governed-mcp/README.md
+      - docs/course/modules/13-auth-ui-observability/README.md
+      - docs/course/modules/14-local-operations/README.md
+    artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz]
+
+  - id: interview-demo
+    title: Archon — Interview and Demo Preparation
+    purpose: Practice concise, credible explanations without overstating implementation evidence.
+    sources:
+      - README.md
+      - docs/ARCHITECTURE-DIAGRAMS.md
+      - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/REMAINING-DEFERRED-GAPS.md
+      - docs/course/tracks/interview-preparation.md
+      - docs/course/reference/code-bookmarks.md
+      - docs/DEMO-SCRIPT.md
+      - docs/INTERVIEW-ANSWER-BANK.md
+    artifacts: [audio, video, slide-deck, infographic, flashcards, quiz]

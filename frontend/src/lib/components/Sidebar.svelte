@@ -10,7 +10,7 @@
     { href: '/documents', label: 'Documents', icon: FileText },
     { href: '/eval', label: 'Eval', icon: ShieldCheck },
     { href: '/memory', label: 'Memory', icon: Brain },
-    { href: '/learn/map', label: 'Visual learning', icon: Network },
+    { href: '/learn', label: 'Visual learning', icon: Network },
     { href: '/settings', label: 'Skills & Integrations', icon: Settings },
   ];
   async function load() { loading = true; error = ''; try { const r = await authenticatedFetch('/api/conversations'); if (!r.ok) throw new Error(`Request failed (${r.status})`); conversations = await r.json(); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load conversations'; } finally { loading = false; } }

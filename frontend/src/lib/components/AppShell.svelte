@@ -21,7 +21,7 @@
     { href: '/documents', label: 'Documents', icon: FileText },
     { href: '/eval', label: 'Eval', icon: Shield },
     { href: '/memory', label: 'Memory', icon: Brain },
-    { href: '/learn/map', label: 'Learn', icon: Network },
+    { href: '/learn', label: 'Learn', icon: Network },
     { href: '/settings', label: 'Skills & Integrations', icon: Settings },
   ];
 
