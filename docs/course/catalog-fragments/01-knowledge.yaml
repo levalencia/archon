@@ -1,16 +1,19 @@
 - id: context-windows
   title: "Context windows"
-  status: partial
+  status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/runtime/context.py
+    - backend/app/runtime/support.py
     - backend/app/services/auto_compact.py
   tests:
-    - backend/tests/unit/test_conversations.py
-    - backend/tests/unit/test_memory_startup.py
+    - backend/tests/unit/test_context_provenance.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
+    - backend/tests/unit/test_budgeted_provider.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Fixed message selection is not a token guarantee; full live compaction and effective-context provenance are not established."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "The fail-closed bound covers roles/content, image refs, tool_call_id, tool-call JSON, tool definitions, response format and response-contract schema; images are revalidated and reserve 22k tokens each. It is deliberately conservative rather than provider-exact, and provenance remains initial-context rather than per-call."
 
 - id: conversation-lifecycle
   title: "Conversation lifecycle"
@@ -42,7 +45,7 @@
 
 - id: checkpoints
   title: "Checkpoints"
-  status: partial
+  status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/memory/checkpoints.py
@@ -52,7 +55,7 @@
     - backend/tests/unit/test_run_lineage.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Durable fork checkpoints restore safe conversation state only; workspace restoration is none and the standalone manager is in-memory."
+  limitations: "Archon checkpoints restore durable safe conversation/run state for replay and fork; arbitrary filesystem workspace, process, tool, and external-side-effect restoration is explicitly outside this server-product boundary."
 
 - id: run-ledger
   title: "Durable Run Ledger"
@@ -96,16 +99,17 @@
 
 - id: embeddings
   title: "Embeddings"
-  status: partial
+  status: implemented
   module: docs/course/modules/08-rag-grounding/README.md
   sources:
     - backend/app/services/chunker.py
+    - scripts/generate-local-env.py
   tests:
     - backend/tests/unit/test_embedding_hardening.py
     - backend/tests/unit/test_embedding_config.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Final acceptance used deterministic mock embeddings; no external semantic-quality acceptance is claimed."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Azure Foundry text-embedding-3-small is live-proven for vector generation and ingest/query retrieval in a development deployment; broad domain retrieval and production SLA are not claimed."
 
 - id: retrieval
   title: "Scoped SQL JSON cosine retrieval"
@@ -149,17 +153,19 @@
 
 - id: faithfulness
   title: "Faithfulness"
-  status: partial
+  status: implemented
   module: docs/course/modules/08-rag-grounding/README.md
   sources:
     - backend/app/services/grounded_rag.py
+    - backend/app/delegation/service.py
     - backend/app/eval/evaluators.py
   tests:
     - backend/tests/unit/test_grounded_rag.py
+    - backend/tests/unit/test_evidence_verifier.py
     - backend/tests/unit/test_eval.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Current metrics are deterministic proxies/keyword heuristics without calibrated semantic-judge validation."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Faithfulness combines deterministic citation checks with a bounded no-tools Foundry verifier and exposes method and score; one live sentinel is not a broad calibrated benchmark."
 
 - id: citations
   title: "Citations"
@@ -205,19 +211,24 @@
 
 - id: retries-timeouts-cancellation
   title: "Retries, timeouts, and cancellation"
-  status: partial
+  status: implemented
   module: docs/course/modules/10-resilience/README.md
   sources:
+    - backend/app/runtime/deadline.py
+    - backend/app/runtime/engine.py
     - backend/app/agents/resilient_coordinator.py
     - backend/app/services/grounded_rag.py
     - backend/app/tools/registry.py
   tests:
+    - backend/tests/unit/test_deadline.py
+    - backend/tests/unit/test_runtime_budget_regressions.py
     - backend/tests/unit/test_evidence_verifier.py
     - backend/tests/unit/test_grounded_rag.py
     - backend/tests/unit/test_tools.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Policies are path-specific; there is no universal end-to-end deadline/retry layer and coordinator degradation is prototype-grade."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Managed chat, RAG and verifier operations—including run/event persistence and approval preparation—share absolute monotonic deadlines. One shielded first-terminal-wins task prevents competing terminal sequences; bounded cleanup logs indeterminate state if it cannot finish. Detached non-terminal work may still consume resources or finish an already-started side effect."
 
 - id: circuit-breaker
   title: "Circuit breaker"
@@ -233,16 +244,19 @@
 
 - id: fallback
   title: "Provider fallback"
-  status: partial
+  status: implemented
   module: docs/course/modules/10-resilience/README.md
   sources:
     - backend/app/agents/fallback_chain.py
     - backend/app/agents/llm_factory.py
+    - backend/app/runtime/capabilities.py
   tests:
     - backend/tests/unit/test_fallback_wire.py
+    - backend/tests/unit/test_provider_capabilities.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Legacy text fallback loses typed capability parity and all-fail returns an error string."
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Typed fallback preserves the complete capability/response contract or fails before dispatch; the managed Archon deployment intentionally configures Foundry only and does not claim live cross-provider failover or silent fallback to mock."
 
 - id: rate-limiting
   title: "Rate limiting"

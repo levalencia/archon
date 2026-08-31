@@ -1,6 +1,6 @@
 # Retries, timeouts, deadlines, and cancellation
 
-**Status:** implemented at selected boundaries; no universal policy
+**Status:** implemented at the managed runtime boundaries; arbitrary in-process work still cannot be forcibly rolled back
 
 ## Definitions
 
@@ -77,7 +77,12 @@ sequenceDiagram
   Note over C,T: cancellation stops waiting; it does not roll back a committed effect
 ```
 
-## Archon: resilient coordinator
+## Archon: shared managed-runtime deadline
+
+`backend/app/runtime/deadline.py` creates a monotonic absolute deadline and awaits nested work only for the remaining budget. `AgentRuntime`, grounded RAG, and the child verifier wrap their complete managed operation—including run creation, event persistence, approval preparation, provider/tool waits, and normal finalization—inside that absolute deadline. If a collaborator absorbs cancellation, an immediate post-await fence prevents later provider/tool dispatch.
+Terminal recording uses one shared, shielded persistence task with a separate bounded cleanup budget (50 ms total for runtime/RAG and 250 ms total for the verifier). The first terminal decision wins: a late worker and timeout cleanup wait on the same task rather than starting competing `completed`/`timeout` sequences. If persistence still cannot finish, Archon logs an explicit `*_terminal_persistence_indeterminate` state rather than waiting indefinitely or claiming durable completion. Detached non-terminal operations may still consume resources or complete an already-started side effect; their result cannot re-enter provider/tool dispatch.
+
+## Archon: legacy resilient coordinator
 
 `backend/app/agents/resilient_coordinator.py::ResilientCoordinator._execute_with_fallback` uses `asyncio.wait_for`.
 Each specialist attempt receives the same `timeout_seconds` value.
@@ -124,12 +129,9 @@ It does not guarantee that the provider stopped processing the cancelled request
 
 ## Archon: bounded evidence verifier
 
-The bounded verifier has explicit attempt, time, and token budgets.
-Its tests cover prevention before a call, bounded retry, actual usage beyond budget, timeout, and cancellation.
-This is evidence for that verifier boundary, not a universal runtime policy.
-Other callers must establish their own retry classification and deadline propagation.
-A local component budget should fit inside the request's end-to-end budget.
-Terminal evidence must distinguish timeout, cancellation, provider failure, and budget exhaustion.
+The bounded verifier has explicit attempt, absolute deadline, input, output, and accumulated usage budgets. Malformed JSON receives at most one corrective retry; the retry text does not include rejected model output and its enlarged request is re-estimated before dispatch.
+The managed RAG acceptance exercises the verifier through the same durable monetary gateway as the parent call and records a completed child verdict. This is evidence for the managed verifier boundary, not for arbitrary third-party code.
+A local component budget must fit inside the request's end-to-end deadline and monetary budget. Terminal evidence distinguishes timeout, cancellation, provider failure, malformed response, and budget exhaustion.
 
 ## Cancellation correctness
 

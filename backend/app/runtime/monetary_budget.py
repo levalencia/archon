@@ -10,8 +10,9 @@ import asyncio
 import copy
 import hashlib
 import inspect
+import json
 import re
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Generic, TypeVar
@@ -22,6 +23,7 @@ from app.observability.cost_tracker import (
     validated_pricing_pair,
 )
 from app.runtime.capabilities import ProviderCapabilities, get_provider_capabilities
+from app.runtime.images import validate_model_image_data_uri
 from app.runtime.models import Message, ModelResponse, TokenUsage, ToolCall, ToolDefinition
 from app.runtime.ports import ModelProvider
 from app.runtime.structured_output import ResponseContract
@@ -36,6 +38,16 @@ from app.services.monetary_budget import (
 
 _MAX_BIGINT = 2**63 - 1
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
+# A byte-pair token always represents at least one input byte. Counting every UTF-8
+# byte as one token is deliberately conservative when no provider tokenizer is available.
+_MESSAGE_FRAME_TOKENS = 128
+_TOOL_CALL_FRAME_TOKENS = 128
+_TOOL_DEFINITION_FRAME_TOKENS = 256
+_RESPONSE_CONTRACT_FRAME_TOKENS = 1_024
+# Image validation permits at most 16M pixels. Claude's documented approximation is
+# roughly pixels/750 tokens, so 22k includes framing headroom and is also conservative
+# for the other currently supported image adapters.
+_MAX_IMAGE_INPUT_TOKENS = 22_000
 _T = TypeVar("_T")
 
 
@@ -49,6 +61,69 @@ def _amount(value: int, label: str) -> int:
     if type(value) is not int or not 0 <= value <= _MAX_BIGINT:
         raise ValueError(f"{label} must be an integer within the BIGINT range")
     return value
+
+
+def _json_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    raise TypeError(f"unsupported JSON request value: {type(value).__name__}")
+
+
+def estimate_request_input_tokens(
+    messages: Sequence[Message],
+    tools: Sequence[ToolDefinition],
+    response_contract: ResponseContract | None = None,
+    response_format: str | None = None,
+) -> int:
+    """Conservatively bound every known provider-visible request field."""
+
+    total = 0
+    for message in messages:
+        total += _MESSAGE_FRAME_TOKENS
+        total += len(message.role.value.encode("utf-8"))
+        total += len(message.content.encode("utf-8"))
+        if message.tool_call_id is not None:
+            total += len(message.tool_call_id.encode("utf-8"))
+        for image in message.images:
+            validate_model_image_data_uri(image)
+            total += _MAX_IMAGE_INPUT_TOKENS + len(image.encode("utf-8"))
+        for call in message.tool_calls:
+            encoded = json.dumps(
+                [call.id, call.name, dict(call.arguments)],
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                default=str,
+            ).encode("utf-8")
+            total += _TOOL_CALL_FRAME_TOKENS + len(encoded)
+    for tool in tools:
+        encoded = json.dumps(
+            [tool.name, tool.description, dict(tool.input_schema)],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            default=str,
+        ).encode("utf-8")
+        total += _TOOL_DEFINITION_FRAME_TOKENS + len(encoded)
+    if response_contract is not None:
+        encoded_contract = json.dumps(
+            [
+                response_contract.schema_id,
+                response_contract.schema_version,
+                dict(response_contract.json_schema),
+                response_contract.max_output_bytes,
+                response_contract.max_depth,
+                response_contract.max_nodes,
+            ],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            default=_json_mapping,
+        ).encode("utf-8")
+        total += _RESPONSE_CONTRACT_FRAME_TOKENS + len(encoded_contract)
+    if response_format is not None:
+        total += _RESPONSE_CONTRACT_FRAME_TOKENS + len(response_format.encode("utf-8"))
+    return total
 
 
 def usd_limit_to_nusd(value: Decimal) -> int:
@@ -407,6 +482,16 @@ class DurableBudgetedProvider:
             raise ValueError("response_contract and response_format are mutually exclusive")
 
         # Validate and calculate before opening/allocating so malformed calls have no ledger effect.
+        if (
+            estimate_request_input_tokens(
+                messages,
+                tools,
+                response_contract=response_contract,
+                response_format=response_format,
+            )
+            > self._max_input_tokens
+        ):
+            raise ModelBudgetExhausted
         quote, quoted_candidate = self._quoted_candidate(max_tokens)
         kwargs: dict[str, Any] = {"max_tokens": max_tokens}
         if response_contract is not None:

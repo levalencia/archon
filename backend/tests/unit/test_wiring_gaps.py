@@ -6,6 +6,7 @@ Covers encrypted memory, resilient coordinator, image input, and write approval.
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -138,3 +139,23 @@ class TestWriteFileApproval:
         registry = SecureToolRegistry()
         register_builtin_tools(registry)
         assert registry.tool_requires_approval("write_file") is True
+
+
+class TestMemoryCheckpointSurface:
+    """Memory page must not expose the unsupported legacy restore flow."""
+
+    def test_memory_page_does_not_claim_legacy_checkpoint_restore(self) -> None:
+        root = Path(__file__).parents[3]
+        page = (root / "frontend" / "src" / "routes" / "memory" / "+page.svelte").read_text(
+            encoding="utf-8"
+        )
+        route = (root / "backend" / "app" / "routes" / "memory.py").read_text(encoding="utf-8")
+        api_map = (root / "docs" / "course" / "reference" / "api-map.md").read_text(
+            encoding="utf-8"
+        )
+
+        assert "/api/memory/checkpoints" not in page
+        assert '@router.get("/checkpoints")' not in route
+        assert "GET /api/memory/checkpoints" not in api_map
+        assert "Restore checkpoint" not in page
+        assert "created automatically every 10 messages" not in page

@@ -130,9 +130,9 @@ See [`evidence/local-dr-report.json`](evidence/local-dr-report.json).
 
 | Measurement | Observed local result |
 |---|---:|
-| Backup duration | 0.343 s |
-| Restore-to-ready RTO | 21.586 s |
-| RPO at snapshot boundary | 0 changed records |
+| Backup duration | 0.69 s |
+| Observed restore-to-ready | 24.787 s |
+| Selected-record differences at snapshot boundary | 0 |
 | Restored run events | 5 |
 | Documents / chunks / terminal approvals | 1 / 1 / 1 |
 | Schema revision | `20260826_08` |

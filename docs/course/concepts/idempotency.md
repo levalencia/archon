@@ -1,6 +1,6 @@
 # Idempotency
 
-**Status:** partial, implemented at selected persistence and runtime boundaries—not a universal request guarantee.
+**Status:** implemented as durable at-most-once orchestration—not a universal exactly-once guarantee.
 
 ## Beginner explanation
 
@@ -111,9 +111,9 @@ Returning a stored prior result improves retry ergonomics but requires result re
 
 ## Lab versus production
 
-A lab can demonstrate conflict-safe inserts, concurrent first-writer reservation, restart-safe tombstones, and explicit indeterminate review with SQLite.
-Production still needs live PostgreSQL contention, downstream idempotency-key support, retention policy, external reconciliation playbooks, and deployment evidence.
-Archon's guarantee must be stated as at-most-once orchestration—not end-to-end exactly once.
+The managed deployment acceptance now races duplicate effect reservations against PostgreSQL and proves exactly one local reservation winner while cleaning its test rows.
+Production still needs downstream idempotency-key support, retention policy, external reconciliation playbooks, and public deployment evidence.
+Archon's guarantee remains durable at-most-once orchestration—not end-to-end exactly once.
 
 ## 30-second interview answer
 
@@ -126,7 +126,7 @@ Archon's guarantee must be stated as at-most-once orchestration—not end-to-end
 3. **Is effect duplicate blocking durable?** Yes when the effect ledger is enabled: a metadata-only tombstone survives runtime restart. The older `seen_calls` guard remains only an in-run optimization.
 4. **Why bind key to payload?** To prevent one key authorizing or suppressing different operations.
 5. **Does one approval winner imply one tool effect?** No; approval and effect reservation are separate boundaries.
-6. **What is Archon's honest status?** Durable at-most-once orchestration locally; live downstream/PostgreSQL/deployment evidence is still partial.
+6. **What is Archon's honest status?** Durable at-most-once orchestration with live PostgreSQL first-writer evidence; downstream exactly-once, reconciliation, and public deployment remain outside the claim.
 
 ## Related modules and concepts
 

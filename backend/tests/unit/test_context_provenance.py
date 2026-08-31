@@ -10,7 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.runtime.context import build_effective_context, derive_context_asset_hmac_key
-from app.runtime.context_provenance import EffectiveContextManifest
+from app.runtime.context_provenance import EffectiveContext, EffectiveContextManifest
+from app.runtime.models import Message, Role
+from app.runtime.support import compact_effective_context
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.auto_compact import auto_compact_context
 from app.services.context_snapshots import ContextSnapshotConflictError, ContextSnapshotRepository
@@ -223,3 +225,51 @@ async def test_repository_is_idempotent_scoped_and_stores_no_content(tmp_path) -
         assert not hasattr(row, "prompt")
         assert not hasattr(row, "summary")
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_shared_compaction_updates_messages_sources_and_manifest(monkeypatch) -> None:
+    async def fake_compact(messages, **kwargs):
+        assert kwargs["max_tokens"] == 5_904
+        return (
+            [
+                {"role": "system", "content": "summary", "images": []},
+                {
+                    "role": "user",
+                    "content": "current",
+                    "images": [],
+                    "_source_message_id": 12,
+                },
+            ],
+            {
+                "compacted": True,
+                "tokens": 42,
+                "selected_message_ids": [12],
+                "summarized_message_ids": [11],
+            },
+        )
+
+    monkeypatch.setattr("app.runtime.support.auto_compact_context", fake_compact)
+    original = EffectiveContext(
+        (Message(Role.USER, "old"), Message(Role.USER, "current")),
+        (11, 12),
+        EffectiveContextManifest(
+            owner_id="alice",
+            project_id="project",
+            run_id="run-1",
+            conversation_id="conversation",
+            selected_message_ids=(11, 12),
+            estimated_tokens=10_000,
+        ),
+    )
+
+    compacted, stats = await compact_effective_context(
+        original, max_tokens=10_000, reserve_for_response=4_096
+    )
+
+    assert stats["compacted"] is True
+    assert [message.content for message in compacted.messages] == ["summary", "current"]
+    assert compacted.source_message_ids == (None, 12)
+    assert compacted.manifest.selected_message_ids == (12,)
+    assert compacted.manifest.summarized_message_ids == (11,)
+    assert compacted.manifest.estimated_tokens == 42

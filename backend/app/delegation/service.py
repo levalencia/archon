@@ -6,8 +6,13 @@ import asyncio
 import json
 import math
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
+from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Any
+
+import structlog
 
 from app.delegation.envelope import (
     DelegationEnvelope,
@@ -23,6 +28,7 @@ from app.delegation.models import (
     VerificationReasonCode,
     validate_verdict_evidence_subset,
 )
+from app.runtime.deadline import DeadlineExceededError, await_before_deadline, consume_detached_task
 from app.runtime.events import AgentEventKind
 from app.runtime.models import Message, ModelResponse, Role, TokenUsage
 from app.runtime.ports import ModelProvider
@@ -36,6 +42,21 @@ claim_id, status, reason_code, confidence, evidence_ids. status is supported, re
 escalate. reason_code is evidence_supports, evidence_contradicts, insufficient_evidence, or
 invalid_citation. Include every claim exactly once and cite only supplied evidence IDs."""
 _VERDICT_KEYS = frozenset({"claim_id", "status", "reason_code", "confidence", "evidence_ids"})
+_TERMINAL_CLEANUP_SECONDS = 0.125
+logger = structlog.get_logger()
+
+
+@dataclass(slots=True)
+class _VerifierTerminalState:
+    started: bool = False
+    persisted: bool = False
+    result: ChildVerificationResult | None = None
+    task: asyncio.Task[None] | None = None
+
+
+_VERIFIER_TERMINAL_STATE: ContextVar[_VerifierTerminalState | None] = ContextVar(
+    "verifier_terminal_state", default=None
+)
 
 
 class TransientVerifierError(RuntimeError):
@@ -219,8 +240,10 @@ class EvidenceVerifierSpecialist:
         runs: RunRepository,
         redactor: PersistenceRedactor,
         envelopes: DelegationEnvelopeService | None = None,
+        provider_factory: Callable[[ChildVerificationRequest], ModelProvider] | None = None,
     ) -> None:
         self._provider = provider
+        self._provider_factory = provider_factory
         self._runs = runs
         self._redactor = redactor
         self._envelopes = envelopes
@@ -229,6 +252,75 @@ class EvidenceVerifierSpecialist:
         self,
         request: ChildVerificationRequest,
         envelope: DelegationEnvelope | None = None,
+    ) -> ChildVerificationResult:
+        started = time.monotonic()
+        deadline = started + request.budget.timeout_seconds
+        terminal = _VerifierTerminalState()
+        token = _VERIFIER_TERMINAL_STATE.set(terminal)
+        try:
+            return await await_before_deadline(
+                self._verify(request, envelope, started=started),
+                deadline=deadline,
+            )
+        except DeadlineExceededError:
+            if terminal.started:
+                await self._bounded_finish(
+                    request,
+                    ChildVerificationStatus.TIMEOUT,
+                    _fail_closed(request, VerificationReasonCode.TIMEOUT),
+                    TokenUsage(),
+                    started,
+                    VerificationReasonCode.TIMEOUT,
+                    0,
+                )
+                if terminal.result is not None:
+                    return terminal.result
+            verdicts = _fail_closed(request, VerificationReasonCode.TIMEOUT)
+            await self._bounded_finish(
+                request,
+                ChildVerificationStatus.TIMEOUT,
+                verdicts,
+                TokenUsage(),
+                started,
+                VerificationReasonCode.TIMEOUT,
+                0,
+            )
+            return terminal.result or ChildVerificationResult(
+                request.child_id,
+                request.parent_run_id,
+                ChildVerificationStatus.TIMEOUT,
+                TokenUsage(),
+                (time.monotonic() - started) * 1000,
+                verdicts,
+            )
+        except asyncio.CancelledError:
+            if not terminal.started:
+                await self._bounded_finish(
+                    request,
+                    ChildVerificationStatus.CANCELLED,
+                    _fail_closed(request, VerificationReasonCode.PROVIDER_ERROR),
+                    TokenUsage(),
+                    started,
+                    VerificationReasonCode.PROVIDER_ERROR,
+                    0,
+                )
+            elif not terminal.persisted:
+                logger.warning(
+                    "verifier_terminal_persistence_indeterminate",
+                    child_run_id=request.child_id,
+                    status=(terminal.result.status.value if terminal.result else "unknown"),
+                    error_type="cancelled",
+                )
+            raise
+        finally:
+            _VERIFIER_TERMINAL_STATE.reset(token)
+
+    async def _verify(
+        self,
+        request: ChildVerificationRequest,
+        envelope: DelegationEnvelope | None,
+        *,
+        started: float,
     ) -> ChildVerificationResult:
         # Keep redaction as an explicit dependency of this persistence boundary.
         # RunRepository performs the actual allow-listing and redaction.
@@ -248,8 +340,9 @@ class EvidenceVerifierSpecialist:
                 child_run_id=request.child_id,
                 context_hash=context_hash,
             )
-        started = time.monotonic()
-        messages = _messages(request)
+            if time.monotonic() >= started + request.budget.timeout_seconds:
+                raise DeadlineExceededError
+        messages = list(_messages(request))
         estimate = estimate_input_tokens(messages)
         usage = TokenUsage()
         attempts = 0
@@ -261,6 +354,13 @@ class EvidenceVerifierSpecialist:
             provider="verifier",
             model=request.model,
         )
+        if time.monotonic() >= started + request.budget.timeout_seconds:
+            raise DeadlineExceededError
+        provider = (
+            self._provider_factory(request)
+            if self._provider_factory is not None
+            else self._provider
+        )
         await self._append(
             request,
             AgentEventKind.DELEGATION_REQUESTED,
@@ -268,6 +368,8 @@ class EvidenceVerifierSpecialist:
             self._request_payload(request, estimate),
             usage,
         )
+        if time.monotonic() >= started + request.budget.timeout_seconds:
+            raise DeadlineExceededError
         if estimate > request.budget.input_tokens:
             return await self._finish(
                 request,
@@ -282,21 +384,25 @@ class EvidenceVerifierSpecialist:
         async def execute() -> tuple[ClaimVerdict, ...]:
             nonlocal usage, attempts
             while True:
+                current_estimate = estimate_input_tokens(messages)
                 remaining_input = request.budget.input_tokens - usage.input_tokens
                 remaining_output = request.budget.output_tokens - usage.output_tokens
                 # The estimate is only a pre-call guard. Provider-reported usage is the
                 # authority after a call and is accumulated across every response.
                 if (
-                    remaining_input < estimate
+                    remaining_input < current_estimate
                     or remaining_output <= 0
-                    or usage.total_tokens + estimate
+                    or usage.total_tokens + current_estimate
                     > request.budget.input_tokens + request.budget.output_tokens
                 ):
                     raise _BudgetExhaustedError
                 attempts += 1
                 try:
-                    response = await self._provider.complete(
-                        messages, tools=(), max_tokens=remaining_output
+                    response = await provider.complete(
+                        messages,
+                        tools=(),
+                        max_tokens=remaining_output,
+                        response_format="json",
                     )
                     usage = usage + response.usage
                     if (
@@ -306,13 +412,27 @@ class EvidenceVerifierSpecialist:
                         > request.budget.input_tokens + request.budget.output_tokens
                     ):
                         raise _BudgetExhaustedError
-                    return _parse_response(response, request)
+                    try:
+                        return _parse_response(response, request)
+                    except _MalformedResponseError:
+                        if attempts > request.budget.retries:
+                            raise
+                        messages.append(
+                            Message(
+                                Role.USER,
+                                "The prior verifier response was invalid. Return one JSON object "
+                                "with only the verdicts array and the exact required fields; "
+                                "include no prose or markdown.",
+                            )
+                        )
                 except (TransientVerifierError, ConnectionError, OSError):
                     if attempts > request.budget.retries:
                         raise
 
         try:
-            verdicts = await asyncio.wait_for(execute(), timeout=request.budget.timeout_seconds)
+            verdicts = await await_before_deadline(
+                execute(), deadline=started + request.budget.timeout_seconds
+            )
         except asyncio.CancelledError:
             await asyncio.shield(self._cancel(request, usage, started, attempts))
             raise
@@ -376,6 +496,56 @@ class EvidenceVerifierSpecialist:
             attempts,
         )
 
+    async def _bounded_finish(
+        self,
+        request: ChildVerificationRequest,
+        status: ChildVerificationStatus,
+        verdicts: tuple[ClaimVerdict, ...],
+        usage: TokenUsage,
+        started: float,
+        reason: VerificationReasonCode | None,
+        attempts: int,
+    ) -> None:
+        terminal = _VERIFIER_TERMINAL_STATE.get()
+        if terminal is not None and terminal.started:
+            if terminal.task is not None and not terminal.task.done():
+
+                async def wait_for_existing_terminal() -> None:
+                    await asyncio.shield(terminal.task)
+
+                with suppress(BaseException):
+                    await await_before_deadline(
+                        wait_for_existing_terminal(),
+                        deadline=time.monotonic() + _TERMINAL_CLEANUP_SECONDS,
+                    )
+                if not terminal.task.done():
+                    terminal.task.cancel()
+                    with suppress(BaseException):
+                        await await_before_deadline(
+                            wait_for_existing_terminal(),
+                            deadline=time.monotonic() + _TERMINAL_CLEANUP_SECONDS,
+                        )
+            if not terminal.persisted:
+                logger.warning(
+                    "verifier_terminal_persistence_indeterminate",
+                    child_run_id=request.child_id,
+                    status=(terminal.result.status.value if terminal.result else status.value),
+                    error_type="terminal_already_started",
+                )
+            return
+        try:
+            await await_before_deadline(
+                self._finish(request, status, verdicts, usage, started, reason, attempts),
+                deadline=time.monotonic() + _TERMINAL_CLEANUP_SECONDS,
+            )
+        except BaseException as cleanup_error:
+            logger.warning(
+                "verifier_terminal_persistence_indeterminate",
+                child_run_id=request.child_id,
+                status=status.value,
+                error_type=type(cleanup_error).__name__,
+            )
+
     async def _finish(
         self,
         request: ChildVerificationRequest,
@@ -387,6 +557,24 @@ class EvidenceVerifierSpecialist:
         attempts: int,
     ) -> ChildVerificationResult:
         latency = (time.monotonic() - started) * 1000
+        result = ChildVerificationResult(
+            request.child_id,
+            request.parent_run_id,
+            status,
+            usage,
+            latency,
+            verdicts,
+        )
+        terminal = _VERIFIER_TERMINAL_STATE.get()
+        if terminal is not None:
+            if terminal.started:
+                if terminal.result is None:
+                    raise RuntimeError("verifier terminal state is incomplete")
+                if terminal.task is not None:
+                    await asyncio.shield(terminal.task)
+                return terminal.result
+            terminal.started = True
+            terminal.result = result
         counts = {item.value: 0 for item in ClaimVerdictStatus}
         for verdict in verdicts:
             counts[verdict.status.value] += 1
@@ -402,20 +590,38 @@ class EvidenceVerifierSpecialist:
             "output_tokens": usage.output_tokens,
             "total_tokens": usage.total_tokens,
         }
-        await self._append(request, AgentEventKind.DELEGATION_COMPLETED, attempts, payload, usage)
-        await self._append(
-            request,
-            AgentEventKind.RUN_STOPPED,
-            attempts,
-            {"reason": status.value, "error": status is not ChildVerificationStatus.COMPLETED},
-            usage,
-        )
-        await self._runs.finalize_metadata(
-            request.user_id, request.child_id, answer="", cost_usd=0.0, latency_ms=latency
-        )
-        return ChildVerificationResult(
-            request.child_id, request.parent_run_id, status, usage, latency, verdicts
-        )
+
+        async def persist_terminal() -> None:
+            await self._append(
+                request,
+                AgentEventKind.DELEGATION_COMPLETED,
+                attempts,
+                payload,
+                usage,
+            )
+            await self._append(
+                request,
+                AgentEventKind.RUN_STOPPED,
+                attempts,
+                {"reason": status.value, "error": status is not ChildVerificationStatus.COMPLETED},
+                usage,
+            )
+            await self._runs.finalize_metadata(
+                request.user_id,
+                request.child_id,
+                answer="",
+                cost_usd=0.0,
+                latency_ms=latency,
+            )
+            if terminal is not None:
+                terminal.persisted = True
+
+        task = asyncio.create_task(persist_terminal())
+        task.add_done_callback(consume_detached_task)
+        if terminal is not None:
+            terminal.task = task
+        await asyncio.shield(task)
+        return result
 
     async def _cancel(
         self,

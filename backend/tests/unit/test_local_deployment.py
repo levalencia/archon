@@ -21,6 +21,8 @@ def _compose_config() -> dict:
         "POSTGRES_PASSWORD": "test-only-random-hex",
         "ARCHON_SECRET_KEY": "test-only-app-key",
         "ARCHON_ENCRYPTION_MASTER_KEY": "MDAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMA",
+        "ARCHON_EFFECT_IDENTITY_SECRET": "test-only-effect-identity-secret-that-is-long-enough",
+        "ARCHON_DELEGATION_SIGNING_KEY": "test-only-delegation-signing-key-that-is-long-enough",
     }
     result = subprocess.run(
         [
@@ -74,6 +76,15 @@ def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
     assert "ARCHON_LLM_MODEL: ${ARCHON_LLM_MODEL:-mock-model}" in text
     assert "ARCHON_LLM_API_KEY: ${ARCHON_LLM_API_KEY:-}" in text
     assert "ARCHON_LLM_BASE_URL: ${ARCHON_LLM_BASE_URL:-}" in text
+    assert 'ARCHON_DURABLE_MONETARY_BUDGET_ENABLED: "true"' in text
+    assert 'ARCHON_DURABLE_EFFECT_LEDGER_ENABLED: "true"' in text
+    assert "${ARCHON_EFFECT_IDENTITY_SECRET:?" in text
+    assert "${ARCHON_DELEGATION_SIGNING_KEY:?" in text
+    assert "ARCHON_VERIFIER_ENABLED: ${ARCHON_VERIFIER_ENABLED:-false}" in text
+    assert "ARCHON_AGENT_DEADLINE_SECONDS: ${ARCHON_AGENT_DEADLINE_SECONDS:-90}" in text
+    assert "ARCHON_EMBEDDING_PROVIDER: ${ARCHON_EMBEDDING_PROVIDER:-mock}" in text
+    assert "ARCHON_EMBEDDING_MODEL: ${ARCHON_EMBEDDING_MODEL:-mock-embedding}" in text
+    assert "ARCHON_EMBEDDING_API_KEY: ${ARCHON_EMBEDDING_API_KEY:-}" in text
     assert 'ARCHON_EXECUTION_ENABLED: "true"' in text
     assert "ARCHON_EXECUTION_RUNNER_SOCKET" in text
     assert "docker.sock" not in text
@@ -128,6 +139,9 @@ def test_images_run_nonroot_and_backend_migrates() -> None:
     assert "alembic upgrade head" in entrypoint
     smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
     assert '[[ "$migration" == "20260828_14" ]]' in smoke
+    assert "app.acceptance.control_plane" in smoke
+    assert 'durable_monetary_budget"] == "enabled"' in smoke
+    assert 'durable_effect_ledger"] == "enabled"' in smoke
     assert "USER node" in frontend
     assert frontend.count("@sha256:") == 2
     assert "adapter-node" in (ROOT / "frontend/svelte.config.js").read_text()

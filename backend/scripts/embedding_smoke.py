@@ -77,7 +77,7 @@ def preflight(settings: Settings, *, execute_live: bool, injected: bool = False)
 def _configuration_error(settings: Settings) -> str | None:
     if settings.embedding_provider == "mock":
         return "mock_provider"
-    if settings.embedding_provider != "openai":
+    if settings.embedding_provider not in {"openai", "foundry"}:
         return "unsupported_provider"
     if not (settings.embedding_api_key or settings.llm_api_key):
         return "credential_missing"
@@ -95,6 +95,7 @@ def _service(settings: Settings) -> EmbeddingService:
         base_url=settings.embedding_base_url,
         allowed_hosts=settings.embedding_allowed_hosts,
         allow_private_endpoint=settings.embedding_allow_private_endpoint,
+        api_version=settings.embedding_api_version,
     )
 
 

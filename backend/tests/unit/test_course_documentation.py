@@ -74,3 +74,15 @@ def test_current_course_documentation_satisfies_contract() -> None:
     issues = module.validate_repository(ROOT)
 
     assert issues == [], "\n".join(issues)
+
+
+@pytest.mark.unit
+def test_current_course_has_no_unresolved_partial_statuses() -> None:
+    module = _load_validator()
+    course_root = ROOT / "docs" / "course"
+    fragments = sorted((course_root / "catalog-fragments").glob("[0-9][0-9]-*.yaml"))
+    entries = [entry for fragment in fragments for entry in module.parse_catalog_fragment(fragment)]
+    assert [entry.identifier for entry in entries if entry.fields.get("status") == "partial"] == []
+
+    coverage = (course_root / "course-concept-coverage.md").read_text(encoding="utf-8")
+    assert "| **partial** |" not in coverage.lower()

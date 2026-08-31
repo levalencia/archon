@@ -26,6 +26,7 @@ def anthropic_request(
     *,
     response_format: str | None = None,
     prompt_caching_enabled: bool = False,
+    json_prefill_enabled: bool = True,
 ) -> dict[str, Any]:
     system_parts: list[str] = []
     converted: list[dict[str, Any]] = []
@@ -109,12 +110,30 @@ def anthropic_request(
                 request["system"] = request["system"] + "\n\n" + json_instruction
         else:
             request["system"] = json_instruction
-        # Add prefill to force JSON opening brace
-        request["messages"].append({"role": "assistant", "content": "{"})
+        # Direct Anthropic supports assistant prefill; some Foundry endpoints reject it.
+        if json_prefill_enabled:
+            request["messages"].append({"role": "assistant", "content": "{"})
     return request
 
 
-def anthropic_response(response: Any) -> ModelResponse:
+def normalize_json_mode_content(content: str) -> str:
+    """Remove only an exact JSON Markdown fence; never extract arbitrary embedded JSON."""
+
+    stripped = content.strip()
+    if not stripped.startswith("```") or not stripped.endswith("```"):
+        return stripped
+    first_newline = stripped.find("\n")
+    if first_newline < 0:
+        return stripped
+    language = stripped[3:first_newline].strip().lower()
+    if language not in {"", "json"}:
+        return stripped
+    return stripped[first_newline + 1 : -3].strip()
+
+
+def anthropic_response(
+    response: Any, *, json_prefill: bool = False, json_mode: bool = False
+) -> ModelResponse:
     text: list[str] = []
     calls: list[ToolCall] = []
     for block in response.content:
@@ -123,8 +142,13 @@ def anthropic_response(response: Any) -> ModelResponse:
             text.append(block.text)
         elif block_type == "tool_use":
             calls.append(ToolCall(block.id, block.name, block.input))
+    content = "".join(text) or None
+    if json_mode and content is not None:
+        content = normalize_json_mode_content(content)
+    if json_prefill and content is not None and not content.lstrip().startswith("{"):
+        content = "{" + content
     return ModelResponse(
-        content="".join(text) or None,
+        content=content,
         tool_calls=tuple(calls),
         usage=normalize_anthropic_usage(response.usage),
         provider_stop_reason=getattr(response, "stop_reason", None),

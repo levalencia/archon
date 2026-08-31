@@ -223,7 +223,7 @@
 
 - id: rto-rpo
   title: "RTO and RPO"
-  status: partial
+  status: deferred
   module: docs/course/modules/14-local-operations/README.md
   sources:
     - scripts/local-dr-smoke.sh
@@ -232,4 +232,4 @@
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
     - docs/evidence/local-dr-report.json
-  limitations: "Recovery timing and record-difference values are one local measured observation, not adopted RTO/RPO objectives. Measured recovery values from one local drill are observations, not adopted objectives or guarantees."
+  limitations: "Local restore time and record difference are measured observations. Organization-approved RTO/RPO, off-site retention, PITR and cloud failover are deferred with public/cloud deployment and cannot be inferred from one local drill."

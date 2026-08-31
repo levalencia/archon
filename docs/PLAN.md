@@ -510,7 +510,7 @@ No Azure, no AWS, no cloud accounts needed. Deploy to cloud is Phase 8 (optional
 | 8 | Chat Agent Architecture | Phase 1 | Full chat UI + backend |
 | 9 | Conversation Management | Phase 1, 6 | Multi-turn with memory |
 | 10 | Code Analysis Agent | Phase 4 | Extensible specialist agent pattern |
-| 11 | Multi-Modal Classification | — | **Partial**: Document type detection on upload |
+| 11 | Multi-Modal Classification | — | **Implemented (bounded)**: validated multimodal input and document type detection; no general-purpose vision classifier claim |
 | 12 | AI Agent Learning & Compliance | Phase 7 | Evaluation harness, compliance checks |
 | 13 | Tool Orchestration & Monitoring | Phase 4, 5 | Multi-tool chains with OTel tracing |
 | 14 | Multi-Modal Chat + Monitoring | Phase 1, 5 | Chat with observability |

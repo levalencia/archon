@@ -1,19 +1,24 @@
 - id: provider-adapters-capability-parity
   title: "Provider adapters and capability parity"
-  status: partial
+  status: implemented
   module: docs/course/modules/02-typed-runtime/README.md
   sources:
     - backend/app/runtime/ports.py
+    - backend/app/runtime/capabilities.py
+    - backend/app/agents/fallback_chain.py
     - backend/app/agents/llm_factory.py
   tests:
     - backend/tests/unit/test_adapters.py
+    - backend/tests/unit/test_provider_capabilities.py
     - backend/tests/unit/test_fallback_wire.py
-  evidence: []
-  limitations: "Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Parity means capability-aware non-degradation, not identical vendor features: requirements are negotiated and preserved through fallback or rejected before dispatch. Only Foundry has current live evidence; cross-provider live equivalence is not claimed."
 
 - id: skills-project-instructions
   title: "Skills and project instructions"
-  status: partial
+  status: deferred
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/skills/registry.py
@@ -22,7 +27,7 @@
   tests:
     - backend/tests/unit/test_skills_security.py
   evidence: []
-  limitations: "Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract."
+  limitations: "Keyword-selected skills are wired into sync/SSE and selected skill IDs appear in effective-context provenance. Filesystem project instructions, immutable content versions, scope ownership and a precedence resolver are deferred until Archon has an authorized project-workspace model."
 
 - id: pii-redaction-data-boundaries
   title: "PII redaction and data boundaries"
@@ -57,29 +62,40 @@
 
 - id: cost-usage-budgets
   title: "Cost, usage, and budgets"
-  status: partial
+  status: implemented
   module: docs/course/modules/07-run-ledger/README.md
   sources:
     - backend/app/observability/cost_tracker.py
+    - backend/app/runtime/monetary_budget.py
+    - backend/app/services/monetary_budget.py
     - backend/app/routes/stream.py
     - backend/app/eval/service.py
   tests:
+    - backend/tests/unit/test_budgeted_provider.py
+    - backend/tests/unit/test_durable_budget_wiring.py
     - backend/tests/unit/test_eval_wire.py
     - backend/tests/unit/test_recorded_evaluations.py
-  evidence: []
-  limitations: "Runs record token and estimated cost data and evaluations aggregate it, but the chat cost tracker is recreated per response and no durable monetary budget prevents spend. No persistent price version, reservation, atomic counter, hard budget, or cross-replica enforcement."
+  evidence:
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Atomic run/project reservation and reconciliation are live-proven for chat, RAG and verifier calls; price-book versioning, period policies, operator resolution of indeterminate charges and budget-management UI remain future work."
 
 - id: structured-output-prompt-caching
   title: "Structured output and prompt caching"
-  status: partial
+  status: implemented
   module: docs/course/modules/02-typed-runtime/README.md
   sources:
     - backend/app/runtime/anthropic.py
+    - backend/app/runtime/structured_output.py
+    - backend/app/runtime/engine.py
     - backend/app/runtime/support.py
   tests:
-    - backend/tests/unit/test_json_mode_and_caching.py
-  evidence: []
-  limitations: "Anthropic request construction supports JSON prompting/prefill and ephemeral system-prompt cache control, but JSON is not schema-validated and cache hits or savings are not measured; parity across providers is absent. No response schema, parser/retry contract, provider matrix, cache-read token capture, or savings evidence."
+    - backend/tests/unit/test_structured_output.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
+    - backend/tests/unit/test_prompt_cache_accounting.py
+    - backend/tests/unit/test_provider_acceptance_scripts.py
+  evidence:
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Foundry JSON prompting is followed by strict local Draft 2020-12 validation and one bounded retry; native provider-side JSON Schema is not claimed. Cache controls and counters are wired, but the live probe observed zero cache tokens and makes no savings claim."
 
 - id: multimodal-and-artifacts
   title: "Multimodal input and artifacts"
@@ -116,16 +132,22 @@
 
 - id: compliance-red-teaming
   title: "Compliance controls and red teaming"
-  status: partial
+  status: implemented
   module: docs/course/modules/09-evaluation-harness/README.md
   sources:
     - backend/app/security/compliance.py
+    - backend/app/runtime/engine.py
+    - backend/app/routes/chat.py
+    - backend/app/routes/stream.py
+    - backend/app/routes/documents.py
     - backend/app/routes/red_team.py
   tests:
     - backend/tests/unit/test_compliance.py
+    - backend/tests/integration/test_mandatory_compliance.py
     - backend/tests/security/test_resource_security.py
-  evidence: []
-  limitations: "Rule-based compliance checks plus admin-only guardrail red-team and bounded fuzz routes exist and are unit-tested, but compliance is not a mandatory chat boundary and the probes do not execute full agent trajectories. No mandatory compliance call in both chat paths, versioned policy approvals, full-trajectory attacks, regression gate, or compliance certification."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Mandatory deterministic compliance runs before supported chat, document, structured-output and effect boundaries, with admin-only guardrail/fuzz tests. This is a local technical baseline, not legal certification or an exhaustive external red-team program."
 
 - id: agent-communication-security
   title: "Agent communication security"

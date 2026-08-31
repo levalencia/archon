@@ -205,7 +205,7 @@ async def test_live_factory_budget_blocks_and_reconciles_with_real_run_repositor
                 durable_monetary_budget_enabled=True,
                 agent_run_budget_usd=run_limit,
                 agent_project_budget_usd=Decimal("2"),
-                agent_model_input_reservation_tokens=10,
+                agent_model_input_reservation_tokens=1_000,
             ),
             repository=memory,
             exporter=None,

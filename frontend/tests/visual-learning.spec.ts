@@ -43,16 +43,21 @@ test('architecture keeps five layers fixed and exposes typed relations', async (
 test('evidence view preserves status and proof boundaries', async ({ page }) => {
   await openStudio(page, 'evidence');
   await expect(page.getByRole('heading', { name: 'Capability evidence without inflated claims' })).toBeVisible();
-  await page.getByRole('combobox', { name: 'Evidence status' }).selectOption('partial');
-  await expect(page.getByText('14 of 66 capabilities')).toBeVisible();
-  await page.getByRole('searchbox', { name: 'Search evidence' }).fill('embedding');
-  await page.getByRole('button', { name: /Embeddings/ }).click();
   const details = page.getByLabel('Selected evidence details');
-  await expect(details).toContainText(/mock embeddings/i);
+
+  await page.getByRole('combobox', { name: 'Evidence status' }).selectOption('partial');
+  await expect(page.getByText('0 of 66 capabilities')).toBeVisible();
+  await expect(details).toContainText('No evidence details are available');
+
+  await page.getByRole('combobox', { name: 'Evidence status' }).selectOption('implemented');
+  await page.getByRole('searchbox', { name: 'Search evidence' }).fill('embedding');
+  await expect(page.getByText('7 of 66 capabilities')).toBeVisible();
+  await page.getByRole('button', { name: /Embeddings/ }).click();
+  await expect(details).toContainText(/Azure Foundry text-embedding-3-small is live-proven/i);
 
   await page.getByRole('searchbox', { name: 'Search evidence' }).fill('');
   await page.getByRole('combobox', { name: 'Evidence status' }).selectOption('deferred');
-  await expect(page.getByText('6 of 66 capabilities')).toBeVisible();
+  await expect(page.getByText('8 of 66 capabilities')).toBeVisible();
   await expect(details).not.toContainText('Embeddings');
 
   await page.getByRole('searchbox', { name: 'Search evidence' }).fill('no-such-capability');

@@ -1,6 +1,6 @@
 # Fallback
 
-**Status:** partially implemented through two different mechanisms
+**Status:** implemented as capability-preserving typed fallback; the managed deployment intentionally remains Foundry-only
 
 ## Definition
 

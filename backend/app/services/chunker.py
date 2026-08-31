@@ -14,6 +14,7 @@ import asyncio
 import hashlib
 import ipaddress
 import math
+import re
 import socket
 import uuid
 from dataclasses import dataclass, field
@@ -256,9 +257,12 @@ class EmbeddingService:
         base_url: str = "https://api.openai.com/v1",
         allowed_hosts: str = "api.openai.com",
         allow_private_endpoint: bool = False,
+        api_version: str = "2024-05-01-preview",
     ) -> None:
-        if provider not in {"mock", "openai"}:
+        if provider not in {"mock", "openai", "foundry"}:
             raise ValueError(f"Unsupported embedding provider: {provider}")
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?", api_version):
+            raise ValueError("Invalid embedding API version")
         if not 1 <= dimensions <= 4096:
             raise ValueError("Embedding dimensions must be between 1 and 4096")
         self.provider = provider
@@ -266,6 +270,7 @@ class EmbeddingService:
         self.api_key = api_key
         self.dimensions = dimensions
         self.allow_private_endpoint = allow_private_endpoint
+        self.api_version = api_version
         self.base_url = validate_embedding_endpoint(
             base_url,
             allowed_hosts={host.strip() for host in allowed_hosts.split(",")},
@@ -295,7 +300,7 @@ class EmbeddingService:
         """Generate embedding vector for text."""
         if self.provider == "mock":
             return self._mock_embed(text)
-        if self.provider == "openai":
+        if self.provider in {"openai", "foundry"}:
             results = await self._openai_embed([text])
             return results[0]
 
@@ -304,7 +309,7 @@ class EmbeddingService:
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts."""
-        if self.provider == "openai":
+        if self.provider in {"openai", "foundry"}:
             return await self._openai_embed(texts)
         return [await self.embed(text) for text in texts]
 
@@ -350,6 +355,12 @@ class EmbeddingService:
         request_url = f"https://{ip_host}{request_port}{parsed.path.rstrip('/')}/embeddings"
         authority_host = f"[{original_host}]" if ":" in original_host else original_host
         authority = f"{authority_host}{request_port}"
+        headers = {"Content-Type": "application/json", "Host": authority}
+        if self.provider == "foundry":
+            headers["api-key"] = self.api_key
+            request_url += f"?api-version={self.api_version}"
+        else:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         async with httpx.AsyncClient(
             timeout=30.0, follow_redirects=False, trust_env=False
@@ -357,11 +368,7 @@ class EmbeddingService:
             request = httpx.Request(
                 "POST",
                 request_url,
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                    "Host": authority,
-                },
+                headers=headers,
                 json={
                     "input": texts,
                     "model": self.model,

@@ -121,7 +121,7 @@
 
 - id: json-schema-subset
   title: Tool input JSON Schema subset
-  status: partial
+  status: implemented
   module: docs/course/modules/04-tools-and-schemas/README.md
   sources:
     - backend/app/tools/registry.py
@@ -129,7 +129,7 @@
     - backend/tests/unit/test_tools.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: Compact object/property/type/enum subset; not full JSON Schema.
+  limitations: The documented object/property/type/enum validation subset is fail-closed, rejects unknown schema keywords, and is tested; recursive or remote full-spec JSON Schema is intentionally outside this tool-contract boundary.
 
 - id: policy-engine
   title: Deterministic policy engine
@@ -163,30 +163,35 @@
 
 - id: idempotency
   title: Idempotency and exactly-once claim boundaries
-  status: partial
+  status: implemented
   module: docs/course/modules/05-policy-and-approvals/README.md
   sources:
-    - backend/app/runtime/engine.py
-    - backend/app/security/approval_repository.py
+    - backend/app/runtime/effect_ledger.py
+    - backend/app/runtime/effect_executor.py
+    - backend/app/services/effect_ledger.py
   tests:
-    - backend/tests/unit/test_runtime_policy.py
-    - backend/tests/unit/test_durable_live_approvals.py
+    - backend/tests/unit/test_durable_effect_executor.py
+    - backend/tests/integration/test_effect_budget_migration.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: Local duplicate blocking and one-shot approval do not guarantee exactly-once external effects.
+    - docs/evidence/live-rag-hardening.json
+  limitations: Durable HMAC-bound first-writer-wins effect reservations are proven under PostgreSQL contention; universal exactly-once behavior in arbitrary external systems is explicitly not claimed.
 - id: context-windows
   title: "Context windows"
-  status: partial
+  status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/runtime/context.py
+    - backend/app/runtime/support.py
     - backend/app/services/auto_compact.py
   tests:
-    - backend/tests/unit/test_conversations.py
-    - backend/tests/unit/test_memory_startup.py
+    - backend/tests/unit/test_context_provenance.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
+    - backend/tests/unit/test_budgeted_provider.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Fixed message selection is not a token guarantee; full live compaction and effective-context provenance are not established."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "The fail-closed bound covers roles/content, image refs, tool_call_id, tool-call JSON, tool definitions, response format and response-contract schema; images are revalidated and reserve 22k tokens each. It is deliberately conservative rather than provider-exact, and provenance remains initial-context rather than per-call."
 
 - id: conversation-lifecycle
   title: "Conversation lifecycle"
@@ -218,7 +223,7 @@
 
 - id: checkpoints
   title: "Checkpoints"
-  status: partial
+  status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/memory/checkpoints.py
@@ -228,7 +233,7 @@
     - backend/tests/unit/test_run_lineage.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Durable fork checkpoints restore safe conversation state only; workspace restoration is none and the standalone manager is in-memory."
+  limitations: "Archon checkpoints restore durable safe conversation/run state for replay and fork; arbitrary filesystem workspace, process, tool, and external-side-effect restoration is explicitly outside this server-product boundary."
 
 - id: run-ledger
   title: "Durable Run Ledger"
@@ -272,16 +277,17 @@
 
 - id: embeddings
   title: "Embeddings"
-  status: partial
+  status: implemented
   module: docs/course/modules/08-rag-grounding/README.md
   sources:
     - backend/app/services/chunker.py
+    - scripts/generate-local-env.py
   tests:
     - backend/tests/unit/test_embedding_hardening.py
     - backend/tests/unit/test_embedding_config.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Final acceptance used deterministic mock embeddings; no external semantic-quality acceptance is claimed."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Azure Foundry text-embedding-3-small is live-proven for vector generation and ingest/query retrieval in a development deployment; broad domain retrieval and production SLA are not claimed."
 
 - id: retrieval
   title: "Scoped SQL JSON cosine retrieval"
@@ -325,17 +331,19 @@
 
 - id: faithfulness
   title: "Faithfulness"
-  status: partial
+  status: implemented
   module: docs/course/modules/08-rag-grounding/README.md
   sources:
     - backend/app/services/grounded_rag.py
+    - backend/app/delegation/service.py
     - backend/app/eval/evaluators.py
   tests:
     - backend/tests/unit/test_grounded_rag.py
+    - backend/tests/unit/test_evidence_verifier.py
     - backend/tests/unit/test_eval.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Current metrics are deterministic proxies/keyword heuristics without calibrated semantic-judge validation."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Faithfulness combines deterministic citation checks with a bounded no-tools Foundry verifier and exposes method and score; one live sentinel is not a broad calibrated benchmark."
 
 - id: citations
   title: "Citations"
@@ -381,19 +389,24 @@
 
 - id: retries-timeouts-cancellation
   title: "Retries, timeouts, and cancellation"
-  status: partial
+  status: implemented
   module: docs/course/modules/10-resilience/README.md
   sources:
+    - backend/app/runtime/deadline.py
+    - backend/app/runtime/engine.py
     - backend/app/agents/resilient_coordinator.py
     - backend/app/services/grounded_rag.py
     - backend/app/tools/registry.py
   tests:
+    - backend/tests/unit/test_deadline.py
+    - backend/tests/unit/test_runtime_budget_regressions.py
     - backend/tests/unit/test_evidence_verifier.py
     - backend/tests/unit/test_grounded_rag.py
     - backend/tests/unit/test_tools.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Policies are path-specific; there is no universal end-to-end deadline/retry layer and coordinator degradation is prototype-grade."
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Managed chat, RAG and verifier operations—including run/event persistence and approval preparation—share absolute monotonic deadlines. One shielded first-terminal-wins task prevents competing terminal sequences; bounded cleanup logs indeterminate state if it cannot finish. Detached non-terminal work may still consume resources or finish an already-started side effect."
 
 - id: circuit-breaker
   title: "Circuit breaker"
@@ -409,16 +422,19 @@
 
 - id: fallback
   title: "Provider fallback"
-  status: partial
+  status: implemented
   module: docs/course/modules/10-resilience/README.md
   sources:
     - backend/app/agents/fallback_chain.py
     - backend/app/agents/llm_factory.py
+    - backend/app/runtime/capabilities.py
   tests:
     - backend/tests/unit/test_fallback_wire.py
+    - backend/tests/unit/test_provider_capabilities.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
   evidence:
-    - docs/evidence/local-portfolio-benchmark.json
-  limitations: "Legacy text fallback loses typed capability parity and all-fail returns an error string."
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Typed fallback preserves the complete capability/response contract or fails before dispatch; the managed Archon deployment intentionally configures Foundry only and does not claim live cross-provider failover or silent fallback to mock."
 
 - id: rate-limiting
   title: "Rate limiting"
@@ -658,7 +674,7 @@
 
 - id: rto-rpo
   title: "RTO and RPO"
-  status: partial
+  status: deferred
   module: docs/course/modules/14-local-operations/README.md
   sources:
     - scripts/local-dr-smoke.sh
@@ -667,23 +683,28 @@
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
     - docs/evidence/local-dr-report.json
-  limitations: "Recovery timing and record-difference values are one local measured observation, not adopted RTO/RPO objectives. Measured recovery values from one local drill are observations, not adopted objectives or guarantees."
+  limitations: "Local restore time and record difference are measured observations. Organization-approved RTO/RPO, off-site retention, PITR and cloud failover are deferred with public/cloud deployment and cannot be inferred from one local drill."
 - id: provider-adapters-capability-parity
   title: "Provider adapters and capability parity"
-  status: partial
+  status: implemented
   module: docs/course/modules/02-typed-runtime/README.md
   sources:
     - backend/app/runtime/ports.py
+    - backend/app/runtime/capabilities.py
+    - backend/app/agents/fallback_chain.py
     - backend/app/agents/llm_factory.py
   tests:
     - backend/tests/unit/test_adapters.py
+    - backend/tests/unit/test_provider_capabilities.py
     - backend/tests/unit/test_fallback_wire.py
-  evidence: []
-  limitations: "Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Parity means capability-aware non-degradation, not identical vendor features: requirements are negotiated and preserved through fallback or rejected before dispatch. Only Foundry has current live evidence; cross-provider live equivalence is not claimed."
 
 - id: skills-project-instructions
   title: "Skills and project instructions"
-  status: partial
+  status: deferred
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
     - backend/app/skills/registry.py
@@ -692,7 +713,7 @@
   tests:
     - backend/tests/unit/test_skills_security.py
   evidence: []
-  limitations: "Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract."
+  limitations: "Keyword-selected skills are wired into sync/SSE and selected skill IDs appear in effective-context provenance. Filesystem project instructions, immutable content versions, scope ownership and a precedence resolver are deferred until Archon has an authorized project-workspace model."
 
 - id: pii-redaction-data-boundaries
   title: "PII redaction and data boundaries"
@@ -727,29 +748,40 @@
 
 - id: cost-usage-budgets
   title: "Cost, usage, and budgets"
-  status: partial
+  status: implemented
   module: docs/course/modules/07-run-ledger/README.md
   sources:
     - backend/app/observability/cost_tracker.py
+    - backend/app/runtime/monetary_budget.py
+    - backend/app/services/monetary_budget.py
     - backend/app/routes/stream.py
     - backend/app/eval/service.py
   tests:
+    - backend/tests/unit/test_budgeted_provider.py
+    - backend/tests/unit/test_durable_budget_wiring.py
     - backend/tests/unit/test_eval_wire.py
     - backend/tests/unit/test_recorded_evaluations.py
-  evidence: []
-  limitations: "Runs record token and estimated cost data and evaluations aggregate it, but the chat cost tracker is recreated per response and no durable monetary budget prevents spend. No persistent price version, reservation, atomic counter, hard budget, or cross-replica enforcement."
+  evidence:
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Atomic run/project reservation and reconciliation are live-proven for chat, RAG and verifier calls; price-book versioning, period policies, operator resolution of indeterminate charges and budget-management UI remain future work."
 
 - id: structured-output-prompt-caching
   title: "Structured output and prompt caching"
-  status: partial
+  status: implemented
   module: docs/course/modules/02-typed-runtime/README.md
   sources:
     - backend/app/runtime/anthropic.py
+    - backend/app/runtime/structured_output.py
+    - backend/app/runtime/engine.py
     - backend/app/runtime/support.py
   tests:
-    - backend/tests/unit/test_json_mode_and_caching.py
-  evidence: []
-  limitations: "Anthropic request construction supports JSON prompting/prefill and ephemeral system-prompt cache control, but JSON is not schema-validated and cache hits or savings are not measured; parity across providers is absent. No response schema, parser/retry contract, provider matrix, cache-read token capture, or savings evidence."
+    - backend/tests/unit/test_structured_output.py
+    - backend/tests/unit/test_runtime_provider_contracts.py
+    - backend/tests/unit/test_prompt_cache_accounting.py
+    - backend/tests/unit/test_provider_acceptance_scripts.py
+  evidence:
+    - docs/evidence/live-rag-hardening.json
+  limitations: "Foundry JSON prompting is followed by strict local Draft 2020-12 validation and one bounded retry; native provider-side JSON Schema is not claimed. Cache controls and counters are wired, but the live probe observed zero cache tokens and makes no savings claim."
 
 - id: multimodal-and-artifacts
   title: "Multimodal input and artifacts"
@@ -786,16 +818,22 @@
 
 - id: compliance-red-teaming
   title: "Compliance controls and red teaming"
-  status: partial
+  status: implemented
   module: docs/course/modules/09-evaluation-harness/README.md
   sources:
     - backend/app/security/compliance.py
+    - backend/app/runtime/engine.py
+    - backend/app/routes/chat.py
+    - backend/app/routes/stream.py
+    - backend/app/routes/documents.py
     - backend/app/routes/red_team.py
   tests:
     - backend/tests/unit/test_compliance.py
+    - backend/tests/integration/test_mandatory_compliance.py
     - backend/tests/security/test_resource_security.py
-  evidence: []
-  limitations: "Rule-based compliance checks plus admin-only guardrail red-team and bounded fuzz routes exist and are unit-tested, but compliance is not a mandatory chat boundary and the probes do not execute full agent trajectories. No mandatory compliance call in both chat paths, versioned policy approvals, full-trajectory attacks, regression gate, or compliance certification."
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "Mandatory deterministic compliance runs before supported chat, document, structured-output and effect boundaries, with admin-only guardrail/fuzz tests. This is a local technical baseline, not legal certification or an exhaustive external red-team program."
 
 - id: agent-communication-security
   title: "Agent communication security"

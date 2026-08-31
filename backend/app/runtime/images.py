@@ -47,6 +47,17 @@ class ImageAttachment:
     data_uri: str
 
 
+def validate_model_image_data_uri(value: str, limits: ImageLimits | None = None) -> ImageAttachment:
+    """Revalidate provider-bound image data without retaining it in a store."""
+
+    return ImageAttachmentStore(limits).add_data_uri(
+        value,
+        owner_id="runtime-validation",
+        project_id="runtime-validation",
+        persist=False,
+    )
+
+
 class ImageAttachmentStore:
     """Process-local contract store; durable upload routes can replace storage behind this API."""
 

@@ -17,9 +17,9 @@
     "architecture_layers": 5,
     "notebooks": 5,
     "statuses": {
-      "deferred": 6,
-      "implemented": 46,
-      "partial": 14
+      "deferred": 8,
+      "implemented": 58,
+      "partial": 0
     }
   },
   "roadmap": [
@@ -746,15 +746,15 @@
     {
       "id": "json-schema-subset",
       "title": "Tool input JSON Schema subset",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "04-tools-and-schemas",
       "module_title": "04 — Tool contracts and schemas",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/04-tools-and-schemas/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/json-schema.md",
       "content_source": "concept",
-      "summary": "JSON Schema is a vocabulary for describing the shape of JSON data. Archon uses a deliberately small, custom-validated subset to reject malformed tool arguments before permissions or handler code run. It is partial support , not compliance with the full JSON Schema specification.",
+      "summary": "JSON Schema is a vocabulary for describing the shape of JSON data. Archon uses a deliberately small, custom-validated subset to reject malformed tool arguments before permissions or handler code run. It is an intentionally bounded contract—not a claim of compliance with the full JSON Schema specification.",
       "mental_model": "A schema is a syntactic gate between probabilistic output and deterministic code. Think of it as an airport document check: it rejects the wrong shape, but it does not establish permission, benign intent, or safe destination.",
-      "limitations": "Compact object/property/type/enum subset; not full JSON Schema.",
+      "limitations": "The documented object/property/type/enum validation subset is fail-closed, rejects unknown schema keywords, and is tested; recursive or remote full-spec JSON Schema is intentionally outside this tool-contract boundary.",
       "sources": [
         {
           "path": "backend/app/tools/registry.py",
@@ -893,7 +893,7 @@
     {
       "id": "idempotency",
       "title": "Idempotency and exactly-once claim boundaries",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "05-policy-and-approvals",
       "module_title": "05 — Policy and durable approvals",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/05-policy-and-approvals/README.md",
@@ -901,29 +901,34 @@
       "content_source": "concept",
       "summary": "An operation is idempotent when repeating the same logical request does not create extra effects after the first successful application. “Set status to approved” can be idempotent; “send another email” usually is not unless the receiver recognizes a stable operation key. Retries are safe only when every effect they may repeat has a duplicate-detection or reconciliation rule.",
       "mental_model": "A client can time out after the server committed but before receiving the response. The retry is ambiguous: did the first attempt fail, or did only its acknowledgement fail? Place stable identity and atomic deduplication at the effect , not merely at the HTTP endpoint.",
-      "limitations": "Local duplicate blocking and one-shot approval do not guarantee exactly-once external effects.",
+      "limitations": "Durable HMAC-bound first-writer-wins effect reservations are proven under PostgreSQL contention; universal exactly-once behavior in arbitrary external systems is explicitly not claimed.",
       "sources": [
         {
-          "path": "backend/app/runtime/engine.py",
-          "label": "engine.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/engine.py"
+          "path": "backend/app/runtime/effect_ledger.py",
+          "label": "effect_ledger.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/effect_ledger.py"
         },
         {
-          "path": "backend/app/security/approval_repository.py",
-          "label": "approval_repository.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/app/security/approval_repository.py"
+          "path": "backend/app/runtime/effect_executor.py",
+          "label": "effect_executor.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/effect_executor.py"
+        },
+        {
+          "path": "backend/app/services/effect_ledger.py",
+          "label": "effect_ledger.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/services/effect_ledger.py"
         }
       ],
       "tests": [
         {
-          "path": "backend/tests/unit/test_runtime_policy.py",
-          "label": "test_runtime_policy.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_runtime_policy.py"
+          "path": "backend/tests/unit/test_durable_effect_executor.py",
+          "label": "test_durable_effect_executor.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_durable_effect_executor.py"
         },
         {
-          "path": "backend/tests/unit/test_durable_live_approvals.py",
-          "label": "test_durable_live_approvals.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_durable_live_approvals.py"
+          "path": "backend/tests/integration/test_effect_budget_migration.py",
+          "label": "test_effect_budget_migration.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/integration/test_effect_budget_migration.py"
         }
       ],
       "evidence": [
@@ -931,6 +936,11 @@
           "path": "docs/IMPLEMENTATION-EVIDENCE.md",
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
+        },
+        {
+          "path": "docs/evidence/live-rag-hardening.json",
+          "label": "live-rag-hardening.json",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/live-rag-hardening.json"
         }
       ],
       "proof": {
@@ -942,7 +952,7 @@
     {
       "id": "context-windows",
       "title": "Context windows",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "06-context-and-memory",
       "module_title": "Module 06 — Context, conversations, and encrypted memory",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/06-context-and-memory/README.md",
@@ -950,12 +960,17 @@
       "content_source": "concept",
       "summary": "A context window is everything sent to the model for one invocation. It can include system instructions, tool descriptions, selected durable facts, recent conversation messages, images, and the current user turn. The window is temporary: it is constructed for a request and is not itself a durable memory store. A model can only condition its answer on content that fits and is selected, even if much more data exists in the database. Three layers must stay distinct: 1. Conversation rows are durable ordered…",
       "mental_model": "Think of a packing list, not a brain: the database owns history and facts; build messages chooses what enters this model call. Facts are an encrypted, quota-bounded notebook keyed by (user id, project id) . A checkpoint freezes state for restoration/forking; it is not automatically replayed model execution.",
-      "limitations": "Fixed message selection is not a token guarantee; full live compaction and effective-context provenance are not established.",
+      "limitations": "The fail-closed bound covers roles/content, image refs, tool_call_id, tool-call JSON, tool definitions, response format and response-contract schema; images are revalidated and reserve 22k tokens each. It is deliberately conservative rather than provider-exact, and provenance remains initial-context rather than per-call.",
       "sources": [
         {
           "path": "backend/app/runtime/context.py",
           "label": "context.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/context.py"
+        },
+        {
+          "path": "backend/app/runtime/support.py",
+          "label": "support.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/support.py"
         },
         {
           "path": "backend/app/services/auto_compact.py",
@@ -965,14 +980,19 @@
       ],
       "tests": [
         {
-          "path": "backend/tests/unit/test_conversations.py",
-          "label": "test_conversations.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_conversations.py"
+          "path": "backend/tests/unit/test_context_provenance.py",
+          "label": "test_context_provenance.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_context_provenance.py"
         },
         {
-          "path": "backend/tests/unit/test_memory_startup.py",
-          "label": "test_memory_startup.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_memory_startup.py"
+          "path": "backend/tests/unit/test_runtime_provider_contracts.py",
+          "label": "test_runtime_provider_contracts.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_runtime_provider_contracts.py"
+        },
+        {
+          "path": "backend/tests/unit/test_budgeted_provider.py",
+          "label": "test_budgeted_provider.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_budgeted_provider.py"
         }
       ],
       "evidence": [
@@ -980,6 +1000,11 @@
           "path": "docs/IMPLEMENTATION-EVIDENCE.md",
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
+        },
+        {
+          "path": "docs/evidence/live-rag-hardening.json",
+          "label": "live-rag-hardening.json",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/live-rag-hardening.json"
         }
       ],
       "proof": {
@@ -1089,7 +1114,7 @@
     {
       "id": "checkpoints",
       "title": "Checkpoints",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "06-context-and-memory",
       "module_title": "Module 06 — Context, conversations, and encrypted memory",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/06-context-and-memory/README.md",
@@ -1097,7 +1122,7 @@
       "content_source": "concept",
       "summary": "A checkpoint names a stable boundary and saves the state that Archon explicitly knows how to persist at that boundary. Think of it as a photograph of selected application data, not a virtual-machine image. Archon has two different implementations: a small in-memory teaching utility and the durable checkpoint created by the Run Ledger fork path. The durable path copies redacted conversation rows through a selected run-event time and records lineage metadata. It does not turn time backward, undo an email, reopen a…",
       "mental_model": "Think of a packing list, not a brain: the database owns history and facts; build messages chooses what enters this model call. Facts are an encrypted, quota-bounded notebook keyed by (user id, project id) . A checkpoint freezes state for restoration/forking; it is not automatically replayed model execution.",
-      "limitations": "Durable fork checkpoints restore safe conversation state only; workspace restoration is none and the standalone manager is in-memory.",
+      "limitations": "Archon checkpoints restore durable safe conversation/run state for replay and fork; arbitrary filesystem workspace, process, tool, and external-side-effect restoration is explicitly outside this server-product boundary.",
       "sources": [
         {
           "path": "backend/app/memory/checkpoints.py",
@@ -1275,7 +1300,7 @@
     {
       "id": "embeddings",
       "title": "Embeddings",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "08-rag-grounding",
       "module_title": "Module 08 — Documents, embeddings, RAG, and grounded answers",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/08-rag-grounding/README.md",
@@ -1283,12 +1308,17 @@
       "content_source": "concept",
       "summary": "RAG retrieves document chunks before asking a model to answer. An embedding maps text to numbers; retrieval ranks chunks by similarity; generation writes claims from those chunks; verification decides whether each claim has conservative support; citations point back to evidence. A similar chunk is not proof that an answer is true.",
       "mental_model": "Imagine a coordinate map where semantically related passages should appear near one another. The map is learned, not a database of facts. Changing the embedding model is like changing coordinate systems: old and new coordinates should not be mixed. A compass can point toward a likely neighborhood without proving that a particular house contains the answer.",
-      "limitations": "Final acceptance used deterministic mock embeddings; no external semantic-quality acceptance is claimed.",
+      "limitations": "Azure Foundry text-embedding-3-small is live-proven for vector generation and ingest/query retrieval in a development deployment; broad domain retrieval and production SLA are not claimed.",
       "sources": [
         {
           "path": "backend/app/services/chunker.py",
           "label": "chunker.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/services/chunker.py"
+        },
+        {
+          "path": "scripts/generate-local-env.py",
+          "label": "generate-local-env.py",
+          "href": "https://github.com/levalencia/archon/blob/main/scripts/generate-local-env.py"
         }
       ],
       "tests": [
@@ -1305,9 +1335,9 @@
       ],
       "evidence": [
         {
-          "path": "docs/evidence/local-portfolio-benchmark.json",
-          "label": "local-portfolio-benchmark.json",
-          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
+          "path": "docs/evidence/live-rag-hardening.json",
+          "label": "live-rag-hardening.json",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/live-rag-hardening.json"
         }
       ],
       "proof": {
@@ -1456,7 +1486,7 @@
     {
       "id": "faithfulness",
       "title": "Faithfulness",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "08-rag-grounding",
       "module_title": "Module 08 — Documents, embeddings, RAG, and grounded answers",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/08-rag-grounding/README.md",
@@ -1464,12 +1494,17 @@
       "content_source": "concept",
       "summary": "RAG retrieves document chunks before asking a model to answer. An embedding maps text to numbers; retrieval ranks chunks by similarity; generation writes claims from those chunks; verification decides whether each claim has conservative support; citations point back to evidence. A similar chunk is not proof that an answer is true.",
       "mental_model": "Faithfulness is the discipline of a witness repeating only what appears in the supplied record. The witness may accurately repeat a bad or irrelevant record. A keyword checker is like an auditor matching vocabulary; it can miss paraphrases and be fooled by copied words. A semantic judge reads meaning, but the judge can also be inconsistent or biased.",
-      "limitations": "Current metrics are deterministic proxies/keyword heuristics without calibrated semantic-judge validation.",
+      "limitations": "Faithfulness combines deterministic citation checks with a bounded no-tools Foundry verifier and exposes method and score; one live sentinel is not a broad calibrated benchmark.",
       "sources": [
         {
           "path": "backend/app/services/grounded_rag.py",
           "label": "grounded_rag.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/services/grounded_rag.py"
+        },
+        {
+          "path": "backend/app/delegation/service.py",
+          "label": "service.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/delegation/service.py"
         },
         {
           "path": "backend/app/eval/evaluators.py",
@@ -1484,6 +1519,11 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_grounded_rag.py"
         },
         {
+          "path": "backend/tests/unit/test_evidence_verifier.py",
+          "label": "test_evidence_verifier.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_evidence_verifier.py"
+        },
+        {
           "path": "backend/tests/unit/test_eval.py",
           "label": "test_eval.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_eval.py"
@@ -1491,9 +1531,9 @@
       ],
       "evidence": [
         {
-          "path": "docs/evidence/local-portfolio-benchmark.json",
-          "label": "local-portfolio-benchmark.json",
-          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
+          "path": "docs/evidence/live-rag-hardening.json",
+          "label": "live-rag-hardening.json",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/live-rag-hardening.json"
         }
       ],
       "proof": {
@@ -1652,7 +1692,7 @@
     {
       "id": "retries-timeouts-cancellation",
       "title": "Retries, timeouts, and cancellation",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "10-resilience",
       "module_title": "Module 10 — Resilience: idempotency, retries, deadlines, breakers, fallback, and rate limits",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/10-resilience/README.md",
@@ -1660,8 +1700,18 @@
       "content_source": "concept",
       "summary": "Failures are normal: providers time out, clients disconnect, retries duplicate work, and traffic spikes. Resilience means bounding damage and preserving a truthful terminal state—not merely “trying again.” Archon demonstrates idempotent creation/finalization guards, bounded retries in selected paths, timeout/cancellation handling, a concurrency-safe circuit breaker, fallback adapters, and sliding-window rate limiting.",
       "mental_model": "Use layered bulkheads: idempotency prevents duplicate state; deadlines bound time; cancellation stops unwanted work and finalizes evidence; retries handle classified transient failures within a budget; a breaker stops hammering an unhealthy dependency; fallback changes the service path; rate limiting controls admission. Each layer has different semantics.",
-      "limitations": "Policies are path-specific; there is no universal end-to-end deadline/retry layer and coordinator degradation is prototype-grade.",
+      "limitations": "Managed chat, RAG and verifier operations—including run/event persistence and approval preparation—share absolute monotonic deadlines. One shielded first-terminal-wins task prevents competing terminal sequences; bounded cleanup logs indeterminate state if it cannot finish. Detached non-terminal work may still consume resources or finish an already-started side effect.",
       "sources": [
+        {
+          "path": "backend/app/runtime/deadline.py",
+          "label": "deadline.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/deadline.py"
+        },
+        {
+          "path": "backend/app/runtime/engine.py",
+          "label": "engine.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/engine.py"
+        },
         {
           "path": "backend/app/agents/resilient_coordinator.py",
           "label": "resilient_coordinator.py",
@@ -1679,6 +1729,16 @@
         }
       ],
       "tests": [
+        {
+          "path": "backend/tests/unit/test_deadline.py",
+          "label": "test_deadline.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_deadline.py"
+        },
+        {
+          "path": "backend/tests/unit/test_runtime_budget_regressions.py",
+          "label": "test_runtime_budget_regressions.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_runtime_budget_regressions.py"
+        },
         {
           "path": "backend/tests/unit/test_evidence_verifier.py",
           "label": "test_evidence_verifier.py",
@@ -1700,6 +1760,11 @@
           "path": "docs/IMPLEMENTATION-EVIDENCE.md",
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
+        },
+        {
+          "path": "docs/evidence/live-rag-hardening.json",
+          "label": "live-rag-hardening.json",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/live-rag-hardening.json"
         }
       ],
       "proof": {
@@ -1750,7 +1815,7 @@
     {
       "id": "fallback",
       "title": "Provider fallback",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "10-resilience",
       "module_title": "Module 10 — Resilience: idempotency, retries, deadlines, breakers, fallback, and rate limits",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/10-resilience/README.md",
@@ -1758,7 +1823,7 @@
       "content_source": "concept",
       "summary": "Failures are normal: providers time out, clients disconnect, retries duplicate work, and traffic spikes. Resilience means bounding damage and preserving a truthful terminal state—not merely “trying again.” Archon demonstrates idempotent creation/finalization guards, bounded retries in selected paths, timeout/cancellation handling, a concurrency-safe circuit breaker, fallback adapters, and sliding-window rate limiting.",
       "mental_model": "Use layered bulkheads: idempotency prevents duplicate state; deadlines bound time; cancellation stops unwanted work and finalizes evidence; retries handle classified transient failures within a budget; a breaker stops hammering an unhealthy dependency; fallback changes the service path; rate limiting controls admission. Each layer has different semantics.",
-      "limitations": "Legacy text fallback loses typed capability parity and all-fail returns an error string.",
+      "limitations": "Typed fallback preserves the complete capability/response contract or fails before dispatch; the managed Archon deployment intentionally configures Foundry only and does not claim live cross-provider failover or silent fallback to mock.",
       "sources": [
         {
           "path": "backend/app/agents/fallback_chain.py",
@@ -1769,6 +1834,11 @@
           "path": "backend/app/agents/llm_factory.py",
           "label": "llm_factory.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/agents/llm_factory.py"
+        },
+        {
+          "path": "backend/app/runtime/capabilities.py",
+          "label": "capabilities.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/capabilities.py"
         }
       ],
       "tests": [
@@ -1776,13 +1846,23 @@
           "path": "backend/tests/unit/test_fallback_wire.py",
           "label": "test_fallback_wire.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_fallback_wire.py"
+        },
+        {
+          "path": "backend/tests/unit/test_provider_capabilities.py",
+          "label": "test_provider_capabilities.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_provider_capabilities.py"
+        },
+        {
+          "path": "backend/tests/unit/test_runtime_provider_contracts.py",
+          "label": "test_runtime_provider_contracts.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_runtime_provider_contracts.py"
         }
       ],
       "evidence": [
         {
-          "path": "docs/evidence/local-portfolio-benchmark.json",
-          "label": "local-portfolio-benchmark.json",
-          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
+          "path": "docs/IMPLEMENTATION-EVIDENCE.md",
+          "label": "IMPLEMENTATION-EVIDENCE.md",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
       ],
       "proof": {
@@ -2622,7 +2702,7 @@
     {
       "id": "rto-rpo",
       "title": "RTO and RPO",
-      "status": "partial",
+      "status": "deferred",
       "module_id": "14-local-operations",
       "module_title": "Module 14 — Local operations: Compose, health, migrations, CI, and recovery",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/14-local-operations/README.md",
@@ -2630,7 +2710,7 @@
       "content_source": "concept",
       "summary": "A service owner must decide how long an outage may last and how much recent data may be lost. Recovery Time Objective, or RTO, is an agreed maximum acceptable restoration time. Recovery Point Objective, or RPO, is an agreed maximum acceptable data-loss window measured backward from the disruption. An objective is a business decision informed by risk, cost, and system capability. A stopwatch result from one drill is only an observation. Archon currently has one local measured recovery-time observation and one…",
       "mental_model": "Operations is a chain of evidence: configuration → start → migrate → ready → serve → observe → back up → destroy → restore → verify exact records. A manifest is a recipe, not proof the meal was cooked. A backup is unproven until restored. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable evidence; mutable authority never comes from model prose.",
-      "limitations": "Recovery timing and record-difference values are one local measured observation, not adopted RTO/RPO objectives. Measured recovery values from one local drill are observations, not adopted objectives or guarantees.",
+      "limitations": "Local restore time and record difference are measured observations. Organization-approved RTO/RPO, off-site retention, PITR and cloud failover are deferred with public/cloud deployment and cannot be inferred from one local drill.",
       "sources": [
         {
           "path": "scripts/local-dr-smoke.sh",
@@ -2666,7 +2746,7 @@
     {
       "id": "provider-adapters-capability-parity",
       "title": "Provider adapters and capability parity",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "02-typed-runtime",
       "module_title": "02 — Typed runtime and state machine",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/02-typed-runtime/README.md",
@@ -2674,12 +2754,22 @@
       "content_source": "concept",
       "summary": "A provider adapter translates Archon’s model request into one vendor’s API and translates the reply back. Capability parity means changing providers does not silently remove a feature. A shared method name alone is not parity: a text-only fallback cannot safely replace a request that requires typed tools.",
       "mental_model": "Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.",
-      "limitations": "Archon has several live adapters behind model interfaces, but it does not negotiate or preserve tools, images, structured output, usage, caching, and stop semantics uniformly across every provider and fallback. No explicit capability matrix or fail-fast negotiation; legacy fallback can degrade semantics.",
+      "limitations": "Parity means capability-aware non-degradation, not identical vendor features: requirements are negotiated and preserved through fallback or rejected before dispatch. Only Foundry has current live evidence; cross-provider live equivalence is not claimed.",
       "sources": [
         {
           "path": "backend/app/runtime/ports.py",
           "label": "ports.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/ports.py"
+        },
+        {
+          "path": "backend/app/runtime/capabilities.py",
+          "label": "capabilities.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/capabilities.py"
+        },
+        {
+          "path": "backend/app/agents/fallback_chain.py",
+          "label": "fallback_chain.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/agents/fallback_chain.py"
         },
         {
           "path": "backend/app/agents/llm_factory.py",
@@ -2694,22 +2784,38 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_adapters.py"
         },
         {
+          "path": "backend/tests/unit/test_provider_capabilities.py",
+          "label": "test_provider_capabilities.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_provider_capabilities.py"
+        },
+        {
           "path": "backend/tests/unit/test_fallback_wire.py",
           "label": "test_fallback_wire.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_fallback_wire.py"
         }
       ],
-      "evidence": [],
+      "evidence": [
+        {
+          "path": "docs/IMPLEMENTATION-EVIDENCE.md",
+          "label": "IMPLEMENTATION-EVIDENCE.md",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
+        },
+        {
+          "path": "docs/evidence/live-rag-hardening.json",
+          "label": "live-rag-hardening.json",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/live-rag-hardening.json"
+        }
+      ],
       "proof": {
         "code": true,
         "tests": true,
-        "evidence": false
+        "evidence": true
       }
     },
     {
       "id": "skills-project-instructions",
       "title": "Skills and project instructions",
-      "status": "partial",
+      "status": "deferred",
       "module_id": "06-context-and-memory",
       "module_title": "Module 06 — Context, conversations, and encrypted memory",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/06-context-and-memory/README.md",
@@ -2717,7 +2823,7 @@
       "content_source": "concept",
       "summary": "Instructions tell an agent how to behave; a skill is a reusable packet of task guidance selected when relevant. A production system must state which instruction wins when system, organization, project, skill, and user directions conflict. Merely concatenating matching text is not an instruction governance model.",
       "mental_model": "Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.",
-      "limitations": "Keyword-selected skills are injected into sync and streaming chat, but there is no project-file instruction convention, precedence model, immutable version/provenance record, or effective-context inspector. Remote loading and mutable global registry lack a complete trust, ownership, version, and precedence contract.",
+      "limitations": "Keyword-selected skills are wired into sync/SSE and selected skill IDs appear in effective-context provenance. Filesystem project instructions, immutable content versions, scope ownership and a precedence resolver are deferred until Archon has an authorized project-workspace model.",
       "sources": [
         {
           "path": "backend/app/skills/registry.py",
@@ -2865,7 +2971,7 @@
     {
       "id": "cost-usage-budgets",
       "title": "Cost, usage, and budgets",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "07-run-ledger",
       "module_title": "Module 07 — Durable Run Ledger, replay, fork, and compare",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/07-run-ledger/README.md",
@@ -2873,12 +2979,22 @@
       "content_source": "concept",
       "summary": "Usage reports what a model call consumed. Pricing converts that usage into money. A budget must reserve an upper bound before dispatch, then reconcile actual usage afterward. Reporting cost after a run is observability; preventing an over-budget call is enforcement. Archon uses integer nano-US-dollars ( nUSD ) for enforcement. It does not use binary floating point in authoritative counters.",
       "mental_model": "The ledger is a flight recorder. RunRow is the flight summary; RuntimeEventRow records ordered instrument readings. It deliberately stores hashes, IDs, counts, and decisions rather than prompts, chain-of-thought, tool arguments, or results.",
-      "limitations": "Runs record token and estimated cost data and evaluations aggregate it, but the chat cost tracker is recreated per response and no durable monetary budget prevents spend. No persistent price version, reservation, atomic counter, hard budget, or cross-replica enforcement.",
+      "limitations": "Atomic run/project reservation and reconciliation are live-proven for chat, RAG and verifier calls; price-book versioning, period policies, operator resolution of indeterminate charges and budget-management UI remain future work.",
       "sources": [
         {
           "path": "backend/app/observability/cost_tracker.py",
           "label": "cost_tracker.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/observability/cost_tracker.py"
+        },
+        {
+          "path": "backend/app/runtime/monetary_budget.py",
+          "label": "monetary_budget.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/monetary_budget.py"
+        },
+        {
+          "path": "backend/app/services/monetary_budget.py",
+          "label": "monetary_budget.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/services/monetary_budget.py"
         },
         {
           "path": "backend/app/routes/stream.py",
@@ -2893,6 +3009,16 @@
       ],
       "tests": [
         {
+          "path": "backend/tests/unit/test_budgeted_provider.py",
+          "label": "test_budgeted_provider.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_budgeted_provider.py"
+        },
+        {
+          "path": "backend/tests/unit/test_durable_budget_wiring.py",
+          "label": "test_durable_budget_wiring.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_durable_budget_wiring.py"
+        },
+        {
           "path": "backend/tests/unit/test_eval_wire.py",
           "label": "test_eval_wire.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_eval_wire.py"
@@ -2903,17 +3029,23 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_recorded_evaluations.py"
         }
       ],
-      "evidence": [],
+      "evidence": [
+        {
+          "path": "docs/evidence/live-rag-hardening.json",
+          "label": "live-rag-hardening.json",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/live-rag-hardening.json"
+        }
+      ],
       "proof": {
         "code": true,
         "tests": true,
-        "evidence": false
+        "evidence": true
       }
     },
     {
       "id": "structured-output-prompt-caching",
       "title": "Structured output and prompt caching",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "02-typed-runtime",
       "module_title": "02 — Typed runtime and state machine",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/02-typed-runtime/README.md",
@@ -2921,12 +3053,22 @@
       "content_source": "concept",
       "summary": "Structured output is a contract: the model response must parse as strict JSON and satisfy an application validator before Archon treats it as a successful answer. A provider's JSON hint or native schema improves generation but does not replace local validation. Prompt caching is separately observable accounting. A cache marker merely requests reuse; only provider-reported cache-read or cache-write counters prove what the provider reported for that call. Local tests prove normalization and arithmetic, not a real…",
       "mental_model": "Keep these layers distinct: 1. Requested format: JSON mode or provider-native JSON Schema. 2. Transport response: provider text, tool calls, usage, and stop reason. 3. Local trust boundary: strict JSON parse and application validation. 4. Cache request: an eligible stable prompt prefix is marked. 5. Cache evidence: provider-reported counters are normalized and priced per response. A response is not trusted merely because the provider says it used a schema. Cache savings are not inferred from a request marker.",
-      "limitations": "Anthropic request construction supports JSON prompting/prefill and ephemeral system-prompt cache control, but JSON is not schema-validated and cache hits or savings are not measured; parity across providers is absent. No response schema, parser/retry contract, provider matrix, cache-read token capture, or savings evidence.",
+      "limitations": "Foundry JSON prompting is followed by strict local Draft 2020-12 validation and one bounded retry; native provider-side JSON Schema is not claimed. Cache controls and counters are wired, but the live probe observed zero cache tokens and makes no savings claim.",
       "sources": [
         {
           "path": "backend/app/runtime/anthropic.py",
           "label": "anthropic.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/anthropic.py"
+        },
+        {
+          "path": "backend/app/runtime/structured_output.py",
+          "label": "structured_output.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/structured_output.py"
+        },
+        {
+          "path": "backend/app/runtime/engine.py",
+          "label": "engine.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/engine.py"
         },
         {
           "path": "backend/app/runtime/support.py",
@@ -2936,16 +3078,37 @@
       ],
       "tests": [
         {
-          "path": "backend/tests/unit/test_json_mode_and_caching.py",
-          "label": "test_json_mode_and_caching.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_json_mode_and_caching.py"
+          "path": "backend/tests/unit/test_structured_output.py",
+          "label": "test_structured_output.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_structured_output.py"
+        },
+        {
+          "path": "backend/tests/unit/test_runtime_provider_contracts.py",
+          "label": "test_runtime_provider_contracts.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_runtime_provider_contracts.py"
+        },
+        {
+          "path": "backend/tests/unit/test_prompt_cache_accounting.py",
+          "label": "test_prompt_cache_accounting.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_prompt_cache_accounting.py"
+        },
+        {
+          "path": "backend/tests/unit/test_provider_acceptance_scripts.py",
+          "label": "test_provider_acceptance_scripts.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_provider_acceptance_scripts.py"
         }
       ],
-      "evidence": [],
+      "evidence": [
+        {
+          "path": "docs/evidence/live-rag-hardening.json",
+          "label": "live-rag-hardening.json",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/live-rag-hardening.json"
+        }
+      ],
       "proof": {
         "code": true,
         "tests": true,
-        "evidence": false
+        "evidence": true
       }
     },
     {
@@ -3074,7 +3237,7 @@
     {
       "id": "compliance-red-teaming",
       "title": "Compliance controls and red teaming",
-      "status": "partial",
+      "status": "implemented",
       "module_id": "09-evaluation-harness",
       "module_title": "Module 09 — Evaluation harness and regression evidence",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/09-evaluation-harness/README.md",
@@ -3082,12 +3245,32 @@
       "content_source": "concept",
       "summary": "Compliance controls encode obligations such as prohibited content or required disclaimers. Red teaming deliberately probes bypasses and unsafe behavior. A list of blocked phrases is a test aid, not legal certification, and testing a guardrail in isolation is not testing the whole agent.",
       "mental_model": "Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.",
-      "limitations": "Rule-based compliance checks plus admin-only guardrail red-team and bounded fuzz routes exist and are unit-tested, but compliance is not a mandatory chat boundary and the probes do not execute full agent trajectories. No mandatory compliance call in both chat paths, versioned policy approvals, full-trajectory attacks, regression gate, or compliance certification.",
+      "limitations": "Mandatory deterministic compliance runs before supported chat, document, structured-output and effect boundaries, with admin-only guardrail/fuzz tests. This is a local technical baseline, not legal certification or an exhaustive external red-team program.",
       "sources": [
         {
           "path": "backend/app/security/compliance.py",
           "label": "compliance.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/security/compliance.py"
+        },
+        {
+          "path": "backend/app/runtime/engine.py",
+          "label": "engine.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/engine.py"
+        },
+        {
+          "path": "backend/app/routes/chat.py",
+          "label": "chat.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/routes/chat.py"
+        },
+        {
+          "path": "backend/app/routes/stream.py",
+          "label": "stream.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/routes/stream.py"
+        },
+        {
+          "path": "backend/app/routes/documents.py",
+          "label": "documents.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/routes/documents.py"
         },
         {
           "path": "backend/app/routes/red_team.py",
@@ -3102,16 +3285,27 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_compliance.py"
         },
         {
+          "path": "backend/tests/integration/test_mandatory_compliance.py",
+          "label": "test_mandatory_compliance.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/integration/test_mandatory_compliance.py"
+        },
+        {
           "path": "backend/tests/security/test_resource_security.py",
           "label": "test_resource_security.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/security/test_resource_security.py"
         }
       ],
-      "evidence": [],
+      "evidence": [
+        {
+          "path": "docs/IMPLEMENTATION-EVIDENCE.md",
+          "label": "IMPLEMENTATION-EVIDENCE.md",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
+        }
+      ],
       "proof": {
         "code": true,
         "tests": true,
-        "evidence": false
+        "evidence": true
       }
     },
     {

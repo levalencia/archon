@@ -1,7 +1,7 @@
 # Context windows
 
-> **Implementation status:** `partial`
-> **Boundary:** Archon assembles and can compact bounded per-call input, but it does not expose a complete provenance inspector for every token on every route.
+> **Implementation status:** `implemented`
+> **Boundary:** sync and SSE share token-aware compaction with output reserve, and every runtime iteration fails closed before dispatch when its request bound exceeds the configured context allowance. Without a provider tokenizer, Archon counts every known provider-visible field: role/content bytes, image references, `tool_call_id`, tool calls, tool definitions, response format and response-contract schema. It uses one token per UTF-8 byte plus framing, revalidates image data/MIME/dimensions at the request boundary, and reserves 22k tokens per validated image. This is intentionally conservative, not an exact usage estimate. Persisted provenance describes initial effective context rather than every later tool/model call.
 
 ## Beginner explanation
 
@@ -60,10 +60,9 @@ sequenceDiagram
   Route->>Model: one bounded request
 ```
 
-The sync and streaming paths do not have identical implementation details, so inspect the actual call chain before claiming parity.
-`backend/app/runtime/support.py::prepare_messages` delegates to `build_messages`.
-`backend/app/routes/stream.py` invokes `auto_compact_context`; `backend/app/agents/agent.py` also contains a compaction call.
-The chat module's `_NoOpContextOptimizer` is explicitly pass-through and reports zero token usage, so it is not evidence of optimization.
+Sync and streaming now call the same `compact_effective_context` helper after `prepare_effective_context`, so their initial selection, compaction, source-ID partition, and manifest update share one implementation.
+`AgentRuntime` also bounds the full provider-visible request before every model call and returns `context_budget_exhausted` before dispatch when the configured allowance minus output reserve would be exceeded. The fallback bound includes roles, content, image references, `tool_call_id`, tool-call JSON, tool definitions, response format and the complete response-contract schema. It counts one token per UTF-8 byte plus explicit framing, revalidates image bytes/MIME/dimensions, and reserves 22,000 tokens per validated image; it intentionally sacrifices usable context rather than undercounting adversarial input when an exact provider tokenizer is unavailable.
+This per-iteration gate prevents late overflow after tool results, but it does not persist a separate provenance manifest for every later model call.
 
 ## Compaction
 
@@ -115,11 +114,11 @@ Tool descriptions are rendered into the system prompt while native schemas are s
 | Source symbol | Contract |
 |---|---|
 | `backend/app/runtime/context.py::build_messages` | Ordered context assembly and 20-message history bound |
-| `backend/app/runtime/support.py::prepare_messages` | Runtime adapter into the builder |
+| `backend/app/runtime/support.py::compact_effective_context` | Shared sync/SSE compaction and provenance-manifest update |
+| `backend/app/runtime/engine.py::AgentRuntime.run` | Per-provider-call messages/tools context admission and output reserve |
 | `backend/app/memory/scoped.py::ScopedEncryptedMemoryRepository.context_text` | Owner/project facts rendered as bullets |
 | `backend/app/services/auto_compact.py::auto_compact_context` | Threshold, summary, recent retention, and stats |
 | `backend/app/services/auto_compact.py::MAX_CONTEXT_TOKENS` | Default estimation budget, not provider proof |
-| `backend/app/routes/chat.py::_NoOpContextOptimizer` | Explicit pass-through compatibility object |
 
 `backend/tests/unit/test_wiring_gaps.py::TestImageInputPlumbing::test_images_flow_through_build_messages` checks image propagation.
 `backend/tests/unit/test_runtime_sse.py::test_chat_uses_typed_runtime_and_preserves_history` checks history in the typed runtime path.
@@ -162,10 +161,9 @@ Capturing full context provenance aids debugging but creates a high-value privac
 ## Lab versus production
 
 A lab can use mock providers, a 20-message bound, and local token estimates to demonstrate selection and compaction.
-Production should set model-specific limits, reserve output capacity, bound image/tool-schema contributions, monitor provider-reported usage, and test adversarial long inputs.
-It should also define data-processing policy for decrypted facts sent externally.
-Do not infer production SLOs or provider parity from unit tests.
-The `_NoOpContextOptimizer` should be called out honestly wherever it remains in a path.
+Production should set provider/model-specific limits, calibrate local estimates against reported usage, bound image/tool-schema contributions, monitor context failures, and test adversarial long inputs.
+It should also define data-processing policy for decrypted facts sent externally and decide whether per-call provenance warrants its additional privacy/storage cost.
+Do not infer a public SLO or exact tokenizer parity from the managed local acceptance.
 
 ## Exercise
 
@@ -194,7 +192,7 @@ For an advanced exercise, call `auto_compact_context` with a tiny `max_tokens` a
 4. **What does compaction preserve?** System messages and a configurable number of recent non-system messages.
 5. **What happens when summarization is empty?** A bounded prefix fallback is used.
 6. **Can logs contain the whole effective context?** They should not; use safe aggregate metadata.
-7. **Is `_NoOpContextOptimizer` a real token optimizer?** No; it is pass-through compatibility code.
+7. **What is the remaining context limitation?** Estimates are conservative rather than provider-exact, and persisted provenance describes initial effective context rather than every later model call.
 
 ## Related concepts
 

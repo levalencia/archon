@@ -55,6 +55,12 @@ class TestHealthEndpoints:
                 "background_job_worker": "up",
                 "vector_store": "sql-json-cosine",
                 "evidence_verifier": "disabled",
+                "runtime_controls": {
+                    "durable_monetary_budget": "disabled",
+                    "durable_effect_ledger": "disabled",
+                    "agent_deadline_seconds": 90.0,
+                    "rag_deadline_seconds": 60.0,
+                },
                 "embeddings": {
                     "provider": "mock",
                     "model": "text-embedding-3-small",
@@ -95,6 +101,12 @@ class TestHealthEndpoints:
                 "background_job_worker": "up",
                 "vector_store": "sql-json-cosine",
                 "evidence_verifier": "disabled",
+                "runtime_controls": {
+                    "durable_monetary_budget": "disabled",
+                    "durable_effect_ledger": "disabled",
+                    "agent_deadline_seconds": 90.0,
+                    "rag_deadline_seconds": 60.0,
+                },
                 "embeddings": {
                     "provider": "mock",
                     "model": "text-embedding-3-small",

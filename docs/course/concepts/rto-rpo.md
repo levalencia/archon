@@ -1,8 +1,8 @@
 # Recovery time and recovery point
 
-> **Documentation status:** Draft
-> **Concept status:** `partial`
-> **Status boundary:** The repository records measured observations from one bounded local recovery drill; no organization-approved RTO/RPO objective, SLO, or guarantee exists.
+> **Documentation status:** Complete for the local-drill/deferred-objective boundary
+> **Concept status:** `deferred`
+> **Status boundary:** The repository records measured observations from a bounded local recovery drill. Organization-approved RTO/RPO, off-site/PITR architecture and cloud failover are deferred with public/cloud deployment; the measured values are not objectives or guarantees.
 > **Used by:** [Module 14](../modules/14-local-operations/README.md)
 
 ## Beginner explanation
@@ -49,7 +49,7 @@ flowchart LR
 ```
 
 Archon is at the measurement stage for one local path, without the preceding business approval or production architecture.
-The page status is therefore `partial` even though scripts and a report exist.
+The page status is therefore `deferred`: the local measurement capability is implemented, while adopting business objectives and building cloud/PITR failover remains postponed with public cloud deployment.
 An objective should identify service scope, outage start, recovery endpoint, data class, exclusions, workload, region, and authority that accepted it.
 Repeated tests are needed because one fast result can be luck and one slow result can be environment noise.
 
@@ -172,7 +172,7 @@ Write two sentences beginning with “This drill observed …” and “This dri
 | missing encryption key | continuity is called out | key recovery is not drilled here |
 | report tampering | restricted file mode from drill | no signature or immutable evidence store |
 | secret leakage | ephemeral env and cleanup | `KEEP=1` intentionally retains sensitive artifacts |
-| one successful run | status remains partial | variability and failure rate unknown |
+| one successful run | objective adoption remains deferred | variability and failure rate unknown |
 | unavailable staff/provider | local automation avoids some dependencies | incident response and cloud dependencies untested |
 | objective drift | canonical evidence separates observation from target | copied numbers can still be misrepresented |
 
@@ -213,7 +213,7 @@ The current local dump/restore path cannot justify selecting an aggressive targe
 | governance | honest canonical evidence | approved objectives, owners, exceptions |
 | operations | scripted cleanup and stage failure | on-call, escalation, alerting, audit |
 
-Status remains `partial`: measurement machinery exists, but objectives and production validation do not.
+Status is `deferred`: measurement machinery exists, but adopting objectives and validating cloud recovery requires an authorized production topology and business owner.
 
 ## Interview answer
 
@@ -227,7 +227,7 @@ Status remains `partial`: measurement machinery exists, but objectives and produ
 2. When does the current recovery timer start and stop?
 3. Why does a zero selected-record difference not mean zero data-loss time?
 4. Which test inspects the drill’s structure?
-5. Why is the concept status `partial`?
+5. Why is objective adoption deferred even though the local measurement capability is implemented?
 6. Who should approve RTO/RPO?
 7. What additional evidence would production need?
 

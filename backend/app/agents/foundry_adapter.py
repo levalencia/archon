@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from app.runtime.anthropic import anthropic_request, anthropic_response, normalize_anthropic_usage
+from app.runtime.anthropic import (
+    anthropic_request,
+    anthropic_response,
+    normalize_anthropic_usage,
+    normalize_json_mode_content,
+)
 from app.runtime.capabilities import ProviderCapabilities
 from app.runtime.models import Message, ModelResponse, ToolDefinition
 from app.runtime.structured_output import ResponseContract
@@ -44,17 +49,18 @@ class FoundryAdapter:
     ) -> ModelResponse:
         if response_contract is not None and response_format is not None:
             raise ValueError("response_contract and response_format are mutually exclusive")
-        del response_contract
+        effective_format = "json" if response_contract is not None else response_format
         request = anthropic_request(
             messages,
             tools,
             max_tokens,
-            response_format=response_format,
+            response_format=effective_format,
             prompt_caching_enabled=self.prompt_caching_enabled,
+            json_prefill_enabled=False,
         )
         if hasattr(self._client, "messages"):
             response = await self._client.messages.create(model=self.model, **request)
-            return anthropic_response(response)
+            return anthropic_response(response, json_mode=effective_format == "json")
 
         # Compatibility seam for injected HTTP transports used in deterministic tests.
         response = await self._client.post("/messages", json={"model": self.model, **request})
@@ -65,6 +71,8 @@ class FoundryAdapter:
             for block in payload.get("content", ())
             if block.get("type") == "text"
         )
+        if effective_format == "json" and content:
+            content = normalize_json_mode_content(content)
         return ModelResponse(
             content=content or None,
             usage=normalize_anthropic_usage(payload.get("usage", {})),

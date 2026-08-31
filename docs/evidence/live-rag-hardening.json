@@ -1,0 +1,82 @@
+{
+  "schema": "archon.live-rag-hardening.v1",
+  "generated_at": "2026-08-31T19:43:42Z",
+  "base_commit": "a48737634c8022e32aeed0c7b4b5b1f670c1766b",
+  "candidate_commit": "86dbca1deb68637f9daa548a74660c696e98725f",
+  "runtime": {
+    "mode": "live-foundry",
+    "llm_provider": "foundry",
+    "llm_model": "claude-opus-4-6",
+    "embedding_provider": "foundry",
+    "embedding_model": "text-embedding-3-small",
+    "embedding_dimensions": 1536
+  },
+  "acceptance": {
+    "focused_tests": {
+      "passed": 156,
+      "skipped": 0,
+      "status": "pass"
+    },
+    "full_verification": {
+      "backend_passed": 1457,
+      "backend_skipped": 2,
+      "frontend_unit_passed": 48,
+      "playwright_passed": 30,
+      "status": "pass"
+    },
+    "post_review_hardening": {
+      "utf8_byte_upper_bound": "pass",
+      "tool_call_id_and_response_contract_bound": "pass",
+      "provider_bound_image_revalidation": "pass",
+      "adversarial_context_rejected_before_provider": "pass",
+      "absolute_runtime_deadline": "pass",
+      "absolute_rag_deadline": "pass",
+      "absolute_verifier_deadline": "pass",
+      "single_terminal_task_consistency": "pass",
+      "terminal_cleanup_indeterminate_signal": "pass"
+    },
+    "provider": {
+      "structured_output": "pass",
+      "native_tool_call": "pass",
+      "prompt_cache_accounting": "pass",
+      "cache_read_tokens_observed": 0,
+      "cache_write_tokens_observed": 0
+    },
+    "embedding": {
+      "vector_finite": true,
+      "vector_nonzero": true,
+      "ingest_query": "pass"
+    },
+    "rag": {
+      "upload": "pass",
+      "retrieval": "pass",
+      "grounded": true,
+      "claims": 1,
+      "unsupported": 0,
+      "verifier_status": "completed",
+      "verifier_rejected": 0,
+      "faithfulness_score": 1.0,
+      "faithfulness_method": "live_bounded_verifier",
+      "sentinel_answer_present": true
+    },
+    "postgres_control_plane": {
+      "budget_reservation_winners": 1,
+      "effect_reservation_winners": 1,
+      "status": "pass"
+    },
+    "managed_deployment": {
+      "mock_mode": "pass",
+      "live_foundry_mode": "pass",
+      "cleanup": "pass"
+    }
+  },
+  "boundaries": [
+    "Foundry Claude uses JSON prompting plus strict local Draft 2020-12 validation; native provider JSON Schema is not claimed.",
+    "Prompt-cache controls and usage accounting are wired, but this acceptance observed zero cache read/write tokens and makes no savings claim.",
+    "Durable idempotency provides first-writer-wins effect reservation; universal exactly-once behavior for arbitrary external systems is not claimed.",
+    "Context admission counts every known provider-visible field, including tool_call_id and response-contract schema, using one token per UTF-8 byte plus framing; provider-bound images are revalidated and reserve 22,000 tokens each, so the bound may reject usable context rather than undercount.",
+    "Context provenance describes the initial effective context; per-model-call provenance remains future hardening.",
+    "Runtime, RAG and verifier operations use absolute deadlines; one shielded first-terminal-wins persistence task prevents competing terminal sequences, and bounded cleanup logs an indeterminate state if it cannot finish.",
+    "The embedding deployment is a development Azure Foundry GlobalStandard deployment, not a production SLA claim."
+  ]
+}

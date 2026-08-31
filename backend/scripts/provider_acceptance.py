@@ -154,7 +154,7 @@ async def run_acceptance(
             results=checks,
         )
     try:
-        if not capabilities.json_schema:
+        if not capabilities.json_mode:
             checks.append(
                 result(
                     "structured_output",
@@ -242,33 +242,55 @@ async def run_acceptance(
                 )
             )
         else:
-            reads = [
-                response.usage.cache_read_input_tokens
-                for response in responses
-                if response.usage.cache_read_input_tokens is not None
-            ]
-            writes = [
-                response.usage.cache_write_input_tokens
-                for response in responses
-                if response.usage.cache_write_input_tokens is not None
-            ]
-            if not reads and not writes:
-                checks.append(
-                    result(
-                        "cache_metrics",
-                        "skipped",
-                        error_code="not_reported",
-                        error_category="provider",
+            try:
+                repeated_prefix = " ".join(["Archon bounded prompt-cache acceptance prefix"] * 320)
+                cache_responses = []
+                for marker in ("first", "second"):
+                    cache_responses.append(
+                        await _bounded(
+                            client.complete(
+                                [
+                                    Message(Role.SYSTEM, repeated_prefix),
+                                    Message(Role.USER, f"Reply with the word {marker}."),
+                                ],
+                                max_tokens=32,
+                            ),
+                            timeout,
+                        )
                     )
-                )
-            else:
-                checks.append(
-                    result(
-                        "cache_metrics",
-                        "pass",
-                        metrics={"read_tokens": sum(reads), "write_tokens": sum(writes)},
+                responses.extend(cache_responses)
+                reads = [
+                    response.usage.cache_read_input_tokens
+                    for response in cache_responses
+                    if response.usage.cache_read_input_tokens is not None
+                ]
+                writes = [
+                    response.usage.cache_write_input_tokens
+                    for response in cache_responses
+                    if response.usage.cache_write_input_tokens is not None
+                ]
+                if not reads and not writes:
+                    checks.append(
+                        result(
+                            "cache_metrics",
+                            "skipped",
+                            error_code="not_reported",
+                            error_category="provider",
+                        )
                     )
-                )
+                else:
+                    checks.append(
+                        result(
+                            "cache_metrics",
+                            "pass",
+                            metrics={
+                                "read_tokens": sum(reads),
+                                "write_tokens": sum(writes),
+                            },
+                        )
+                    )
+            except Exception as exc:
+                checks.append(error_result("cache_metrics", exc))
     finally:
         cleanup_error = await bounded_close(client, timeout)
         if cleanup_error is not None:
@@ -304,7 +326,7 @@ async def main() -> int:
                 kind="model",
                 execute_live=args.execute_live,
                 operation_timeout=args.timeout,
-                operation_count=3,
+                operation_count=5,
             )
         except ValueError:
             print(json.dumps({"schema": "archon.provider-acceptance", "status": "fail"}))

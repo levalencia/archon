@@ -25,6 +25,7 @@ from app.services.chunker import DocumentChunk
 from app.services.db_store import DatabaseStore, DocumentRow, RuntimeEventRow, VectorChunkRow
 from app.services.grounded_rag import (
     DocumentEvidence,
+    GroundedDeadlineExceededError,
     GroundedDocumentWorkflow,
     GroundedProviderError,
     _verify_document_claims,
@@ -207,6 +208,7 @@ async def test_enabled_verifier_filters_and_records_child_lineage(
     assert result.verification_status == "completed"
     assert result.verification_tokens == 18
     assert result.verification_rejected_count == rejected
+    assert result.metrics["faithfulness_method"] == "live_bounded_verifier"
     assert result.child_run_id is not None
     assert child.calls == 1
     child_input = child.messages[1].content
@@ -239,6 +241,7 @@ async def test_verifier_failure_fails_closed_and_no_evidence_never_delegates(
     assert result.unsupported == ("Alpha project uses Python",)
     assert result.verification_status == "failed"
     assert result.verification_rejected_count == 1
+    assert result.metrics["faithfulness_method"] == "bounded_verifier_fail_closed"
 
     unused = FakeProvider("must not be called")
     empty, _ = await _run(harness, FakeProvider("must not be called"), [], verifier_provider=unused)
@@ -558,3 +561,141 @@ async def test_owner_scope_restart_ledger_and_no_raw_database_content(harness: H
     assert quote not in raw
     assert answer not in raw
     assert "private-roadmap" not in raw
+
+
+@pytest.mark.asyncio
+async def test_grounded_deadline_detaches_cancellation_resistant_provider(
+    harness: Harness,
+) -> None:
+    started_provider = asyncio.Event()
+    finished = asyncio.Event()
+
+    class StubbornProvider:
+        async def complete(self, messages: Any, tools: Any = (), **kwargs: Any) -> Any:
+            del messages, tools, kwargs
+            started_provider.set()
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.05)
+            finished.set()
+            return ModelResponse(json.dumps({"claims": [{"text": "late", "evidence_ids": ["E1"]}]}))
+
+    workflow = GroundedDocumentWorkflow(
+        vector_store=FakeVectors([_row()]),  # type: ignore[arg-type]
+        embedding_service=FakeEmbeddings(),  # type: ignore[arg-type]
+        model_provider=StubbornProvider(),  # type: ignore[arg-type]
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+        deadline_seconds=0.5,
+    )
+    started = asyncio.get_running_loop().time()
+    run_task = asyncio.create_task(
+        workflow.run(
+            "What does Alpha use?",
+            owner_id="alice",
+            project_id="project-a",
+            correlation_id="deadline-correlation",
+            document_id=None,
+            document_ids={"doc-1"},
+        )
+    )
+    await asyncio.wait_for(started_provider.wait(), timeout=1.0)
+    with pytest.raises(GroundedDeadlineExceededError, match="grounded_deadline_exceeded"):
+        await run_task
+    assert asyncio.get_running_loop().time() - started < 0.6
+    # Full Linux coverage runs can delay scheduling of the already-detached task;
+    # this wait observes eventual exception consumption and is not the request deadline.
+    await asyncio.wait_for(finished.wait(), timeout=1.0)
+    run = (await harness.runs.list("alice")).items[0]
+    assert run.status == "failed"
+    assert run.stop_reason == "deadline_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_grounded_deadline_bounds_slow_run_creation_before_provider(
+    harness: Harness,
+) -> None:
+    original_ensure = harness.runs.ensure_run
+    finished = asyncio.Event()
+
+    async def slow_ensure(**kwargs: Any) -> Any:
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.08)
+        result = await original_ensure(**kwargs)
+        finished.set()
+        return result
+
+    harness.runs.ensure_run = slow_ensure  # type: ignore[method-assign]
+    provider = FakeProvider('{"claims":[]}')
+    workflow = GroundedDocumentWorkflow(
+        vector_store=FakeVectors([_row()]),  # type: ignore[arg-type]
+        embedding_service=FakeEmbeddings(),  # type: ignore[arg-type]
+        model_provider=provider,
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+        deadline_seconds=0.01,
+    )
+
+    started = asyncio.get_running_loop().time()
+    with pytest.raises(GroundedDeadlineExceededError, match="grounded_deadline_exceeded"):
+        await workflow.run(
+            "What does Alpha use?",
+            owner_id="alice",
+            project_id="project-a",
+            correlation_id="slow-run-creation",
+            document_id=None,
+            document_ids={"doc-1"},
+        )
+    assert asyncio.get_running_loop().time() - started < 0.08
+    assert provider.calls == 0
+    await asyncio.wait_for(finished.wait(), timeout=0.3)
+    assert provider.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_grounded_terminal_persistence_race_keeps_one_completed_reason(
+    harness: Harness,
+) -> None:
+    original_append = harness.runs.append
+    terminal_records: list[str] = []
+    terminal_finished = asyncio.Event()
+
+    async def slow_terminal_append(**kwargs: Any) -> Any:
+        if kwargs.get("kind") == "run_stopped":
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.15)
+            terminal_records.append(str(kwargs["payload"]["reason"]))
+            terminal_finished.set()
+            return None
+        return await original_append(**kwargs)
+
+    harness.runs.append = slow_terminal_append  # type: ignore[method-assign]
+    workflow = GroundedDocumentWorkflow(
+        vector_store=FakeVectors([_row()]),  # type: ignore[arg-type]
+        embedding_service=FakeEmbeddings(),  # type: ignore[arg-type]
+        model_provider=FakeProvider('{"claims":[]}'),
+        runs=harness.runs,
+        provider="fake-provider",
+        model="fake-model",
+        deadline_seconds=0.1,
+    )
+
+    result = await workflow.run(
+        "What does Alpha use?",
+        owner_id="alice",
+        project_id="project-a",
+        correlation_id="terminal-race",
+        document_id=None,
+        document_ids={"doc-1"},
+    )
+
+    assert result.answer
+    await asyncio.wait_for(terminal_finished.wait(), timeout=0.5)
+    assert terminal_records == ["completed"]

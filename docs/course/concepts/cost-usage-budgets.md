@@ -1,7 +1,7 @@
 # Cost, usage, and durable budgets
 
-> **Implementation status:** `partial`
-> **Status boundary:** exact nUSD run/project reservations and reconciliation are wired into sync and SSE model calls, but live-provider pricing, PostgreSQL contention, and deployment evidence are not recorded.
+> **Implementation status:** `implemented`
+> **Status boundary:** exact nUSD run/project reservations, input-bound admission, dispatch state, and reconciliation are wired into chat, RAG, and verifier model calls. Live Foundry and PostgreSQL contention evidence are recorded; price-book revisions and operator budget-management UX remain future work.
 > **Used by module:** [Module 07-run-ledger](../modules/07-run-ledger/README.md)
 > **Catalog ID:** `cost-usage-budgets`
 
@@ -92,10 +92,11 @@ The charge ledger stores safe identities, integer amounts, token counters, and t
 
 ## What this does not prove
 
-- Price tables are code/configuration and require maintenance when providers change prices.
-- SQLite concurrency tests and generated PostgreSQL SQL do not replace live PostgreSQL contention tests.
-- Deterministic provider doubles do not prove real-provider billing parity.
-- Local wiring does not prove a public deployment, production SLO, or legal/compliance guarantee.
+- Price tables are code/configuration and require maintenance and versioning when providers change prices.
+- The PostgreSQL contention probe proves atomic first-writer behavior in the managed local stack, not multi-region database semantics.
+- Live Foundry usage proves the reservation/reconciliation path executes; it does not prove invoice parity.
+- Local managed deployment evidence does not prove a public deployment, production SLO, or legal/compliance guarantee.
+- Periodic budget resets, operator resolution of indeterminate charges, and a budget-management UI remain outside this boundary.
 
 ## Exercise
 
@@ -109,7 +110,7 @@ The charge ledger stores safe identities, integer amounts, token counters, and t
 
 ## Interview answer
 
-> Archon enforces monetary budgets with durable integer nUSD accounts. Every model call reserves a conservative upper bound across fallback candidates before dispatch, marks dispatch durably, and reconciles exact provider-reported usage before returning the response. Unknown prices and insufficient capacity fail closed. Cancellation after dispatch becomes indeterminate rather than releasing potentially billable funds. The honest limitation is that live provider and PostgreSQL contention evidence is still pending.
+> Archon enforces monetary budgets with durable integer nUSD accounts. Every chat, RAG, or verifier model call reserves a conservative upper bound before dispatch, rejects an oversized serialized request, marks dispatch durably, and reconciles provider-reported usage. PostgreSQL contention proves one budget reservation winner and the live Foundry path exercises reconciliation. Unknown prices and insufficient capacity fail closed; post-dispatch ambiguity remains indeterminate. Price-book lifecycle and invoice parity remain explicit limits.
 
 ## Self-check
 

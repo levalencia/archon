@@ -123,17 +123,43 @@ class SequencedEmbedding(FakeEmbedding):
 @pytest.mark.asyncio
 async def test_provider_passes_adapter_contracts_and_report_is_deterministic() -> None:
     provider = FakeProvider(
-        ProviderCapabilities(native_tools=True, json_schema=True, cache_usage=True, usage=True)
+        ProviderCapabilities(
+            native_tools=True,
+            json_mode=True,
+            json_schema=True,
+            cache_usage=True,
+            usage=True,
+        )
     )
     report = await run_provider(settings(), execute_live=True, provider=provider, clock=lambda: NOW)
     assert report["status"] == "pass"
     assert report["preflight"]["execution_mode"] == "deterministic"
     assert [item["status"] for item in report["results"]] == ["pass", "pass", "pass"]
-    assert provider.calls == 2
+    assert provider.calls == 4
     assert isinstance(provider.requests[0]["kwargs"].get("response_contract"), ResponseContract)
     assert not provider.requests[0]["tools"]
     assert provider.requests[1]["tools"][0].name == "acceptance_probe"
     assert provider.closed
+    assert "unit-test-credential" not in json.dumps(report)
+
+
+@pytest.mark.asyncio
+async def test_provider_accepts_json_mode_with_strict_local_schema_validation() -> None:
+    provider = FakeProvider(
+        ProviderCapabilities(
+            native_tools=False,
+            json_mode=True,
+            json_schema=False,
+            cache_usage=False,
+            usage=True,
+        )
+    )
+    report = await run_provider(settings(), execute_live=True, provider=provider, clock=lambda: NOW)
+
+    structured = report["results"][0]
+    assert structured["status"] == "pass"
+    assert structured["metrics"] == {"schema_valid": True}
+    assert isinstance(provider.requests[0]["kwargs"].get("response_contract"), ResponseContract)
     assert "unit-test-credential" not in json.dumps(report)
 
 
@@ -148,13 +174,15 @@ async def test_provider_unsupported_capabilities_skip_without_calls() -> None:
 
 @pytest.mark.asyncio
 async def test_provider_timeout_and_malformed_responses_are_bounded() -> None:
-    delayed = FakeProvider(ProviderCapabilities(native_tools=True, json_schema=True), delay=0.05)
+    delayed = FakeProvider(
+        ProviderCapabilities(native_tools=True, json_mode=True, json_schema=True), delay=0.05
+    )
     timed = await run_provider(
         settings(), execute_live=True, provider=delayed, timeout=0.001, clock=lambda: NOW
     )
     assert [item["error"]["code"] for item in timed["results"][:2]] == ["timeout", "timeout"]
     malformed = FakeProvider(
-        ProviderCapabilities(native_tools=True, json_schema=True), malformed=True
+        ProviderCapabilities(native_tools=True, json_mode=True, json_schema=True), malformed=True
     )
     broken = await run_provider(
         settings(), execute_live=True, provider=malformed, clock=lambda: NOW
@@ -162,7 +190,7 @@ async def test_provider_timeout_and_malformed_responses_are_bounded() -> None:
     assert [item["status"] for item in broken["results"][:2]] == ["fail", "fail"]
     assert all(set(item.get("error", {})) <= {"category", "code"} for item in broken["results"])
 
-    hanging = HangingCloseProvider(ProviderCapabilities(json_schema=True))
+    hanging = HangingCloseProvider(ProviderCapabilities(json_mode=True, json_schema=True))
     cleanup = await run_provider(
         settings(), execute_live=True, provider=hanging, timeout=0.001, clock=lambda: NOW
     )
