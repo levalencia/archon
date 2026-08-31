@@ -343,6 +343,7 @@ test('all top-level routes and a refreshed chat deep link render without browser
   const routes: Array<[string, RegExp]> = [
     ['/login', /^Archon$/], ['/dashboard', /^Dashboard$/], ['/documents', /Documents & RAG/],
     ['/eval', /Recorded Run Evaluations/], ['/memory', /Memory Inspector/], ['/settings', /Skills & Integrations/],
+    ['/learn/map', /Explore Archon as a living concept map/],
   ];
   for (const [path, heading] of routes) {
     await page.goto(path);

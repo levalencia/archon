@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { isAuthenticated, getUser, logout } from '$lib/auth';
-  import { MessageSquare, LayoutDashboard, FileText, Shield, Settings, Brain, LogOut, Zap } from 'lucide-svelte';
+  import { MessageSquare, LayoutDashboard, FileText, Shield, Settings, Brain, LogOut, Zap, Network } from 'lucide-svelte';
 
   let { children } = $props();
   let user = $state<{ user_id: string; username: string } | null>(null);
@@ -21,6 +21,7 @@
     { href: '/documents', label: 'Documents', icon: FileText },
     { href: '/eval', label: 'Eval', icon: Shield },
     { href: '/memory', label: 'Memory', icon: Brain },
+    { href: '/learn/map', label: 'Learn', icon: Network },
     { href: '/settings', label: 'Skills & Integrations', icon: Settings },
   ];
 
@@ -50,7 +51,7 @@
       {#if user}<button onclick={logout} class="m-3 flex min-h-11 items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-[var(--danger)] hover:bg-[rgba(255,107,114,.1)]"><LogOut size={18}/> Log out</button>{/if}
     </aside>
     <main class="min-w-0 flex-1 overflow-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">{@render children()}</main>
-    <nav class="fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 border-t border-[var(--border)] bg-[rgba(16,21,29,.98)] pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Mobile navigation">
+    <nav class="fixed inset-x-0 bottom-0 z-50 grid grid-cols-7 border-t border-[var(--border)] bg-[rgba(16,21,29,.98)] pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Mobile navigation">
       {#each navItems as item}
         <a href={item.href} aria-label={item.label} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-[9px] no-underline {isActive(item.href, $page.url.pathname) ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}">
           <item.icon size={19}/><span class="max-w-full truncate">{item.label === 'Skills & Integrations' ? 'Settings' : item.label}</span>

@@ -6,7 +6,7 @@
 
 A local-first system for building, governing, inspecting, and evaluating AI agent runs.
 
-[Architecture](docs/ARCHITECTURE-DIAGRAMS.md) · [CI and local run](docs/CI-PIPELINES-AND-LOCAL-RUN.md) · [Implementation evidence](docs/IMPLEMENTATION-EVIDENCE.md) · [Course](docs/course/README.md) · [Interview route](docs/course/tracks/interview-preparation.md) · [Demo](docs/DEMO-SCRIPT.md)
+[Architecture](docs/ARCHITECTURE-DIAGRAMS.md) · [CI and local run](docs/CI-PIPELINES-AND-LOCAL-RUN.md) · [Implementation evidence](docs/IMPLEMENTATION-EVIDENCE.md) · [Course](docs/course/README.md) · [Visual learning](docs/visual-learning/README.md) · [Interview route](docs/course/tracks/interview-preparation.md) · [Demo](docs/DEMO-SCRIPT.md)
 
 </div>
 
@@ -32,8 +32,8 @@ Archon is a serious local portfolio system. It is not a public production servic
 |---|---|
 | Deployment target | Production-like local Docker Compose on macOS |
 | Local services | 7 containers; only the loopback gateway publishes a host port |
-| Backend | **1,389 passed, 2 expected skips, 87.25% coverage** |
-| Frontend | Svelte **0 errors / 0 warnings**, **44 Vitest**, production build, **21 Playwright** |
+| Backend | **1,408 passed, 2 expected skips, 87.30% coverage** |
+| Frontend | Svelte **0 errors / 0 warnings**, **48 Vitest**, production build, **26 Playwright** |
 | Capability manifest | **16 entries validated** |
 | Portfolio benchmark | **12 scenarios, 120/120 iterations passed**, zero external cost |
 | Disaster recovery | **RPO 0 records**, measured **RTO 24.787 seconds** |
@@ -51,7 +51,7 @@ Choose the route that matches your goal.
 | Recruiter or engineering manager | This README, then [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md) |
 | Interviewer or candidate | [2/15/45-minute interview route](docs/course/tracks/interview-preparation.md) |
 | Engineer reviewing the system | [Architecture Diagrams](docs/ARCHITECTURE-DIAGRAMS.md) and [Code Bookmarks](docs/course/reference/code-bookmarks.md) |
-| Learner | [Archon Course](docs/course/README.md) |
+| Learner | [Visual Learning Studio](docs/visual-learning/README.md), then the [Archon Course](docs/course/README.md) |
 | Operator | [Local Operations](docs/course/modules/14-local-operations/README.md) and [DR Runbook](docs/DR-RUNBOOK.md) |
 | Demo presenter | [Demo Script](docs/DEMO-SCRIPT.md) |
 
@@ -336,7 +336,8 @@ docker-compose.local.yml Verified seven-service local target
 
 ## Documentation routes
 
-- [Course home](docs/course/README.md): 16 modules and 64 canonical concepts
+- [Visual Learning Studio](docs/visual-learning/README.md): interactive `/learn/map` over 66 canonical concepts
+- [Course home](docs/course/README.md): 16 modules and 66 canonical concepts
 - [Learn from zero](docs/course/tracks/learn-from-zero.md)
 - [Interview preparation](docs/course/tracks/interview-preparation.md)
 - [Company workshops](docs/course/tracks/company-workshops.md)

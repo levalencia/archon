@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Conversation } from '$lib/types';
   import { authenticatedFetch } from '$lib/auth';
-  import { LayoutDashboard, FileText, ShieldCheck, Brain, Settings, MessageSquarePlus, X } from 'lucide-svelte';
+  import { LayoutDashboard, FileText, ShieldCheck, Brain, Settings, MessageSquarePlus, X, Network } from 'lucide-svelte';
   let { activeId = '', onSelect = (_id: string) => {}, onNew = () => {}, onClose = () => {} }: { activeId?: string; onSelect?: (id: string) => void; onNew?: () => void; onClose?: () => void } = $props();
   let conversations: Conversation[] = $state([]);
   let loading = $state(true); let error = $state('');
@@ -10,6 +10,7 @@
     { href: '/documents', label: 'Documents', icon: FileText },
     { href: '/eval', label: 'Eval', icon: ShieldCheck },
     { href: '/memory', label: 'Memory', icon: Brain },
+    { href: '/learn/map', label: 'Visual learning', icon: Network },
     { href: '/settings', label: 'Skills & Integrations', icon: Settings },
   ];
   async function load() { loading = true; error = ''; try { const r = await authenticatedFetch('/api/conversations'); if (!r.ok) throw new Error(`Request failed (${r.status})`); conversations = await r.json(); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load conversations'; } finally { loading = false; } }

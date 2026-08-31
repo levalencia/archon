@@ -12,7 +12,7 @@ Archon is a local Agent Reliability Workbench, not a publicly deployed productio
 - **Interview study:** Luis or any engineer preparing concise architecture and trade-off explanations.
 - **Technical reference:** contributors tracing a concept to exact code, tests, and runtime evidence.
 
-Start with the [syllabus](syllabus.md) for prerequisites, outcomes, pacing, and capstone artifacts. Use the [concept map](concept-map.md) when a module assumes unfamiliar vocabulary. Use the [AIAMastery Days 1–30 coverage map](course-concept-coverage.md) to see every course topic—including partial, not-implemented, and deferred concepts—and the generated [`concept-catalog.yaml`](concept-catalog.yaml) for machine-readable source/test/evidence mappings. The repository-wide [deferred-gap register](../REMAINING-DEFERRED-GAPS.md) explains the architecture and evidence required to revisit the six intentional capstone omissions.
+Start with the [syllabus](syllabus.md) for prerequisites, outcomes, pacing, and capstone artifacts. Use the [concept map](concept-map.md) when a module assumes unfamiliar vocabulary. For interactive exploration, open the [Visual Learning Studio](../visual-learning/README.md) at `/learn/map`; it renders all 66 catalog concepts from these same canonical sources. Use the [AIAMastery Days 1–30 coverage map](course-concept-coverage.md) to see every course topic—including partial, not-implemented, and deferred concepts—and the generated [`concept-catalog.yaml`](concept-catalog.yaml) for machine-readable source/test/evidence mappings. The repository-wide [deferred-gap register](../REMAINING-DEFERRED-GAPS.md) explains the architecture and evidence required to revisit the six intentional capstone omissions.
 
 ## Information architecture
 
