@@ -1,0 +1,21 @@
+{
+  "schema": "archon.notebooklm-artifact-review",
+  "version": 1,
+  "source_commit": "<40-character git commit>",
+  "notebook_id": "<notebook recipe id>",
+  "artifact_type": "<audio|video|slide-deck|infographic|mind-map|flashcards|quiz>",
+  "artifact_path": "<external local path>",
+  "promptbook_section": "<section title>",
+  "selected_sources": [],
+  "generated_at": "<UTC ISO-8601 timestamp>",
+  "review": {
+    "comprehension": 0,
+    "structure": 0,
+    "relationships": 0,
+    "accuracy": 0,
+    "boundaries": 0,
+    "interview_value": 0,
+    "notes": "",
+    "accepted": false
+  }
+}

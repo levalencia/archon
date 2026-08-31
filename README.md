@@ -32,8 +32,8 @@ Archon is a serious local portfolio system. It is not a public production servic
 |---|---|
 | Deployment target | Production-like local Docker Compose on macOS |
 | Local services | 7 containers; only the loopback gateway publishes a host port |
-| Backend | **1,408 passed, 2 expected skips, 87.30% coverage** |
-| Frontend | Svelte **0 errors / 0 warnings**, **48 Vitest**, production build, **26 Playwright** |
+| Backend | **1,415 passed, 2 expected skips, 87.23% coverage** |
+| Frontend | Svelte **0 errors / 0 warnings**, **48 Vitest**, production build, **30 Playwright** |
 | Capability manifest | **16 entries validated** |
 | Portfolio benchmark | **12 scenarios, 120/120 iterations passed**, zero external cost |
 | Disaster recovery | **RPO 0 records**, measured **RTO 24.787 seconds** |
@@ -336,7 +336,7 @@ docker-compose.local.yml Verified seven-service local target
 
 ## Documentation routes
 
-- [Visual Learning Studio](docs/visual-learning/README.md): interactive `/learn/map` over 66 canonical concepts
+- [Visual Learning Studio](docs/visual-learning/README.md): Roadmap, Stories, Architecture, Evidence, and NotebookLM media recipes at `/learn`
 - [Course home](docs/course/README.md): 16 modules and 66 canonical concepts
 - [Learn from zero](docs/course/tracks/learn-from-zero.md)
 - [Interview preparation](docs/course/tracks/interview-preparation.md)

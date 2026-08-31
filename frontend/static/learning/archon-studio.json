@@ -1,23 +1,93 @@
 {
-  "schema": "archon.visual-learning-graph",
-  "version": 1,
+  "schema": "archon.visual-learning-studio",
+  "version": 2,
   "generated_from": [
     "docs/course/concept-catalog.yaml",
-    "docs/visual-learning/map-curation.yaml",
     "docs/course/concepts/*.md",
-    "docs/course/modules/*/README.md"
+    "docs/course/modules/*/README.md",
+    "docs/visual-learning/studio-curation.yaml",
+    "docs/visual-learning/notebooklm-sources.yaml",
+    "docs/visual-learning/notebooklm-promptbook.md",
+    "docs/visual-learning/notebooklm-runbook.md"
   ],
   "stats": {
     "concepts": 66,
-    "modules": 15,
-    "edges": 78,
-    "tours": 4,
+    "modules": 16,
+    "stories": 5,
+    "architecture_layers": 5,
+    "notebooks": 5,
     "statuses": {
       "deferred": 6,
       "implemented": 46,
       "partial": 14
     }
   },
+  "roadmap": [
+    {
+      "id": "foundations",
+      "title": "Foundations and bounded runtime",
+      "question": "What is an agent, and how does Archon keep execution bounded?",
+      "outcome": "Explain the trust boundary, typed contracts, state machine, and ReAct loop.",
+      "module_ids": [
+        "00-agent-anatomy",
+        "01-python-architecture",
+        "02-typed-runtime",
+        "03-react-loop"
+      ]
+    },
+    {
+      "id": "governance",
+      "title": "Tools and governance",
+      "question": "How can a model request effects without receiving unchecked power?",
+      "outcome": "Trace a tool call through schema validation, policy, approval, isolation, and idempotency.",
+      "module_ids": [
+        "04-tools-and-schemas",
+        "05-policy-and-approvals"
+      ]
+    },
+    {
+      "id": "knowledge",
+      "title": "Context, memory, and grounded knowledge",
+      "question": "What information enters a run, persists between runs, or supports an answer?",
+      "outcome": "Distinguish context, durable memory, retrieval, grounding, citations, and faithfulness.",
+      "module_ids": [
+        "06-context-and-memory",
+        "07-run-ledger",
+        "08-rag-grounding"
+      ]
+    },
+    {
+      "id": "evaluation",
+      "title": "Evaluation and resilience",
+      "question": "How does Archon measure quality and respond to failure?",
+      "outcome": "Explain recorded evaluation, drift, retries, breakers, fallbacks, rate limits, and jobs.",
+      "module_ids": [
+        "09-evaluation-harness",
+        "10-resilience"
+      ]
+    },
+    {
+      "id": "coordination",
+      "title": "Delegation and governed integrations",
+      "question": "How does work cross agent and process boundaries safely?",
+      "outcome": "Explain bounded delegation, lineage, signed envelopes, MCP transports, and inventory.",
+      "module_ids": [
+        "11-bounded-delegation",
+        "12-governed-mcp"
+      ]
+    },
+    {
+      "id": "product-operations",
+      "title": "Product surface and operations",
+      "question": "How does the user inspect Archon, and how is the local system operated?",
+      "outcome": "Demonstrate auth, SSE, observability, multimodal artifacts, Docker, migrations, backup, and readiness.",
+      "module_ids": [
+        "13-auth-ui-observability",
+        "14-local-operations",
+        "15-capstone"
+      ]
+    }
+  ],
   "modules": [
     {
       "id": "00-agent-anatomy",
@@ -25,6 +95,9 @@
       "summary": "By the end you can name an agent's boundaries, trace startup and one request, and separate control logic from model behavior. Prerequisites: basic Python functions, HTTP, and the terms model , tool , policy , event , and adapter . Start with Agent anatomy.",
       "mental_model": "A chatbot maps text to text. An agent may ask a model what to do, invoke effects, feed observations back, and stop. Therefore the model is an untrusted planner inside a deterministic control plane—not the application. Archon is a custom typed runtime ; it does not use an agent framework.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/00-agent-anatomy/README.md",
+      "concept_ids": [
+        "agent-anatomy"
+      ],
       "concept_count": 1
     },
     {
@@ -33,6 +106,10 @@
       "summary": "You will read Archon's Python boundaries, explain structural typing and dependency injection (DI), and identify where async work can block or be cancelled. Prerequisites: classes, type hints, await , and context managers. Canonical reading: OOP, Protocols, and DI and Async Python.",
       "mental_model": "The runtime should depend on capabilities, not vendors or databases. Frozen dataclasses carry values; Protocols define ports; concrete adapters are injected at application/request composition roots.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/01-python-architecture/README.md",
+      "concept_ids": [
+        "python-protocols-di",
+        "async-python"
+      ],
       "concept_count": 2
     },
     {
@@ -41,6 +118,12 @@
       "summary": "You will trace immutable messages and native tool calls, model runtime transitions, and interpret every terminal StopReason . Prerequisites: Modules 00–01 and Python dataclasses/enums. Read Typed runtime and State machines, then use the runtime walkthrough.",
       "mental_model": "AgentRuntime.run is an explicit bounded state machine even though it is implemented as a loop rather than a state-machine library. Typed values prevent text scraping from becoming an execution protocol.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/02-typed-runtime/README.md",
+      "concept_ids": [
+        "typed-runtime",
+        "runtime-state-machine",
+        "provider-adapters-capability-parity",
+        "structured-output-prompt-caching"
+      ],
       "concept_count": 4
     },
     {
@@ -49,6 +132,10 @@
       "summary": "You will distinguish reasoning/action/observation iteration from reflection, verifier delegation, and post-run evaluation; then test a bounded recovery path. Prerequisites: Module 02. Read ReAct, State machines, and Idempotency.",
       "mental_model": "ReAct alternates model decisions and tool observations. Archon does not expose hidden chain-of-thought; it handles provider-native calls and visible observations. A tool error can be returned to the model for another bounded attempt. That is local error feedback—not final-answer reflection. Separately, optional BoundedReflectionService can critique a completed unstructured draft without tools and perform at most one hard-bounded revision. The evidence-only verifier child and recorded-run evaluations are also…",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/03-react-loop/README.md",
+      "concept_ids": [
+        "react-loop",
+        "generic-self-reflection"
+      ],
       "concept_count": 2
     },
     {
@@ -57,6 +144,10 @@
       "summary": "You will register a typed tool, explain validation order, and test malformed arguments without executing a handler. Prerequisites: Modules 01–03 and JSON objects. Read Tool contracts, JSON Schema, and the tool registry walkthrough.",
       "mental_model": "A tool is an effectful capability behind metadata and gates—not an arbitrary Python function offered directly to a model. Registration validates trusted metadata; execution validates untrusted arguments, permissions, timeout, and audit behavior.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/04-tools-and-schemas/README.md",
+      "concept_ids": [
+        "tool-contracts",
+        "json-schema-subset"
+      ],
       "concept_count": 2
     },
     {
@@ -65,6 +156,12 @@
       "summary": "You will predict ALLOW/ASK/DENY, explain exact-bound durable approval, and test atomic one-shot decisions. Prerequisites: Modules 02–04, hashes, and database transactions. Read Policy engine, Durable approvals, Idempotency, and the policy/approval walkthrough.",
       "mental_model": "Policy answers whether a classified request may proceed. Approval supplies a human decision only for ASK ; it does not replace policy. A receipt binds owner, conversation, run, native call ID, canonical tool name, and canonical argument hash so approval cannot be replayed for changed work.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/05-policy-and-approvals/README.md",
+      "concept_ids": [
+        "policy-engine",
+        "durable-approvals",
+        "idempotency",
+        "execution-isolation-sandbox"
+      ],
       "concept_count": 4
     },
     {
@@ -73,6 +170,14 @@
       "summary": "A model does not remember a chat by itself. Archon constructs each request from a system instruction, tool descriptions, selected persistent facts, recent conversation messages, and the new user turn. Context is the bounded input sent now; conversation history is durable message data; memory is selected durable facts. Treating these as separate stores prevents accidental cross-user recall and makes deletion and provenance comprehensible.",
       "mental_model": "Think of a packing list, not a brain: the database owns history and facts; build messages chooses what enters this model call. Facts are an encrypted, quota-bounded notebook keyed by (user id, project id) . A checkpoint freezes state for restoration/forking; it is not automatically replayed model execution.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/06-context-and-memory/README.md",
+      "concept_ids": [
+        "context-windows",
+        "conversation-lifecycle",
+        "encrypted-memory",
+        "checkpoints",
+        "skills-project-instructions",
+        "pii-redaction-data-boundaries"
+      ],
       "concept_count": 6
     },
     {
@@ -81,6 +186,13 @@
       "summary": "A chat answer alone cannot explain what an agent did. The Run Ledger stores an ordered, owner-scoped trajectory: policy decisions, tool metadata, evidence IDs, token totals, stop reason, lineage, and bounded display metadata. Replay reads stored facts; fork copies safe conversation state at an event boundary; compare places two stored trajectories side by side. None reruns a model or tool.",
       "mental_model": "The ledger is a flight recorder. RunRow is the flight summary; RuntimeEventRow records ordered instrument readings. It deliberately stores hashes, IDs, counts, and decisions rather than prompts, chain-of-thought, tool arguments, or results.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/07-run-ledger/README.md",
+      "concept_ids": [
+        "run-ledger",
+        "replay-fork-compare",
+        "cost-usage-budgets",
+        "export-share-redaction",
+        "public-anonymous-sharing"
+      ],
       "concept_count": 5
     },
     {
@@ -89,6 +201,15 @@
       "summary": "RAG retrieves document chunks before asking a model to answer. An embedding maps text to numbers; retrieval ranks chunks by similarity; generation writes claims from those chunks; verification decides whether each claim has conservative support; citations point back to evidence. A similar chunk is not proof that an answer is true.",
       "mental_model": "Retrieval is a librarian, generation is a writer, verification is a fact checker, and citations are shelf labels. One role cannot substitute for another.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/08-rag-grounding/README.md",
+      "concept_ids": [
+        "chunking",
+        "embeddings",
+        "retrieval",
+        "rag",
+        "groundedness",
+        "faithfulness",
+        "citations"
+      ],
       "concept_count": 7
     },
     {
@@ -97,6 +218,14 @@
       "summary": "An evaluation turns examples and expectations into repeatable measurements. Archon has a lightweight live-call EvalHarness , heuristic evaluators, and a stronger durable path that evaluates already-completed Run Ledger trajectories against a versioned, hash-verified dataset. The durable path does not call a model, retriever, or tool.",
       "mental_model": "A test harness is a ruler. A versioned dataset says what is measured; an evaluator defines marks on the ruler; persistence makes results auditable; a threshold is a policy decision. A precise ruler can consistently measure the wrong thing, so validity must be argued separately from reproducibility.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/09-evaluation-harness/README.md",
+      "concept_ids": [
+        "evaluation-harness",
+        "datasets",
+        "compliance-red-teaming",
+        "learning-optimization-drift",
+        "fine-tuning-vertical-adaptation",
+        "autonomous-unapproved-production-optimization"
+      ],
       "concept_count": 6
     },
     {
@@ -105,6 +234,13 @@
       "summary": "Failures are normal: providers time out, clients disconnect, retries duplicate work, and traffic spikes. Resilience means bounding damage and preserving a truthful terminal state—not merely “trying again.” Archon demonstrates idempotent creation/finalization guards, bounded retries in selected paths, timeout/cancellation handling, a concurrency-safe circuit breaker, fallback adapters, and sliding-window rate limiting.",
       "mental_model": "Use layered bulkheads: idempotency prevents duplicate state; deadlines bound time; cancellation stops unwanted work and finalizes evidence; retries handle classified transient failures within a budget; a breaker stops hammering an unhealthy dependency; fallback changes the service path; rate limiting controls admission. Each layer has different semantics.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/10-resilience/README.md",
+      "concept_ids": [
+        "retries-timeouts-cancellation",
+        "circuit-breaker",
+        "fallback",
+        "rate-limiting",
+        "background-jobs-scheduling"
+      ],
       "concept_count": 5
     },
     {
@@ -113,6 +249,13 @@
       "summary": "Archon delegates only evidence review, not open-ended work. The child sees a sealed claim/evidence packet and has no tools. Code deterministically validates that boundary and output schema; the verdict inside it is model-generated and can still be wrong.",
       "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable…",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/11-bounded-delegation/README.md",
+      "concept_ids": [
+        "bounded-delegation",
+        "verifier-child",
+        "parent-child-lineage",
+        "agent-communication-security",
+        "distributed-agent-networks"
+      ],
       "concept_count": 5
     },
     {
@@ -121,6 +264,10 @@
       "summary": "MCP standardizes tool discovery and calls; it does not confer trust. Archon supports one concrete path: deployment-owned stdio profiles become scoped inventory, then immutable runtime bindings that still cross schema, policy, approval and timeout controls.",
       "mental_model": "Think “controlled adapter pipeline,” not “install any plugin.” Operators own executable profiles; users select only safe profile IDs. Discovery imports bounded metadata. The runtime exposes enabled healthy tools only, revalidates the binding immediately before transport use, then sends it through SecureToolRegistry. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable evidence;…",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/12-governed-mcp/README.md",
+      "concept_ids": [
+        "mcp",
+        "mcp-transports-inventory"
+      ],
       "concept_count": 2
     },
     {
@@ -129,6 +276,15 @@
       "summary": "One request crosses several different boundaries: credentials establish identity, owner/project scopes data, policy governs actions, SSE projects progress, and observability emits safe operational signals. None substitutes for another. SSE is transient; durable run and evaluation records have separate persistence contracts.",
       "mental_model": "Identity is the root label, owner/project is the data fence, policy is the action gate, and observability is the instrument panel. SSE is only a projection of typed events; the Run Ledger remains durable evidence. Logs describe, metrics aggregate, and traces time the path—none alone proves semantic correctness. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable evidence; mutable…",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/13-auth-ui-observability/README.md",
+      "concept_ids": [
+        "authentication",
+        "authorization-ownership",
+        "sse",
+        "structured-logging",
+        "metrics",
+        "tracing-opentelemetry",
+        "multimodal-and-artifacts"
+      ],
       "concept_count": 7
     },
     {
@@ -137,10 +293,29 @@
       "summary": "Operations asks whether a specific build can start, become ready, preserve schema, pass clean-worker gates, and recover durable state. Compose files and scripts are recipes; only revision- and environment-scoped executions are observations.",
       "mental_model": "Operations is a chain of evidence: configuration → start → migrate → ready → serve → observe → back up → destroy → restore → verify exact records. A manifest is a recipe, not proof the meal was cooked. A backup is unproven until restored. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable evidence; mutable authority never comes from model prose.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/14-local-operations/README.md",
+      "concept_ids": [
+        "liveness-readiness",
+        "docker-compose",
+        "migrations",
+        "ci",
+        "backup-restore",
+        "rto-rpo",
+        "high-throughput-serving",
+        "kubernetes-public-deployment"
+      ],
       "concept_count": 8
+    },
+    {
+      "id": "15-capstone",
+      "title": "Module 15 — Capstone: evidence-first demo and interview defense",
+      "summary": "The capstone is claim control: say exactly what exists, how it is wired, what tests establish, what was observed, and what remains unverified. A persuasive demo does not merge distinct proof paths or turn local evidence into production claims.",
+      "mental_model": "Build the story as a proof graph. Every claim points to source, test, observed artifact, and limitation. The graph may stop at local observation; never draw an unsupported edge to production. The demo spine is Policy → Run → Approval → Tool → Evidence → Evaluation, with auth/ownership around it and operations beneath it. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable evidence;…",
+      "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/15-capstone/README.md",
+      "concept_ids": [],
+      "concept_count": 0
     }
   ],
-  "nodes": [
+  "concepts": [
     {
       "id": "agent-anatomy",
       "title": "Agent anatomy and trust boundaries",
@@ -188,7 +363,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "python-protocols-di",
@@ -237,7 +417,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "async-python",
@@ -286,7 +471,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "typed-runtime",
@@ -335,7 +525,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "runtime-state-machine",
@@ -374,7 +569,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "react-loop",
@@ -418,7 +618,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "generic-self-reflection",
@@ -477,7 +682,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "tool-contracts",
@@ -526,7 +736,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "json-schema-subset",
@@ -560,7 +775,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "policy-engine",
@@ -604,7 +824,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "durable-approvals",
@@ -658,7 +883,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "idempotency",
@@ -702,7 +932,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "context-windows",
@@ -746,7 +981,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "conversation-lifecycle",
@@ -790,7 +1030,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "encrypted-memory",
@@ -834,7 +1079,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "checkpoints",
@@ -878,7 +1128,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "run-ledger",
@@ -922,7 +1177,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "replay-fork-compare",
@@ -966,7 +1226,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "chunking",
@@ -1000,7 +1265,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "embeddings",
@@ -1039,7 +1309,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "retrieval",
@@ -1083,7 +1358,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "rag",
@@ -1127,7 +1407,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "groundedness",
@@ -1161,7 +1446,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "faithfulness",
@@ -1205,7 +1495,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "citations",
@@ -1239,7 +1534,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "evaluation-harness",
@@ -1293,7 +1593,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "datasets",
@@ -1337,7 +1642,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "retries-timeouts-cancellation",
@@ -1391,7 +1701,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "circuit-breaker",
@@ -1425,7 +1740,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "fallback",
@@ -1464,7 +1784,12 @@
           "label": "local-portfolio-benchmark.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-portfolio-benchmark.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "rate-limiting",
@@ -1508,7 +1833,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "bounded-delegation",
@@ -1552,7 +1882,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "verifier-child",
@@ -1596,7 +1931,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "parent-child-lineage",
@@ -1640,7 +1980,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "mcp",
@@ -1684,7 +2029,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "mcp-transports-inventory",
@@ -1733,7 +2083,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "authentication",
@@ -1777,7 +2132,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "authorization-ownership",
@@ -1821,7 +2181,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "sse",
@@ -1865,7 +2230,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "structured-logging",
@@ -1909,7 +2279,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "metrics",
@@ -1953,7 +2328,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "tracing-opentelemetry",
@@ -1997,7 +2377,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "liveness-readiness",
@@ -2036,7 +2421,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "docker-compose",
@@ -2075,7 +2465,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "migrations",
@@ -2119,7 +2514,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "ci",
@@ -2158,7 +2558,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "backup-restore",
@@ -2207,7 +2612,12 @@
           "label": "local-dr-report.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-dr-report.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "rto-rpo",
@@ -2246,7 +2656,12 @@
           "label": "local-dr-report.json",
           "href": "https://github.com/levalencia/archon/blob/main/docs/evidence/local-dr-report.json"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "provider-adapters-capability-parity",
@@ -2284,7 +2699,12 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_fallback_wire.py"
         }
       ],
-      "evidence": []
+      "evidence": [],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": false
+      }
     },
     {
       "id": "skills-project-instructions",
@@ -2322,7 +2742,12 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_skills_security.py"
         }
       ],
-      "evidence": []
+      "evidence": [],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": false
+      }
     },
     {
       "id": "pii-redaction-data-boundaries",
@@ -2371,7 +2796,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "execution-isolation-sandbox",
@@ -2425,7 +2855,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "cost-usage-budgets",
@@ -2468,7 +2903,12 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_recorded_evaluations.py"
         }
       ],
-      "evidence": []
+      "evidence": [],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": false
+      }
     },
     {
       "id": "structured-output-prompt-caching",
@@ -2501,7 +2941,12 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_json_mode_and_caching.py"
         }
       ],
-      "evidence": []
+      "evidence": [],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": false
+      }
     },
     {
       "id": "multimodal-and-artifacts",
@@ -2565,7 +3010,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "background-jobs-scheduling",
@@ -2614,7 +3064,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "compliance-red-teaming",
@@ -2652,7 +3107,12 @@
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/security/test_resource_security.py"
         }
       ],
-      "evidence": []
+      "evidence": [],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": false
+      }
     },
     {
       "id": "agent-communication-security",
@@ -2701,7 +3161,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "learning-optimization-drift",
@@ -2770,7 +3235,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "distributed-agent-networks",
@@ -2792,7 +3262,12 @@
           "label": "REMAINING-DEFERRED-GAPS.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/REMAINING-DEFERRED-GAPS.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": false,
+        "tests": false,
+        "evidence": true
+      }
     },
     {
       "id": "high-throughput-serving",
@@ -2814,7 +3289,12 @@
           "label": "REMAINING-DEFERRED-GAPS.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/REMAINING-DEFERRED-GAPS.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": false,
+        "tests": false,
+        "evidence": true
+      }
     },
     {
       "id": "fine-tuning-vertical-adaptation",
@@ -2836,7 +3316,12 @@
           "label": "REMAINING-DEFERRED-GAPS.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/REMAINING-DEFERRED-GAPS.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": false,
+        "tests": false,
+        "evidence": true
+      }
     },
     {
       "id": "kubernetes-public-deployment",
@@ -2869,7 +3354,12 @@
           "label": "REMAINING-DEFERRED-GAPS.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/REMAINING-DEFERRED-GAPS.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": false,
+        "evidence": true
+      }
     },
     {
       "id": "export-share-redaction",
@@ -2918,7 +3408,12 @@
           "label": "IMPLEMENTATION-EVIDENCE.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": true,
+        "tests": true,
+        "evidence": true
+      }
     },
     {
       "id": "public-anonymous-sharing",
@@ -2940,7 +3435,12 @@
           "label": "REMAINING-DEFERRED-GAPS.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/REMAINING-DEFERRED-GAPS.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": false,
+        "tests": false,
+        "evidence": true
+      }
     },
     {
       "id": "autonomous-unapproved-production-optimization",
@@ -2962,909 +3462,898 @@
           "label": "REMAINING-DEFERRED-GAPS.md",
           "href": "https://github.com/levalencia/archon/blob/main/docs/REMAINING-DEFERRED-GAPS.md"
         }
-      ]
+      ],
+      "proof": {
+        "code": false,
+        "tests": false,
+        "evidence": true
+      }
     }
   ],
-  "edges": [
-    {
-      "source": "agent-anatomy",
-      "target": "python-protocols-di",
-      "kinds": [
-        "curated",
-        "tour:lifecycle"
-      ],
-      "labels": [
-        "Agent lifecycle",
-        "architecture foundation"
-      ]
-    },
-    {
-      "source": "agent-communication-security",
-      "target": "authorization-ownership",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "identity boundary"
-      ]
-    },
-    {
-      "source": "agent-communication-security",
-      "target": "distributed-agent-networks",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "11-bounded-delegation"
-      ]
-    },
-    {
-      "source": "agent-communication-security",
-      "target": "parent-child-lineage",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "11-bounded-delegation"
-      ]
-    },
-    {
-      "source": "async-python",
-      "target": "python-protocols-di",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "01-python-architecture"
-      ]
-    },
-    {
-      "source": "async-python",
-      "target": "runtime-state-machine",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "cancellation boundary"
-      ]
-    },
-    {
-      "source": "authentication",
-      "target": "authorization-ownership",
-      "kinds": [
-        "curated",
-        "module-sequence"
-      ],
-      "labels": [
-        "13-auth-ui-observability",
-        "identity to scope"
-      ]
-    },
-    {
-      "source": "authorization-ownership",
-      "target": "sse",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "13-auth-ui-observability"
-      ]
-    },
-    {
-      "source": "autonomous-unapproved-production-optimization",
-      "target": "fine-tuning-vertical-adaptation",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "09-evaluation-harness"
-      ]
-    },
-    {
-      "source": "background-jobs-scheduling",
-      "target": "rate-limiting",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "10-resilience"
-      ]
-    },
-    {
-      "source": "backup-restore",
-      "target": "ci",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "14-local-operations"
-      ]
-    },
-    {
-      "source": "backup-restore",
-      "target": "rto-rpo",
-      "kinds": [
-        "curated",
-        "module-sequence"
-      ],
-      "labels": [
-        "14-local-operations",
-        "recovery evidence"
-      ]
-    },
-    {
-      "source": "bounded-delegation",
-      "target": "verifier-child",
-      "kinds": [
-        "curated",
-        "module-sequence"
-      ],
-      "labels": [
-        "11-bounded-delegation",
-        "bounded verification"
-      ]
-    },
-    {
-      "source": "checkpoints",
-      "target": "chunking",
-      "kinds": [
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "checkpoints",
-      "target": "encrypted-memory",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "06-context-and-memory",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "checkpoints",
-      "target": "skills-project-instructions",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "06-context-and-memory"
-      ]
-    },
-    {
-      "source": "chunking",
-      "target": "embeddings",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "08-rag-grounding",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "ci",
-      "target": "liveness-readiness",
-      "kinds": [
-        "tour:observability"
-      ],
-      "labels": [
-        "Evidence and observability"
-      ]
-    },
-    {
-      "source": "ci",
-      "target": "migrations",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "14-local-operations"
-      ]
-    },
-    {
-      "source": "circuit-breaker",
-      "target": "fallback",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "10-resilience"
-      ]
-    },
-    {
-      "source": "circuit-breaker",
-      "target": "retries-timeouts-cancellation",
-      "kinds": [
-        "curated",
-        "module-sequence"
-      ],
-      "labels": [
-        "10-resilience",
-        "resilience chain"
-      ]
-    },
-    {
-      "source": "citations",
-      "target": "evaluation-harness",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "evidence scoring"
-      ]
-    },
-    {
-      "source": "citations",
-      "target": "faithfulness",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "08-rag-grounding",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "compliance-red-teaming",
-      "target": "datasets",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "09-evaluation-harness"
-      ]
-    },
-    {
-      "source": "compliance-red-teaming",
-      "target": "learning-optimization-drift",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "09-evaluation-harness"
-      ]
-    },
-    {
-      "source": "compliance-red-teaming",
-      "target": "policy-engine",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "control feedback"
-      ]
-    },
-    {
-      "source": "context-windows",
-      "target": "conversation-lifecycle",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "06-context-and-memory",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "conversation-lifecycle",
-      "target": "encrypted-memory",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "06-context-and-memory",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "cost-usage-budgets",
-      "target": "export-share-redaction",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "07-run-ledger"
-      ]
-    },
-    {
-      "source": "cost-usage-budgets",
-      "target": "replay-fork-compare",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "07-run-ledger"
-      ]
-    },
-    {
-      "source": "cost-usage-budgets",
-      "target": "run-ledger",
-      "kinds": [
-        "tour:observability"
-      ],
-      "labels": [
-        "Evidence and observability"
-      ]
-    },
-    {
-      "source": "cost-usage-budgets",
-      "target": "structured-logging",
-      "kinds": [
-        "tour:observability"
-      ],
-      "labels": [
-        "Evidence and observability"
-      ]
-    },
-    {
-      "source": "datasets",
-      "target": "evaluation-harness",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "09-evaluation-harness"
-      ]
-    },
-    {
-      "source": "docker-compose",
-      "target": "liveness-readiness",
-      "kinds": [
-        "curated",
-        "module-sequence"
-      ],
-      "labels": [
-        "14-local-operations",
-        "runtime operation"
-      ]
-    },
-    {
-      "source": "docker-compose",
-      "target": "migrations",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "14-local-operations"
-      ]
-    },
-    {
-      "source": "durable-approvals",
-      "target": "idempotency",
-      "kinds": [
-        "module-sequence",
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "05-policy-and-approvals",
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "durable-approvals",
-      "target": "policy-engine",
-      "kinds": [
-        "module-sequence",
-        "tour:lifecycle",
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "05-policy-and-approvals",
-        "Agent lifecycle",
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "durable-approvals",
-      "target": "tool-contracts",
-      "kinds": [
-        "tour:lifecycle"
-      ],
-      "labels": [
-        "Agent lifecycle"
-      ]
-    },
-    {
-      "source": "embeddings",
-      "target": "retrieval",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "08-rag-grounding",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "evaluation-harness",
-      "target": "learning-optimization-drift",
-      "kinds": [
-        "tour:observability"
-      ],
-      "labels": [
-        "Evidence and observability"
-      ]
-    },
-    {
-      "source": "evaluation-harness",
-      "target": "run-ledger",
-      "kinds": [
-        "tour:lifecycle"
-      ],
-      "labels": [
-        "Agent lifecycle"
-      ]
-    },
-    {
-      "source": "evaluation-harness",
-      "target": "tracing-opentelemetry",
-      "kinds": [
-        "tour:observability"
-      ],
-      "labels": [
-        "Evidence and observability"
-      ]
-    },
-    {
-      "source": "execution-isolation-sandbox",
-      "target": "idempotency",
-      "kinds": [
-        "module-sequence",
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "05-policy-and-approvals",
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "execution-isolation-sandbox",
-      "target": "mcp",
-      "kinds": [
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "export-share-redaction",
-      "target": "public-anonymous-sharing",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "07-run-ledger"
-      ]
-    },
-    {
-      "source": "faithfulness",
-      "target": "groundedness",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "08-rag-grounding",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "fallback",
-      "target": "provider-adapters-capability-parity",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "provider resilience"
-      ]
-    },
-    {
-      "source": "fallback",
-      "target": "rate-limiting",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "10-resilience"
-      ]
-    },
-    {
-      "source": "fine-tuning-vertical-adaptation",
-      "target": "learning-optimization-drift",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "09-evaluation-harness"
-      ]
-    },
-    {
-      "source": "generic-self-reflection",
-      "target": "react-loop",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "03-react-loop"
-      ]
-    },
-    {
-      "source": "groundedness",
-      "target": "rag",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "08-rag-grounding",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "high-throughput-serving",
-      "target": "kubernetes-public-deployment",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "14-local-operations"
-      ]
-    },
-    {
-      "source": "high-throughput-serving",
-      "target": "rto-rpo",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "14-local-operations"
-      ]
-    },
-    {
-      "source": "json-schema-subset",
-      "target": "policy-engine",
-      "kinds": [
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "json-schema-subset",
-      "target": "structured-output-prompt-caching",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "structured contracts"
-      ]
-    },
-    {
-      "source": "json-schema-subset",
-      "target": "tool-contracts",
-      "kinds": [
-        "module-sequence",
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "04-tools-and-schemas",
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "learning-optimization-drift",
-      "target": "liveness-readiness",
-      "kinds": [
-        "tour:observability"
-      ],
-      "labels": [
-        "Evidence and observability"
-      ]
-    },
-    {
-      "source": "mcp",
-      "target": "mcp-transports-inventory",
-      "kinds": [
-        "module-sequence",
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "12-governed-mcp",
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "mcp-transports-inventory",
-      "target": "run-ledger",
-      "kinds": [
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "metrics",
-      "target": "structured-logging",
-      "kinds": [
-        "module-sequence",
-        "tour:observability"
-      ],
-      "labels": [
-        "13-auth-ui-observability",
-        "Evidence and observability"
-      ]
-    },
-    {
-      "source": "metrics",
-      "target": "tracing-opentelemetry",
-      "kinds": [
-        "module-sequence",
-        "tour:observability"
-      ],
-      "labels": [
-        "13-auth-ui-observability",
-        "Evidence and observability"
-      ]
-    },
-    {
-      "source": "multimodal-and-artifacts",
-      "target": "tracing-opentelemetry",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "13-auth-ui-observability"
-      ]
-    },
-    {
-      "source": "parent-child-lineage",
-      "target": "verifier-child",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "11-bounded-delegation"
-      ]
-    },
-    {
-      "source": "pii-redaction-data-boundaries",
-      "target": "run-ledger",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "safe persistence"
-      ]
-    },
-    {
-      "source": "pii-redaction-data-boundaries",
-      "target": "skills-project-instructions",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "06-context-and-memory"
-      ]
-    },
-    {
-      "source": "policy-engine",
-      "target": "react-loop",
-      "kinds": [
-        "tour:lifecycle"
-      ],
-      "labels": [
-        "Agent lifecycle"
-      ]
-    },
-    {
-      "source": "provider-adapters-capability-parity",
-      "target": "react-loop",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "model contract"
-      ]
-    },
-    {
-      "source": "provider-adapters-capability-parity",
-      "target": "runtime-state-machine",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "02-typed-runtime"
-      ]
-    },
-    {
-      "source": "provider-adapters-capability-parity",
-      "target": "structured-output-prompt-caching",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "02-typed-runtime"
-      ]
-    },
-    {
-      "source": "python-protocols-di",
-      "target": "typed-runtime",
-      "kinds": [
-        "tour:lifecycle"
-      ],
-      "labels": [
-        "Agent lifecycle"
-      ]
-    },
-    {
-      "source": "rag",
-      "target": "retrieval",
-      "kinds": [
-        "module-sequence",
-        "tour:memory-rag"
-      ],
-      "labels": [
-        "08-rag-grounding",
-        "Memory and grounded RAG"
-      ]
-    },
-    {
-      "source": "react-loop",
-      "target": "runtime-state-machine",
-      "kinds": [
-        "tour:lifecycle"
-      ],
-      "labels": [
-        "Agent lifecycle"
-      ]
-    },
-    {
-      "source": "react-loop",
-      "target": "skills-project-instructions",
-      "kinds": [
-        "curated"
-      ],
-      "labels": [
-        "runtime guidance"
-      ]
-    },
-    {
-      "source": "react-loop",
-      "target": "tool-contracts",
-      "kinds": [
-        "tour:tool-execution"
-      ],
-      "labels": [
-        "Governed tool execution"
-      ]
-    },
-    {
-      "source": "replay-fork-compare",
-      "target": "run-ledger",
-      "kinds": [
-        "module-sequence"
-      ],
-      "labels": [
-        "07-run-ledger"
-      ]
-    },
-    {
-      "source": "run-ledger",
-      "target": "tool-contracts",
-      "kinds": [
-        "tour:lifecycle"
-      ],
-      "labels": [
-        "Agent lifecycle"
-      ]
-    },
-    {
-      "source": "runtime-state-machine",
-      "target": "typed-runtime",
-      "kinds": [
-        "module-sequence",
-        "tour:lifecycle"
-      ],
-      "labels": [
-        "02-typed-runtime",
-        "Agent lifecycle"
-      ]
-    },
-    {
-      "source": "sse",
-      "target": "structured-logging",
-      "kinds": [
-        "curated",
-        "module-sequence"
-      ],
-      "labels": [
-        "13-auth-ui-observability",
-        "observable execution"
-      ]
-    }
-  ],
-  "tours": [
-    {
-      "id": "lifecycle",
-      "title": "Agent lifecycle",
-      "description": "Follow one request from the agent boundary through the bounded runtime, policy, tools, durable evidence, and evaluation.",
-      "concept_ids": [
-        "agent-anatomy",
-        "python-protocols-di",
-        "typed-runtime",
-        "runtime-state-machine",
-        "react-loop",
-        "policy-engine",
-        "durable-approvals",
-        "tool-contracts",
-        "run-ledger",
-        "evaluation-harness"
-      ]
-    },
-    {
-      "id": "tool-execution",
-      "title": "Governed tool execution",
-      "description": "See how schemas, policy, approvals, isolation, MCP, and idempotency constrain a model-proposed effect.",
-      "concept_ids": [
-        "react-loop",
-        "tool-contracts",
-        "json-schema-subset",
-        "policy-engine",
-        "durable-approvals",
-        "idempotency",
-        "execution-isolation-sandbox",
-        "mcp",
-        "mcp-transports-inventory",
-        "run-ledger"
+  "stories": [
+    {
+      "id": "request-lifecycle",
+      "title": "A user sends a message",
+      "description": "Follow one authenticated request from the browser to a durable, inspectable result.",
+      "steps": [
+        {
+          "title": "Submit message",
+          "from": "Browser",
+          "to": "Gateway",
+          "relationship": "HTTP POST",
+          "explanation": "The Workbench submits the user message through the loopback gateway.",
+          "concept_ids": [
+            "authentication",
+            "sse"
+          ],
+          "number": 1
+        },
+        {
+          "title": "Establish ownership",
+          "from": "Gateway",
+          "to": "Authentication",
+          "relationship": "AUTHENTICATES WITH",
+          "explanation": "Security middleware and JWT validation establish the caller before protected work begins.",
+          "concept_ids": [
+            "authentication",
+            "authorization-ownership"
+          ],
+          "number": 2
+        },
+        {
+          "title": "Create bounded run",
+          "from": "Authentication",
+          "to": "Agent runtime",
+          "relationship": "AUTHORIZES",
+          "explanation": "The runtime creates typed state, budgets, stop conditions, and correlation context.",
+          "concept_ids": [
+            "typed-runtime",
+            "runtime-state-machine",
+            "cost-usage-budgets"
+          ],
+          "number": 3
+        },
+        {
+          "title": "Decide next action",
+          "from": "Agent runtime",
+          "to": "Model adapter",
+          "relationship": "CALLS",
+          "explanation": "The bounded ReAct loop asks the configured provider for a response or structured tool request.",
+          "concept_ids": [
+            "react-loop",
+            "provider-adapters-capability-parity"
+          ],
+          "number": 4
+        },
+        {
+          "title": "Govern any effect",
+          "from": "Model adapter",
+          "to": "Policy engine",
+          "relationship": "PROPOSES TOOL",
+          "explanation": "Tool arguments are validated and policy decides ALLOW, ASK, or DENY before execution.",
+          "concept_ids": [
+            "tool-contracts",
+            "json-schema-subset",
+            "policy-engine"
+          ],
+          "number": 5
+        },
+        {
+          "title": "Execute or pause",
+          "from": "Policy engine",
+          "to": "Tool execution",
+          "relationship": "GATES",
+          "explanation": "Approval-bound effects pause durably; allowed effects execute with isolation and idempotency controls.",
+          "concept_ids": [
+            "durable-approvals",
+            "idempotency",
+            "execution-isolation-sandbox"
+          ],
+          "number": 6
+        },
+        {
+          "title": "Persist evidence",
+          "from": "Tool execution",
+          "to": "Run Ledger",
+          "relationship": "RECORDS",
+          "explanation": "Events, outputs, effects, stop reasons, and lineage become durable evidence.",
+          "concept_ids": [
+            "run-ledger",
+            "replay-fork-compare"
+          ],
+          "number": 7
+        },
+        {
+          "title": "Stream result",
+          "from": "Run Ledger",
+          "to": "Workbench",
+          "relationship": "EMITS SSE",
+          "explanation": "Ordered runtime events and the final answer are exposed to the authenticated user for inspection.",
+          "concept_ids": [
+            "sse",
+            "structured-logging",
+            "tracing-opentelemetry"
+          ],
+          "number": 8
+        }
+      ]
+    },
+    {
+      "id": "governed-tool",
+      "title": "A model requests a tool",
+      "description": "See how structured model intent becomes a policy-controlled side effect.",
+      "steps": [
+        {
+          "title": "Produce structured intent",
+          "from": "Model adapter",
+          "to": "Tool contract",
+          "relationship": "REQUESTS",
+          "explanation": "The provider emits a named tool request with typed arguments rather than executing code directly.",
+          "concept_ids": [
+            "provider-adapters-capability-parity",
+            "tool-contracts"
+          ],
+          "number": 1
+        },
+        {
+          "title": "Validate arguments",
+          "from": "Tool contract",
+          "to": "Schema validator",
+          "relationship": "VALIDATES",
+          "explanation": "Unsupported or malformed arguments fail before policy or execution.",
+          "concept_ids": [
+            "json-schema-subset",
+            "structured-output-prompt-caching"
+          ],
+          "number": 2
+        },
+        {
+          "title": "Classify effect",
+          "from": "Schema validator",
+          "to": "Policy engine",
+          "relationship": "EVALUATES",
+          "explanation": "Deterministic policy considers tool, arguments, ownership, and effect class.",
+          "concept_ids": [
+            "policy-engine"
+          ],
+          "number": 3
+        },
+        {
+          "title": "Bind approval",
+          "from": "Policy engine",
+          "to": "Approval repository",
+          "relationship": "ASK",
+          "explanation": "ASK creates a durable approval tied to the exact run, tool, arguments, and effect.",
+          "concept_ids": [
+            "durable-approvals"
+          ],
+          "number": 4
+        },
+        {
+          "title": "Prevent duplicate effects",
+          "from": "Approval repository",
+          "to": "Effect ledger",
+          "relationship": "AUTHORIZES ONCE",
+          "explanation": "Idempotency and durable effect state prevent accidental duplicate side effects.",
+          "concept_ids": [
+            "idempotency",
+            "run-ledger"
+          ],
+          "number": 5
+        },
+        {
+          "title": "Execute in boundary",
+          "from": "Effect ledger",
+          "to": "Sandbox or adapter",
+          "relationship": "EXECUTES",
+          "explanation": "The approved tool runs inside its declared isolation and permission boundary.",
+          "concept_ids": [
+            "execution-isolation-sandbox",
+            "mcp"
+          ],
+          "number": 6
+        },
+        {
+          "title": "Return observable result",
+          "from": "Sandbox or adapter",
+          "to": "Agent runtime",
+          "relationship": "RETURNS",
+          "explanation": "Structured success or error feedback re-enters the bounded runtime and is recorded.",
+          "concept_ids": [
+            "react-loop",
+            "structured-logging"
+          ],
+          "number": 7
+        }
       ]
     },
     {
       "id": "memory-rag",
-      "title": "Memory and grounded RAG",
-      "description": "Separate conversation history, encrypted memory, retrieval, grounding, faithfulness, and citations.",
-      "concept_ids": [
-        "context-windows",
-        "conversation-lifecycle",
-        "encrypted-memory",
-        "checkpoints",
-        "chunking",
-        "embeddings",
-        "retrieval",
-        "rag",
-        "groundedness",
-        "faithfulness",
-        "citations"
+      "title": "Archon answers with grounded knowledge",
+      "description": "Separate transient context, durable memory, retrieval, and answer verification.",
+      "steps": [
+        {
+          "title": "Build run context",
+          "from": "Conversation",
+          "to": "Context window",
+          "relationship": "SELECTS",
+          "explanation": "Only scoped messages, instructions, memory, and provenance enter the current model context.",
+          "concept_ids": [
+            "context-windows",
+            "conversation-lifecycle",
+            "skills-project-instructions"
+          ],
+          "number": 1
+        },
+        {
+          "title": "Load durable memory",
+          "from": "Encrypted memory",
+          "to": "Context window",
+          "relationship": "READS SCOPED",
+          "explanation": "Owner and project boundaries restrict which persisted memories may influence the run.",
+          "concept_ids": [
+            "encrypted-memory",
+            "pii-redaction-data-boundaries"
+          ],
+          "number": 2
+        },
+        {
+          "title": "Prepare knowledge",
+          "from": "Documents",
+          "to": "Chunks",
+          "relationship": "SPLITS",
+          "explanation": "Ingested documents are normalized and divided into retrievable units with provenance.",
+          "concept_ids": [
+            "chunking"
+          ],
+          "number": 3
+        },
+        {
+          "title": "Locate candidates",
+          "from": "Chunks",
+          "to": "Retrieval",
+          "relationship": "SUPPLIES INPUT TO",
+          "explanation": "Embeddings and similarity ranking locate potentially relevant passages; similarity is not proof.",
+          "concept_ids": [
+            "embeddings",
+            "retrieval"
+          ],
+          "number": 4
+        },
+        {
+          "title": "Generate from evidence",
+          "from": "Retrieval",
+          "to": "RAG response",
+          "relationship": "GROUNDS",
+          "explanation": "The model receives selected evidence and instructions to keep claims conservative.",
+          "concept_ids": [
+            "rag",
+            "groundedness"
+          ],
+          "number": 5
+        },
+        {
+          "title": "Verify and cite",
+          "from": "RAG response",
+          "to": "Evaluation",
+          "relationship": "CHECKS",
+          "explanation": "Citation presence and faithfulness are evaluated separately from retrieval relevance.",
+          "concept_ids": [
+            "citations",
+            "faithfulness",
+            "evaluation-harness"
+          ],
+          "number": 6
+        }
       ]
     },
     {
       "id": "observability",
-      "title": "Evidence and observability",
-      "description": "Trace operational signals from the run ledger through logs, metrics, traces, evaluation, drift, and readiness.",
-      "concept_ids": [
-        "run-ledger",
-        "cost-usage-budgets",
-        "structured-logging",
-        "metrics",
-        "tracing-opentelemetry",
-        "evaluation-harness",
-        "learning-optimization-drift",
-        "liveness-readiness",
-        "ci"
+      "title": "A run becomes evidence",
+      "description": "Follow runtime events into logs, metrics, traces, evaluation, and the user interface.",
+      "steps": [
+        {
+          "title": "Emit typed events",
+          "from": "Agent runtime",
+          "to": "Runtime event stream",
+          "relationship": "EMITS",
+          "explanation": "State transitions produce structured events with run and correlation identifiers.",
+          "concept_ids": [
+            "runtime-state-machine",
+            "sse"
+          ],
+          "number": 1
+        },
+        {
+          "title": "Persist the timeline",
+          "from": "Runtime event stream",
+          "to": "Run Ledger",
+          "relationship": "APPENDS",
+          "explanation": "Durable ordered events support later inspection, replay, fork, and comparison.",
+          "concept_ids": [
+            "run-ledger",
+            "replay-fork-compare"
+          ],
+          "number": 2
+        },
+        {
+          "title": "Produce operational signals",
+          "from": "Runtime event stream",
+          "to": "Observability",
+          "relationship": "FAN OUT",
+          "explanation": "Logs, counters, latency metrics, and trace spans provide complementary views.",
+          "concept_ids": [
+            "structured-logging",
+            "metrics",
+            "tracing-opentelemetry"
+          ],
+          "number": 3
+        },
+        {
+          "title": "Evaluate recorded output",
+          "from": "Run Ledger",
+          "to": "Evaluation harness",
+          "relationship": "SCORES",
+          "explanation": "Recorded-run evaluators produce durable reports without pretending every metric is model judgment.",
+          "concept_ids": [
+            "evaluation-harness",
+            "groundedness",
+            "faithfulness"
+          ],
+          "number": 4
+        },
+        {
+          "title": "Detect change",
+          "from": "Evaluation harness",
+          "to": "Drift workflow",
+          "relationship": "COMPARES",
+          "explanation": "Candidate behavior is measured and any optimization remains bounded and approval-gated.",
+          "concept_ids": [
+            "learning-optimization-drift"
+          ],
+          "number": 5
+        },
+        {
+          "title": "Surface evidence",
+          "from": "Evidence stores",
+          "to": "Workbench",
+          "relationship": "RENDERS",
+          "explanation": "The UI shows timelines, summaries, evaluation reports, and explicit limitations.",
+          "concept_ids": [
+            "multimodal-and-artifacts",
+            "authorization-ownership"
+          ],
+          "number": 6
+        }
+      ]
+    },
+    {
+      "id": "local-startup",
+      "title": "The local stack becomes ready",
+      "description": "Distinguish process liveness, dependency readiness, and actual application acceptance.",
+      "steps": [
+        {
+          "title": "Generate protected runtime context",
+          "from": "local-stack.sh",
+          "to": "Compose environment",
+          "relationship": "CREATES",
+          "explanation": "The wrapper creates protected infrastructure secrets and records exact runtime metadata.",
+          "concept_ids": [
+            "docker-compose"
+          ],
+          "number": 1
+        },
+        {
+          "title": "Start dependencies",
+          "from": "Compose",
+          "to": "PostgreSQL + Redis",
+          "relationship": "STARTS",
+          "explanation": "Durable stores must become healthy before the backend can claim readiness.",
+          "concept_ids": [
+            "docker-compose",
+            "migrations"
+          ],
+          "number": 2
+        },
+        {
+          "title": "Apply schema",
+          "from": "Backend entrypoint",
+          "to": "PostgreSQL",
+          "relationship": "MIGRATES",
+          "explanation": "Database migrations run before application traffic is accepted.",
+          "concept_ids": [
+            "migrations"
+          ],
+          "number": 3
+        },
+        {
+          "title": "Start application services",
+          "from": "Compose",
+          "to": "Backend + Frontend + Sandbox + OTEL",
+          "relationship": "STARTS",
+          "explanation": "Each service runs with its own health or containment contract.",
+          "concept_ids": [
+            "execution-isolation-sandbox",
+            "tracing-opentelemetry"
+          ],
+          "number": 4
+        },
+        {
+          "title": "Prove readiness",
+          "from": "Gateway",
+          "to": "Health endpoints",
+          "relationship": "CHECKS",
+          "explanation": "Health and readiness checks prove process and dependency state, not model intelligence.",
+          "concept_ids": [
+            "liveness-readiness"
+          ],
+          "number": 5
+        },
+        {
+          "title": "Run acceptance",
+          "from": "Smoke test",
+          "to": "User-facing API",
+          "relationship": "EXERCISES",
+          "explanation": "Auth, chat, persistence, metrics, migrations, and trace export are exercised through the retained stack.",
+          "concept_ids": [
+            "ci",
+            "backup-restore",
+            "rto-rpo"
+          ],
+          "number": 6
+        }
       ]
     }
-  ]
+  ],
+  "architecture": {
+    "layers": [
+      {
+        "id": "experience",
+        "title": "User experience",
+        "description": "Authenticated interfaces for conversations, inspection, learning, and evidence.",
+        "components": [
+          {
+            "id": "browser-workbench",
+            "title": "Browser and Workbench",
+            "responsibility": "Submit requests and inspect runs, approvals, artifacts, and evaluations.",
+            "concept_ids": [
+              "sse",
+              "multimodal-and-artifacts"
+            ]
+          },
+          {
+            "id": "visual-learning",
+            "title": "Visual Learning Studio",
+            "responsibility": "Teach stable roadmaps, flows, architecture, evidence, and media recipes.",
+            "concept_ids": [
+              "skills-project-instructions"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "access-control",
+        "title": "Access and control",
+        "description": "Establish identity, ownership, routing, and deterministic effect policy.",
+        "components": [
+          {
+            "id": "gateway",
+            "title": "Gateway",
+            "responsibility": "Provide the loopback entry point and route frontend/API traffic.",
+            "concept_ids": [
+              "docker-compose"
+            ]
+          },
+          {
+            "id": "auth",
+            "title": "Authentication and ownership",
+            "responsibility": "Bind every protected resource and request to an authenticated owner.",
+            "concept_ids": [
+              "authentication",
+              "authorization-ownership"
+            ]
+          },
+          {
+            "id": "policy",
+            "title": "Policy and approvals",
+            "responsibility": "Decide ALLOW, ASK, or DENY and preserve exact approval bindings.",
+            "concept_ids": [
+              "policy-engine",
+              "durable-approvals"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "runtime",
+        "title": "Agent runtime",
+        "description": "Execute bounded model/tool loops under typed state, budgets, and stop conditions.",
+        "components": [
+          {
+            "id": "context-runtime",
+            "title": "Context builder",
+            "responsibility": "Assemble scoped messages, memory, instructions, and provenance.",
+            "concept_ids": [
+              "context-windows",
+              "conversation-lifecycle"
+            ]
+          },
+          {
+            "id": "react-runtime",
+            "title": "Bounded ReAct engine",
+            "responsibility": "Coordinate provider calls, tool proposals, feedback, and stop reasons.",
+            "concept_ids": [
+              "typed-runtime",
+              "runtime-state-machine",
+              "react-loop"
+            ]
+          },
+          {
+            "id": "provider-layer",
+            "title": "Provider adapters",
+            "responsibility": "Normalize model capabilities without coupling the runtime to one vendor.",
+            "concept_ids": [
+              "provider-adapters-capability-parity",
+              "structured-output-prompt-caching"
+            ]
+          },
+          {
+            "id": "tool-layer",
+            "title": "Tool and MCP layer",
+            "responsibility": "Validate, govern, isolate, and invoke local or MCP tools.",
+            "concept_ids": [
+              "tool-contracts",
+              "mcp",
+              "mcp-transports-inventory"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "data-evidence",
+        "title": "Data and evidence",
+        "description": "Persist state, knowledge, effects, approvals, and inspectable run history.",
+        "components": [
+          {
+            "id": "relational-data",
+            "title": "PostgreSQL repositories",
+            "responsibility": "Persist users, conversations, approvals, runs, evaluations, and jobs.",
+            "concept_ids": [
+              "run-ledger",
+              "durable-approvals",
+              "background-jobs-scheduling"
+            ]
+          },
+          {
+            "id": "redis-data",
+            "title": "Redis runtime state",
+            "responsibility": "Support scoped cache, coordination, and rate-limiting contracts.",
+            "concept_ids": [
+              "rate-limiting",
+              "encrypted-memory"
+            ]
+          },
+          {
+            "id": "knowledge-data",
+            "title": "Documents and retrieval",
+            "responsibility": "Ingest, chunk, rank, ground, and cite source material.",
+            "concept_ids": [
+              "chunking",
+              "embeddings",
+              "retrieval",
+              "rag",
+              "citations"
+            ]
+          },
+          {
+            "id": "effect-data",
+            "title": "Effect and audit ledgers",
+            "responsibility": "Record idempotency, effects, lineage, exports, and disclosure decisions.",
+            "concept_ids": [
+              "idempotency",
+              "export-share-redaction",
+              "parent-child-lineage"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "reliability",
+        "title": "Reliability and observability",
+        "description": "Measure behavior, contain failure, and prove local readiness.",
+        "components": [
+          {
+            "id": "resilience",
+            "title": "Resilience controls",
+            "responsibility": "Apply retries, timeouts, breakers, fallbacks, rate limits, and durable jobs.",
+            "concept_ids": [
+              "retries-timeouts-cancellation",
+              "circuit-breaker",
+              "fallback",
+              "rate-limiting"
+            ]
+          },
+          {
+            "id": "observability",
+            "title": "Logs, metrics, and traces",
+            "responsibility": "Correlate operational signals without treating one signal as complete evidence.",
+            "concept_ids": [
+              "structured-logging",
+              "metrics",
+              "tracing-opentelemetry"
+            ]
+          },
+          {
+            "id": "evaluation",
+            "title": "Evaluation and drift",
+            "responsibility": "Score recorded runs and gate any proposed optimization.",
+            "concept_ids": [
+              "evaluation-harness",
+              "learning-optimization-drift"
+            ]
+          },
+          {
+            "id": "operations",
+            "title": "Local operations",
+            "responsibility": "Build, migrate, back up, restore, and prove liveness/readiness.",
+            "concept_ids": [
+              "liveness-readiness",
+              "docker-compose",
+              "migrations",
+              "backup-restore",
+              "ci"
+            ]
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "source": "browser-workbench",
+        "target": "gateway",
+        "type": "CALLS",
+        "label": "HTTP and SSE"
+      },
+      {
+        "source": "gateway",
+        "target": "auth",
+        "type": "ROUTES",
+        "label": "protected requests"
+      },
+      {
+        "source": "auth",
+        "target": "context-runtime",
+        "type": "AUTHORIZES",
+        "label": "owner-scoped request"
+      },
+      {
+        "source": "context-runtime",
+        "target": "react-runtime",
+        "type": "BUILDS_CONTEXT_FOR",
+        "label": "messages and provenance"
+      },
+      {
+        "source": "react-runtime",
+        "target": "provider-layer",
+        "type": "CALLS",
+        "label": "model request"
+      },
+      {
+        "source": "provider-layer",
+        "target": "policy",
+        "type": "PROPOSES",
+        "label": "structured tool request"
+      },
+      {
+        "source": "policy",
+        "target": "tool-layer",
+        "type": "GATES",
+        "label": "ALLOW ASK DENY"
+      },
+      {
+        "source": "tool-layer",
+        "target": "effect-data",
+        "type": "PERSISTS_TO",
+        "label": "effects and audit"
+      },
+      {
+        "source": "react-runtime",
+        "target": "relational-data",
+        "type": "PERSISTS_TO",
+        "label": "run timeline"
+      },
+      {
+        "source": "context-runtime",
+        "target": "knowledge-data",
+        "type": "READS",
+        "label": "grounded context"
+      },
+      {
+        "source": "react-runtime",
+        "target": "observability",
+        "type": "EMITS",
+        "label": "logs metrics traces"
+      },
+      {
+        "source": "relational-data",
+        "target": "evaluation",
+        "type": "SUPPLIES_RUNS_TO",
+        "label": "recorded runs"
+      },
+      {
+        "source": "resilience",
+        "target": "react-runtime",
+        "type": "CONSTRAINS",
+        "label": "retries budgets failures"
+      },
+      {
+        "source": "operations",
+        "target": "gateway",
+        "type": "PROVES_READY",
+        "label": "health and readiness"
+      }
+    ]
+  },
+  "notebooklm": {
+    "version": 1,
+    "source_priority": [
+      "docs/IMPLEMENTATION-EVIDENCE.md",
+      "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
+      "docs/REMAINING-DEFERRED-GAPS.md",
+      "docs/ARCHITECTURE-DIAGRAMS.md",
+      "docs/course/README.md"
+    ],
+    "notebooks": [
+      {
+        "id": "system-overview",
+        "title": "Archon — System Overview",
+        "purpose": "Understand Archon's mission, architecture, evidence posture, and explicit boundaries.",
+        "sources": [
+          "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
+          "docs/REMAINING-DEFERRED-GAPS.md",
+          "docs/ARCHITECTURE-DIAGRAMS.md",
+          "docs/course/README.md",
+          "README.md",
+          "docs/course/concept-map.md",
+          "docs/course/modules/00-agent-anatomy/README.md",
+          "docs/course/modules/15-capstone/README.md"
+        ],
+        "artifacts": [
+          "audio",
+          "video",
+          "slide-deck",
+          "infographic",
+          "mind-map"
+        ],
+        "source_count": 9
+      },
+      {
+        "id": "request-lifecycle",
+        "title": "Archon — Request Lifecycle and Governed Tools",
+        "purpose": "Follow one request through runtime, model, policy, approval, execution, and evidence.",
+        "sources": [
+          "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
+          "docs/REMAINING-DEFERRED-GAPS.md",
+          "docs/ARCHITECTURE-DIAGRAMS.md",
+          "docs/course/README.md",
+          "docs/course/modules/00-agent-anatomy/README.md",
+          "docs/course/modules/02-typed-runtime/README.md",
+          "docs/course/modules/03-react-loop/README.md",
+          "docs/course/modules/04-tools-and-schemas/README.md",
+          "docs/course/modules/05-policy-and-approvals/README.md",
+          "docs/course/modules/07-run-ledger/README.md",
+          "docs/course/concepts/agent-anatomy.md",
+          "docs/course/concepts/state-machines.md",
+          "docs/course/concepts/react.md",
+          "docs/course/concepts/tool-contracts.md",
+          "docs/course/concepts/policy-engine.md",
+          "docs/course/concepts/durable-approvals.md"
+        ],
+        "artifacts": [
+          "audio",
+          "video",
+          "slide-deck",
+          "infographic",
+          "mind-map",
+          "flashcards",
+          "quiz"
+        ],
+        "source_count": 17
+      },
+      {
+        "id": "memory-rag-evaluation",
+        "title": "Archon — Memory, RAG, and Evaluation",
+        "purpose": "Distinguish transient context, durable memory, retrieval, grounding, citations, and evaluation.",
+        "sources": [
+          "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
+          "docs/REMAINING-DEFERRED-GAPS.md",
+          "docs/ARCHITECTURE-DIAGRAMS.md",
+          "docs/course/README.md",
+          "docs/course/modules/06-context-and-memory/README.md",
+          "docs/course/modules/08-rag-grounding/README.md",
+          "docs/course/modules/09-evaluation-harness/README.md",
+          "docs/course/concepts/context-windows.md",
+          "docs/course/concepts/conversation-lifecycle.md",
+          "docs/course/concepts/encrypted-memory.md",
+          "docs/course/concepts/chunking.md",
+          "docs/course/concepts/embeddings.md",
+          "docs/course/concepts/retrieval.md",
+          "docs/course/concepts/rag.md",
+          "docs/course/concepts/groundedness.md",
+          "docs/course/concepts/faithfulness.md",
+          "docs/course/concepts/citations.md"
+        ],
+        "artifacts": [
+          "audio",
+          "video",
+          "slide-deck",
+          "infographic",
+          "mind-map",
+          "flashcards",
+          "quiz"
+        ],
+        "source_count": 18
+      },
+      {
+        "id": "reliability-operations",
+        "title": "Archon — Reliability, Security, and Operations",
+        "purpose": "Understand failure containment, delegation, MCP, observability, and local operations.",
+        "sources": [
+          "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
+          "docs/REMAINING-DEFERRED-GAPS.md",
+          "docs/ARCHITECTURE-DIAGRAMS.md",
+          "docs/course/README.md",
+          "docs/CI-PIPELINES-AND-LOCAL-RUN.md",
+          "docs/DR-RUNBOOK.md",
+          "docs/course/modules/10-resilience/README.md",
+          "docs/course/modules/11-bounded-delegation/README.md",
+          "docs/course/modules/12-governed-mcp/README.md",
+          "docs/course/modules/13-auth-ui-observability/README.md",
+          "docs/course/modules/14-local-operations/README.md"
+        ],
+        "artifacts": [
+          "audio",
+          "video",
+          "slide-deck",
+          "infographic",
+          "mind-map",
+          "flashcards",
+          "quiz"
+        ],
+        "source_count": 12
+      },
+      {
+        "id": "interview-demo",
+        "title": "Archon — Interview and Demo Preparation",
+        "purpose": "Practice concise, credible explanations without overstating implementation evidence.",
+        "sources": [
+          "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
+          "docs/REMAINING-DEFERRED-GAPS.md",
+          "docs/ARCHITECTURE-DIAGRAMS.md",
+          "docs/course/README.md",
+          "README.md",
+          "docs/course/tracks/interview-preparation.md",
+          "docs/course/reference/code-bookmarks.md",
+          "docs/DEMO-SCRIPT.md",
+          "docs/INTERVIEW-ANSWER-BANK.md"
+        ],
+        "artifacts": [
+          "audio",
+          "video",
+          "slide-deck",
+          "infographic",
+          "flashcards",
+          "quiz"
+        ],
+        "source_count": 10
+      }
+    ],
+    "promptbook_href": "https://github.com/levalencia/archon/blob/main/docs/visual-learning/notebooklm-promptbook.md",
+    "runbook_href": "https://github.com/levalencia/archon/blob/main/docs/visual-learning/notebooklm-runbook.md"
+  }
 }

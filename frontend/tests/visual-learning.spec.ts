@@ -1,66 +1,106 @@
 import { test, expect, type Page } from '@playwright/test';
 
-async function openMap(page: Page) {
+async function openStudio(page: Page, view?: string) {
   await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
-  await page.goto('/learn/map');
-  await expect(page.getByRole('heading', { name: 'Explore Archon as a living concept map' })).toBeVisible();
-  await expect(page.locator('g.concept-node')).toHaveCount(66);
+  await page.goto(view ? `/learn?view=${view}` : '/learn');
+  await expect(page.getByRole('heading', { name: 'Choose the view that matches your question' })).toBeVisible();
 }
 
-test('renders all canonical concepts and evidence details', async ({ page }) => {
-  await openMap(page);
-  await expect(page.getByLabel('Learning graph summary')).toContainText('66');
-  await expect(page.getByLabel('Learning graph summary')).toContainText('46');
-  await expect(page.getByLabel('Learning graph summary')).toContainText('14');
-  await expect(page.getByLabel('Learning graph summary')).toContainText('6');
-
-  const embeddings = page.locator('g.concept-node[aria-label^="Embeddings,"]');
-  await embeddings.focus();
-  await embeddings.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Embeddings', exact: true })).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Selected concept details' })).toContainText(/mock embeddings/i);
-  await expect(page.getByRole('link', { name: /Open concept page|Open module fallback/ })).toHaveAttribute('href', /github\.com\/levalencia\/archon/);
+test('roadmap presents six stable phases and sixteen modules', async ({ page }) => {
+  await openStudio(page);
+  await expect(page.getByRole('heading', { name: 'A stable path from foundations to operations' })).toBeVisible();
+  await expect(page.getByLabel('Visual Learning Studio summary')).toContainText('66');
+  await expect(page.getByLabel('Visual Learning Studio summary')).toContainText('16');
+  await expect(page.locator('article').filter({ hasText: /Foundations and bounded runtime/ })).toBeVisible();
+  await page.getByRole('button', { name: /Typed runtime/ }).click();
+  await expect(page.getByLabel('Selected module')).toContainText('Typed runtime');
+  await expect(page.locator('g.concept-node')).toHaveCount(0);
 });
 
-test('filters by status and text without losing the canonical graph', async ({ page }) => {
-  await openMap(page);
-  await expect(page.locator('g.concept-node[tabindex="0"]')).toHaveCount(10);
-
-  await page.getByRole('button', { name: 'partial', exact: true }).click();
-  await expect(page.getByText('14 concepts visible')).toBeVisible();
-  await expect(page.locator('g.concept-node[tabindex="0"]')).toHaveCount(14);
-
-  await page.getByRole('button', { name: 'all', exact: true }).click();
-  await page.getByRole('searchbox', { name: 'Search concepts' }).fill('bounded react');
-  await expect(page.getByText('1 concepts visible')).toBeVisible();
-  await expect(page.locator('g.concept-node[tabindex="0"]')).toHaveCount(1);
-  await expect(page.locator('g.concept-node')).toHaveCount(66);
+test('stories use one labeled directional relationship per step', async ({ page }) => {
+  await openStudio(page, 'stories');
+  await expect(page.getByRole('heading', { name: 'Follow one flow at a time' })).toBeVisible();
+  await expect(page.getByText('Step 1 of 8')).toBeVisible();
+  await expect(page.getByText('HTTP POST', { exact: true })).toBeVisible();
+  await expect(page.getByText('Browser', { exact: true })).toBeVisible();
+  await expect(page.getByText('Gateway', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Next story step' }).click();
+  await expect(page.getByText('Step 2 of 8')).toBeVisible();
+  await expect(page.getByText('AUTHENTICATES WITH', { exact: true })).toBeVisible();
 });
 
-test('guided journey advances across concepts', async ({ page }) => {
-  await openMap(page);
-
-  await page.getByRole('button', { name: /Agent lifecycle/ }).click();
-  await expect(page.getByText('Step 1 of 10')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Agent anatomy and trust boundaries' })).toBeVisible();
-
-  const typedRuntime = page.locator('g.concept-node[aria-label^="Typed provider-neutral runtime,"]');
-  await typedRuntime.focus();
-  await typedRuntime.press('Enter');
-  await expect(page.getByText('Step 3 of 10')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Typed provider-neutral runtime' })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Previous journey step' }).click();
-  await expect(page.getByText('Step 2 of 10')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Python OOP, Protocols, and dependency injection' })).toBeVisible();
+test('architecture keeps five layers fixed and exposes typed relations', async ({ page }) => {
+  await openStudio(page, 'architecture');
+  await expect(page.getByRole('heading', { name: 'Five stable architecture layers' })).toBeVisible();
+  await expect(page.getByText(/Layer [1-5]/)).toHaveCount(5);
+  await page.getByRole('button', { name: /Policy and approvals/ }).click();
+  const details = page.getByLabel('Selected architecture component');
+  await expect(details).toContainText('Policy and approvals');
+  await expect(details).toContainText('GATES');
+  await expect(page.locator('g.concept-node')).toHaveCount(0);
 });
 
-test('mobile map remains within viewport and exposes navigation', async ({ page }) => {
+test('evidence view preserves status and proof boundaries', async ({ page }) => {
+  await openStudio(page, 'evidence');
+  await expect(page.getByRole('heading', { name: 'Capability evidence without inflated claims' })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Evidence status' }).selectOption('partial');
+  await expect(page.getByText('14 of 66 capabilities')).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search evidence' }).fill('embedding');
+  await page.getByRole('button', { name: /Embeddings/ }).click();
+  const details = page.getByLabel('Selected evidence details');
+  await expect(details).toContainText(/mock embeddings/i);
+
+  await page.getByRole('searchbox', { name: 'Search evidence' }).fill('');
+  await page.getByRole('combobox', { name: 'Evidence status' }).selectOption('deferred');
+  await expect(page.getByText('6 of 66 capabilities')).toBeVisible();
+  await expect(details).not.toContainText('Embeddings');
+
+  await page.getByRole('searchbox', { name: 'Search evidence' }).fill('no-such-capability');
+  await expect(page.getByText('0 of 66 capabilities')).toBeVisible();
+  await expect(details).toContainText('No evidence details are available');
+});
+
+test('Present, Listen, and Study expose prepared NotebookLM recipes', async ({ page }) => {
+  await openStudio(page, 'present');
+  await expect(page.getByRole('heading', { name: 'Explain Archon visually' })).toBeVisible();
+  await expect(page.getByText('Prepared, not yet generated.')).toBeVisible();
+  await expect(page.getByText('Slide Deck', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Open NotebookLM promptbook/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Open step-by-step runbook/ })).toBeVisible();
+
+  await page.getByRole('link', { name: /Listen/ }).click();
+  await expect(page.getByRole('heading', { name: 'Review Archon through audio' })).toBeVisible();
+  await expect(page.getByText('Audio', { exact: true })).toBeVisible();
+
+  await page.getByRole('link', { name: /Study/ }).click();
+  await expect(page.getByRole('heading', { name: 'Practice retrieval and comprehension' })).toBeVisible();
+  await expect(page.getByText('Flashcards')).toBeVisible();
+  await expect(page.getByText('Quiz')).toBeVisible();
+});
+
+test('browser history restores the previous studio mode', async ({ page }) => {
+  await openStudio(page);
+  await page.getByRole('link', { name: /Stories/ }).click();
+  await expect(page).toHaveURL(/view=stories/);
+  await expect(page.getByRole('heading', { name: 'Follow one flow at a time' })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'A stable path from foundations to operations' })).toBeVisible();
+});
+
+test('legacy map URL redirects to the structured Stories view', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
+  await page.goto('/learn/map');
+  await expect(page).toHaveURL(/\/learn\?view=stories$/);
+  await expect(page.getByRole('heading', { name: 'Follow one flow at a time' })).toBeVisible();
+});
+
+test('all studio modes avoid horizontal overflow on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await openMap(page);
-
-  await expect(page.getByRole('link', { name: 'Learn' })).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
-  await expect(page.getByLabel('Selected concept details')).toBeVisible();
-  await expect.poll(async () => page.evaluate(() => document.body.scrollWidth <= document.body.clientWidth)).toBe(true);
+  await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
+  for (const view of ['roadmap', 'stories', 'architecture', 'evidence', 'present', 'listen', 'study']) {
+    await page.goto(`/learn?view=${view}`);
+    await expect(page.getByRole('heading', { name: 'Choose the view that matches your question' })).toBeVisible();
+    await expect.poll(async () => page.evaluate(() => document.body.scrollWidth <= document.body.clientWidth)).toBe(true);
+  }
+  await expect(page.getByRole('link', { name: 'Learn', exact: true })).toHaveAttribute('aria-current', 'page');
 });
