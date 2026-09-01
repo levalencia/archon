@@ -2,13 +2,19 @@
 
 ## Status
 
-Planned and under implementation. This document defines the target contract; it is not implementation evidence by itself.
+Implemented on the local `feature/spi-docscore` candidate based on `a642952`.
+It is not pushed or deployed; deployed `main` remains `63215bf`. This document
+describes the implemented core contract, while revision-scoped observations live
+in `docs/evidence/skills-project-instructions-implementation.md`.
 
 ## Problem
 
-Archon currently has a small in-memory skill registry, lexical selection, and full-body prompt injection. Native tools and governed MCP tools are executable, but they do not share a metadata-first discovery layer. Project instructions do not yet exist at runtime.
+Archon now keeps skills, project instructions, and executable capabilities as
+separate contracts. Skills and instruction snapshots are durable and versioned;
+native and MCP tools participate in metadata-first discovery but remain subject
+to independent policy and approval.
 
-The target system must answer four different questions without conflating them:
+The system answers four different questions without conflating them:
 
 1. **Project instructions:** What durable repository rules apply here?
 2. **Skills:** Which reusable workflow is relevant to this task?
@@ -71,13 +77,12 @@ Compatibility families may be enabled per project:
 
 A project selects one family. Equivalent files from multiple ecosystems are not silently merged.
 
-### Trusted workspace sources
+### Implemented source boundary
 
 - Manual/UI content.
-- Read-only local mount selected from deployment-owned mount keys.
-- Allowlisted GitHub repository at an immutable commit SHA.
+- Bounded instruction files beneath a configured trusted root.
 
-A user or model cannot submit an arbitrary host path. Local files are opened only beneath the configured root with canonical containment and special-file rejection.
+A user or model cannot submit an arbitrary host path. Local files are opened only beneath the configured root with canonical containment and special-file rejection. The current acceptance proves approved snapshots; it does not claim a deployed GitHub ingestion service or trust arbitrary repository text.
 
 ### Resolution
 
@@ -153,7 +158,7 @@ Selection outputs include selected and rejected IDs with stable reasons. Denied 
 
 ## MCP scope
 
-The release supports:
+The candidate supports:
 
 - governed stdio profiles;
 - governed remote Streamable HTTP profiles;
@@ -165,7 +170,7 @@ The release supports:
 - lazy schema materialization;
 - approval, provenance and execution-time TOCTOU validation.
 
-Outside the release:
+Outside the candidate claim:
 
 - public marketplace;
 - arbitrary package/server execution;
@@ -178,16 +183,16 @@ Outside the release:
 
 Archon begins with ten owned skills:
 
-1. technical research;
-2. code analysis;
-3. code review;
+1. API design;
+2. code review;
+3. database migrations;
 4. debugging;
-5. testing/TDD;
-6. secure coding;
-7. architecture/design;
-8. RAG/evaluation;
-9. deployment/readiness;
-10. technical documentation.
+5. deployment safety;
+6. technical documentation;
+7. incident response;
+8. performance analysis;
+9. security review;
+10. test engineering.
 
 The goal is coverage and depth, not catalog size.
 
@@ -204,7 +209,23 @@ For every run, the effective-context record must identify:
 - context cost by layer;
 - omission/truncation reasons.
 
-It must not expose secrets, raw hidden reasoning, or unrestricted tool payloads.
+It must not expose secrets, raw hidden reasoning, raw instruction/skill bodies,
+or unrestricted tool payloads. The implemented Run Ledger snapshot stores exact
+instruction and skill revision references plus capability IDs and schema hashes.
+
+## Acceptance boundary
+
+- ORM metadata declares 41 tables; Alembic revisions 15–21 cover this slice.
+- Ten bundled, repository-owned skills are bootstrapped.
+- Sync and SSE call the same request-context preparation service.
+- One real Foundry run with `claude-opus-4-6` recorded one skill revision, one
+  approved instruction revision, and nine capability references.
+- A disposable PostgreSQL round trip reached head 21, observed five integrity
+  triggers, two owner-scope foreign keys and a false MCP enabled default, then
+  completed 14 → 21 again.
+
+No final integrated-suite count, public deployment, arbitrary external skill
+trust, generic OAuth, or broad semantic-selection quality is claimed.
 
 ## Threat model
 

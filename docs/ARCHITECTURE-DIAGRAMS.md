@@ -2,6 +2,9 @@
 
 These diagrams describe the current evidence-backed system. Historical diagrams that implied pgvector, Azure Blob, Jaeger, dynamic swarms, or host-process sandboxing were removed because those paths were not the verified product.
 
+The Skills + Project Instructions additions shown here are a local candidate
+based on `a642952`, not a deployed revision. Deployed `main` remains `63215bf`.
+
 ## 1. Agent Reliability Workbench
 
 ```mermaid
@@ -14,7 +17,7 @@ flowchart LR
         Policy[Rule policy engine]
         Approval[Durable approvals]
         Registry[Secure tool registry]
-        MCP[Governed MCP stdio]
+        MCP[Governed MCP stdio + HTTP]
         Sandbox[Optional Docker sandbox]
     end
 
@@ -125,7 +128,7 @@ The child receives selected claims/evidence only, has no tools, and cannot appro
 
 ```mermaid
 flowchart LR
-    Profiles[Injected allowlisted profiles] --> Client[Official MCP 2.1.1 stdio client]
+    Profiles[Allowlisted stdio / HTTP profiles] --> Client[Governed MCP clients]
     Client --> Inventory[(Owner/project server + tool inventory)]
     Inventory --> Enable[Per-tool enablement]
     Enable --> Adapter[Runtime tool adapter]
@@ -137,7 +140,29 @@ flowchart LR
 
 Commands, arguments, environment variables, and secrets are not user-controlled server records. Profile changes invalidate stale inventory; tool schema and enabled state are rechecked immediately before execution.
 
-## 6. Verified local deployment
+## 6. Skills, instructions, and exact context provenance
+
+```mermaid
+flowchart LR
+    Request[Owner + project + request] --> Prepare[Shared sync/SSE context preparation]
+    Snapshots[(Approved instruction snapshots)] --> Prepare
+    Bindings[(Exact project skill bindings)] --> Prepare
+    Bundled[Ten bundled skills] --> Bindings
+    Native[Native descriptors] --> Discover[Metadata-first discovery]
+    MCP2[Governed stdio/HTTP MCP descriptors] --> Discover
+    GodMode[Optional metadata-only GodMode] -.-> Discover
+    Discover --> Filter[Project preference + policy visibility]
+    Filter --> Prepare
+    Prepare --> Provider[Model provider]
+    Prepare --> Context[(Run Ledger effective-context snapshot)]
+```
+
+Instructions and skills provide context, never authority. Discovery returns
+bounded metadata; execution still requires the normal policy/approval path.
+The Run Ledger stores exact revision IDs, ordering, reasons, capability IDs and
+schema hashes—not raw instruction/skill bodies or hidden reasoning.
+
+## 7. Verified local deployment
 
 ```mermaid
 flowchart TB
@@ -162,7 +187,7 @@ internal only]
 
 The backend defaults to `linux/amd64` in this target because the ARM image reproduced a native `cryptography` SIGILL on the verified Mac. All referenced images are pinned by digest. Only the gateway publishes a loopback port.
 
-## 7. Backup and clean restore
+## 8. Backup and clean restore
 
 ```mermaid
 sequenceDiagram
@@ -183,7 +208,7 @@ sequenceDiagram
     V->>V: record RTO/RPO and cleanup
 ```
 
-## 8. Trust boundaries
+## 9. Trust boundaries
 
 ```mermaid
 flowchart TD

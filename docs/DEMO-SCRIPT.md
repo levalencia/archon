@@ -71,17 +71,25 @@ Say:
 
 Mention that retrieval is SQL JSON cosine, not pgvector.
 
-## 2:45–3:20 — Governed MCP
+## 2:45–3:20 — Skills, instructions, and governed MCP
 
-Open **Skills & Integrations**.
+Open the project Settings capability surfaces and one run's effective context.
 
-Show server profile, health, discovered inventory, read-only/destructive indicators and an individual tool toggle.
+Show one approved instruction snapshot, one exact project skill binding, compact
+capability inventory, and the run's instruction/skill/capability provenance.
 
 Say:
 
-> Archon uses the official MCP 2.1.1 stdio SDK. Users select allowlisted profiles; commands and secrets are not persisted. Enabled tools still pass through the same runtime policy and approval path, with a final enabled/schema/profile recheck before execution.
+> Sync and SSE share one context-preparation path. Project instructions are
+> approved immutable snapshots, skill bindings name the exact revision, and
+> capability discovery is metadata-first. The Run Ledger records exactly what
+> was selected. Governed stdio and Streamable HTTP MCP tools still pass through
+> policy, approval, and a final schema/profile recheck.
 
-Do not imply Streamable HTTP, OAuth or public server deployment.
+If using the recorded Foundry acceptance, state its exact bound: one skill, one
+instruction and nine capability references with `claude-opus-4-6`. Do not imply
+broad selection quality, generic OAuth, or public server deployment. GodMode is
+an optional metadata-only adapter, not an installer or trust source.
 
 ## 3:20–4:10 — Local operations and DR
 
@@ -106,7 +114,10 @@ Show the limitations section.
 
 Say:
 
-> This is not publicly deployed. Remote CI is green at `9696ad8`, but real external-provider behavior was not rerun in this evidence cycle. The value is that those limits are explicit, while the local reliability paths are executable and measured.
+> This candidate is local and not pushed or deployed; deployed main remains
+> `63215bf`. A bounded Foundry acceptance and disposable PostgreSQL migration
+> round trip passed. I am not presenting an unfinished integrated verification
+> run as a final count.
 
 ## Live commands
 
@@ -144,5 +155,6 @@ Use committed local evidence rather than pretending the live command completed:
 - `docs/evidence/local-dr-report.json`
 - `docs/evidence/local-portfolio-benchmark.json`
 - `docs/IMPLEMENTATION-EVIDENCE.md`
+- `docs/evidence/skills-project-instructions-implementation.md`
 
 State the revision and that the evidence was recorded locally. Do not edit screenshots or terminal output to manufacture a green result.
