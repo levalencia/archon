@@ -1,7 +1,7 @@
 """Persist deployment-profile transport kind for MCP servers.
 
-Revision ID: 20260901_18
-Revises: 20260901_17
+Revision ID: 20260901_19
+Revises: 20260901_18
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "20260901_18"
-down_revision: str | None = "20260901_17"
+revision: str = "20260901_19"
+down_revision: str | None = "20260901_18"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

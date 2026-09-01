@@ -21,7 +21,7 @@ def test_transport_migration_is_linear_and_accepts_http(tmp_path: Path, monkeypa
     database = tmp_path / "transport-migration.db"
     config = _config(database)
     command.upgrade(config, "20260901_17")
-    command.upgrade(config, "20260901_18")
+    command.upgrade(config, "20260901_19")
     engine = create_engine(f"sqlite:///{database}")
     constraints = {
         item["name"]: item
@@ -38,7 +38,7 @@ def test_transport_migration_is_linear_and_accepts_http(tmp_path: Path, monkeypa
             ),
             {"id": "00000000-0000-0000-0000-000000000001", "now": "2026-09-01"},
         )
-    command.downgrade(config, "20260901_17")
+    command.downgrade(config, "20260901_18")
     with engine.connect() as connection:
         assert connection.execute(text("SELECT transport FROM mcp_servers")).scalar_one() == "stdio"
     engine.dispose()
