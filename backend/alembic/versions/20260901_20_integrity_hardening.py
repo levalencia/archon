@@ -18,7 +18,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 _SKILL_IMMUTABLE_COLUMNS = (
-    "package_id,owner_id,revision_number,declared_version,description,content,content_hash,"
+    "id,package_id,owner_id,revision_number,declared_version,description,content,content_hash,"
     "manifest_hash,tags_json,references_json,triggers_json,negative_triggers_json,"
     "required_capability_ids_json,context_cost,source_url,source_revision,trust_state,created_at"
 )
@@ -26,9 +26,13 @@ _SKILL_IMMUTABLE_COLUMNS = (
 
 def _replace_guards(*, hardened: bool) -> None:
     dialect = op.get_bind().dialect.name
-    columns = _SKILL_IMMUTABLE_COLUMNS if hardened else (
-        "package_id,owner_id,revision_number,declared_version,description,content,content_hash,"
-        "manifest_hash,tags_json,references_json,source_url,source_revision,trust_state,created_at"
+    columns = (
+        _SKILL_IMMUTABLE_COLUMNS
+        if hardened
+        else (
+            "package_id,owner_id,revision_number,declared_version,description,content,content_hash,"
+            "manifest_hash,tags_json,references_json,source_url,source_revision,trust_state,created_at"
+        )
     )
     if dialect == "sqlite":
         for name in ("trg_skill_revisions_update", "trg_skill_revisions_content_update"):
@@ -38,14 +42,22 @@ def _replace_guards(*, hardened: bool) -> None:
             f"{columns} ON skill_revisions "
             "BEGIN SELECT RAISE(ABORT, 'immutable revision'); END"
         )
-        for operation in ("update", "delete"):
+        for operation in ("insert", "update", "delete"):
             op.execute(f"DROP TRIGGER IF EXISTS trg_skill_references_{operation}")
-            if hardened:
+        if hardened:
+            for operation in ("update", "delete"):
                 op.execute(
                     f"CREATE TRIGGER trg_skill_references_{operation} BEFORE {operation.upper()} "
                     "ON skill_references BEGIN SELECT RAISE(ABORT, "
                     "'immutable skill reference'); END"
                 )
+            op.execute(
+                "CREATE TRIGGER trg_skill_references_insert BEFORE INSERT ON skill_references "
+                "WHEN EXISTS (SELECT 1 FROM skill_revisions AS revision "
+                "WHERE revision.id=NEW.revision_id AND revision.owner_id=NEW.owner_id "
+                "AND revision.review_state='approved') "
+                "BEGIN SELECT RAISE(ABORT, 'approved revision references are immutable'); END"
+            )
     elif dialect == "postgresql":
         op.execute("DROP TRIGGER IF EXISTS trg_skill_revisions_immutable ON skill_revisions")
         op.execute(
@@ -54,12 +66,28 @@ def _replace_guards(*, hardened: bool) -> None:
             "EXECUTE FUNCTION archon_spi_reject_revision_mutation()"
         )
         op.execute("DROP TRIGGER IF EXISTS trg_skill_references_immutable ON skill_references")
+        op.execute("DROP TRIGGER IF EXISTS trg_skill_references_insert ON skill_references")
         if hardened:
             op.execute(
                 "CREATE TRIGGER trg_skill_references_immutable BEFORE UPDATE OR DELETE "
                 "ON skill_references FOR EACH ROW "
                 "EXECUTE FUNCTION archon_spi_reject_revision_mutation()"
             )
+            op.execute(
+                "CREATE OR REPLACE FUNCTION archon_spi_reject_approved_reference_insert() "
+                "RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
+                "IF EXISTS (SELECT 1 FROM skill_revisions AS revision "
+                "WHERE revision.id=NEW.revision_id AND revision.owner_id=NEW.owner_id "
+                "AND revision.review_state='approved') THEN "
+                "RAISE EXCEPTION 'approved revision references are immutable'; END IF; "
+                "RETURN NEW; END $$"
+            )
+            op.execute(
+                "CREATE TRIGGER trg_skill_references_insert BEFORE INSERT ON skill_references "
+                "FOR EACH ROW EXECUTE FUNCTION archon_spi_reject_approved_reference_insert()"
+            )
+        else:
+            op.execute("DROP FUNCTION IF EXISTS archon_spi_reject_approved_reference_insert()")
 
 
 def upgrade() -> None:

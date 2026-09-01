@@ -81,6 +81,14 @@ def test_instruction_and_capability_apis_are_scoped_and_restart_safe(tmp_path: P
         assert all(item["reason"].startswith("provider_visible_") for item in capability_refs)
         assert client.get("/api/projects/shared/instructions/revisions", headers=other).json() == []
 
+        inventory = client.post(
+            "/api/capabilities/search",
+            json={"query": "", "project_id": "shared", "limit": 100},
+            headers=admin,
+        )
+        assert inventory.status_code == 200
+        assert len(inventory.json()) >= 10
+
         found = client.post(
             "/api/capabilities/search", json={"query": "code-review"}, headers=admin
         )

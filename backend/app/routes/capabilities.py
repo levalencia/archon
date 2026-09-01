@@ -39,7 +39,7 @@ class CapabilityItem(StrictModel):
 
 
 class SearchBody(StrictModel):
-    query: str = Field(min_length=1, max_length=500)
+    query: str = Field(default="", max_length=500)
     project_id: ProjectId | None = None
     limit: int = Field(default=20, ge=1, le=100)
 

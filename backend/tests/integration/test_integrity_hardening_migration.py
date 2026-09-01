@@ -84,13 +84,20 @@ def test_revision_owner_fences_defaults_and_complete_immutability(
             connection.execute(text("PRAGMA foreign_keys=ON"))
 
         connection.execute(
+            text("UPDATE skill_revisions SET review_state='pending' WHERE id='rev-a'")
+        )
+        connection.execute(
             text(
                 "INSERT INTO skill_references VALUES "
                 "('rev-a','alice','guide','x','" + "e" * 64 + "',1)"
             )
         )
+        connection.execute(
+            text("UPDATE skill_revisions SET review_state='approved' WHERE id='rev-a'")
+        )
         connection.commit()
         for column, value in (
+            ("id", "'rev-a-new'"),
             ("triggers_json", "'[\"changed\"]'"),
             ("negative_triggers_json", "'[\"changed\"]'"),
             ("required_capability_ids_json", "'[\"changed\"]'"),
@@ -102,6 +109,8 @@ def test_revision_owner_fences_defaults_and_complete_immutability(
                 )
             connection.rollback()
         for statement in (
+            "INSERT INTO skill_references VALUES "
+            "('rev-a','alice','supplement','late','" + "f" * 64 + "',4)",
             "UPDATE skill_references SET content='changed' WHERE revision_id='rev-a'",
             "DELETE FROM skill_references WHERE revision_id='rev-a'",
         ):
