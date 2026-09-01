@@ -59,6 +59,21 @@ def test_instruction_and_capability_apis_are_scoped_and_restart_safe(tmp_path: P
         )
         assert approved.status_code == 200
         assert approved.json()["trust_state"] == "approved"
+        chat = client.post(
+            "/api/chat",
+            json={"message": "Review this project.", "project_id": "shared"},
+            headers=admin,
+        )
+        assert chat.status_code == 200
+        effective_context = client.get(
+            f"/api/runs/{chat.json()['run_id']}/effective-context", headers=admin
+        )
+        assert effective_context.status_code == 200
+        instruction_ref = effective_context.json()["instruction_revisions"][0]
+        assert instruction_ref["source_path"] == ".archon/instructions.md"
+        assert instruction_ref["scope_path"] == "."
+        assert instruction_ref["order"] == 0
+        assert instruction_ref["content_hash"] == approved.json()["content_hash"]
         assert client.get("/api/projects/shared/instructions/revisions", headers=other).json() == []
 
         found = client.post(

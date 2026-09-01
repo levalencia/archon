@@ -313,6 +313,14 @@ async def get_run_effective_context(
                 "id": item.revision_id,
                 "revision": item.revision_id,
                 "content_hash": item.content_hash,
+                "source_path": item.relative_path,
+                "relative_path": item.relative_path,
+                "scope_path": item.scope_path,
+                "family": item.family,
+                "is_override": item.is_override,
+                "byte_count": item.byte_count,
+                "order": item.order,
+                "resolution_order": item.order,
                 "selection_reason": "approved_current_revision",
             }
             for item in snapshot.instruction_revisions
