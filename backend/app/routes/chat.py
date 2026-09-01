@@ -35,7 +35,13 @@ from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.conversations import ConversationRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
 from app.services.task_queue import DurableJobQueue
-from app.tools.builtin import calculator_tool, datetime_tool, read_file_tool, write_file_tool
+from app.tools.builtin import (
+    calculator_tool,
+    datetime_tool,
+    list_directory_tool,
+    read_file_tool,
+    write_file_tool,
+)
 from app.tools.image_gen import image_gen_tool
 from app.tools.memory_tools import (
     create_memory_tool,
@@ -143,6 +149,18 @@ def _create_tool_registry(
                 "path": {"type": "string"},
                 "max_size": {"type": "integer"},
             },
+        },
+        timeout=10,
+        risk_classes=frozenset({RiskClass.READ}),
+        resource_resolver=resolve_workspace_path,
+    )
+    registry.register(
+        name="list_directory",
+        handler=list_directory_tool,
+        description="List files and subdirectories by path",
+        input_schema={
+            "required": ["path"],
+            "properties": {"path": {"type": "string"}},
         },
         timeout=10,
         risk_classes=frozenset({RiskClass.READ}),

@@ -614,6 +614,7 @@ class TestLiveClassifications:
             "datetime": {"read"},
             "web_search": {"network"},
             "read_file": {"read"},
+            "list_directory": {"read"},
             "write_file": {"write"},
             "image_gen": {"network", "external_side_effect"},
             "memory": {"read", "write"},
@@ -623,7 +624,7 @@ class TestLiveClassifications:
 
         actual = {item["name"]: set(item["risk_classes"]) for item in registry.list_tools()}
         assert actual == expected
-        for name in ("read_file", "write_file"):
+        for name in ("read_file", "list_directory", "write_file"):
             assert registry.get_tool(name).resource_resolver is resolve_workspace_path  # type: ignore[union-attr]
 
     def test_builtin_registry_classifies_every_tool(self) -> None:
