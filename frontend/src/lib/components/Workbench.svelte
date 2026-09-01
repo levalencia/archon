@@ -18,6 +18,7 @@
     RunStats,
   } from '$lib/types';
   import { authenticatedFetch } from '$lib/auth';
+  import { readProjectScope } from '$lib/project-scope';
 
   // ── Props ──────────────────────────────────────────────────────────
   let { initialId = '' }: { initialId?: string } = $props();
@@ -370,7 +371,12 @@
       const r = await authenticatedFetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, conversation_id: currentId, image: image || '' }),
+        body: JSON.stringify({
+          message: text,
+          conversation_id: currentId,
+          image: image || '',
+          project_id: readProjectScope(),
+        }),
         signal: controller.signal,
       });
       if (!r.ok || !r.body) throw new Error(`Run failed (${r.status})`);

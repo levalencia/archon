@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
@@ -107,6 +108,21 @@ class MCPToolRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class MCPToolMetadataRecord:
+    """Schema-free inventory row used to select tools before materialization."""
+
+    id: str
+    server_id: str
+    name: str
+    title: str | None
+    description: str | None
+    read_only: bool
+    destructive: bool
+    version: str | None
+    schema_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class MCPServerRecord:
     id: str
     owner_id: str
@@ -135,17 +151,20 @@ class MCPRepository:
         project_id: str,
         name: str,
         profile_id: str,
-        enabled: bool = True,
+        enabled: bool = False,
+        transport: str = "stdio",
         now: datetime | None = None,
     ) -> MCPServerRecord:
         current = _utc(now or datetime.now(tz=UTC))
+        if transport not in {"stdio", "streamable_http"}:
+            raise ValueError("invalid MCP transport")
         row = MCPServerRow(
             id=str(uuid.uuid4()),
             owner_id=_identifier(owner_id, "owner_id"),
             project_id=_identifier(project_id, "project_id"),
             name=_identifier(name, "name"),
             profile_id=_identifier(profile_id, "profile_id"),
-            transport="stdio",
+            transport=transport,
             enabled=bool(enabled),
             health=MCPHealth.UNKNOWN.value if enabled else MCPHealth.DISABLED.value,
             last_error_code=None,
@@ -192,12 +211,15 @@ class MCPRepository:
         name: str | None = None,
         profile_id: str | None = None,
         enabled: bool | None = None,
+        transport: str | None = None,
         now: datetime | None = None,
     ) -> MCPServerRecord | None:
         values: dict[str, object] = {"updated_at": _utc(now or datetime.now(tz=UTC))}
         if name is not None:
             values["name"] = _identifier(name, "name")
         requested_profile = None if profile_id is None else _identifier(profile_id, "profile_id")
+        if transport is not None and transport not in {"stdio", "streamable_http"}:
+            raise ValueError("invalid MCP transport")
         if enabled is not None:
             values["enabled"] = bool(enabled)
             values["health"] = MCPHealth.UNKNOWN.value if enabled else MCPHealth.DISABLED.value
@@ -217,9 +239,12 @@ class MCPRepository:
                 profile_changed = (
                     requested_profile is not None and requested_profile != row.profile_id
                 )
+                transport_changed = transport is not None and transport != row.transport
                 if requested_profile is not None:
                     values["profile_id"] = requested_profile
-                if profile_changed:
+                if transport is not None:
+                    values["transport"] = transport
+                if profile_changed or transport_changed:
                     final_enabled = bool(values.get("enabled", row.enabled))
                     values["health"] = (
                         MCPHealth.UNKNOWN.value if final_enabled else MCPHealth.DISABLED.value
@@ -250,16 +275,101 @@ class MCPRepository:
             return True
 
     async def list_tools(
-        self, *, owner_id: str, project_id: str, server_id: str
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        enabled_only: bool = False,
+        excluded_tool_ids: frozenset[str] = frozenset(),
     ) -> tuple[MCPToolRecord, ...]:
+        scope = self._scope(owner_id, project_id, server_id)
+        excluded = tuple(_uuid(value, "excluded_tool_id") for value in excluded_tool_ids)
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(MCPToolRow)
+                    .join(MCPServerRow, MCPServerRow.id == MCPToolRow.server_id)
+                    .where(
+                        *scope,
+                        *([MCPToolRow.enabled.is_(True)] if enabled_only else []),
+                        *([MCPToolRow.id.not_in(excluded)] if excluded else []),
+                    )
+                    .order_by(MCPToolRow.name)
+                )
+            ).scalars()
+            return tuple(self._tool(row) for row in rows)
+
+    async def list_tool_metadata(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        enabled_only: bool = False,
+        excluded_tool_ids: frozenset[str] = frozenset(),
+    ) -> tuple[MCPToolMetadataRecord, ...]:
+        """List compact tool metadata without decoding any persisted schema JSON."""
+        scope = self._scope(owner_id, project_id, server_id)
+        excluded = tuple(_uuid(value, "excluded_tool_id") for value in excluded_tool_ids)
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        MCPToolRow.id,
+                        MCPToolRow.server_id,
+                        MCPToolRow.name,
+                        MCPToolRow.title,
+                        MCPToolRow.description,
+                        MCPToolRow.read_only,
+                        MCPToolRow.destructive,
+                        MCPToolRow.version,
+                        MCPToolRow.input_schema_json,
+                    )
+                    .join(MCPServerRow, MCPServerRow.id == MCPToolRow.server_id)
+                    .where(
+                        *scope,
+                        *([MCPToolRow.enabled.is_(True)] if enabled_only else []),
+                        *([MCPToolRow.id.not_in(excluded)] if excluded else []),
+                    )
+                    .order_by(MCPToolRow.name, MCPToolRow.id)
+                )
+            ).all()
+        return tuple(
+            MCPToolMetadataRecord(
+                id=row.id,
+                server_id=row.server_id,
+                name=row.name,
+                title=row.title,
+                description=row.description,
+                read_only=bool(row.read_only),
+                destructive=bool(row.destructive),
+                version=row.version,
+                schema_hash=hashlib.sha256(row.input_schema_json.encode("utf-8")).hexdigest(),
+            )
+            for row in rows
+        )
+
+    async def load_tools(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        tool_ids: frozenset[str],
+    ) -> tuple[MCPToolRecord, ...]:
+        """Decode schemas only for explicitly selected tool IDs."""
+        if not tool_ids:
+            return ()
+        selected = tuple(_uuid(value, "tool_id") for value in tool_ids)
         scope = self._scope(owner_id, project_id, server_id)
         async with self._sessions() as session:
             rows = (
                 await session.execute(
                     select(MCPToolRow)
                     .join(MCPServerRow, MCPServerRow.id == MCPToolRow.server_id)
-                    .where(*scope)
-                    .order_by(MCPToolRow.name)
+                    .where(*scope, MCPToolRow.id.in_(selected))
+                    .order_by(MCPToolRow.name, MCPToolRow.id)
                 )
             ).scalars()
             return tuple(self._tool(row) for row in rows)
@@ -363,6 +473,32 @@ class MCPRepository:
             )
         async with self._sessions() as session:
             result = await session.execute(update(MCPServerRow).where(*scope).values(**values))
+            await session.commit()
+            return bool(result.rowcount == 1)
+
+    async def disable_tool(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        tool_id: str,
+    ) -> bool:
+        """Fail closed without decoding a potentially malformed persisted schema."""
+        scope = self._scope(owner_id, project_id, server_id)
+        async with self._sessions() as session:
+            server = (
+                await session.execute(select(MCPServerRow.id).where(*scope))
+            ).scalar_one_or_none()
+            if server is None:
+                return False
+            result = await session.execute(
+                update(MCPToolRow)
+                .where(
+                    MCPToolRow.server_id == server_id, MCPToolRow.id == _uuid(tool_id, "tool_id")
+                )
+                .values(enabled=False)
+            )
             await session.commit()
             return bool(result.rowcount == 1)
 

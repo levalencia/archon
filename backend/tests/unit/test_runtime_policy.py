@@ -1128,6 +1128,7 @@ async def test_policy_events_never_serialize_raw_arguments_or_output() -> None:
         "id",
         "name",
         "arguments_hash",
+        "arguments_size",
         "output_hash",
         "output_size",
         "status",

@@ -57,7 +57,7 @@ test('evidence view preserves status and proof boundaries', async ({ page }) => 
 
   await page.getByRole('searchbox', { name: 'Search evidence' }).fill('');
   await page.getByRole('combobox', { name: 'Evidence status' }).selectOption('deferred');
-  await expect(page.getByText('8 of 66 capabilities')).toBeVisible();
+  await expect(page.getByText('7 of 66 capabilities')).toBeVisible();
   await expect(details).not.toContainText('Embeddings');
 
   await page.getByRole('searchbox', { name: 'Search evidence' }).fill('no-such-capability');

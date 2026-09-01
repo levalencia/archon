@@ -1,6 +1,7 @@
 # Remaining Deferred Gaps
 
-**S8.10 candidate boundary:** documentation at repository candidate `440f08e`; this page does not record an S8.10 gate run or declare S8.10 complete.
+**Current boundary:** local Skills + Project Instructions candidate based on
+`a642952`; deployed `main` remains `63215bf`. No push or deployment is claimed.
 
 Archon is an evidence-rich **local Agent Reliability Workbench**. The omissions below are deliberate product and evidence boundaries, not hidden implementation promises. `Deferred` means outside the current capstone scope with no delivery date. A nearby file, manifest, test double, or local observation does not change that status.
 
@@ -18,7 +19,6 @@ For every gap, distinguish architecture artifacts from exercised capability. Sta
 | Public/cloud/Kubernetes deployment | Hardened loopback Compose; historical K8s/Helm artifacts | A working public or cloud deployment |
 | Public anonymous sharing | Immutable scanned exports and authenticated recipient-bound grants | Anonymous Internet disclosure |
 | Autonomous unapproved production optimization | Drift reports and human-approved recommendation records | Automatic production mutation |
-| Filesystem project instructions | Keyword-selected runtime skills with selected IDs in context provenance | Trusted project workspace, immutable instruction versions, scope ownership and precedence |
 | Organization-approved RTO/RPO and cloud recovery | Checksummed local backup/restore drill with measured observations | Adopted objectives, off-site/PITR/cloud topology, repeated drills and accountable owner |
 
 ## 1. Distributed multi-node agent network
@@ -155,17 +155,7 @@ Required evidence includes pre-registered success and safety criteria; represent
 
 Human approval and non-mutating promotion make the safety boundary obvious: the system recommends and records, while accountable operators change production. This directly reinforces the capstone thesis that model- or metric-generated text never grants mutable authority.
 
-## 7. Filesystem project instructions
-
-### Why it is out of scope
-
-Archon is currently a multi-user server application without an authorized project-workspace filesystem boundary. Treating arbitrary repository files as instructions would add path ownership, trust, injection, precedence, revision, and disclosure risks. Runtime skills remain implemented and their selected IDs are visible in effective-context provenance.
-
-### Architecture and evidence required
-
-A status review requires an owner/project-bound workspace model; allowlisted instruction filenames; descriptor-relative path containment; immutable content hashes and revisions; deterministic precedence across system, organization, project, skill, and user instructions; conflict/failure behavior; context-provenance exposure; cross-user isolation tests; and sync/SSE acceptance. Merely reading `AGENTS.md` from the process working directory is insufficient.
-
-## 8. Organization-approved RTO/RPO and cloud recovery
+## 7. Organization-approved RTO/RPO and cloud recovery
 
 ### Why it is out of scope
 
@@ -177,9 +167,14 @@ A status review requires Luis or a service owner to adopt scoped objectives; sel
 
 ## Candidate acceptance boundary
 
-This S8.10 documentation candidate establishes an explicit map of intentional omissions and the evidence thresholds for reconsidering them. It does **not**:
+The local candidate now implements owner/project-bound instruction snapshots,
+deterministic precedence, exact skill bindings, shared sync/SSE preparation, and
+Run Ledger provenance. Local filesystem loading remains restricted to configured
+trusted roots; arbitrary user/model host paths, automatic trust of repository
+text, public catalogs, and silent multi-family merging remain outside the claim.
+The candidate does **not**:
 
-- claim that an integrated S8.10 benchmark or final gate has run;
+- claim a final integrated `verify.sh` result;
 - convert local tests, fixtures, manifests, or historical evidence into live/provider/deployment evidence;
 - assign a delivery date to any deferred item;
 - change any `Deployed` value from **No**.

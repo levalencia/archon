@@ -49,7 +49,8 @@ This notebook contains public, repository-grounded Archon learning material.
 - Local deployment is not public production deployment.
 - Process health or dependency readiness is not proof of useful model behavior.
 - Deterministic mock output is not live provider inference.
-- Provider-live embeddings and native JSON Schema parity are not proven.
+- Provider-live embeddings are not inferred from configuration; cite them only when the evidence source records an executed live acceptance.
+- Native provider JSON Schema parity is not claimed; Archon applies strict local validation.
 - OTEL debug/stdout export is not a Jaeger or Azure Monitor deployment.
 - Approval-gated optimization is not autonomous production mutation.
 - Code existence is not automatically runtime or user-facing evidence.

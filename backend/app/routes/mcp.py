@@ -29,7 +29,7 @@ class ServerCreate(_StrictModel):
     project_id: ProjectId
     name: str = Field(min_length=1, max_length=255)
     profile_id: str = Field(min_length=1, max_length=255)
-    enabled: bool = True
+    enabled: bool = False
 
     @model_validator(mode="after")
     def validate_identifiers(self) -> ServerCreate:

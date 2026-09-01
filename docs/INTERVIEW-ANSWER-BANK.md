@@ -40,7 +40,11 @@ One constrained specialist made the benefit measurable. The child receives only 
 
 ## 10. How is MCP governed?
 
-Archon uses the official MCP 2.1.1 stdio SDK. Server profiles are injected from an allowlist; user-provided commands/env/secrets are not persisted. Discovery follows pagination and stores owner/project inventory with tools disabled by default. Enabled tools become typed runtime definitions and still require normal policy/approval. Profile, health, enabled state and schema are rechecked just before call to close stale-inventory races.
+Archon governs allowlisted stdio and bounded Streamable HTTP profiles. Protected credential references are resolved outside model-visible metadata. Discovery stores owner/project inventory with tools disabled by default; enabled tools become typed runtime definitions and still require normal policy/approval. Profile, health, enabled state and schema hash are rechecked just before execution. This is not a public MCP marketplace, generic OAuth platform, or deployed multi-region gateway.
+
+## 10A. How do skills and project instructions remain auditable?
+
+Project instructions are approved immutable snapshots, and project skill bindings identify the exact owner/revision rather than a mutable name. Sync and SSE share one context-preparation service. Metadata-first discovery keeps unrelated bodies and schemas out of context; the optional GodMode adapter searches metadata only and cannot install or trust content. The Run Ledger records instruction and skill revisions plus capability IDs/schema hashes. One bounded Foundry acceptance with `claude-opus-4-6` observed one skill, one instruction and nine capability references; that is not a broad routing-quality or deployment claim.
 
 ## 11. What resilience controls exist?
 
@@ -88,7 +92,7 @@ The project became more truthful as it became more capable. I removed false pgve
 
 ## 22. What remains incomplete?
 
-No public deployment, no final external-provider acceptance, no indexed vector service, no online memory-key rotation, no production SLO/load evidence, and broad historical Mypy debt outside scoped ratchets. Remote CI is green at `9696ad8`. Legacy experimental multi-agent code exists but is not the product claim.
+No public deployment, no indexed vector service, no production SLO/load evidence, no generic MCP OAuth/public gateway, and no claim that optional metadata catalogs install trusted content. The Skills + Project Instructions candidate has bounded Foundry and PostgreSQL evidence, but no final integrated-suite count or candidate remote-CI/deployment claim. Legacy experimental multi-agent code exists but is not the product claim.
 
 ## STAR story: PostgreSQL DR failure
 

@@ -98,6 +98,17 @@ class Settings(BaseSettings):
 
     # Skills
     skills_top_k: int = 3
+    skills_allowed_repositories: str = ""
+    # Optional metadata-only external catalog. The source must resolve below the fixed root.
+    skill_catalog_enabled: bool = False
+    skill_catalog_allowlisted_root: str = ""
+    skill_catalog_executable: str = ""
+    skill_catalog_json_index: str = ""
+    skill_catalog_timeout_seconds: float = Field(default=2.0, ge=0.05, le=30.0)
+    skill_catalog_max_stdout_bytes: int = Field(default=65_536, ge=1_024, le=1_048_576)
+    skill_catalog_max_results: int = Field(default=50, ge=1, le=100)
+    project_workspace_root: str = ""
+    mcp_profiles_json: SecretStr = SecretStr("")
     image_gen_provider: str = "mock"  # mock | together | openai
     image_gen_api_key: str = ""
 

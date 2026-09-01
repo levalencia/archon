@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import inspect
 import math
 import os
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -178,6 +180,28 @@ def resolve_workspace_path(arguments: Mapping[str, Any]) -> tuple[ResourcePatter
     return (ResourcePattern(ResourceKind.PATH, resolved.as_posix()),)
 
 
+def workspace_path_resolver(root: Path) -> ResourceResolver:
+    """Bind policy path identity to one trusted, tenant-specific workspace."""
+    canonical_root = root.resolve(strict=False)
+
+    def resolve(arguments: Mapping[str, Any]) -> tuple[ResourcePattern, ...]:
+        path = arguments.get("path")
+        if not isinstance(path, str):
+            raise ValueError("path argument must be a string")
+        if not path or (os.name != "nt" and "\\" in path):
+            raise ValueError("Invalid workspace path")
+        requested = Path(path)
+        candidate = requested if requested.is_absolute() else canonical_root / requested
+        resolved = Path(os.path.abspath(candidate))
+        try:
+            resolved.relative_to(canonical_root)
+        except ValueError:
+            raise ValueError("Invalid workspace path") from None
+        return (ResourcePattern(ResourceKind.PATH, resolved.as_posix()),)
+
+    return resolve
+
+
 @dataclass(frozen=True, slots=True)
 class ToolDefinition:
     """A registered tool with its metadata."""
@@ -193,6 +217,7 @@ class ToolDefinition:
     resource_resolver: ResourceResolver | None = None
     effectful: bool = False
     idempotency_key_parameter: str | None = None
+    capability_id: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.risk_classes, frozenset) or not all(
@@ -223,7 +248,16 @@ class ToolDefinition:
                 raise ValueError("handler does not accept the idempotency key parameter")
             effectful = True
         object.__setattr__(self, "effectful", effectful)
-        object.__setattr__(self, "name", canonical_tool_name(self.name))
+        canonical_name = canonical_tool_name(self.name)
+        object.__setattr__(self, "name", canonical_name)
+        capability_id = self.capability_id or (
+            f"native.{canonical_name}"
+            if re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,120}", canonical_name)
+            else f"native.tool_{hashlib.sha256(canonical_name.encode('utf-8')).hexdigest()[:16]}"
+        )
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", capability_id):
+            raise ValueError("invalid capability id")
+        object.__setattr__(self, "capability_id", capability_id)
         object.__setattr__(self, "required_permissions", tuple(self.required_permissions or ()))
         object.__setattr__(self, "input_schema", _deep_freeze(schema))
 
@@ -248,12 +282,16 @@ class SecureToolRegistry:
         audit: AuditLog | None = None,
         default_timeout: int = DEFAULT_TOOL_TIMEOUT,
         compliance: MandatoryComplianceService | None = default_compliance,
+        disabled_capability_ids: frozenset[str] = frozenset(),
+        denied_permissions: frozenset[str] = frozenset(),
     ) -> None:
         self._tools: dict[str, ToolDefinition] = {}
         self._permissions = permissions
         self._audit = audit
         self._default_timeout = default_timeout
         self._compliance = compliance
+        self._disabled_capability_ids = set(disabled_capability_ids)
+        self._denied_permissions = set(denied_permissions)
 
     def register(
         self,
@@ -268,6 +306,7 @@ class SecureToolRegistry:
         resource_resolver: ResourceResolver | None = None,
         effectful: bool = False,
         idempotency_key_parameter: str | None = None,
+        capability_id: str | None = None,
     ) -> None:
         """Register a tool."""
         canonical_name = canonical_tool_name(name)
@@ -285,6 +324,7 @@ class SecureToolRegistry:
             resource_resolver=resource_resolver,
             effectful=effectful,
             idempotency_key_parameter=idempotency_key_parameter,
+            capability_id=capability_id,
         )
         logger.info("tool_registered", name=canonical_name, description=description)
 
@@ -406,6 +446,34 @@ class SecureToolRegistry:
         logger.info("tool_executed", tool=tool_name, correlation_id=correlation_id)
         return result if isinstance(result, dict) else {"result": result}
 
+    def _is_visible(self, tool: ToolDefinition) -> bool:
+        """Fail closed for project-disabled capabilities and denied permission dependencies."""
+        return (
+            tool.capability_id not in self._disabled_capability_ids
+            and tool.name not in self._disabled_capability_ids
+            and not set(cast(tuple[str, ...], tool.required_permissions)).intersection(
+                self._denied_permissions
+            )
+        )
+
+    def apply_capability_policy(
+        self,
+        *,
+        disabled_capability_ids: frozenset[str] = frozenset(),
+        denied_permissions: frozenset[str] = frozenset(),
+    ) -> None:
+        """Tighten visibility/execution policy; policy can never re-enable a capability."""
+        self._disabled_capability_ids.update(disabled_capability_ids)
+        self._denied_permissions.update(denied_permissions)
+
+    def remove_capability(self, capability_id: str) -> bool:
+        """Remove an executable by stable capability ID (or legacy executable name)."""
+        for name, tool in tuple(self._tools.items()):
+            if capability_id in {tool.capability_id, tool.name}:
+                del self._tools[name]
+                return True
+        return False
+
     async def execute(
         self, call: ToolCall | str, parameters: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -425,6 +493,9 @@ class SecureToolRegistry:
             raise ValueError(error_msg)
 
         tool = self._tools[tool_name]
+        if not self._is_visible(tool):
+            logger.warning("tool_not_found", tool=tool_name, correlation_id=correlation_id)
+            raise ValueError(f"Unknown tool: {tool_name}")
 
         # 2. Input validation. This must precede every permission or execution hook.
         parameters = self._validate_arguments(tool, parameters)
@@ -437,7 +508,7 @@ class SecureToolRegistry:
         """Validate an effectful call before any durable reservation or handler dispatch."""
         tool_name = canonical_tool_name(call.name)
         tool = self._tools.get(tool_name)
-        if tool is None:
+        if tool is None or not self._is_visible(tool):
             raise PolicyMetadataError(f"Unknown tool: {tool_name}")
         parameters = self._validate_arguments(tool, call.arguments)
         if tool.effectful and self._compliance is not None:
@@ -451,7 +522,7 @@ class SecureToolRegistry:
     ) -> ToolEffectSpec:
         tool_name = canonical_tool_name(call.name)
         tool = self._tools.get(tool_name)
-        if tool is None:
+        if tool is None or not self._is_visible(tool):
             raise PolicyMetadataError(f"Unknown tool: {tool_name}")
         parameters = self._validate_arguments(tool, call.arguments)
         if approved_resources is None:
@@ -468,7 +539,7 @@ class SecureToolRegistry:
     async def execute_effect(self, call: ToolCall, *, effect_id: str) -> dict[str, Any]:
         tool_name = canonical_tool_name(call.name)
         tool = self._tools.get(tool_name)
-        if tool is None:
+        if tool is None or not self._is_visible(tool):
             raise ValueError(f"Unknown tool: {tool_name}")
         audit_parameters = self._validate_arguments(tool, call.arguments)
         handler_parameters = copy.deepcopy(audit_parameters)
@@ -487,12 +558,38 @@ class SecureToolRegistry:
                 "requires_approval": tool.requires_approval,
             }
             for tool in self._tools.values()
+            if self._is_visible(tool)
         ]
+
+    def capability_descriptors(self) -> tuple[Any, ...]:
+        """Return compact descriptors for exactly the tools visible to a provider."""
+        from app.capabilities.models import CapabilityDescriptor, CapabilityKind
+
+        return tuple(
+            CapabilityDescriptor(
+                id=cast(str, tool.capability_id),
+                kind=(
+                    CapabilityKind.MCP
+                    if cast(str, tool.capability_id).startswith("mcp.")
+                    else CapabilityKind.NATIVE
+                ),
+                name=tool.name,
+                executable_name=tool.name,
+                description=tool.description,
+                required_permissions=cast(tuple[str, ...], tool.required_permissions),
+                tags=tuple(sorted(risk.value for risk in tool.risk_classes)),
+                context_cost=0,
+            )
+            for tool in self._tools.values()
+            if self._is_visible(tool)
+        )
 
     def definitions(self) -> tuple[RuntimeToolDefinition, ...]:
         """Return provider-neutral schemas for native provider tool calling."""
         definitions = []
         for tool in self._tools.values():
+            if not self._is_visible(tool):
+                continue
             schema = _deep_thaw(tool.input_schema)
             schema.setdefault("type", "object")
             schema.setdefault("properties", {})
@@ -501,13 +598,14 @@ class SecureToolRegistry:
 
     def get_tool(self, name: str) -> ToolDefinition | None:
         """Get a tool definition by name."""
-        return self._tools.get(canonical_tool_name(name))
+        tool = self._tools.get(canonical_tool_name(name))
+        return tool if tool is not None and self._is_visible(tool) else None
 
     def policy_request(self, call: ToolCall) -> PolicyRequest:
         """Build fail-closed policy input from a typed provider tool call."""
         tool_name = canonical_tool_name(call.name)
         tool = self._tools.get(tool_name)
-        if tool is None:
+        if tool is None or not self._is_visible(tool):
             raise PolicyMetadataError(f"Unknown tool: {tool_name}")
         if not tool.risk_classes:
             raise PolicyMetadataError(f"Tool '{tool_name}' has no risk classification")
@@ -548,6 +646,6 @@ class SecureToolRegistry:
     def tool_requires_approval(self, name: str) -> bool:
         """Check if a tool requires human approval before execution."""
         tool = self._tools.get(canonical_tool_name(name))
-        if tool is None:
+        if tool is None or not self._is_visible(tool):
             return False
         return tool.requires_approval

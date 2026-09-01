@@ -7,15 +7,25 @@ import json
 import os
 import re
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, Generic, Protocol, TypeVar, cast
+from urllib.parse import urlsplit
 
+import httpx2
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 from mcp.types import PaginatedRequestParams, Tool
 
-from app.mcp.models import MCPCallResult, ServerProfile, ToolDescriptor
+from app.mcp.models import (
+    MCPCallResult,
+    MCPServerProfile,
+    RemoteServerProfile,
+    ServerProfile,
+    ToolDescriptor,
+)
 
 _T = TypeVar("_T")
+_ProfileT = TypeVar("_ProfileT", ServerProfile, RemoteServerProfile)
 _BASE_ENV_KEYS = ("PATH", "HOME", "LANG", "TMPDIR")
 _MAX_SCHEMA_BYTES = 64_000
 _MAX_TOOL_NAME_BYTES = 128
@@ -66,43 +76,18 @@ def _find_client_error(error: BaseException) -> MCPClientError | None:
     return None
 
 
-class StdioMCPClient:
-    """Runs only the executable and arguments in an injected ``ServerProfile``."""
+class _BaseMCPClient(Generic[_ProfileT]):
+    """Shared bounded MCP discovery and call normalization."""
 
-    def __init__(self, profile: ServerProfile) -> None:
-        if not isinstance(profile, ServerProfile):
-            raise TypeError("profile must be a ServerProfile")
-        self._profile = profile
+    def __init__(self, profile: _ProfileT) -> None:
+        self._profile: _ProfileT = profile
 
     async def _with_session(
         self,
         operation: Callable[[ClientSession], Awaitable[_T]],
         operation_timeout: float,
     ) -> _T:
-        parameters = StdioServerParameters(
-            command=self._profile.command,
-            args=list(self._profile.args),
-            cwd=self._profile.cwd,
-            env=_child_environment(self._profile.env),
-        )
-        try:
-            async with asyncio.timeout(self._profile.connect_timeout_seconds + operation_timeout):
-                async with stdio_client(parameters) as (read_stream, write_stream):
-                    async with ClientSession(read_stream, write_stream) as session:
-                        async with asyncio.timeout(self._profile.connect_timeout_seconds):
-                            await session.initialize()
-                        async with asyncio.timeout(operation_timeout):
-                            return await operation(session)
-        except MCPClientError:
-            raise
-        except (Exception, BaseExceptionGroup) as exc:
-            # SDK/provider details can contain commands, paths, arguments, or response data.
-            if _contains_timeout(exc):
-                raise MCPClientError("timeout") from None
-            client_error = _find_client_error(exc)
-            if client_error is not None:
-                raise MCPClientError(client_error.code) from None
-            raise MCPClientError("transport_error") from None
+        raise NotImplementedError
 
     async def initialize(self) -> None:
         """Start, initialize, and cleanly close the configured server."""
@@ -183,7 +168,7 @@ class StdioMCPClient:
                 cursor = next_cursor
             raise MCPClientError("result_too_large")
 
-        return await self._with_session(operation, self._profile.call_timeout_seconds)
+        return await self._with_session(operation, self._profile.discovery_timeout_seconds)
 
     async def call_tool(self, name: str, arguments: Mapping[str, Any]) -> MCPCallResult:
         if (
@@ -217,3 +202,189 @@ class StdioMCPClient:
             )
 
         return await self._with_session(operation, self._profile.call_timeout_seconds)
+
+
+class StdioMCPClient(_BaseMCPClient[ServerProfile]):
+    """Runs only the executable and arguments in an injected ``ServerProfile``."""
+
+    def __init__(self, profile: ServerProfile) -> None:
+        if not isinstance(profile, ServerProfile):
+            raise TypeError("profile must be a ServerProfile")
+        super().__init__(profile)
+
+    async def _with_session(
+        self,
+        operation: Callable[[ClientSession], Awaitable[_T]],
+        operation_timeout: float,
+    ) -> _T:
+        parameters = StdioServerParameters(
+            command=self._profile.command,
+            args=list(self._profile.args),
+            cwd=self._profile.cwd,
+            env=_child_environment(self._profile.env),
+        )
+        try:
+            async with asyncio.timeout(self._profile.connect_timeout_seconds + operation_timeout):
+                async with stdio_client(parameters) as (read_stream, write_stream):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        async with asyncio.timeout(self._profile.connect_timeout_seconds):
+                            await session.initialize()
+                        async with asyncio.timeout(operation_timeout):
+                            return await operation(session)
+        except MCPClientError:
+            raise
+        except (Exception, BaseExceptionGroup) as exc:
+            # SDK/provider details can contain commands, paths, arguments, or response data.
+            if _contains_timeout(exc):
+                raise MCPClientError("timeout") from None
+            client_error = _find_client_error(exc)
+            if client_error is not None:
+                raise MCPClientError(client_error.code) from None
+            raise MCPClientError("transport_error") from None
+
+
+class CredentialProvider(Protocol):
+    """Resolves a deployment-owned reference immediately before an HTTP connection."""
+
+    def resolve(self, credential_ref: str) -> Mapping[str, str]: ...
+
+
+class _NoCredentials:
+    def resolve(self, credential_ref: str) -> Mapping[str, str]:
+        raise MCPClientError("credentials_unavailable")
+
+
+_FORBIDDEN_CREDENTIAL_HEADERS = frozenset(
+    {
+        "host",
+        "content-length",
+        "transfer-encoding",
+        "connection",
+        "mcp-session-id",
+        "mcp-protocol-version",
+    }
+)
+
+
+class RemoteMCPClient(_BaseMCPClient[RemoteServerProfile]):
+    """Bounded official-SDK client for one governed Streamable HTTP profile."""
+
+    def __init__(
+        self,
+        profile: RemoteServerProfile,
+        *,
+        credential_provider: CredentialProvider | None = None,
+        http_client_factory: Callable[..., Any] = httpx2.AsyncClient,
+    ) -> None:
+        if not isinstance(profile, RemoteServerProfile):
+            raise TypeError("profile must be a RemoteServerProfile")
+        self._profile = profile
+        self._credential_provider = credential_provider or _NoCredentials()
+        self._http_client_factory = http_client_factory
+        parsed = urlsplit(profile.url)
+        self._origin = (parsed.scheme, parsed.hostname, parsed.port)
+
+    def _credential_headers(self) -> dict[str, str]:
+        if self._profile.credential_ref is None:
+            return {}
+        try:
+            raw = self._credential_provider.resolve(self._profile.credential_ref)
+            if not isinstance(raw, Mapping):
+                raise TypeError
+            headers = dict(raw)
+        except MCPClientError:
+            raise
+        except Exception:
+            raise MCPClientError("credentials_unavailable") from None
+        if any(
+            type(key) is not str
+            or type(value) is not str
+            or not key
+            or key.lower() in _FORBIDDEN_CREDENTIAL_HEADERS
+            or any(character in key or character in value for character in "\r\n\x00")
+            for key, value in headers.items()
+        ):
+            raise MCPClientError("invalid_credentials")
+        return headers
+
+    async def _guard_origin(self, request: Any) -> None:
+        url = request.url
+        origin = (url.scheme, url.host, url.port)
+        if origin != self._origin:
+            raise MCPClientError("unsafe_redirect")
+
+    def _build_http_client(self) -> Any:
+        """Build a non-proxying, non-redirecting client; raw headers remain ephemeral."""
+
+        return self._http_client_factory(
+            headers=self._credential_headers(),
+            timeout=httpx2.Timeout(
+                self._profile.response_timeout_seconds,
+                connect=self._profile.connect_timeout_seconds,
+            ),
+            follow_redirects=False,
+            trust_env=False,
+            event_hooks={"request": [self._guard_origin]},
+        )
+
+    async def _with_session(
+        self,
+        operation: Callable[[ClientSession], Awaitable[_T]],
+        operation_timeout: float,
+    ) -> _T:
+        try:
+            async with asyncio.timeout(
+                self._profile.connect_timeout_seconds
+                + operation_timeout
+                + self._profile.response_timeout_seconds
+            ):
+                async with self._build_http_client() as http_client:
+                    async with streamable_http_client(
+                        self._profile.url,
+                        http_client=http_client,
+                        terminate_on_close=True,
+                    ) as streams:
+                        read_stream, write_stream = streams[0], streams[1]
+                        async with ClientSession(read_stream, write_stream) as session:
+                            async with asyncio.timeout(self._profile.connect_timeout_seconds):
+                                await session.initialize()
+                            async with asyncio.timeout(operation_timeout):
+                                return await operation(session)
+        except MCPClientError:
+            raise
+        except (Exception, BaseExceptionGroup) as exc:
+            if _contains_timeout(exc):
+                raise MCPClientError("timeout") from None
+            client_error = _find_client_error(exc)
+            if client_error is not None:
+                raise MCPClientError(client_error.code) from None
+            raise MCPClientError("transport_error") from None
+
+    async def health_check(self) -> bool:
+        """Probe availability with bounded reconnect and exponential backoff."""
+
+        for attempt in range(self._profile.reconnect_attempts + 1):
+            try:
+                await self.initialize()
+                return True
+            except MCPClientError as error:
+                if error.code not in {"timeout", "transport_error"}:
+                    return False
+                if attempt == self._profile.reconnect_attempts:
+                    return False
+                await asyncio.sleep(self._profile.reconnect_backoff_seconds * (2**attempt))
+        return False
+
+
+def create_mcp_client(
+    profile: MCPServerProfile,
+    *,
+    credential_provider: CredentialProvider | None = None,
+) -> StdioMCPClient | RemoteMCPClient:
+    """Common transport factory while preserving existing stdio profiles."""
+
+    if isinstance(profile, ServerProfile):
+        return StdioMCPClient(profile)
+    if isinstance(profile, RemoteServerProfile):
+        return RemoteMCPClient(profile, credential_provider=credential_provider)
+    raise TypeError("profile must be an MCP server profile")

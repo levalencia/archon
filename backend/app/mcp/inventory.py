@@ -7,8 +7,14 @@ from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Protocol
 
-from app.mcp.client import MCPClientError, StdioMCPClient
-from app.mcp.models import ServerProfile, ToolDescriptor
+from app.mcp.client import MCPClientError, create_mcp_client
+from app.mcp.models import (
+    MCPServerProfile,
+    RemoteServerProfile,
+    ServerProfile,
+    ToolDescriptor,
+    profile_transport,
+)
 from app.mcp.repository import MCPHealth, MCPRepository, MCPServerRecord, MCPToolRecord
 
 _STABLE_CLIENT_ERRORS = frozenset(
@@ -32,7 +38,7 @@ class MCPClient(Protocol):
     async def list_tools(self) -> tuple[ToolDescriptor, ...]: ...
 
 
-MCPClientFactory = Callable[[ServerProfile], MCPClient]
+MCPClientFactory = Callable[[MCPServerProfile], MCPClient]
 
 
 class MCPInventoryError(RuntimeError):
@@ -49,18 +55,20 @@ class MCPInventoryService:
     def __init__(
         self,
         repository: MCPRepository,
-        client_factory: MCPClientFactory = StdioMCPClient,
-        profiles: Mapping[str, ServerProfile] | None = None,
+        client_factory: MCPClientFactory = create_mcp_client,
+        profiles: Mapping[str, MCPServerProfile] | None = None,
     ) -> None:
         copied = dict(profiles or {})
         if any(
-            not isinstance(key, str) or not key or not isinstance(value, ServerProfile)
+            not isinstance(key, str)
+            or not key
+            or not isinstance(value, (ServerProfile, RemoteServerProfile))
             for key, value in copied.items()
         ):
             raise ValueError("invalid MCP profile allowlist")
         self._repository = repository
         self._client_factory = client_factory
-        self._profiles: Mapping[str, ServerProfile] = MappingProxyType(copied)
+        self._profiles: Mapping[str, MCPServerProfile] = MappingProxyType(copied)
 
     async def create_server(
         self,
@@ -69,7 +77,7 @@ class MCPInventoryService:
         project_id: str,
         name: str,
         profile_id: str,
-        enabled: bool = True,
+        enabled: bool = False,
     ) -> MCPServerRecord:
         if profile_id not in self._profiles:
             raise MCPInventoryError("unknown_profile")
@@ -79,6 +87,7 @@ class MCPInventoryService:
             name=name,
             profile_id=profile_id,
             enabled=enabled,
+            transport=profile_transport(self._profiles[profile_id]),
         )
 
     async def update_server(
@@ -100,6 +109,9 @@ class MCPInventoryService:
             name=name,
             profile_id=profile_id,
             enabled=enabled,
+            transport=(
+                profile_transport(self._profiles[profile_id]) if profile_id is not None else None
+            ),
         )
 
     async def discover(
@@ -119,7 +131,7 @@ class MCPInventoryService:
             )
             raise MCPInventoryError("server_disabled")
         profile = self._profiles.get(server.profile_id)
-        if profile is None:
+        if profile is None or server.transport != profile_transport(profile):
             await self._fail(owner_id, project_id, server_id, "unknown_profile", server.profile_id)
             raise MCPInventoryError("unknown_profile")
         try:
@@ -151,7 +163,7 @@ class MCPInventoryService:
         )
         if not health_updated:
             raise MCPInventoryError("discovery_failed")
-        return tools
+        return tuple(tools)
 
     async def _fail(
         self,

@@ -28,16 +28,24 @@ Archon is a serious local portfolio system. It is not a public production servic
 
 ## Verified status
 
-| Evidence | Final result |
+The Skills + Project Instructions work is a **local candidate** on
+`feature/skills-project-instructions-mcp`; its code evidence is anchored at `9eaf49e`
+before the documentation-only commits. It has not been pushed or deployed.
+The deployed `main` revision remains `63215bf`. The candidate has focused,
+adversarial, real-provider, temporary-PostgreSQL, frontend, and browser evidence;
+the exact-head integrated `verify.sh` gate passed on `26e36737` with backend **1537 passed / 4 skipped**, Svelte **0 errors / 0 warnings**, Vitest **53**, production build PASS, Playwright **33**, Bandit, sandbox, backend-container health, benchmark, and clean-tree checks.
+
+| Evidence | Recorded result |
 |---|---|
-| Deployment target | Production-like local Docker Compose on macOS |
-| Local services | 7 containers; only the loopback gateway publishes a host port |
-| Backend | **1,415 passed, 2 expected skips, 87.23% coverage** |
-| Frontend | Svelte **0 errors / 0 warnings**, **48 Vitest**, production build, **30 Playwright** |
-| Capability manifest | **16 entries validated** |
-| Portfolio benchmark | **12 scenarios, 120/120 iterations passed**, zero external cost |
-| Disaster recovery | **0 selected-record differences at snapshot**, observed **restore-to-ready 24.787 seconds** |
-| Live provider evidence | Foundry Claude tool call, cache-metric transport, and multimodal probe passed |
+| Deployment target | Existing production-like local Docker Compose on macOS; candidate not deployed |
+| Local services | 7 retained baseline containers; only the loopback gateway publishes a host port |
+| Deployed baseline backend | **1,415 passed, 2 expected skips, 87.23% coverage** |
+| Candidate frontend | Svelte **0 errors / 0 warnings**, **53 Vitest**, production build, **33 Playwright** |
+| Capability manifest | **16 stable acceptance entries**; Skills + Project Instructions is tracked in the 66-concept course catalog |
+| Candidate concept totals | **59 implemented / 7 deferred / 0 partial** |
+| Portfolio benchmark | Historical deployed-baseline result: **12 scenarios, 120/120 iterations passed**, zero external cost |
+| Disaster recovery | Historical deployed-baseline result: **0 selected-record differences**, observed **restore-to-ready 24.787 seconds** |
+| Candidate live provider evidence | Foundry `claude-opus-4-6`: one selected skill, one instruction revision, nine capability refs |
 | Public/cloud deployment | **No. Deliberately deferred.** |
 
 The canonical details and limits live in [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md).
@@ -138,11 +146,15 @@ The model proposes actions. Deterministic code owns authority, limits, persisten
 - idempotent effect ledger;
 - durable monetary reservations and reconciliation;
 - governed MCP discovery and invocation;
+- governed stdio and Streamable HTTP MCP transports;
 - isolated sandbox execution with no host fallback.
 
 ### Evidence and state
 
 - owner/project-scoped conversations;
+- immutable, owner/project-scoped project-instruction snapshots;
+- exact project bindings for versioned skills and ten bundled skill packages;
+- metadata-first capability discovery with optional metadata-only GodMode search;
 - AES-GCM encrypted memory;
 - context provenance and online key rotation;
 - ordered Run Ledger events;
@@ -168,7 +180,7 @@ The model proposes actions. Deterministic code owns authority, limits, persisten
 - REST and SSE parity;
 - structured logs, metrics, and OpenTelemetry traces;
 - liveness and dependency readiness;
-- Alembic migrations through `20260828_14`;
+- Alembic migrations through `20260901_21` on the local candidate;
 - Docker Compose deployment;
 - checksum-verified backup and clean restore;
 - measured RPO/RTO;
@@ -177,19 +189,13 @@ The model proposes actions. Deterministic code owns authority, limits, persisten
 ## Data model
 
 The deployed target uses one PostgreSQL database named `archon` and one Redis data store.
+The local candidate migrates the schema from revision 14 through revisions 15–21.
 
-PostgreSQL contains **32 ORM tables**:
-
-| Domain | Tables |
-|---|---:|
-| Identity and conversations | 4 |
-| Runs, events, checkpoints, forks, and audit | 5 |
-| Approvals, effects, costs, jobs, and delegation | 6 |
-| Context and encrypted memory | 4 |
-| Documents, artifacts, and vectors | 3 |
-| MCP inventory | 2 |
-| Evaluation, drift, and optimization candidates | 6 |
-| Export and sharing | 2 |
+The candidate ORM declares **41 tables**. The added persistence covers immutable
+skill revisions/references, exact project bindings, project-instruction
+snapshots, capability preferences/provenance, and governed MCP transport
+profiles. This is a code-and-migration claim, not evidence that revision 21 is
+deployed on `main`.
 
 Redis stores rate-limit windows and temporary state. It is not a relational database.
 
@@ -289,6 +295,13 @@ This is partial live evidence. A zero cache counter is not a cache-hit or billin
 
 See the sanitized [Live Provider Acceptance Summary](docs/evidence/live-provider-acceptance-summary.json). It contains no prompts, responses, credentials, full endpoint URLs, or raw provider errors.
 
+The Skills + Project Instructions candidate also passed one operator-authorized
+Foundry acceptance with `claude-opus-4-6`: one skill revision, one approved
+instruction revision, and nine capability references were present in the exact
+Run Ledger context. This proves one bounded candidate path, not selection
+quality in general or deployment. See the
+[candidate implementation evidence](docs/evidence/skills-project-instructions-implementation.md).
+
 ## Evidence packet
 
 | Evidence | Location |
@@ -298,6 +311,7 @@ See the sanitized [Live Provider Acceptance Summary](docs/evidence/live-provider
 | Benchmark report | [Portfolio Benchmark](docs/evidence/local-portfolio-benchmark.json) |
 | Recovery report | [DR Report](docs/evidence/local-dr-report.json) |
 | Live-provider summary | [Live Provider Acceptance](docs/evidence/live-provider-acceptance-summary.json) |
+| Skills + Project Instructions candidate | [Implementation Evidence](docs/evidence/skills-project-instructions-implementation.md) |
 | Deferred scope | [Remaining Deferred Gaps](docs/REMAINING-DEFERRED-GAPS.md) |
 | CI, pipelines, containers, and local commands | [CI and Local Run Guide](docs/CI-PIPELINES-AND-LOCAL-RUN.md) |
 | API surface | [API Map](docs/course/reference/api-map.md) |

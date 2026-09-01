@@ -15,6 +15,7 @@ import operator
 import os
 import stat
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -29,6 +30,19 @@ logger = structlog.get_logger()
 MAX_READ_FILE_BYTES = 1_000_000
 MAX_CALCULATOR_EXPRESSION_LENGTH = 500
 MAX_CALCULATOR_NODES = 64
+
+
+@dataclass(frozen=True, slots=True)
+class TenantWorkspace:
+    """Trusted descriptor-relative workspace scope created by the HTTP layer."""
+
+    configured_root: Path
+    tenant_components: tuple[str, str]
+
+    @property
+    def path(self) -> Path:
+        return self.configured_root.joinpath(*self.tenant_components)
+
 
 _BINARY_OPERATORS = {
     ast.Add: operator.add,
@@ -138,13 +152,23 @@ async def datetime_tool(query: str = "now") -> dict:
     }
 
 
-def _workspace_root(workspace_root: str | Path | None = None) -> Path:
+def _workspace_root(workspace_root: str | Path | TenantWorkspace | None = None) -> Path:
+    if isinstance(workspace_root, TenantWorkspace):
+        return workspace_root.path
     root_value = (
         workspace_root
         if workspace_root is not None
         else os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
     )
     return Path(root_value).resolve()
+
+
+def _workspace_anchor(
+    workspace_root: str | Path | TenantWorkspace | None,
+) -> tuple[Path, list[str]]:
+    if isinstance(workspace_root, TenantWorkspace):
+        return workspace_root.configured_root, list(workspace_root.tenant_components)
+    return _workspace_root(workspace_root), []
 
 
 _SECURE_TRAVERSAL_AVAILABLE = (
@@ -162,7 +186,7 @@ _DIRECTORY_OPEN_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os
 def _relative_workspace_components(
     path: str | Path,
     root: Path,
-    workspace_root: str | Path | None,
+    workspace_root: str | Path | TenantWorkspace | None,
 ) -> list[str]:
     """Return lexical path components without resolving any requested component."""
     raw_path = os.fspath(path)
@@ -179,7 +203,9 @@ def _relative_workspace_components(
     if requested.is_absolute():
         roots = [root]
         root_value = (
-            workspace_root
+            root
+            if isinstance(workspace_root, TenantWorkspace)
+            else workspace_root
             if workspace_root is not None
             else os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
         )
@@ -248,17 +274,22 @@ def _path_result(root: Path, components: list[str]) -> str:
 
 
 async def read_file_tool(
-    path: str | Path, workspace_root: str | Path | None = None, max_size: int = MAX_READ_FILE_BYTES
+    path: str | Path,
+    workspace_root: str | Path | TenantWorkspace | None = None,
+    max_size: int = MAX_READ_FILE_BYTES,
 ) -> dict:
     """Read a regular file through a no-follow workspace descriptor chain."""
     directory_fd: int | None = None
     file_fd: int | None = None
     try:
+        if type(max_size) is not int or not 0 <= max_size <= MAX_READ_FILE_BYTES:
+            return {"error": f"max_size must be between 0 and {MAX_READ_FILE_BYTES} bytes"}
         root = _workspace_root(workspace_root)
+        anchor, tenant_components = _workspace_anchor(workspace_root)
         components = _relative_workspace_components(path, root, workspace_root)
         if not components:
             return {"error": f"Not a regular file: {path}"}
-        directory_fd = _open_workspace_directory(root, components[:-1])
+        directory_fd = _open_workspace_directory(anchor, tenant_components + components[:-1])
         file_fd = os.open(
             components[-1],
             os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
@@ -304,13 +335,16 @@ async def read_file_tool(
             os.close(directory_fd)
 
 
-async def list_directory_tool(path: str | Path, workspace_root: str | Path | None = None) -> dict:
+async def list_directory_tool(
+    path: str | Path, workspace_root: str | Path | TenantWorkspace | None = None
+) -> dict:
     """List a directory through a no-follow workspace descriptor chain."""
     directory_fd: int | None = None
     try:
         root = _workspace_root(workspace_root)
+        anchor, tenant_components = _workspace_anchor(workspace_root)
         components = _relative_workspace_components(path, root, workspace_root)
-        directory_fd = _open_workspace_directory(root, components)
+        directory_fd = _open_workspace_directory(anchor, tenant_components + components)
         items = []
         for name in sorted(os.listdir(directory_fd)):
             item_stat = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -344,18 +378,23 @@ async def list_directory_tool(path: str | Path, workspace_root: str | Path | Non
 
 
 async def write_file_tool(
-    path: str | Path, content: str, workspace_root: str | Path | None = None
+    path: str | Path,
+    content: str,
+    workspace_root: str | Path | TenantWorkspace | None = None,
 ) -> dict:
     """Write a file through a no-follow workspace descriptor chain."""
     directory_fd: int | None = None
     file_fd: int | None = None
     try:
         root = _workspace_root(workspace_root)
+        anchor, tenant_components = _workspace_anchor(workspace_root)
         components = _relative_workspace_components(path, root, workspace_root)
         if not components:
             return {"error": f"Not a regular file: {path}"}
         encoded_content = content.encode("utf-8")
-        directory_fd = _open_workspace_directory(root, components[:-1], create=True)
+        directory_fd = _open_workspace_directory(
+            anchor, tenant_components + components[:-1], create=True
+        )
         file_fd = os.open(
             components[-1],
             os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),

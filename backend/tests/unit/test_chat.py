@@ -10,6 +10,22 @@ from app.config import Settings
 from app.main import create_app
 
 
+def _bind_code_review(client: TestClient) -> None:
+    item = next(
+        row for row in client.get("/api/skills/catalog").json() if row["name"] == "code-review"
+    )
+    response = client.put(
+        f"/api/skills/projects/default/{item['id']}",
+        json={
+            "revision_id": item["revision_id"],
+            "revision_owner_id": item["revision_owner_id"],
+            "enabled": True,
+            "pinned": True,
+        },
+    )
+    assert response.status_code == 200
+
+
 @pytest.fixture
 def client(tmp_path) -> TestClient:
     settings = Settings(
@@ -52,6 +68,26 @@ class TestChatEndpoint:
         assert "conversation_id" in data
         assert "correlation_id" in data
         assert data["iterations"] >= 1
+        assert data["run_id"]
+
+    @pytest.mark.unit
+    def test_durable_skill_selection_is_visible_in_run_provenance(self, client: TestClient) -> None:
+        _bind_code_review(client)
+        response = client.post(
+            "/api/chat",
+            json={"message": "Review this Python code for security and correctness."},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert any(item["name"] == "archon.code-review" for item in body["skills_used"])
+        assert len(body["skills_used"]) <= 3
+
+        provenance = client.get(f"/api/runs/{body['run_id']}/effective-context")
+        assert provenance.status_code == 200
+        context = provenance.json()
+        assert context["skill_revisions"]
+        assert all(item["revision"] and item["content_hash"] for item in context["skill_revisions"])
+        assert context["context_cost"]["byte_count"] > 0
 
     @pytest.mark.unit
     def test_chat_with_conversation_id(self, client: TestClient) -> None:
@@ -118,6 +154,17 @@ class TestChatStreamEndpoint:
         )
         text = response.text
         assert "event: token" in text
+
+    @pytest.mark.unit
+    def test_stream_uses_same_durable_skill_selection(self, client: TestClient) -> None:
+        _bind_code_review(client)
+        response = client.post(
+            "/api/chat/stream",
+            json={"message": "Review this Python code for security and correctness."},
+        )
+        assert response.status_code == 200
+        assert "event: skill" in response.text
+        assert "archon.code-review" in response.text
 
 
 class TestChatHistory:

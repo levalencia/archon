@@ -4,7 +4,7 @@ import asyncio
 import os
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
@@ -33,10 +33,26 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+_POSTGRES_MIGRATION_LOCK_ID = 479_301_717_367
+
+
 def do_run_migrations(connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
-    with context.begin_transaction():
-        context.run_migrations()
+    locked = connection.dialect.name == "postgresql"
+    if locked:
+        connection.execute(
+            text("SELECT pg_advisory_lock(:lock_id)"),
+            {"lock_id": _POSTGRES_MIGRATION_LOCK_ID},
+        )
+    try:
+        with context.begin_transaction():
+            context.run_migrations()
+    finally:
+        if locked:
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": _POSTGRES_MIGRATION_LOCK_ID},
+            )
 
 
 async def run_async_migrations() -> None:

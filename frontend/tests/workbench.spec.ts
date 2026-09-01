@@ -22,6 +22,12 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/chat/history/*', route => authorized(route.request().headers())
     ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ messages: [] }) })
     : route.fulfill({ status: 401 }));
+  await page.route('**/api/projects/default/instructions', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/skills/catalog?**', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/capabilities/search', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/mcp/profiles', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/mcp/servers?**', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/documents', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
 });
 
 test('mock provider is disclosed before the user sends a message', async ({ page }) => {
@@ -39,9 +45,13 @@ test('mock provider is disclosed before the user sends a message', async ({ page
 });
 
 test('desktop workbench streams an answer and exposes inspector tabs', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('archon.active-project', 'project-a'));
   await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('/');
+  const requestPromise = page.waitForRequest('**/api/chat/stream');
   await expect(page.getByRole('heading', { name: /Make every answer/ })).toBeVisible();
   await page.getByRole('textbox', { name: 'Message' }).fill('Is this grounded?'); await page.getByRole('button', { name: 'Send' }).click();
+  const chatRequest = await requestPromise;
+  expect(chatRequest.postDataJSON().project_id).toBe('project-a');
   await expect(page.getByText('Grounded answer')).toBeVisible(); await expect(page).toHaveURL(/\/chat\/run-123/);
 });
 
@@ -342,7 +352,7 @@ test('all top-level routes and a refreshed chat deep link render without browser
   page.on('pageerror', error => errors.push(error.message));
   const routes: Array<[string, RegExp]> = [
     ['/login', /^Archon$/], ['/dashboard', /^Dashboard$/], ['/documents', /Documents & RAG/],
-    ['/eval', /Recorded Run Evaluations/], ['/memory', /Memory Inspector/], ['/settings', /Skills & Integrations/],
+    ['/eval', /Recorded Run Evaluations/], ['/memory', /Memory Inspector/], ['/settings', /^Settings$/],
     ['/learn', /Choose the view that matches your question/],
   ];
   for (const [path, heading] of routes) {

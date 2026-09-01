@@ -4,10 +4,11 @@
 
 ## Baseline
 
-- **Public baseline before this live-demo candidate:** `82b9120` on `main`, after merged capstone PR #1 and managed-runtime PR #2.
-- **Current acceptance scope:** deterministic full verification plus operator-authorized Foundry model/tool/multimodal and managed API/browser chat evidence.
+- **Current candidate:** local `feature/skills-project-instructions-mcp`; code evidence is anchored at `9eaf49e` before documentation-only commits. No push or deployment is claimed.
+- **Deployed baseline:** `main` remains `63215bf`.
+- **Current acceptance scope:** exact-head `verify.sh` PASS at code HEAD `26e36737`, focused/adversarial Skills + Project Instructions tests, one operator-authorized Foundry run, and a disposable PostgreSQL migration round trip.
 - **Capability status source:** `docs/implementation/CAPABILITY-ACCEPTANCE.yaml`; this prose must not override its per-dimension limits.
-- **Remote status:** `main` was green before this candidate; publish only after the candidate's PR CI is green and reviewed.
+- **Remote status:** no candidate push or candidate CI result is claimed.
 - **Deployment status:** production-like **local** target observed; no non-local/public deployment. Every `Deployed` value remains **No**.
 
 This document separates code presence, wiring, tests, direct observation, UI, and deployment. Local tests, mocks, Docker smokes, and manifests are not public-production evidence.
@@ -25,6 +26,44 @@ provides the validated, machine-readable baseline for capstone gap status and ev
 - **Deployed:** verified outside the local machine.
 
 Legend: **Yes**, **Partial**, **No**, **N/A**.
+
+## Skills + Project Instructions local candidate
+
+The candidate implements migrations `20260901_15` through `20260901_21`, 41
+ORM tables, ten owned bundled skills, immutable skill revisions and exact
+owner/project/revision bindings, approved project-instruction snapshots,
+metadata-first capability discovery, and one request-context preparation path
+shared by sync and SSE. Effective-context persistence records exact instruction
+and skill revisions plus capability IDs/schema hashes in the Run Ledger without
+persisting raw instruction or skill bodies there.
+
+The optional GodMode catalog adapter is metadata-only and disabled by default;
+it does not install, trust, or inject remote content. Governed MCP supports both
+allowlisted stdio and bounded Streamable HTTP profiles. Discovery is not
+authorization: project enablement, disabled/deny filtering, schema-hash checks, and execution-time
+revalidation remain separate.
+
+Focused evidence covers the existing skill parser/catalog/persistence/security,
+instruction loader/precedence/snapshot, capability selector/governance,
+scoped-API, MCP transport, and migration tests listed in
+[`docs/evidence/skills-project-instructions-implementation.md`](evidence/skills-project-instructions-implementation.md).
+
+Two direct observations are recorded for the local candidate:
+
+- **Foundry acceptance — PASS:** `claude-opus-4-6`, no mock fallback, with one
+  selected skill revision, one approved instruction revision, and nine
+  capability provenance references in the run context.
+- **Disposable PostgreSQL acceptance — PASS:** upgrade to head
+  `20260901_21`, five active integrity triggers, two composite owner foreign
+  keys, `mcp_servers.enabled` defaulting to false, downgrade to revision 14,
+  and re-upgrade to 21.
+
+- **Exact-head integrated gate — PASS:** backend **1537 passed / 4 skipped**,
+  Svelte **0/0**, Vitest **53**, build PASS, Playwright **33**, Bandit,
+  sandbox, backend-container health, benchmark, and clean-tree checks.
+
+These observations do not establish public deployment, broad skill-selection
+quality, arbitrary repository trust, or external production readiness.
 
 ## Quality gates
 
@@ -128,7 +167,8 @@ Evidence files:
 | External embedding provider | Yes | Yes | Yes | Yes | Yes | No | Azure Foundry `text-embedding-3-small` produced validated 1,536-dimensional vectors and passed persisted ingest/query plus full grounded-RAG acceptance in the development target. No broad quality or production SLA claim. |
 | Recorded-run evaluations | Yes | Yes | Yes | Yes | Yes | No | Versioned datasets evaluate persisted runs; legacy fabricated A/B endpoints return 410. |
 | Bounded verifier child | Yes | Yes | Yes | Yes | Yes | No | Evidence-only context, no tools, real token/time/retry budgets, durable parent-child runs and benefit fixture. One specialist, not a swarm. |
-| MCP stdio integration | Yes | Yes | Yes | Yes | Yes | No | Official MCP 2.1.1 client/server tests, cursor pagination, allowlisted profiles, durable inventory, per-tool policy/approval and Skills & Integrations UI. No production OAuth/HTTP transport claim. |
+| Governed MCP stdio + HTTP | Yes | Yes | Yes | Yes | Yes | No | Allowlisted stdio and bounded Streamable HTTP profiles, durable inventory, protected credential references, project enablement, per-tool policy/approval, schema-hash/TOCTOU checks, and UI. No generic OAuth platform or public gateway claim. |
+| Skills, project instructions, and capability discovery | Yes | Yes | Yes | Yes | Partial | No | Local candidate: ten bundled skills, immutable exact project bindings, approved instruction snapshots, shared sync/SSE preparation, metadata-first discovery, and exact Run Ledger provenance. One Foundry run observed 1 skill, 1 instruction and 9 capability refs. GodMode is optional metadata-only; UI code exists but this evidence packet does not claim a completed browser acceptance; no deployment or broad selection-quality claim. |
 | Evidence-first Workbench | Yes | Yes | Yes | Yes | Yes | No | Full-width responsive shell, contextual inspector, inline evidence, mobile/tablet focus containment, route coverage. |
 | OpenTelemetry | Yes | Yes | Yes | Yes | No | No | Real SDK/exporter in the local image; readiness and collector logs prove export. Archon has no hosted trace backend or embedded trace UI. |
 | Local container target | Yes | Yes | Yes | Yes | N/A | No | Digest-pinned, loopback-only gateway, non-root/read-only app containers, internal PostgreSQL/Redis/OTEL. Local evidence is not deployment. |

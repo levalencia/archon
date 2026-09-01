@@ -662,6 +662,7 @@ class AgentRuntime:
                             denied_output = {"error": "User denied this tool call"}
                             record = {
                                 "tool": call.name,
+                                "tool_call_id": call.id,
                                 "parameters": dict(call.arguments),
                                 "result": denied_output,
                                 "status": "denied",
@@ -701,6 +702,7 @@ class AgentRuntime:
                         if policy_binding is None:
                             record = {
                                 "tool": call.name,
+                                "tool_call_id": call.id,
                                 "parameters": dict(call.arguments),
                                 "result": error_output,
                                 "status": "error",
@@ -717,9 +719,13 @@ class AgentRuntime:
                             )
                             record = {
                                 "tool": policy_binding.tool_name,
+                                "tool_call_id": policy_binding.tool_call_id,
                                 "parameters": self._policy_binding_arguments(policy_binding),
                                 "result": error_output,
                                 "status": "error",
+                                **self._policy_tool_result_data(
+                                    policy_binding, error_serialized, "error"
+                                ),
                             }
                             completed_data = self._policy_tool_result_data(
                                 policy_binding,
@@ -755,6 +761,7 @@ class AgentRuntime:
                     if policy_binding is None:
                         record = {
                             "tool": call.name,
+                            "tool_call_id": call.id,
                             "parameters": dict(call.arguments),
                             "result": dict(output),
                             "status": execution_status,
@@ -769,9 +776,13 @@ class AgentRuntime:
                     else:
                         record = {
                             "tool": policy_binding.tool_name,
+                            "tool_call_id": policy_binding.tool_call_id,
                             "parameters": self._policy_binding_arguments(policy_binding),
                             "result": dict(output),
                             "status": execution_status,
+                            **self._policy_tool_result_data(
+                                policy_binding, serialized, execution_status
+                            ),
                         }
                         completed_data = self._policy_tool_result_data(
                             policy_binding,
@@ -1533,6 +1544,7 @@ class AgentRuntime:
             "id": binding.tool_call_id,
             "name": binding.tool_name,
             "arguments_hash": binding.arguments_hash,
+            "arguments_size": len(binding.arguments_json.encode("utf-8")),
             "output_hash": hashlib.sha256(encoded).hexdigest(),
             "output_size": len(encoded),
             "status": status,

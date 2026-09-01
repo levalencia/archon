@@ -13,7 +13,12 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.runtime.context_provenance import EffectiveContextManifest
+from app.runtime.context_provenance import (
+    CapabilityContextRef,
+    EffectiveContextManifest,
+    InstructionRevisionRef,
+    SkillRevisionRef,
+)
 from app.services.db_store import ContextSnapshotRow
 
 
@@ -22,7 +27,7 @@ class ContextSnapshotConflictError(RuntimeError):
         super().__init__("context_snapshot_conflict")
 
 
-def _json(values: tuple[str | int, ...]) -> str:
+def _json(values: Any) -> str:
     return json.dumps(list(values), ensure_ascii=False, separators=(",", ":"))
 
 
@@ -58,6 +63,42 @@ class ContextSnapshotRepository:
             "summarized_message_ids_json": _json(manifest.summarized_message_ids),
             "memory_ids_json": _json(manifest.memory_ids),
             "skill_ids_json": _json(manifest.skill_ids),
+            "instruction_revisions_json": _json(
+                [
+                    {
+                        "revision_id": item.revision_id,
+                        "content_hash": item.content_hash,
+                        "order": item.order,
+                    }
+                    for item in manifest.instruction_revisions
+                ]
+            ),
+            "skill_revisions_json": _json(
+                [
+                    {
+                        "capability_id": item.capability_id,
+                        "revision_id": item.revision_id,
+                        "content_hash": item.content_hash,
+                        "reasons": list(item.reasons),
+                    }
+                    for item in manifest.skill_revisions
+                ]
+            ),
+            "capability_references_json": _json(
+                [
+                    {
+                        "capability_id": item.capability_id,
+                        "name": item.name,
+                        "permission": item.permission,
+                        "reason": item.reason,
+                        "schema_hash": item.schema_hash,
+                    }
+                    for item in manifest.capability_references
+                ]
+            ),
+            "selected_capability_ids_json": _json(manifest.selected_capability_ids),
+            "rejected_capability_ids_json": _json(manifest.rejected_capability_ids),
+            "context_cost_bytes": manifest.context_cost_bytes,
             "input_asset_fingerprints_json": _json(manifest.input_asset_fingerprints),
             "summary_version": manifest.summary_version,
             "estimated_tokens": manifest.estimated_tokens,
@@ -137,6 +178,38 @@ class ContextSnapshotRepository:
             ),
             memory_ids=cast(tuple[str, ...], _decode_ids(row.memory_ids_json, integers=False)),
             skill_ids=cast(tuple[str, ...], _decode_ids(row.skill_ids_json, integers=False)),
+            instruction_revisions=tuple(
+                InstructionRevisionRef(
+                    str(item["revision_id"]), str(item["content_hash"]), int(item["order"])
+                )
+                for item in json.loads(row.instruction_revisions_json)
+            ),
+            skill_revisions=tuple(
+                SkillRevisionRef(
+                    str(item["capability_id"]),
+                    str(item["revision_id"]),
+                    str(item["content_hash"]),
+                    tuple(item["reasons"]),
+                )
+                for item in json.loads(row.skill_revisions_json)
+            ),
+            capability_references=tuple(
+                CapabilityContextRef(
+                    capability_id=str(item["capability_id"]),
+                    name=str(item["name"]),
+                    permission=str(item["permission"]),
+                    reason=str(item["reason"]),
+                    schema_hash=str(item["schema_hash"]),
+                )
+                for item in json.loads(row.capability_references_json)
+            ),
+            selected_capability_ids=cast(
+                tuple[str, ...], _decode_ids(row.selected_capability_ids_json, integers=False)
+            ),
+            rejected_capability_ids=cast(
+                tuple[str, ...], _decode_ids(row.rejected_capability_ids_json, integers=False)
+            ),
+            context_cost_bytes=row.context_cost_bytes,
             input_asset_fingerprints=cast(
                 tuple[str, ...], _decode_ids(row.input_asset_fingerprints_json, integers=False)
             ),

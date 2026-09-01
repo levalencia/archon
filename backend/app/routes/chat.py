@@ -7,10 +7,15 @@ GET /api/chat/history/{conversation_id} — Get conversation history
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from functools import partial
+from pathlib import Path
 from typing import Any, cast
 
 import structlog
@@ -20,22 +25,24 @@ from pydantic import BaseModel, Field
 from app.mcp.runtime import MCPBoundToolSpec
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
-from app.routes.admin import get_skills_top_k
-from app.routes.skills import get_skill_registry
-from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.images import ImageValidationError
-from app.runtime.support import compact_effective_context, prepare_effective_context
 from app.security.auth import get_current_user
 from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 from app.security.policy import RiskClass
 from app.services.artifacts import Artifact, detect_artifact_in_response
-from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.conversations import ConversationRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
 from app.services.task_queue import DurableJobQueue
-from app.tools.builtin import calculator_tool, datetime_tool, read_file_tool, write_file_tool
+from app.tools.builtin import (
+    TenantWorkspace,
+    calculator_tool,
+    datetime_tool,
+    list_directory_tool,
+    read_file_tool,
+    write_file_tool,
+)
 from app.tools.image_gen import image_gen_tool
 from app.tools.memory_tools import (
     create_memory_tool,
@@ -43,8 +50,9 @@ from app.tools.memory_tools import (
     memory_tool,
     session_search_tool,
 )
-from app.tools.registry import SecureToolRegistry, resolve_workspace_path
+from app.tools.registry import SecureToolRegistry, workspace_path_resolver
 from app.tools.sandbox import SandboxExecutor
+from app.tools.skill_discovery import GovernedSkillDiscoveryTools, register_skill_discovery_tools
 from app.tools.terminal import terminal_tool
 from app.tools.web_search import web_search_tool
 
@@ -54,6 +62,55 @@ logger = structlog.get_logger()
 _tools_singleton: SecureToolRegistry | None = (
     None  # Historical test override; production never populates this.
 )
+
+
+_SAFE_WORKSPACE_COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+
+
+def _safe_workspace_component(value: str) -> str:
+    """Keep safe identifiers readable and map every other identity collision-free."""
+    if _SAFE_WORKSPACE_COMPONENT.fullmatch(value) and value not in {".", ".."}:
+        return value
+    return f"sha256-{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
+
+
+def tenant_workspace(
+    configured_root: str, owner_id: str, project_id: str
+) -> TenantWorkspace | None:
+    """Create a trusted scope without resolving attacker-controlled tenant components."""
+    if not configured_root.strip():
+        return None
+    root = Path(configured_root).expanduser().resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("project workspace root must be a directory")
+    return TenantWorkspace(
+        configured_root=root,
+        tenant_components=(
+            _safe_workspace_component(owner_id),
+            _safe_workspace_component(project_id),
+        ),
+    )
+
+
+def project_tool_call(call: Mapping[str, Any]) -> dict[str, Any]:
+    """Project runtime tool evidence without exposing argument or result content."""
+    arguments = call.get("parameters", call.get("arguments", {}))
+    result = call.get("result", call.get("output", {}))
+    arguments_json = json.dumps(
+        arguments, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    result_json = json.dumps(
+        result, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
+    ).encode("utf-8")
+    return {
+        "tool": call.get("tool", call.get("name")),
+        "tool_call_id": call.get("tool_call_id", call.get("id")),
+        "status": call.get("status", "success"),
+        "arguments_hash": call.get("arguments_hash") or hashlib.sha256(arguments_json).hexdigest(),
+        "arguments_size": call.get("arguments_size", len(arguments_json)),
+        "output_hash": call.get("output_hash") or hashlib.sha256(result_json).hexdigest(),
+        "output_size": call.get("output_size", len(result_json)),
+    }
 
 
 def get_model_provider(request: Request) -> Any:
@@ -69,6 +126,10 @@ def get_tool_registry(
     sandbox_executor: SandboxExecutor | None = None,
     job_queue: DurableJobQueue | None = None,
     bound_tools: Sequence[MCPBoundToolSpec] = (),
+    discovery_tools: GovernedSkillDiscoveryTools | None = None,
+    disabled_capability_ids: frozenset[str] = frozenset(),
+    denied_permissions: frozenset[str] = frozenset(),
+    workspace: TenantWorkspace | None = None,
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
     if _tools_singleton is not None:
@@ -80,6 +141,10 @@ def get_tool_registry(
         sandbox_executor=sandbox_executor,
         job_queue=job_queue,
         bound_tools=bound_tools,
+        discovery_tools=discovery_tools,
+        disabled_capability_ids=disabled_capability_ids,
+        denied_permissions=denied_permissions,
+        workspace=workspace,
     )
 
 
@@ -98,9 +163,15 @@ def _create_tool_registry(
     sandbox_executor: SandboxExecutor | None = None,
     job_queue: DurableJobQueue | None = None,
     bound_tools: Sequence[MCPBoundToolSpec] = (),
+    discovery_tools: GovernedSkillDiscoveryTools | None = None,
+    disabled_capability_ids: frozenset[str] = frozenset(),
+    denied_permissions: frozenset[str] = frozenset(),
+    workspace: TenantWorkspace | None = None,
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
-    registry = SecureToolRegistry()
+    registry = SecureToolRegistry(
+        disabled_capability_ids=disabled_capability_ids, denied_permissions=denied_permissions
+    )
 
     registry.register(
         name="calculator",
@@ -133,31 +204,45 @@ def _create_tool_registry(
         timeout=30,
         risk_classes=frozenset({RiskClass.NETWORK}),
     )
-    registry.register(
-        name="read_file",
-        handler=read_file_tool,
-        description="Read the contents of a file by path",
-        input_schema={
-            "required": ["path"],
-            "properties": {
-                "path": {"type": "string"},
-                "max_size": {"type": "integer"},
+    if workspace is not None:
+        resolver = workspace_path_resolver(workspace.path)
+        registry.register(
+            name="read_file",
+            handler=partial(read_file_tool, workspace_root=workspace),
+            description="Read the contents of a file by path",
+            input_schema={
+                "required": ["path"],
+                "properties": {
+                    "path": {"type": "string"},
+                    "max_size": {"type": "integer"},
+                },
             },
-        },
-        timeout=10,
-        risk_classes=frozenset({RiskClass.READ}),
-        resource_resolver=resolve_workspace_path,
-    )
-    registry.register(
-        name="write_file",
-        handler=write_file_tool,
-        description="Write content to a file",
-        input_schema={"required": ["path", "content"]},
-        timeout=10,
-        requires_approval=True,
-        risk_classes=frozenset({RiskClass.WRITE}),
-        resource_resolver=resolve_workspace_path,
-    )
+            timeout=10,
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=resolver,
+        )
+        registry.register(
+            name="list_directory",
+            handler=partial(list_directory_tool, workspace_root=workspace),
+            description="List files and subdirectories by path",
+            input_schema={
+                "required": ["path"],
+                "properties": {"path": {"type": "string"}},
+            },
+            timeout=10,
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=resolver,
+        )
+        registry.register(
+            name="write_file",
+            handler=partial(write_file_tool, workspace_root=workspace),
+            description="Write content to a file",
+            input_schema={"required": ["path", "content"]},
+            timeout=10,
+            requires_approval=True,
+            risk_classes=frozenset({RiskClass.WRITE}),
+            resource_resolver=resolver,
+        )
 
     registry.register(
         name="image_gen",
@@ -301,6 +386,14 @@ def _create_tool_registry(
         risk_classes=frozenset({RiskClass.READ}),
     )
 
+    if discovery_tools is not None:
+        # Scope policy filtering precedes provider schema construction.
+        register_skill_discovery_tools(
+            registry,
+            discovery_tools,
+            include_reference=True,
+        )
+
     for spec in bound_tools:
         registry.register(
             name=spec.name,
@@ -310,6 +403,7 @@ def _create_tool_registry(
             timeout=spec.timeout,
             requires_approval=spec.requires_approval,
             risk_classes=spec.risk_classes,
+            capability_id=spec.capability_id,
         )
 
     return registry
@@ -322,10 +416,12 @@ class ChatRequest(BaseModel):
         default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
     )
     image: str = Field(default="", max_length=7_000_000)
+    target_path: str | None = Field(default=None, max_length=1000)
 
 
 class ChatResponse(BaseModel):
     response: str
+    run_id: str
     conversation_id: str
     correlation_id: str
     iterations: int
@@ -372,22 +468,6 @@ async def chat(
     settings = request.app.state.settings
     memory = get_conversation_repository(request)
 
-    # Search for relevant skills
-    skill_registry = get_skill_registry()
-    top_k = get_skills_top_k()
-    relevant_skills = skill_registry.search(body.message, limit=top_k)
-    skills_context = ""
-    skills_used = []
-    for skill in relevant_skills:
-        skills_context += f"\n\n[Skill: {skill.name}]\n{skill.content}"
-        skills_used.append(
-            {
-                "name": skill.name,
-                "description": skill.description,
-                "reason": "Matched query keywords",
-            }
-        )
-
     # Build typed runtime with native provider tools and skill context.
     conv_id = body.conversation_id or str(uuid.uuid4())
     if body.conversation_id:
@@ -402,16 +482,51 @@ async def chat(
     )
     run_context = replace(run_context, project_id=body.project_id)
     scoped_memory = request.app.state.scoped_memory
+    decisions, disabled = await request.app.state.request_context_preparer.scope_policy(
+        owner_id=user["user_id"], project_id=body.project_id
+    )
+    preference_rows = await request.app.state.request_context_preparer.preferences.list(
+        owner_id=user["user_id"], project_id=body.project_id
+    )
+    pinned = frozenset(row.capability_id for row in preference_rows if row.enabled and row.pinned)
+    denied_permissions = frozenset(key for key, value in decisions.items() if value.value == "deny")
     bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
-        user["user_id"], body.project_id
+        user["user_id"],
+        body.project_id,
+        intent=body.message,
+        pinned_capability_ids=pinned,
+        disabled_capability_ids=disabled,
+        denied_permissions=denied_permissions,
+        max_schema_count=8,
+        schema_context_budget=16_384,
+    )
+    mcp_metadata = await request.app.state.mcp_runtime_tools.metadata_for_scope(
+        user["user_id"],
+        body.project_id,
+        disabled_capability_ids=disabled,
+        denied_permissions=denied_permissions,
+    )
+    discovery_tools = GovernedSkillDiscoveryTools(
+        request.app.state.skill_discovery,
+        owner_id=user["user_id"],
+        project_id=body.project_id,
+        permission_decisions=decisions,
+        mcp_metadata=mcp_metadata,
+        disabled_ids=disabled,
     )
     tools = get_tool_registry(
         context=run_context,
+        workspace=tenant_workspace(
+            settings.project_workspace_root, user["user_id"], body.project_id
+        ),
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
         job_queue=request.app.state.job_queue,
         bound_tools=bound_tools,
+        discovery_tools=discovery_tools,
+        disabled_capability_ids=disabled,
+        denied_permissions=denied_permissions,
     )
 
     logger.info(
@@ -419,7 +534,6 @@ async def chat(
         message_length=len(body.message),
         conversation_id=conv_id,
         tools_available=len(tools.list_tools()),
-        skills_found=len(skills_used),
         correlation_id=cid,
     )
 
@@ -444,31 +558,32 @@ async def chat(
     current_message_id = await memory.store(conv_id, "user", body.message, user["user_id"])
     if current_message_id is None:
         raise RuntimeError("context_message_persistence_failed")
-    effective_context = await prepare_effective_context(
-        body.message,
-        conv_id,
-        memory,
-        tools,
-        skills_context,
-        images,
-        user["user_id"],
-        persistent_memory_text,
+    prepared = await request.app.state.request_context_preparer.prepare(
+        owner_id=user["user_id"],
         project_id=body.project_id,
+        intent=body.message,
+        current_path=body.target_path,
         run_id=run_context.run_id,
+        conversation_id=conv_id,
+        memory=memory,
+        tools=tools,
+        images=images,
+        persistent_memory_text=persistent_memory_text,
         memory_ids=memory_ids,
-        skill_ids=tuple(skill.name for skill in relevant_skills),
         current_message_id=current_message_id,
-        asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
+        application_secret=settings.secret_key,
+        max_context_bytes=settings.context_length * 4,
+        max_tokens=settings.context_length,
+        selection_limit=settings.skills_top_k,
     )
-    effective_context, compact_stats = await compact_effective_context(
-        effective_context, max_tokens=settings.context_length
-    )
+    effective_context = prepared.effective_context
+    compact_stats = prepared.compact_stats
+    skills_used = list(prepared.skills_used)
     logger.info(
         "context_prepared",
         compacted=bool(compact_stats.get("compacted")),
         estimated_tokens=int(compact_stats.get("tokens", 0)),
     )
-    await ContextSnapshotRepository(memory.session_factory).record(effective_context.manifest)
     messages = list(effective_context.messages)
     runtime = create_chat_runtime(
         context=run_context,
@@ -501,17 +616,17 @@ async def chat(
         latency_ms=elapsed_ms,
     )
 
+    safe_tool_calls = [project_tool_call(call) for call in result.tool_calls]
     thinking_steps = [
         {
             "step": i + 1,
             "type": "tool_call",
             "agent": "runtime",
-            "detail": f"Called {call['tool']}({call.get('parameters', {})})",
-            "result": str(call.get("result", ""))[:200],
+            **call,
             "done": True,
             "duration_ms": 0,
         }
-        for i, call in enumerate(result.tool_calls)
+        for i, call in enumerate(safe_tool_calls)
     ]
 
     # Add image step if image was analyzed
@@ -573,10 +688,11 @@ async def chat(
 
     return ChatResponse(
         response=result.content,
+        run_id=run_context.run_id,
         conversation_id=conv_id,
         correlation_id=cid,
         iterations=result.iterations,
-        tool_calls=list(result.tool_calls),
+        tool_calls=safe_tool_calls,
         tokens_used=result.usage.total_tokens,
         thinking_steps=thinking_steps,
         skills_used=skills_used,

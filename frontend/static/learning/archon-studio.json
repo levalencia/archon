@@ -17,8 +17,8 @@
     "architecture_layers": 5,
     "notebooks": 5,
     "statuses": {
-      "deferred": 8,
-      "implemented": 58,
+      "deferred": 7,
+      "implemented": 59,
       "partial": 0
     }
   },
@@ -70,7 +70,7 @@
       "id": "coordination",
       "title": "Delegation and governed integrations",
       "question": "How does work cross agent and process boundaries safely?",
-      "outcome": "Explain bounded delegation, lineage, signed envelopes, MCP transports, and inventory.",
+      "outcome": "Explain bounded delegation, lineage, signed envelopes, governed stdio/Streamable HTTP MCP profiles, and scoped inventory.",
       "module_ids": [
         "11-bounded-delegation",
         "12-governed-mcp"
@@ -2815,20 +2815,45 @@
     {
       "id": "skills-project-instructions",
       "title": "Skills and project instructions",
-      "status": "deferred",
+      "status": "implemented",
       "module_id": "06-context-and-memory",
       "module_title": "Module 06 — Context, conversations, and encrypted memory",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/06-context-and-memory/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/skills-project-instructions.md",
       "content_source": "concept",
-      "summary": "Instructions tell an agent how to behave; a skill is a reusable packet of task guidance selected when relevant. A production system must state which instruction wins when system, organization, project, skill, and user directions conflict. Merely concatenating matching text is not an instruction governance model.",
-      "mental_model": "Treat the boundary as a contract with explicit inputs, outputs, state, failure behavior, and evidence. The important question is not whether a similarly named class or file exists, but whether the behavior is wired into a real path and whether a test or observation proves it.",
-      "limitations": "Keyword-selected skills are wired into sync/SSE and selected skill IDs appear in effective-context provenance. Filesystem project instructions, immutable content versions, scope ownership and a precedence resolver are deferred until Archon has an authorized project-workspace model.",
+      "summary": "A project instruction is reviewed guidance that applies to one project. A skill is a versioned reusable package selected for a task. MCP tools are external capabilities, not instructions, but the same project preference layer can enable, disable, or pin them before provider schemas are built. Archon now keeps these concerns separate and records hashes and revision identifiers instead of treating an unversioned text concatenation as governance.",
+      "mental_model": "Use a compile, approve, select, snapshot model: 1. load only one configured instruction family from an already-authorized workspace; 2. persist an immutable, owner/project-scoped snapshot and require approval before activation; 3. discover only approved and trusted skill revisions bound to that project; 4. apply capability preferences, permission decisions, negative triggers, and byte/schema budgets before model exposure; 5. record content hashes, exact revisions, order, reasons, and provider-visible capability…",
+      "limitations": "At a642952 the local candidate implements immutable owner/project-scoped skill revisions, reviewed ordered project-instruction snapshots, deterministic precedence and budgets, metadata-first discovery, sync/SSE enrichment, and exact metadata-only provenance. Migrations 15-21 and repository tests cover the bounded contract; deployed remains no, and no public service, production workspace provisioning, hosted migration, managed MCP credential broker, or production SLO is claimed.",
       "sources": [
         {
-          "path": "backend/app/skills/registry.py",
-          "label": "registry.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/app/skills/registry.py"
+          "path": "backend/app/instructions/loaders.py",
+          "label": "loaders.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/instructions/loaders.py"
+        },
+        {
+          "path": "backend/app/instructions/resolver.py",
+          "label": "resolver.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/instructions/resolver.py"
+        },
+        {
+          "path": "backend/app/skills/persistence.py",
+          "label": "persistence.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/skills/persistence.py"
+        },
+        {
+          "path": "backend/app/skills/discovery.py",
+          "label": "discovery.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/skills/discovery.py"
+        },
+        {
+          "path": "backend/app/skills/context.py",
+          "label": "context.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/skills/context.py"
+        },
+        {
+          "path": "backend/app/routes/project_instructions.py",
+          "label": "project_instructions.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/routes/project_instructions.py"
         },
         {
           "path": "backend/app/routes/chat.py",
@@ -2839,20 +2864,61 @@
           "path": "backend/app/routes/stream.py",
           "label": "stream.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/app/routes/stream.py"
+        },
+        {
+          "path": "backend/app/runtime/context_provenance.py",
+          "label": "context_provenance.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/app/runtime/context_provenance.py"
         }
       ],
       "tests": [
         {
-          "path": "backend/tests/unit/test_skills_security.py",
-          "label": "test_skills_security.py",
-          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_skills_security.py"
+          "path": "backend/tests/unit/test_instruction_loaders.py",
+          "label": "test_instruction_loaders.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_instruction_loaders.py"
+        },
+        {
+          "path": "backend/tests/unit/test_instruction_precedence.py",
+          "label": "test_instruction_precedence.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_instruction_precedence.py"
+        },
+        {
+          "path": "backend/tests/unit/test_instruction_snapshots.py",
+          "label": "test_instruction_snapshots.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_instruction_snapshots.py"
+        },
+        {
+          "path": "backend/tests/unit/test_skill_discovery_enrichment.py",
+          "label": "test_skill_discovery_enrichment.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_skill_discovery_enrichment.py"
+        },
+        {
+          "path": "backend/tests/integration/test_scoped_configuration_apis.py",
+          "label": "test_scoped_configuration_apis.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/integration/test_scoped_configuration_apis.py"
+        },
+        {
+          "path": "backend/tests/integration/test_instruction_snapshot_api.py",
+          "label": "test_instruction_snapshot_api.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/integration/test_instruction_snapshot_api.py"
+        },
+        {
+          "path": "backend/tests/integration/test_skill_migration.py",
+          "label": "test_skill_migration.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/integration/test_skill_migration.py"
         }
       ],
-      "evidence": [],
+      "evidence": [
+        {
+          "path": "docs/IMPLEMENTATION-EVIDENCE.md",
+          "label": "IMPLEMENTATION-EVIDENCE.md",
+          "href": "https://github.com/levalencia/archon/blob/main/docs/IMPLEMENTATION-EVIDENCE.md"
+        }
+      ],
       "proof": {
         "code": true,
         "tests": true,
-        "evidence": false
+        "evidence": true
       }
     },
     {
@@ -3871,7 +3937,7 @@
           "from": "Conversation",
           "to": "Context window",
           "relationship": "SELECTS",
-          "explanation": "Only scoped messages, instructions, memory, and provenance enter the current model context.",
+          "explanation": "Approved immutable project-instruction snapshots and exact skill revisions join scoped messages and memory; hashes, order, and selection reasons enter provenance without raw bodies.",
           "concept_ids": [
             "context-windows",
             "conversation-lifecycle",
@@ -4166,10 +4232,11 @@
           {
             "id": "context-runtime",
             "title": "Context builder",
-            "responsibility": "Assemble scoped messages, memory, instructions, and provenance.",
+            "responsibility": "Assemble approved instruction snapshots and exact selected skill revisions with scoped messages, memory, budgets, and metadata-only provenance.",
             "concept_ids": [
               "context-windows",
-              "conversation-lifecycle"
+              "conversation-lifecycle",
+              "skills-project-instructions"
             ]
           },
           {
@@ -4194,7 +4261,7 @@
           {
             "id": "tool-layer",
             "title": "Tool and MCP layer",
-            "responsibility": "Validate, govern, isolate, and invoke local or MCP tools.",
+            "responsibility": "Select schemas lazily, then validate, govern, isolate, and invoke native or deployment-profiled stdio/Streamable HTTP MCP tools.",
             "concept_ids": [
               "tool-contracts",
               "mcp",
@@ -4392,6 +4459,7 @@
     "version": 1,
     "source_priority": [
       "docs/IMPLEMENTATION-EVIDENCE.md",
+      "docs/evidence/skills-project-instructions-implementation.md",
       "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
       "docs/REMAINING-DEFERRED-GAPS.md",
       "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4404,6 +4472,7 @@
         "purpose": "Understand Archon's mission, architecture, evidence posture, and explicit boundaries.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4423,7 +4492,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 9
+        "source_count": 10
       },
       {
         "id": "request-lifecycle",
@@ -4431,6 +4500,7 @@
         "purpose": "Follow one request through runtime, model, policy, approval, execution, and evidence.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4446,7 +4516,8 @@
           "docs/course/concepts/react.md",
           "docs/course/concepts/tool-contracts.md",
           "docs/course/concepts/policy-engine.md",
-          "docs/course/concepts/durable-approvals.md"
+          "docs/course/concepts/durable-approvals.md",
+          "docs/course/concepts/skills-project-instructions.md"
         ],
         "artifacts": [
           "audio",
@@ -4458,7 +4529,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 17
+        "source_count": 19
       },
       {
         "id": "memory-rag-evaluation",
@@ -4466,6 +4537,7 @@
         "purpose": "Distinguish transient context, durable memory, retrieval, grounding, citations, and evaluation.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4494,7 +4566,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 18
+        "source_count": 19
       },
       {
         "id": "reliability-operations",
@@ -4502,10 +4574,12 @@
         "purpose": "Understand failure containment, delegation, MCP, observability, and local operations.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
           "docs/course/README.md",
+          "docs/architecture/skills-project-instructions.md",
           "docs/CI-PIPELINES-AND-LOCAL-RUN.md",
           "docs/DR-RUNBOOK.md",
           "docs/course/modules/10-resilience/README.md",
@@ -4524,7 +4598,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 12
+        "source_count": 14
       },
       {
         "id": "interview-demo",
@@ -4532,6 +4606,7 @@
         "purpose": "Practice concise, credible explanations without overstating implementation evidence.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4552,7 +4627,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 10
+        "source_count": 11
       }
     ],
     "promptbook_href": "https://github.com/levalencia/archon/blob/main/docs/visual-learning/notebooklm-promptbook.md",
