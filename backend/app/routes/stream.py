@@ -25,6 +25,8 @@ from app.routes.chat import (
     get_conversation_repository,
     get_model_provider,
     get_tool_registry,
+    project_tool_call,
+    tenant_workspace,
 )
 from app.runtime import AgentEvent, AgentEventKind, EventSink
 from app.runtime.factory import RunContext, create_chat_runtime
@@ -210,6 +212,9 @@ async def chat_stream_real(
     )
     tools = get_tool_registry(
         context=run_context,
+        workspace=tenant_workspace(
+            settings.project_workspace_root, user["user_id"], body.project_id
+        ),
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
@@ -316,17 +321,7 @@ async def chat_stream_real(
                 elif event.kind is AgentEventKind.TOOL_CALL_REQUESTED:
                     yield _sse("thinking", f"Calling {event.data['name']}...")
                 elif event.kind is AgentEventKind.TOOL_CALL_COMPLETED:
-                    yield _sse(
-                        "tool_call",
-                        {
-                            "tool": event.data["name"],
-                            "tool_call_id": event.data["id"],
-                            "arguments_hash": event.data.get("arguments_hash"),
-                            "output_hash": event.data.get("output_hash"),
-                            "output_size": event.data.get("output_size"),
-                            "status": event.data.get("status", "success"),
-                        },
-                    )
+                    yield _sse("tool_call", project_tool_call(event.data))
                 elif event.kind is AgentEventKind.TEXT_DELTA:
                     yield _sse("token", event.data["text"])
                 elif event.kind is AgentEventKind.POLICY_DECIDED:

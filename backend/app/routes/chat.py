@@ -7,10 +7,15 @@ GET /api/chat/history/{conversation_id} — Get conversation history
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from functools import partial
+from pathlib import Path
 from typing import Any, cast
 
 import structlog
@@ -31,6 +36,7 @@ from app.services.conversations import ConversationRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
 from app.services.task_queue import DurableJobQueue
 from app.tools.builtin import (
+    TenantWorkspace,
     calculator_tool,
     datetime_tool,
     list_directory_tool,
@@ -44,7 +50,7 @@ from app.tools.memory_tools import (
     memory_tool,
     session_search_tool,
 )
-from app.tools.registry import SecureToolRegistry, resolve_workspace_path
+from app.tools.registry import SecureToolRegistry, workspace_path_resolver
 from app.tools.sandbox import SandboxExecutor
 from app.tools.skill_discovery import GovernedSkillDiscoveryTools, register_skill_discovery_tools
 from app.tools.terminal import terminal_tool
@@ -56,6 +62,56 @@ logger = structlog.get_logger()
 _tools_singleton: SecureToolRegistry | None = (
     None  # Historical test override; production never populates this.
 )
+
+
+_SAFE_WORKSPACE_COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+
+
+def _safe_workspace_component(value: str) -> str:
+    """Keep safe identifiers readable and map every other identity collision-free."""
+    if _SAFE_WORKSPACE_COMPONENT.fullmatch(value) and value not in {".", ".."}:
+        return value
+    return f"sha256-{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
+
+
+def tenant_workspace(
+    configured_root: str, owner_id: str, project_id: str
+) -> TenantWorkspace | None:
+    """Create a trusted scope without resolving attacker-controlled tenant components."""
+    if not configured_root.strip():
+        return None
+    root = Path(configured_root).expanduser().resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("project workspace root must be a directory")
+    return TenantWorkspace(
+        configured_root=root,
+        tenant_components=(
+            _safe_workspace_component(owner_id),
+            _safe_workspace_component(project_id),
+        ),
+    )
+
+
+def project_tool_call(call: Mapping[str, Any]) -> dict[str, Any]:
+    """Project runtime tool evidence without exposing argument or result content."""
+    arguments = call.get("parameters", call.get("arguments", {}))
+    result = call.get("result", call.get("output", {}))
+    arguments_json = json.dumps(
+        arguments, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    result_json = json.dumps(
+        result, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
+    ).encode("utf-8")
+    return {
+        "tool": call.get("tool", call.get("name")),
+        "tool_call_id": call.get("tool_call_id", call.get("id")),
+        "status": call.get("status", "success"),
+        "arguments_hash": call.get("arguments_hash")
+        or hashlib.sha256(arguments_json).hexdigest(),
+        "arguments_size": call.get("arguments_size", len(arguments_json)),
+        "output_hash": call.get("output_hash") or hashlib.sha256(result_json).hexdigest(),
+        "output_size": call.get("output_size", len(result_json)),
+    }
 
 
 def get_model_provider(request: Request) -> Any:
@@ -74,6 +130,7 @@ def get_tool_registry(
     discovery_tools: GovernedSkillDiscoveryTools | None = None,
     disabled_capability_ids: frozenset[str] = frozenset(),
     denied_permissions: frozenset[str] = frozenset(),
+    workspace: TenantWorkspace | None = None,
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
     if _tools_singleton is not None:
@@ -88,6 +145,7 @@ def get_tool_registry(
         discovery_tools=discovery_tools,
         disabled_capability_ids=disabled_capability_ids,
         denied_permissions=denied_permissions,
+        workspace=workspace,
     )
 
 
@@ -109,6 +167,7 @@ def _create_tool_registry(
     discovery_tools: GovernedSkillDiscoveryTools | None = None,
     disabled_capability_ids: frozenset[str] = frozenset(),
     denied_permissions: frozenset[str] = frozenset(),
+    workspace: TenantWorkspace | None = None,
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
     registry = SecureToolRegistry(
@@ -146,43 +205,45 @@ def _create_tool_registry(
         timeout=30,
         risk_classes=frozenset({RiskClass.NETWORK}),
     )
-    registry.register(
-        name="read_file",
-        handler=read_file_tool,
-        description="Read the contents of a file by path",
-        input_schema={
-            "required": ["path"],
-            "properties": {
-                "path": {"type": "string"},
-                "max_size": {"type": "integer"},
+    if workspace is not None:
+        resolver = workspace_path_resolver(workspace.path)
+        registry.register(
+            name="read_file",
+            handler=partial(read_file_tool, workspace_root=workspace),
+            description="Read the contents of a file by path",
+            input_schema={
+                "required": ["path"],
+                "properties": {
+                    "path": {"type": "string"},
+                    "max_size": {"type": "integer"},
+                },
             },
-        },
-        timeout=10,
-        risk_classes=frozenset({RiskClass.READ}),
-        resource_resolver=resolve_workspace_path,
-    )
-    registry.register(
-        name="list_directory",
-        handler=list_directory_tool,
-        description="List files and subdirectories by path",
-        input_schema={
-            "required": ["path"],
-            "properties": {"path": {"type": "string"}},
-        },
-        timeout=10,
-        risk_classes=frozenset({RiskClass.READ}),
-        resource_resolver=resolve_workspace_path,
-    )
-    registry.register(
-        name="write_file",
-        handler=write_file_tool,
-        description="Write content to a file",
-        input_schema={"required": ["path", "content"]},
-        timeout=10,
-        requires_approval=True,
-        risk_classes=frozenset({RiskClass.WRITE}),
-        resource_resolver=resolve_workspace_path,
-    )
+            timeout=10,
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=resolver,
+        )
+        registry.register(
+            name="list_directory",
+            handler=partial(list_directory_tool, workspace_root=workspace),
+            description="List files and subdirectories by path",
+            input_schema={
+                "required": ["path"],
+                "properties": {"path": {"type": "string"}},
+            },
+            timeout=10,
+            risk_classes=frozenset({RiskClass.READ}),
+            resource_resolver=resolver,
+        )
+        registry.register(
+            name="write_file",
+            handler=partial(write_file_tool, workspace_root=workspace),
+            description="Write content to a file",
+            input_schema={"required": ["path", "content"]},
+            timeout=10,
+            requires_approval=True,
+            risk_classes=frozenset({RiskClass.WRITE}),
+            resource_resolver=resolver,
+        )
 
     registry.register(
         name="image_gen",
@@ -456,6 +517,9 @@ async def chat(
     )
     tools = get_tool_registry(
         context=run_context,
+        workspace=tenant_workspace(
+            settings.project_workspace_root, user["user_id"], body.project_id
+        ),
         scoped_memory=scoped_memory,
         conversations=memory,
         sandbox_executor=request.app.state.sandbox_executor,
@@ -553,17 +617,17 @@ async def chat(
         latency_ms=elapsed_ms,
     )
 
+    safe_tool_calls = [project_tool_call(call) for call in result.tool_calls]
     thinking_steps = [
         {
             "step": i + 1,
             "type": "tool_call",
             "agent": "runtime",
-            "detail": f"Called {call['tool']}({call.get('parameters', {})})",
-            "result": str(call.get("result", ""))[:200],
+            **call,
             "done": True,
             "duration_ms": 0,
         }
-        for i, call in enumerate(result.tool_calls)
+        for i, call in enumerate(safe_tool_calls)
     ]
 
     # Add image step if image was analyzed
@@ -629,7 +693,7 @@ async def chat(
         conversation_id=conv_id,
         correlation_id=cid,
         iterations=result.iterations,
-        tool_calls=list(result.tool_calls),
+        tool_calls=safe_tool_calls,
         tokens_used=result.usage.total_tokens,
         thinking_steps=thinking_steps,
         skills_used=skills_used,

@@ -14,7 +14,12 @@ from app.runtime.models import ToolCall
 from app.security.policy import ResourceKind, ResourcePattern, RiskClass, canonical_tool_name
 from app.tools import image_gen as image_gen_module
 from app.tools import memory_tools, web_search
-from app.tools.builtin import register_builtin_tools
+from app.tools.builtin import (
+    MAX_READ_FILE_BYTES,
+    TenantWorkspace,
+    read_file_tool,
+    register_builtin_tools,
+)
 from app.tools.registry import (
     PolicyMetadataError,
     SecureToolRegistry,
@@ -25,6 +30,13 @@ from app.tools.registry import (
 
 def _handler(**_arguments: object) -> dict[str, bool]:
     return {"ok": True}
+
+
+def _tenant_workspace(tmp_path: Path) -> TenantWorkspace:
+    root = tmp_path / "workspaces"
+    tenant = TenantWorkspace(root, ("owner-a", "project-a"))
+    tenant.path.mkdir(parents=True)
+    return tenant
 
 
 class TestTypedMetadata:
@@ -468,18 +480,18 @@ class TestLiveClassifications:
         ],
     )
     def test_live_optional_schema_fields_pass_policy_validation(
-        self, tool_name: str, arguments: dict[str, object]
+        self, tool_name: str, arguments: dict[str, object], tmp_path: Path
     ) -> None:
-        request = _create_tool_registry().policy_request(ToolCall("call-1", tool_name, arguments))
+        request = _create_tool_registry(workspace=_tenant_workspace(tmp_path)).policy_request(
+            ToolCall("call-1", tool_name, arguments)
+        )
         assert request.tool_name == tool_name
 
     async def test_safe_optional_fields_reach_deterministic_live_handlers(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-        (workspace / "notes.txt").write_text("hello", encoding="utf-8")
-        monkeypatch.setenv("ARCHON_WORKSPACE_ROOT", str(workspace))
+        workspace = _tenant_workspace(tmp_path)
+        (workspace.path / "notes.txt").write_text("hello", encoding="utf-8")
         monkeypatch.delenv("ARCHON_BRAVE_API_KEY", raising=False)
 
         async def fake_search(query: str, num: int) -> list[dict[str, str]]:
@@ -496,7 +508,7 @@ class TestLiveClassifications:
         monkeypatch.setattr(web_search, "_extract_content", fake_extract)
         monkeypatch.setattr(memory_tools, "get_session_store", lambda: Store())
         monkeypatch.setattr(image_gen_module, "image_path", lambda filename: tmp_path / filename)
-        registry = _create_tool_registry()
+        registry = _create_tool_registry(workspace=workspace)
 
         searched = await registry.execute(
             ToolCall("search", "web_search", {"query": "policy", "max_results": 2})
@@ -535,6 +547,7 @@ class TestLiveClassifications:
     async def test_sensitive_live_arguments_are_rejected_before_hooks_and_handler(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
         tool_name: str,
         arguments: dict[str, object],
         forbidden_name: str,
@@ -546,14 +559,8 @@ class TestLiveClassifications:
             events.append("handler")
             return {"ok": True}
 
-        def resolver(_arguments: object) -> tuple[ResourcePattern, ...]:
-            events.append("resolver")
-            return ()
-
         monkeypatch.setattr(chat_module, f"{tool_name}_tool", handler)
-        if tool_name == "read_file":
-            monkeypatch.setattr(chat_module, "resolve_workspace_path", resolver)
-        registry = _create_tool_registry()
+        registry = _create_tool_registry(workspace=_tenant_workspace(tmp_path))
         call = ToolCall("call-1", tool_name, arguments)
 
         with pytest.raises(ValueError, match="Unexpected parameter") as policy_error:
@@ -566,8 +573,13 @@ class TestLiveClassifications:
             assert secret not in str(error)
         assert events == []
 
-    def test_optional_argument_schemas_declare_types_and_remain_closed(self) -> None:
-        live = {tool["name"]: tool["input_schema"] for tool in _create_tool_registry().list_tools()}
+    def test_optional_argument_schemas_declare_types_and_remain_closed(
+        self, tmp_path: Path
+    ) -> None:
+        live = {
+            tool["name"]: tool["input_schema"]
+            for tool in _create_tool_registry(workspace=_tenant_workspace(tmp_path)).list_tools()
+        }
         expected_live = {
             "web_search": {
                 "query": {"type": "string"},
@@ -607,8 +619,13 @@ class TestLiveClassifications:
             == "read_file"
         )
 
-    def test_chat_registry_classifies_every_live_tool(self) -> None:
-        registry = _create_tool_registry()
+    def test_filesystem_tools_are_absent_without_configured_workspace(self) -> None:
+        names = {item["name"] for item in _create_tool_registry().list_tools()}
+        assert names.isdisjoint({"read_file", "list_directory", "write_file"})
+
+    def test_chat_registry_classifies_every_live_tool(self, tmp_path: Path) -> None:
+        workspace = _tenant_workspace(tmp_path)
+        registry = _create_tool_registry(workspace=workspace)
         expected = {
             "calculator": {"read"},
             "datetime": {"read"},
@@ -625,7 +642,39 @@ class TestLiveClassifications:
         actual = {item["name"]: set(item["risk_classes"]) for item in registry.list_tools()}
         assert actual == expected
         for name in ("read_file", "list_directory", "write_file"):
-            assert registry.get_tool(name).resource_resolver is resolve_workspace_path  # type: ignore[union-attr]
+            resolver = registry.get_tool(name).resource_resolver  # type: ignore[union-attr]
+            assert resolver is not None
+            assert resolver({"path": "notes.txt"}) == (
+                ResourcePattern(ResourceKind.PATH, str(workspace.path / "notes.txt")),
+            )
+
+    async def test_tenant_workspace_cannot_read_sibling_owner(self, tmp_path: Path) -> None:
+        root = tmp_path / "workspaces"
+        owner_a = TenantWorkspace(root, ("owner-a", "project"))
+        owner_b = TenantWorkspace(root, ("owner-b", "project"))
+        owner_a.path.mkdir(parents=True)
+        owner_b.path.mkdir(parents=True)
+        (owner_a.path / "secret.txt").write_text("TOP-SECRET-A", encoding="utf-8")
+        (owner_b.path / "secret.txt").write_text("owner-b", encoding="utf-8")
+
+        own = await read_file_tool("secret.txt", workspace_root=owner_b)
+        escaped = await read_file_tool("../../owner-a/project/secret.txt", workspace_root=owner_b)
+
+        assert own["content"] == "owner-b"
+        assert "error" in escaped
+        assert "TOP-SECRET-A" not in str(escaped)
+
+    async def test_read_file_enforces_server_side_size_cap(self, tmp_path: Path) -> None:
+        workspace = _tenant_workspace(tmp_path)
+        (workspace.path / "notes.txt").write_text("hello", encoding="utf-8")
+
+        negative = await read_file_tool("notes.txt", workspace_root=workspace, max_size=-1)
+        oversized = await read_file_tool(
+            "notes.txt", workspace_root=workspace, max_size=MAX_READ_FILE_BYTES + 1
+        )
+
+        assert "error" in negative
+        assert "error" in oversized
 
     def test_builtin_registry_classifies_every_tool(self) -> None:
         registry = SecureToolRegistry()

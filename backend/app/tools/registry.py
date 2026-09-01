@@ -180,6 +180,28 @@ def resolve_workspace_path(arguments: Mapping[str, Any]) -> tuple[ResourcePatter
     return (ResourcePattern(ResourceKind.PATH, resolved.as_posix()),)
 
 
+def workspace_path_resolver(root: Path) -> ResourceResolver:
+    """Bind policy path identity to one trusted, tenant-specific workspace."""
+    canonical_root = root.resolve(strict=False)
+
+    def resolve(arguments: Mapping[str, Any]) -> tuple[ResourcePattern, ...]:
+        path = arguments.get("path")
+        if not isinstance(path, str):
+            raise ValueError("path argument must be a string")
+        if not path or (os.name != "nt" and "\\" in path):
+            raise ValueError("Invalid workspace path")
+        requested = Path(path)
+        candidate = requested if requested.is_absolute() else canonical_root / requested
+        resolved = Path(os.path.abspath(candidate))
+        try:
+            resolved.relative_to(canonical_root)
+        except ValueError:
+            raise ValueError("Invalid workspace path") from None
+        return (ResourcePattern(ResourceKind.PATH, resolved.as_posix()),)
+
+    return resolve
+
+
 @dataclass(frozen=True, slots=True)
 class ToolDefinition:
     """A registered tool with its metadata."""
