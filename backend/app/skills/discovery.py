@@ -12,6 +12,7 @@ from app.capabilities.index import CapabilityIndex
 from app.capabilities.models import CapabilityDescriptor, PermissionDecision
 from app.capabilities.selector import SelectionRequest, select_capabilities
 from app.skills.bundled import ARCHON_OWNER_ID
+from app.skills.catalog import ExternalSkillMetadata, SkillCatalogProvider
 from app.skills.parser import parse_skill_markdown
 from app.skills.persistence import SkillRepository
 
@@ -47,6 +48,7 @@ class DiscoveryResult:
     rejected: tuple[DiscoveryCandidate, ...]
     hidden_ids: tuple[str, ...]
     context_cost: int
+    available: tuple[ExternalSkillMetadata, ...] = ()
 
     @property
     def visible_ids(self) -> tuple[str, ...]:
@@ -72,8 +74,11 @@ class LoadedReference:
 
 
 class SkillDiscoveryService:
-    def __init__(self, repository: SkillRepository) -> None:
+    def __init__(
+        self, repository: SkillRepository, catalog_provider: SkillCatalogProvider | None = None
+    ) -> None:
         self._repository = repository
+        self._catalog_provider = catalog_provider
 
     @property
     def repository(self) -> SkillRepository:
@@ -146,8 +151,13 @@ class SkillDiscoveryService:
         chosen = tuple(candidate(item) for item in selection.selected)
         rejected = tuple(candidate(item) for item in selection.rejected)
         visible = tuple(sorted((*chosen, *rejected), key=lambda item: item.capability_id))
+        available = (
+            ()
+            if self._catalog_provider is None
+            else await self._catalog_provider.search(request.intent, limit=request.limit or 20)
+        )
         return DiscoveryResult(
-            visible, chosen, rejected, selection.hidden_ids, selection.context_cost
+            visible, chosen, rejected, selection.hidden_ids, selection.context_cost, available
         )
 
     async def load_selected(self, *, owner_id: str, revision_id: str) -> LoadedSkill:

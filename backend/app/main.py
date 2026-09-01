@@ -93,6 +93,7 @@ from app.services.sql_json_vector_store import SqlJsonVectorStore
 from app.services.task_queue import ClaimedJob, DurableJobQueue
 from app.skills.bootstrap import BundledSkillBootstrap
 from app.skills.bundled import bundled_skills
+from app.skills.catalog import create_skill_catalog_provider
 from app.skills.context import EffectiveContextEnrichmentService
 from app.skills.discovery import SkillDiscoveryService
 from app.skills.installer import HttpSkillFetcher, SkillInstallationService, SkillSourcePolicy
@@ -172,7 +173,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.skill_repository = SkillRepository(repository.session_factory)
     app.state.instruction_repository = ProjectInstructionRepository(repository.session_factory)
     await BundledSkillBootstrap(app.state.skill_repository).install()
-    app.state.skill_discovery = SkillDiscoveryService(app.state.skill_repository)
+    app.state.skill_catalog_provider = create_skill_catalog_provider(
+        enabled=settings.skill_catalog_enabled,
+        allowlisted_root=settings.skill_catalog_allowlisted_root,
+        executable=settings.skill_catalog_executable,
+        json_index=settings.skill_catalog_json_index,
+        timeout_seconds=settings.skill_catalog_timeout_seconds,
+        max_stdout_bytes=settings.skill_catalog_max_stdout_bytes,
+        max_results=settings.skill_catalog_max_results,
+    )
+    app.state.skill_discovery = SkillDiscoveryService(
+        app.state.skill_repository, catalog_provider=app.state.skill_catalog_provider
+    )
     app.state.context_enrichment = EffectiveContextEnrichmentService(
         app.state.skill_repository, app.state.instruction_repository
     )
@@ -506,6 +518,7 @@ def create_app(
             "evidence_verifier": (
                 "enabled" if app.state.evidence_verifier is not None else "disabled"
             ),
+            "skill_catalog": app.state.skill_catalog_provider.health_code,
             "runtime_controls": {
                 "durable_monetary_budget": (
                     "enabled" if app.state.settings.durable_monetary_budget_enabled else "disabled"

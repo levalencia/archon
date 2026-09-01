@@ -55,6 +55,7 @@ class TestHealthEndpoints:
                 "background_job_worker": "up",
                 "vector_store": "sql-json-cosine",
                 "evidence_verifier": "disabled",
+                "skill_catalog": "disabled",
                 "runtime_controls": {
                     "durable_monetary_budget": "disabled",
                     "durable_effect_ledger": "disabled",
@@ -101,6 +102,7 @@ class TestHealthEndpoints:
                 "background_job_worker": "up",
                 "vector_store": "sql-json-cosine",
                 "evidence_verifier": "disabled",
+                "skill_catalog": "disabled",
                 "runtime_controls": {
                     "durable_monetary_budget": "disabled",
                     "durable_effect_ledger": "disabled",

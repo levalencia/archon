@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.security.auth import get_current_user, require_admin
 from app.security.dependencies import enforce_rate_limit
 from app.skills.bundled import ARCHON_OWNER_ID
+from app.skills.catalog import SkillCatalogProvider
 from app.skills.installer import PinnedSkillSource, SkillInstallationService, SkillSourceError
 from app.skills.parser import parse_skill_markdown
 from app.skills.persistence import SkillNotFoundError, SkillRepository
@@ -46,6 +47,12 @@ class CatalogItem(StrictModel):
     enabled: bool
     pinned: bool
     risk_classes: list[str]
+    source_label: str = "installed"
+    availability: str = "installed"
+    external_id: str | None = None
+    repository: str | None = None
+    path: str | None = None
+    revision: str | None = None
 
 
 class SearchRequest(StrictModel):
@@ -135,7 +142,37 @@ async def search(
     body: SearchRequest, request: Request, user: dict[str, Any] = Depends(get_current_user)
 ) -> list[CatalogItem]:
     await _limit(request, user, "search")
-    return (await _items(request, user["user_id"], body.project_id, body.query))[: body.limit]
+    installed = await _items(request, user["user_id"], body.project_id, body.query)
+    seen_names = {item.name.casefold() for item in installed}
+    seen_sources = {item.source for item in installed}
+    provider = cast(SkillCatalogProvider, request.app.state.skill_catalog_provider)
+    external = await provider.search(body.query, limit=body.limit)
+    merged = list(installed)
+    for item in external:
+        if item.name.casefold() in seen_names or item.source_url in seen_sources:
+            continue
+        seen_names.add(item.name.casefold())
+        seen_sources.add(item.source_url)
+        merged.append(
+            CatalogItem(
+                id=f"external:{item.external_id}",
+                name=item.name,
+                description=item.description,
+                source=item.source_url,
+                version=item.revision or "unversioned",
+                trust_state="available",
+                enabled=False,
+                pinned=False,
+                risk_classes=[],
+                source_label="agent-god-mode",
+                availability="available",
+                external_id=item.external_id,
+                repository=item.repository,
+                path=item.path,
+                revision=item.revision,
+            )
+        )
+    return merged[: body.limit]
 
 
 @router.post(

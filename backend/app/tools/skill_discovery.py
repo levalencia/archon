@@ -83,6 +83,22 @@ class GovernedSkillDiscoveryTools:
                 {"capability_id": item.capability_id, "reasons": item.reasons}
                 for item in result.rejected
             ],
+            # External results are summaries marked available. They are never selected,
+            # enabled, loaded, or treated as permission-bearing skill content.
+            "available": [
+                {
+                    "external_id": item.external_id,
+                    "name": item.name,
+                    "description": item.description,
+                    "source_url": item.source_url,
+                    "repository": item.repository,
+                    "path": item.path,
+                    "revision": item.revision,
+                    "status": "available",
+                    "source_label": "agent-god-mode",
+                }
+                for item in result.available
+            ],
             "context_cost": result.context_cost,
         }
 
