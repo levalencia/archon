@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from app.capabilities.models import PermissionDecision
 from app.services.db_store import DatabaseStore
 from app.skills.bootstrap import BundledSkillBootstrap
 from app.skills.bundled import ARCHON_OWNER_ID, bundled_skills
@@ -54,12 +53,14 @@ async def test_metadata_first_discovery_negative_denied_budget_and_lazy_referenc
             project_id="p",
             intent="review python code, do not deploy",
             context_budget=5000,
-            permission_decisions={"capability.code.read": PermissionDecision.ALLOW},
+            permission_decisions={},
         )
     )
     assert result.selected
+    assert result.selected[0].metadata["required_capability_ids"]
     assert all("instructions" not in json.dumps(item.metadata) for item in result.candidates)
-    assert "archon.deploy-safety" not in result.visible_ids
+    deploy = next(item for item in result.rejected if item.capability_id == "archon.deploy-safety")
+    assert any(reason.startswith("negative_trigger:") for reason in deploy.reasons)
     selected = result.selected[0]
     loaded = await service.load_selected(owner_id="alice", revision_id=selected.revision_id)
     assert loaded.content

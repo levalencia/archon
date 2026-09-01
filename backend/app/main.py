@@ -82,13 +82,18 @@ from app.security.persistence_redactor import PersistenceRedactor
 from app.security.rate_limiter import RateLimiter
 from app.services.artifacts import ArtifactStore
 from app.services.chunker import EmbeddingService
+from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
 from app.services.documents import DocumentRepository
 from app.services.key_rotation import MemoryKeyRotationService
+from app.services.request_context import RequestContextPreparationService
 from app.services.run_exports import RunExportService
 from app.services.sql_json_vector_store import SqlJsonVectorStore
 from app.services.task_queue import ClaimedJob, DurableJobQueue
+from app.skills.bootstrap import BundledSkillBootstrap
+from app.skills.context import EffectiveContextEnrichmentService
+from app.skills.discovery import SkillDiscoveryService
 from app.skills.installer import HttpSkillFetcher, SkillInstallationService, SkillSourcePolicy
 from app.skills.persistence import ProjectInstructionRepository, SkillRepository
 from app.skills.registry import create_default_skills
@@ -166,6 +171,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.mcp_repository = MCPRepository(repository.session_factory)
     app.state.skill_repository = SkillRepository(repository.session_factory)
     app.state.instruction_repository = ProjectInstructionRepository(repository.session_factory)
+    await BundledSkillBootstrap(app.state.skill_repository).install()
+    app.state.skill_discovery = SkillDiscoveryService(app.state.skill_repository)
+    app.state.context_enrichment = EffectiveContextEnrichmentService(
+        app.state.skill_repository, app.state.instruction_repository
+    )
+    app.state.context_snapshots = ContextSnapshotRepository(repository.session_factory)
     app.state.skill_installer = SkillInstallationService(
         app.state.skill_repository,
         SkillSourcePolicy(
@@ -176,6 +187,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         HttpSkillFetcher(),
     )
     app.state.capability_preferences = CapabilityPreferenceRepository(repository.session_factory)
+    app.state.request_context_preparer = RequestContextPreparationService(
+        app.state.skill_discovery,
+        app.state.context_enrichment,
+        app.state.context_snapshots,
+        app.state.capability_preferences,
+    )
     app.state.capability_index = CapabilityIndex(
         CapabilityDescriptor(
             id=f"builtin-{skill.name}",

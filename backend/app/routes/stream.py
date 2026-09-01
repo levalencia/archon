@@ -24,26 +24,21 @@ from app.observability.logging import get_correlation_id
 from app.routes.chat import (
     get_conversation_repository,
     get_model_provider,
-    get_skill_registry,
-    get_skills_top_k,
     get_tool_registry,
 )
 from app.runtime import AgentEvent, AgentEventKind, EventSink
-from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.images import ImageValidationError
 from app.runtime.support import (
     JsonModeProvider,
-    compact_effective_context,
-    prepare_effective_context,
 )
 from app.security.auth import get_current_user
 from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 from app.security.live_approvals import ApprovalBroker
 from app.services.artifacts import Artifact, detect_artifact_in_response
-from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
+from app.tools.skill_discovery import GovernedSkillDiscoveryTools
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -55,6 +50,7 @@ class StreamRequest(BaseModel):
         default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
     )
     image: str = Field(default="", max_length=7_000_000)
+    target_path: str | None = Field(default=None, max_length=1000)
 
 
 class ApprovalBody(BaseModel):
@@ -183,6 +179,14 @@ async def chat_stream_real(
     bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
         user["user_id"], body.project_id
     )
+    decisions, disabled = await request.app.state.request_context_preparer.scope_policy(
+        owner_id=user["user_id"], project_id=body.project_id
+    )
+    discovery_tools = GovernedSkillDiscoveryTools(
+        request.app.state.skill_discovery,
+        owner_id=user["user_id"], project_id=body.project_id,
+        permission_decisions=decisions,
+    )
     tools = get_tool_registry(
         context=run_context,
         scoped_memory=scoped_memory,
@@ -190,6 +194,8 @@ async def chat_stream_real(
         sandbox_executor=request.app.state.sandbox_executor,
         job_queue=request.app.state.job_queue,
         bound_tools=bound_tools,
+        discovery_tools=discovery_tools,
+        disabled_capability_ids=disabled,
     )
     approval_broker: ApprovalBroker = request.app.state.approval_broker
 
@@ -201,12 +207,6 @@ async def chat_stream_real(
         if user_message.startswith("/json "):
             json_mode = True
             user_message = user_message[6:]  # Strip '/json ' prefix
-        skills = get_skill_registry().search(user_message, limit=get_skills_top_k())
-        skills_context = "".join(f"\n\n[Skill: {s.name}]\n{s.content}" for s in skills)
-        skills_used = [{"name": s.name, "description": s.description} for s in skills]
-        for skill in skills_used:
-            yield _sse("skill", skill)
-
         if scoped_memory is not None:
             memory_bundle = await scoped_memory.context_bundle(user["user_id"], body.project_id)
             persistent_memory_text = memory_bundle.text
@@ -226,28 +226,20 @@ async def chat_stream_real(
         current_message_id = await memory.store(conv_id, "user", user_message, user["user_id"])
         if current_message_id is None:
             raise RuntimeError("context_message_persistence_failed")
-        effective_context = await prepare_effective_context(
-            user_message,
-            conv_id,
-            memory,
-            tools,
-            skills_context,
-            images,
-            user["user_id"],
-            persistent_memory_text,
-            project_id=body.project_id,
-            run_id=run_context.run_id,
-            memory_ids=memory_ids,
-            skill_ids=tuple(skill.name for skill in skills),
-            current_message_id=current_message_id,
-            asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
+        prepared = await request.app.state.request_context_preparer.prepare(
+            owner_id=user["user_id"], project_id=body.project_id, intent=user_message,
+            current_path=body.target_path, run_id=run_context.run_id, conversation_id=conv_id,
+            memory=memory, tools=tools, images=images,
+            persistent_memory_text=persistent_memory_text, memory_ids=memory_ids,
+            current_message_id=current_message_id, application_secret=settings.secret_key,
+            max_context_bytes=settings.context_length * 4, max_tokens=settings.context_length,
         )
-        effective_context, compact_stats = await compact_effective_context(
-            effective_context, max_tokens=settings.context_length
-        )
+        effective_context = prepared.effective_context
+        skills_used = list(prepared.skills_used)
+        for skill in skills_used:
+            yield _sse("skill", skill)
         messages = list(effective_context.messages)
-        yield _sse("context", compact_stats)
-        await ContextSnapshotRepository(memory.session_factory).record(effective_context.manifest)
+        yield _sse("context", prepared.compact_stats)
 
         queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
         cost_sink = ResponseCostEventSink(

@@ -73,7 +73,10 @@ class GovernedSkillDiscoveryTools:
 
 
 def register_skill_discovery_tools(
-    registry: SecureToolRegistry, tools: GovernedSkillDiscoveryTools
+    registry: SecureToolRegistry,
+    tools: GovernedSkillDiscoveryTools,
+    *,
+    include_reference: bool = True,
 ) -> None:
     registry.register(
         name="discover_capabilities",
@@ -91,6 +94,8 @@ def register_skill_discovery_tools(
         },
         risk_classes=frozenset({RiskClass.READ}),
     )
+    if not include_reference:
+        return
     registry.register(
         name="load_skill_reference",
         handler=tools.load_skill_reference,

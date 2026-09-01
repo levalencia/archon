@@ -28,6 +28,7 @@ class DiscoveryRequest:
     context_budget: int = 16_384
     limit: int | None = None
     current_path: str | None = None
+    disabled_ids: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +75,10 @@ class SkillDiscoveryService:
     def __init__(self, repository: SkillRepository) -> None:
         self._repository = repository
 
+    @property
+    def repository(self) -> SkillRepository:
+        return self._repository
+
     async def discover(self, request: DiscoveryRequest) -> DiscoveryResult:
         rows = await self._repository.list_discoverable(owner_id=request.owner_id)
         pins = set(
@@ -95,14 +100,16 @@ class SkillDiscoveryService:
                 triggers=tuple(json.loads(row.triggers_json)),
                 negative_triggers=tuple(json.loads(row.negative_triggers_json)),
                 tags=tuple(json.loads(row.tags_json)),
-                required_permissions=tuple(json.loads(row.required_capability_ids_json)),
+                # Skill metadata never grants tool permissions. Required capabilities
+                # remain descriptive and are evaluated by the independent tool policy.
                 context_cost=row.context_cost,
                 priority=100 if row.id in pins else 0,
                 version=row.declared_version,
                 content_hash=row.content_hash,
             )
-            descriptors.append(descriptor)
-            by_id[capability_id] = row
+            if capability_id not in request.disabled_ids:
+                descriptors.append(descriptor)
+                by_id[capability_id] = row
         explicit = set(request.explicit_ids)
         if explicit - set(by_id):
             raise LookupError("explicit skill invocation is not visible in scope")
@@ -128,7 +135,7 @@ class SkillDiscoveryService:
                 "tags": match.descriptor.tags,
                 "triggers": match.descriptor.triggers,
                 "negative_triggers": match.descriptor.negative_triggers,
-                "required_capability_ids": match.descriptor.required_permissions,
+                "required_capability_ids": tuple(json.loads(row.required_capability_ids_json)),
                 "context_cost": match.descriptor.context_cost,
                 "content_hash": match.descriptor.content_hash,
             }

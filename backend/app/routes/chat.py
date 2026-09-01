@@ -20,18 +20,13 @@ from pydantic import BaseModel, Field
 from app.mcp.runtime import MCPBoundToolSpec
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
-from app.routes.admin import get_skills_top_k
-from app.routes.skills import get_skill_registry
-from app.runtime.context import derive_context_asset_hmac_key
 from app.runtime.factory import RunContext, create_chat_runtime
 from app.runtime.images import ImageValidationError
-from app.runtime.support import compact_effective_context, prepare_effective_context
 from app.security.auth import get_current_user
 from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 from app.security.policy import RiskClass
 from app.services.artifacts import Artifact, detect_artifact_in_response
-from app.services.context_snapshots import ContextSnapshotRepository
 from app.services.conversations import ConversationRepository
 from app.services.monetary_budget import MonetaryBudgetRepository
 from app.services.task_queue import DurableJobQueue
@@ -51,6 +46,7 @@ from app.tools.memory_tools import (
 )
 from app.tools.registry import SecureToolRegistry, resolve_workspace_path
 from app.tools.sandbox import SandboxExecutor
+from app.tools.skill_discovery import GovernedSkillDiscoveryTools, register_skill_discovery_tools
 from app.tools.terminal import terminal_tool
 from app.tools.web_search import web_search_tool
 
@@ -75,6 +71,8 @@ def get_tool_registry(
     sandbox_executor: SandboxExecutor | None = None,
     job_queue: DurableJobQueue | None = None,
     bound_tools: Sequence[MCPBoundToolSpec] = (),
+    discovery_tools: GovernedSkillDiscoveryTools | None = None,
+    disabled_capability_ids: frozenset[str] = frozenset(),
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
     if _tools_singleton is not None:
@@ -86,6 +84,8 @@ def get_tool_registry(
         sandbox_executor=sandbox_executor,
         job_queue=job_queue,
         bound_tools=bound_tools,
+        discovery_tools=discovery_tools,
+        disabled_capability_ids=disabled_capability_ids,
     )
 
 
@@ -104,6 +104,8 @@ def _create_tool_registry(
     sandbox_executor: SandboxExecutor | None = None,
     job_queue: DurableJobQueue | None = None,
     bound_tools: Sequence[MCPBoundToolSpec] = (),
+    discovery_tools: GovernedSkillDiscoveryTools | None = None,
+    disabled_capability_ids: frozenset[str] = frozenset(),
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
     registry = SecureToolRegistry()
@@ -319,6 +321,14 @@ def _create_tool_registry(
         risk_classes=frozenset({RiskClass.READ}),
     )
 
+    if discovery_tools is not None and "discover_capabilities" not in disabled_capability_ids:
+        # Scope policy filtering precedes provider schema construction.
+        register_skill_discovery_tools(
+            registry,
+            discovery_tools,
+            include_reference="load_skill_reference" not in disabled_capability_ids,
+        )
+
     for spec in bound_tools:
         registry.register(
             name=spec.name,
@@ -340,10 +350,12 @@ class ChatRequest(BaseModel):
         default="default", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$"
     )
     image: str = Field(default="", max_length=7_000_000)
+    target_path: str | None = Field(default=None, max_length=1000)
 
 
 class ChatResponse(BaseModel):
     response: str
+    run_id: str
     conversation_id: str
     correlation_id: str
     iterations: int
@@ -390,22 +402,6 @@ async def chat(
     settings = request.app.state.settings
     memory = get_conversation_repository(request)
 
-    # Search for relevant skills
-    skill_registry = get_skill_registry()
-    top_k = get_skills_top_k()
-    relevant_skills = skill_registry.search(body.message, limit=top_k)
-    skills_context = ""
-    skills_used = []
-    for skill in relevant_skills:
-        skills_context += f"\n\n[Skill: {skill.name}]\n{skill.content}"
-        skills_used.append(
-            {
-                "name": skill.name,
-                "description": skill.description,
-                "reason": "Matched query keywords",
-            }
-        )
-
     # Build typed runtime with native provider tools and skill context.
     conv_id = body.conversation_id or str(uuid.uuid4())
     if body.conversation_id:
@@ -423,6 +419,15 @@ async def chat(
     bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
         user["user_id"], body.project_id
     )
+    decisions, disabled = await request.app.state.request_context_preparer.scope_policy(
+        owner_id=user["user_id"], project_id=body.project_id
+    )
+    discovery_tools = GovernedSkillDiscoveryTools(
+        request.app.state.skill_discovery,
+        owner_id=user["user_id"],
+        project_id=body.project_id,
+        permission_decisions=decisions,
+    )
     tools = get_tool_registry(
         context=run_context,
         scoped_memory=scoped_memory,
@@ -430,6 +435,8 @@ async def chat(
         sandbox_executor=request.app.state.sandbox_executor,
         job_queue=request.app.state.job_queue,
         bound_tools=bound_tools,
+        discovery_tools=discovery_tools,
+        disabled_capability_ids=disabled,
     )
 
     logger.info(
@@ -437,7 +444,6 @@ async def chat(
         message_length=len(body.message),
         conversation_id=conv_id,
         tools_available=len(tools.list_tools()),
-        skills_found=len(skills_used),
         correlation_id=cid,
     )
 
@@ -462,31 +468,31 @@ async def chat(
     current_message_id = await memory.store(conv_id, "user", body.message, user["user_id"])
     if current_message_id is None:
         raise RuntimeError("context_message_persistence_failed")
-    effective_context = await prepare_effective_context(
-        body.message,
-        conv_id,
-        memory,
-        tools,
-        skills_context,
-        images,
-        user["user_id"],
-        persistent_memory_text,
+    prepared = await request.app.state.request_context_preparer.prepare(
+        owner_id=user["user_id"],
         project_id=body.project_id,
+        intent=body.message,
+        current_path=body.target_path,
         run_id=run_context.run_id,
+        conversation_id=conv_id,
+        memory=memory,
+        tools=tools,
+        images=images,
+        persistent_memory_text=persistent_memory_text,
         memory_ids=memory_ids,
-        skill_ids=tuple(skill.name for skill in relevant_skills),
         current_message_id=current_message_id,
-        asset_hmac_key=derive_context_asset_hmac_key(settings.secret_key),
+        application_secret=settings.secret_key,
+        max_context_bytes=settings.context_length * 4,
+        max_tokens=settings.context_length,
     )
-    effective_context, compact_stats = await compact_effective_context(
-        effective_context, max_tokens=settings.context_length
-    )
+    effective_context = prepared.effective_context
+    compact_stats = prepared.compact_stats
+    skills_used = list(prepared.skills_used)
     logger.info(
         "context_prepared",
         compacted=bool(compact_stats.get("compacted")),
         estimated_tokens=int(compact_stats.get("tokens", 0)),
     )
-    await ContextSnapshotRepository(memory.session_factory).record(effective_context.manifest)
     messages = list(effective_context.messages)
     runtime = create_chat_runtime(
         context=run_context,
@@ -591,6 +597,7 @@ async def chat(
 
     return ChatResponse(
         response=result.content,
+        run_id=run_context.run_id,
         conversation_id=conv_id,
         correlation_id=cid,
         iterations=result.iterations,

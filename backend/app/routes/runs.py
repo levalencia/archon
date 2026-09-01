@@ -288,6 +288,60 @@ async def get_run_context(
     }
 
 
+@router.get("/{run_id}/effective-context")
+async def get_run_effective_context(
+    run_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),  # noqa: B008
+) -> dict[str, Any]:
+    """Return metadata-only provenance matching the inspector contract."""
+    await _rate_limit(request, user)
+    run = await _repository(request).get(user["user_id"], run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    snapshot = await request.app.state.context_snapshots.get(
+        owner_id=user["user_id"], project_id=run.project_id, run_id=run_id
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Context snapshot not found")
+    return {
+        "run_id": run_id,
+        "project_id": run.project_id,
+        "manifest_hash": snapshot.manifest_hash,
+        "instruction_revisions": [
+            {
+                "id": item.revision_id,
+                "revision": item.revision_id,
+                "content_hash": item.content_hash,
+                "selection_reason": "approved_current_revision",
+            }
+            for item in snapshot.instruction_revisions
+        ],
+        "skill_revisions": [
+            {
+                "id": item.capability_id,
+                "name": item.capability_id,
+                "revision": item.revision_id,
+                "content_hash": item.content_hash,
+                "selection_reason": ",".join(item.reasons) or "selected",
+            }
+            for item in snapshot.skill_revisions
+        ],
+        "capabilities": [
+            {"id": item, "name": item, "permission": "allow", "reason": "selected"}
+            for item in snapshot.selected_capability_ids
+        ],
+        "context_cost": {
+            "estimated_tokens": snapshot.estimated_tokens,
+            "byte_count": snapshot.context_cost_bytes,
+        },
+        "omission_reasons": [
+            f"{item}: rejected by policy, relevance, or context budget"
+            for item in snapshot.rejected_capability_ids
+        ],
+    }
+
+
 @router.get("/{run_id}")
 async def get_run(
     run_id: str,

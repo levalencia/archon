@@ -52,6 +52,24 @@ class TestChatEndpoint:
         assert "conversation_id" in data
         assert "correlation_id" in data
         assert data["iterations"] >= 1
+        assert data["run_id"]
+
+    @pytest.mark.unit
+    def test_durable_skill_selection_is_visible_in_run_provenance(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/chat",
+            json={"message": "Review this Python code for security and correctness."},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert any(item["name"] == "archon.code-review" for item in body["skills_used"])
+
+        provenance = client.get(f"/api/runs/{body['run_id']}/effective-context")
+        assert provenance.status_code == 200
+        context = provenance.json()
+        assert context["skill_revisions"]
+        assert all(item["revision"] and item["content_hash"] for item in context["skill_revisions"])
+        assert context["context_cost"]["byte_count"] > 0
 
     @pytest.mark.unit
     def test_chat_with_conversation_id(self, client: TestClient) -> None:
@@ -118,6 +136,16 @@ class TestChatStreamEndpoint:
         )
         text = response.text
         assert "event: token" in text
+
+    @pytest.mark.unit
+    def test_stream_uses_same_durable_skill_selection(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/chat/stream",
+            json={"message": "Review this Python code for security and correctness."},
+        )
+        assert response.status_code == 200
+        assert "event: skill" in response.text
+        assert "archon.code-review" in response.text
 
 
 class TestChatHistory:
