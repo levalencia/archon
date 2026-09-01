@@ -8,7 +8,13 @@ from types import MappingProxyType
 from typing import Protocol
 
 from app.mcp.client import MCPClientError, create_mcp_client
-from app.mcp.models import MCPServerProfile, RemoteServerProfile, ServerProfile, ToolDescriptor
+from app.mcp.models import (
+    MCPServerProfile,
+    RemoteServerProfile,
+    ServerProfile,
+    ToolDescriptor,
+    profile_transport,
+)
 from app.mcp.repository import MCPHealth, MCPRepository, MCPServerRecord, MCPToolRecord
 
 _STABLE_CLIENT_ERRORS = frozenset(
@@ -81,6 +87,7 @@ class MCPInventoryService:
             name=name,
             profile_id=profile_id,
             enabled=enabled,
+            transport=profile_transport(self._profiles[profile_id]),
         )
 
     async def update_server(
@@ -102,6 +109,9 @@ class MCPInventoryService:
             name=name,
             profile_id=profile_id,
             enabled=enabled,
+            transport=(
+                profile_transport(self._profiles[profile_id]) if profile_id is not None else None
+            ),
         )
 
     async def discover(
@@ -121,7 +131,7 @@ class MCPInventoryService:
             )
             raise MCPInventoryError("server_disabled")
         profile = self._profiles.get(server.profile_id)
-        if profile is None:
+        if profile is None or server.transport != profile_transport(profile):
             await self._fail(owner_id, project_id, server_id, "unknown_profile", server.profile_id)
             raise MCPInventoryError("unknown_profile")
         try:

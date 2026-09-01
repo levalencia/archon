@@ -96,7 +96,7 @@ from app.skills.context import EffectiveContextEnrichmentService
 from app.skills.discovery import SkillDiscoveryService
 from app.skills.installer import HttpSkillFetcher, SkillInstallationService, SkillSourcePolicy
 from app.skills.persistence import ProjectInstructionRepository, SkillRepository
-from app.skills.registry import create_default_skills
+from app.skills.bundled import bundled_skills
 from app.tools.sandbox import SandboxExecutor
 from app.tools.sandbox_client import SandboxClientConfig, SandboxRunnerClient
 from app.workers.jobs import JobWorker, PermanentJobError, echo_handler
@@ -193,23 +193,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.context_snapshots,
         app.state.capability_preferences,
     )
-    app.state.capability_index = CapabilityIndex(
+    # Build the searchable inventory from the same bundled packages and live native
+    # registry used by requests; executable schemas remain outside this compact index.
+    from app.routes.chat import get_tool_registry
+
+    skill_descriptors = tuple(
         CapabilityDescriptor(
-            id=f"builtin-{skill.name}",
+            id=f"archon.{item.parsed.name}",
             kind="skill",
-            name=skill.name,
-            description=skill.description,
-            tags=tuple(skill.tags),
-            context_cost=len(skill.content.encode("utf-8")),
-            version="1",
-            content_hash=None,
+            name=item.parsed.name,
+            description=item.parsed.description,
+            triggers=item.parsed.triggers,
+            negative_triggers=item.parsed.negative_triggers,
+            tags=item.parsed.tags,
+            context_cost=item.parsed.context_cost,
+            version=item.parsed.version,
+            content_hash=item.parsed.content_hash,
         )
-        for skill in (
-            create_default_skills().get(name)
-            for name in ("research-assistant", "code-analysis", "data-extraction")
-        )
-        if skill is not None
+        for item in bundled_skills()
     )
+    native_descriptors = get_tool_registry(
+        sandbox_executor=app.state.sandbox_executor
+    ).capability_descriptors()
+    app.state.capability_index = CapabilityIndex((*skill_descriptors, *native_descriptors))
 
     def mcp_client_factory(profile: MCPServerProfile) -> Any:
         return create_mcp_client(profile, credential_provider=app.state.mcp_credential_provider)

@@ -176,11 +176,11 @@ async def chat_stream_real(
     )
     run_context = replace(run_context, project_id=body.project_id)
     scoped_memory = request.app.state.scoped_memory
-    bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
-        user["user_id"], body.project_id
-    )
     decisions, disabled = await request.app.state.request_context_preparer.scope_policy(
         owner_id=user["user_id"], project_id=body.project_id
+    )
+    bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
+        user["user_id"], body.project_id, disabled_capability_ids=disabled
     )
     discovery_tools = GovernedSkillDiscoveryTools(
         request.app.state.skill_discovery,
@@ -197,6 +197,7 @@ async def chat_stream_real(
         bound_tools=bound_tools,
         discovery_tools=discovery_tools,
         disabled_capability_ids=disabled,
+        denied_permissions=frozenset(k for k, v in decisions.items() if v.value == "deny"),
     )
     approval_broker: ApprovalBroker = request.app.state.approval_broker
 

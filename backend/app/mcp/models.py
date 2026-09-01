@@ -69,7 +69,7 @@ class RemoteServerProfile:
     """Deployment-owned Streamable HTTP endpoint without inline credentials."""
 
     url: str
-    credential_ref: str | None = None
+    credential_ref: str | None = field(default=None, repr=False)
     allow_insecure_loopback: bool = False
     connect_timeout_seconds: float = 10.0
     discovery_timeout_seconds: float = 30.0
@@ -153,3 +153,8 @@ class MCPCallResult:
     content: tuple[Mapping[str, Any], ...]
     structured_content: Mapping[str, Any] | None
     is_error: bool
+
+
+def profile_transport(profile: MCPServerProfile) -> str:
+    """Return the only persisted connection fact for a deployment-owned profile."""
+    return "streamable_http" if isinstance(profile, RemoteServerProfile) else "stdio"

@@ -917,7 +917,7 @@ class ProjectSkillPinRow(Base):
         String(36), ForeignKey("skill_revisions.id"), primary_key=True
     )
     revision_owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -1074,7 +1074,9 @@ class MCPServerRow(Base):
     __table_args__ = (
         UniqueConstraint("owner_id", "project_id", "name", name="uq_mcp_server_scope_name"),
         Index("ix_mcp_servers_scope", "owner_id", "project_id"),
-        CheckConstraint("transport = 'stdio'", name="ck_mcp_servers_transport"),
+        CheckConstraint(
+            "transport IN ('stdio','streamable_http')", name="ck_mcp_servers_transport"
+        ),
         CheckConstraint(
             "health IN ('unknown','healthy','error','disabled')", name="ck_mcp_servers_health"
         ),

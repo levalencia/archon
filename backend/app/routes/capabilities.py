@@ -67,6 +67,25 @@ async def _limit(request: Request, user: dict[str, Any], action: str) -> None:
     await enforce_rate_limit(request, user, f"capabilities_{action}")
 
 
+async def _scoped_index(request: Request, owner_id: str, project_id: str | None) -> CapabilityIndex:
+    descriptors = list(_index(request).all())
+    if project_id is not None:
+        specs = await request.app.state.mcp_runtime_tools.for_scope(owner_id, project_id)
+        descriptors.extend(
+            CapabilityDescriptor(
+                id=spec.capability_id,
+                kind="mcp",
+                name=spec.name,
+                executable_name=spec.name,
+                description=spec.description,
+                tags=tuple(sorted(risk.value for risk in spec.risk_classes)),
+                context_cost=0,
+            )
+            for spec in specs
+        )
+    return CapabilityIndex(descriptors)
+
+
 def _item(d: CapabilityDescriptor, enabled: bool = True, pinned: bool = False) -> CapabilityItem:
     risks = sorted(set(d.required_permissions)) or ["read"]
     return CapabilityItem(
@@ -100,7 +119,7 @@ async def search(
     )
     result = []
     q = body.query.casefold()
-    for d in _index(request).all():
+    for d in (await _scoped_index(request, user["user_id"], body.project_id)).all():
         if q in f"{d.id} {d.name} {d.description} {' '.join(d.tags)}".casefold():
             pref = prefs.get(d.id)
             result.append(
@@ -118,7 +137,7 @@ async def preference(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> CapabilityItem:
     await _limit(request, user, "write")
-    descriptor = _index(request).get(capability_id)
+    descriptor = (await _scoped_index(request, user["user_id"], project_id)).get(capability_id)
     if descriptor is None:
         raise HTTPException(404, detail={"code": "capability_not_found"})
     row = await _prefs(request).set(
@@ -147,7 +166,7 @@ async def effective(
 
     descriptors = [
         replace(d, enabled=prefs[d.id].enabled if d.id in prefs else d.enabled)
-        for d in _index(request).all()
+        for d in (await _scoped_index(request, user["user_id"], project_id)).all()
     ]
     pinned = frozenset(k for k, v in prefs.items() if v.pinned and v.enabled)
     selected = select_capabilities(

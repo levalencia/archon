@@ -40,6 +40,7 @@ class CapabilityDescriptor:
     version: str | None = None
     content_hash: str | None = None
     enabled: bool = True
+    executable_name: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "kind", CapabilityKind(self.kind))
@@ -49,6 +50,10 @@ class CapabilityDescriptor:
             raise ValueError("capability name must not be blank")
         if self.context_cost < 0:
             raise ValueError("context_cost must be non-negative")
+        if self.executable_name is not None and (
+            not self.executable_name.strip() or len(self.executable_name) > 128
+        ):
+            raise ValueError("invalid executable tool name")
         if any(
             not value.strip() for value in (*self.triggers, *self.negative_triggers, *self.tags)
         ):

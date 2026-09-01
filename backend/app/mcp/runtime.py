@@ -13,7 +13,13 @@ from types import MappingProxyType
 from typing import Any, Protocol, cast
 
 from app.mcp.client import create_mcp_client
-from app.mcp.models import MCPCallResult, MCPServerProfile, RemoteServerProfile, ServerProfile
+from app.mcp.models import (
+    MCPCallResult,
+    MCPServerProfile,
+    RemoteServerProfile,
+    ServerProfile,
+    profile_transport,
+)
 from app.mcp.repository import MCPHealth, MCPRepository, MCPServerRecord, MCPToolRecord
 from app.security.policy import RiskClass
 
@@ -192,6 +198,7 @@ class MCPBoundToolSpec:
     risk_classes: frozenset[RiskClass]
     requires_approval: bool = True
     resource_identity: str = ""
+    capability_id: str | None = None
     _frozen_schema: Any = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -199,6 +206,8 @@ class MCPBoundToolSpec:
         object.__setattr__(self, "input_schema", frozen)
         object.__setattr__(self, "_frozen_schema", frozen)
         object.__setattr__(self, "resource_identity", self.name)
+        if self.capability_id is None:
+            object.__setattr__(self, "capability_id", f"mcp.bound.{_name_part(self.name)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,7 +246,13 @@ class MCPRuntimeToolProvider:
         self._profiles: Mapping[str, MCPServerProfile] = MappingProxyType(copied)
         self._client_factory = client_factory
 
-    async def for_scope(self, owner_id: str, project_id: str) -> tuple[MCPBoundToolSpec, ...]:
+    async def for_scope(
+        self,
+        owner_id: str,
+        project_id: str,
+        *,
+        disabled_capability_ids: frozenset[str] = frozenset(),
+    ) -> tuple[MCPBoundToolSpec, ...]:
         candidates: list[tuple[MCPServerRecord, MCPToolRecord, dict[str, Any]]] = []
         for server in await self._repository.list(owner_id=owner_id, project_id=project_id):
             if (
@@ -246,8 +261,18 @@ class MCPRuntimeToolProvider:
                 or server.profile_id not in self._profiles
             ):
                 continue
+            prefix = f"mcp.{server.id}."
+            excluded_tool_ids = frozenset(
+                capability_id.removeprefix(prefix)
+                for capability_id in disabled_capability_ids
+                if capability_id.startswith(prefix)
+            )
             for tool in await self._repository.list_tools(
-                owner_id=owner_id, project_id=project_id, server_id=server.id
+                owner_id=owner_id,
+                project_id=project_id,
+                server_id=server.id,
+                enabled_only=True,
+                excluded_tool_ids=excluded_tool_ids,
             ):
                 if not tool.enabled:
                     continue
@@ -310,6 +335,7 @@ class MCPRuntimeToolProvider:
                         ),
                     ),
                     risk_classes=frozenset(risks),
+                    capability_id=f"mcp.{server.id}.{tool.id}",
                 )
             )
         return tuple(specs)
@@ -329,7 +355,7 @@ class MCPRuntimeToolProvider:
         ):
             raise MCPRuntimeError("mcp_binding_changed")
         profile = self._profiles.get(server.profile_id)
-        if profile is None:
+        if profile is None or server.transport != profile_transport(profile):
             raise MCPRuntimeError("mcp_binding_changed")
         tools = await self._repository.list_tools(
             owner_id=binding.owner_id,

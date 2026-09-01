@@ -136,16 +136,19 @@ class MCPRepository:
         name: str,
         profile_id: str,
         enabled: bool = True,
+        transport: str = "stdio",
         now: datetime | None = None,
     ) -> MCPServerRecord:
         current = _utc(now or datetime.now(tz=UTC))
+        if transport not in {"stdio", "streamable_http"}:
+            raise ValueError("invalid MCP transport")
         row = MCPServerRow(
             id=str(uuid.uuid4()),
             owner_id=_identifier(owner_id, "owner_id"),
             project_id=_identifier(project_id, "project_id"),
             name=_identifier(name, "name"),
             profile_id=_identifier(profile_id, "profile_id"),
-            transport="stdio",
+            transport=transport,
             enabled=bool(enabled),
             health=MCPHealth.UNKNOWN.value if enabled else MCPHealth.DISABLED.value,
             last_error_code=None,
@@ -192,12 +195,15 @@ class MCPRepository:
         name: str | None = None,
         profile_id: str | None = None,
         enabled: bool | None = None,
+        transport: str | None = None,
         now: datetime | None = None,
     ) -> MCPServerRecord | None:
         values: dict[str, object] = {"updated_at": _utc(now or datetime.now(tz=UTC))}
         if name is not None:
             values["name"] = _identifier(name, "name")
         requested_profile = None if profile_id is None else _identifier(profile_id, "profile_id")
+        if transport is not None and transport not in {"stdio", "streamable_http"}:
+            raise ValueError("invalid MCP transport")
         if enabled is not None:
             values["enabled"] = bool(enabled)
             values["health"] = MCPHealth.UNKNOWN.value if enabled else MCPHealth.DISABLED.value
@@ -217,9 +223,12 @@ class MCPRepository:
                 profile_changed = (
                     requested_profile is not None and requested_profile != row.profile_id
                 )
+                transport_changed = transport is not None and transport != row.transport
                 if requested_profile is not None:
                     values["profile_id"] = requested_profile
-                if profile_changed:
+                if transport is not None:
+                    values["transport"] = transport
+                if profile_changed or transport_changed:
                     final_enabled = bool(values.get("enabled", row.enabled))
                     values["health"] = (
                         MCPHealth.UNKNOWN.value if final_enabled else MCPHealth.DISABLED.value
@@ -250,15 +259,26 @@ class MCPRepository:
             return True
 
     async def list_tools(
-        self, *, owner_id: str, project_id: str, server_id: str
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        enabled_only: bool = False,
+        excluded_tool_ids: frozenset[str] = frozenset(),
     ) -> tuple[MCPToolRecord, ...]:
         scope = self._scope(owner_id, project_id, server_id)
+        excluded = tuple(_uuid(value, "excluded_tool_id") for value in excluded_tool_ids)
         async with self._sessions() as session:
             rows = (
                 await session.execute(
                     select(MCPToolRow)
                     .join(MCPServerRow, MCPServerRow.id == MCPToolRow.server_id)
-                    .where(*scope)
+                    .where(
+                        *scope,
+                        *([MCPToolRow.enabled.is_(True)] if enabled_only else []),
+                        *([MCPToolRow.id.not_in(excluded)] if excluded else []),
+                    )
                     .order_by(MCPToolRow.name)
                 )
             ).scalars()

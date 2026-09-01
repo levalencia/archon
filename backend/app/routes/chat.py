@@ -73,6 +73,7 @@ def get_tool_registry(
     bound_tools: Sequence[MCPBoundToolSpec] = (),
     discovery_tools: GovernedSkillDiscoveryTools | None = None,
     disabled_capability_ids: frozenset[str] = frozenset(),
+    denied_permissions: frozenset[str] = frozenset(),
 ) -> SecureToolRegistry:
     """Create a fresh registry; scoped tools are closures owned by this request."""
     if _tools_singleton is not None:
@@ -86,6 +87,7 @@ def get_tool_registry(
         bound_tools=bound_tools,
         discovery_tools=discovery_tools,
         disabled_capability_ids=disabled_capability_ids,
+        denied_permissions=denied_permissions,
     )
 
 
@@ -106,9 +108,12 @@ def _create_tool_registry(
     bound_tools: Sequence[MCPBoundToolSpec] = (),
     discovery_tools: GovernedSkillDiscoveryTools | None = None,
     disabled_capability_ids: frozenset[str] = frozenset(),
+    denied_permissions: frozenset[str] = frozenset(),
 ) -> SecureToolRegistry:
     """Create a tool registry with real tools wired in."""
-    registry = SecureToolRegistry()
+    registry = SecureToolRegistry(
+        disabled_capability_ids=disabled_capability_ids, denied_permissions=denied_permissions
+    )
 
     registry.register(
         name="calculator",
@@ -321,12 +326,12 @@ def _create_tool_registry(
         risk_classes=frozenset({RiskClass.READ}),
     )
 
-    if discovery_tools is not None and "discover_capabilities" not in disabled_capability_ids:
+    if discovery_tools is not None:
         # Scope policy filtering precedes provider schema construction.
         register_skill_discovery_tools(
             registry,
             discovery_tools,
-            include_reference="load_skill_reference" not in disabled_capability_ids,
+            include_reference=True,
         )
 
     for spec in bound_tools:
@@ -338,6 +343,7 @@ def _create_tool_registry(
             timeout=spec.timeout,
             requires_approval=spec.requires_approval,
             risk_classes=spec.risk_classes,
+            capability_id=spec.capability_id,
         )
 
     return registry
@@ -416,11 +422,11 @@ async def chat(
     )
     run_context = replace(run_context, project_id=body.project_id)
     scoped_memory = request.app.state.scoped_memory
-    bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
-        user["user_id"], body.project_id
-    )
     decisions, disabled = await request.app.state.request_context_preparer.scope_policy(
         owner_id=user["user_id"], project_id=body.project_id
+    )
+    bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
+        user["user_id"], body.project_id, disabled_capability_ids=disabled
     )
     discovery_tools = GovernedSkillDiscoveryTools(
         request.app.state.skill_discovery,
@@ -437,6 +443,7 @@ async def chat(
         bound_tools=bound_tools,
         discovery_tools=discovery_tools,
         disabled_capability_ids=disabled,
+        denied_permissions=frozenset(k for k, v in decisions.items() if v.value == "deny"),
     )
 
     logger.info(
