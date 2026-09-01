@@ -34,6 +34,7 @@ class InstructionFamily(StrEnum):
     ARCHON = "archon"
     AGENTS = "agents"
     CLAUDE = "claude"
+    MANUAL = "manual"
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +142,8 @@ def load_project_instructions(
     if len(parts) > selected_limits.max_directory_depth:
         raise InstructionLoadError("directory depth limit exceeded")
 
+    if selected_family is InstructionFamily.MANUAL:
+        raise InstructionLoadError("manual instructions cannot be filesystem-scanned")
     state = _LoadState(root, selected_family, selected_limits, [], set(), set())
     directories = [root]
     current = root

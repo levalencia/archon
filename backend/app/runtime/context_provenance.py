@@ -56,12 +56,25 @@ class InstructionRevisionRef:
     revision_id: str
     content_hash: str
     order: int
+    relative_path: str = ".archon/instructions.md"
+    scope_path: str = "."
+    family: str = "archon"
+    is_override: bool = False
+    byte_count: int = 0
 
     def __post_init__(self) -> None:
         _text(self.revision_id, "instruction revision_id", 255)
         _hash(self.content_hash, "instruction content_hash")
+        _text(self.relative_path, "instruction relative_path", 1024)
+        _text(self.scope_path, "instruction scope_path", 1024)
+        if self.family not in {"archon", "agents", "claude", "manual"}:
+            raise ValueError("invalid instruction family")
+        if type(self.is_override) is not bool:
+            raise ValueError("instruction is_override must be boolean")
         if type(self.order) is not int or self.order < 0:
             raise ValueError("instruction order must be non-negative")
+        if type(self.byte_count) is not int or self.byte_count < 0:
+            raise ValueError("instruction byte_count must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +202,11 @@ class EffectiveContextManifest:
                     "revision_id": item.revision_id,
                     "content_hash": item.content_hash,
                     "order": item.order,
+                    "relative_path": item.relative_path,
+                    "scope_path": item.scope_path,
+                    "family": item.family,
+                    "is_override": item.is_override,
+                    "byte_count": item.byte_count,
                 }
                 for item in self.instruction_revisions
             ],

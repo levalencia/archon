@@ -83,7 +83,7 @@ A user or model cannot submit an arbitrary host path. Local files are opened onl
 
 Instructions resolve root-to-leaf toward the target path. A same-directory override replaces the normal file at that level. Resolution is bounded by file count, bytes, nesting and import depth.
 
-The runtime consumes approved snapshots, not live mutable files. A changed hash creates a pending revision.
+The runtime consumes approved snapshots, not live mutable files. A changed hash creates a pending revision. Each snapshot durably owns an ordered source set; each source stores its body plus relative path, scope path, family, override flag, byte count, and SHA-256. Manual/UI content is represented as one source. The current pointer is protected by an owner/project-scoped database foreign key, and effective-context manifests expose source metadata and hashes without raw content.
 
 ## Precedence
 

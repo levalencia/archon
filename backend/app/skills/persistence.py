@@ -12,8 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.instructions.loaders import InstructionFamily, InstructionSource
 from app.services.db_store import (
     ProjectInstructionRevisionRow,
+    ProjectInstructionSourceRow,
     ProjectSkillBindingRow,
     ProjectSkillPinRow,
     ProjectWorkspaceRow,
@@ -400,11 +402,51 @@ class SkillRepository:
             return [*rows, *shared]
 
 
+@dataclass(frozen=True, slots=True)
+class ProjectInstructionSnapshot:
+    revision: ProjectInstructionRevisionRow
+    sources: tuple[ProjectInstructionSourceRow, ...]
+
+
 class ProjectInstructionRepository:
-    """Project-scoped append-only instruction history with a durable current pointer."""
+    """Owner/project-scoped immutable snapshots with exact ordered source bodies."""
 
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = sessions
+
+    @staticmethod
+    def _snapshot_hash(sources: tuple[InstructionSource, ...]) -> str:
+        document = [
+            {
+                "ordinal": ordinal,
+                "relative_path": source.relative_path,
+                "scope_path": source.scope_path,
+                "family": source.family.value,
+                "is_override": source.is_override,
+                "byte_count": source.byte_count,
+                "content_hash": source.content_hash,
+            }
+            for ordinal, source in enumerate(sources)
+        ]
+        encoded = json.dumps(
+            document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    @staticmethod
+    def _validate_sources(sources: tuple[InstructionSource, ...]) -> None:
+        if not sources:
+            raise ValueError("project instruction snapshot must have at least one source")
+        total = 0
+        for source in sources:
+            raw = source.content.encode("utf-8")
+            if len(raw) != source.byte_count:
+                raise ValueError("instruction source byte_count does not match body")
+            if hashlib.sha256(raw).hexdigest() != source.content_hash:
+                raise ValueError("instruction source hash does not match body")
+            total += len(raw)
+        if total > 256 * 1024:
+            raise ValueError("project instructions exceed 262144 bytes")
 
     async def append(
         self,
@@ -416,10 +458,27 @@ class ProjectInstructionRepository:
     ) -> ProjectInstructionRevisionRow:
         if not content.strip():
             raise ValueError("project instructions must not be empty")
-        encoded = content.encode("utf-8")
-        if len(encoded) > 256 * 1024:
-            raise ValueError("project instructions exceed 262144 bytes")
-        digest = hashlib.sha256(encoded).hexdigest()
+        source = InstructionSource.from_content(
+            content, ".archon/instructions.md", ".", InstructionFamily.MANUAL
+        )
+        snapshot = await self.append_sources(
+            owner_id=owner_id,
+            project_id=project_id,
+            sources=(source,),
+            review_state=review_state,
+        )
+        return snapshot.revision
+
+    async def append_sources(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        sources: tuple[InstructionSource, ...],
+        review_state: str = "pending",
+    ) -> ProjectInstructionSnapshot:
+        self._validate_sources(sources)
+        digest = self._snapshot_hash(sources)
         now = datetime.now(tz=UTC)
         async with self._sessions() as session, session.begin():
             workspace = await session.get(ProjectWorkspaceRow, (owner_id, project_id))
@@ -437,10 +496,12 @@ class ProjectInstructionRepository:
                 )
             )
             if existing is not None:
+                snapshot = await self._snapshot_in_session(session, existing)
                 if review_state == "approved":
+                    existing.review_state = "approved"
                     workspace.current_instruction_revision_id = existing.id
                     workspace.updated_at = now
-                return existing
+                return snapshot
             last = await session.scalar(
                 select(ProjectInstructionRevisionRow.revision_number)
                 .where(
@@ -455,17 +516,36 @@ class ProjectInstructionRepository:
                 owner_id=owner_id,
                 project_id=project_id,
                 revision_number=(last or 0) + 1,
-                content=content,
+                content=sources[0].content if len(sources) == 1 else "",
                 content_hash=digest,
                 review_state=review_state,
                 created_at=now,
             )
             session.add(row)
             await session.flush()
+            stored: list[ProjectInstructionSourceRow] = []
+            for ordinal, source in enumerate(sources):
+                source_row = ProjectInstructionSourceRow(
+                    id=str(uuid.uuid4()),
+                    revision_id=row.id,
+                    owner_id=owner_id,
+                    project_id=project_id,
+                    ordinal=ordinal,
+                    relative_path=source.relative_path,
+                    scope_path=source.scope_path,
+                    family=source.family.value,
+                    is_override=source.is_override,
+                    byte_count=source.byte_count,
+                    content_hash=source.content_hash,
+                    content=source.content,
+                )
+                session.add(source_row)
+                stored.append(source_row)
+            await session.flush()
             if review_state == "approved":
                 workspace.current_instruction_revision_id = row.id
                 workspace.updated_at = now
-            return row
+            return ProjectInstructionSnapshot(row, tuple(stored))
 
     async def ensure_workspace(self, *, owner_id: str, project_id: str) -> ProjectWorkspaceRow:
         now = datetime.now(tz=UTC)
@@ -494,47 +574,111 @@ class ProjectInstructionRepository:
                 )
             )
 
-    async def get(
+    async def _snapshot_in_session(
+        self, session: AsyncSession, row: ProjectInstructionRevisionRow
+    ) -> ProjectInstructionSnapshot:
+        sources = tuple(
+            await session.scalars(
+                select(ProjectInstructionSourceRow)
+                .where(
+                    ProjectInstructionSourceRow.revision_id == row.id,
+                    ProjectInstructionSourceRow.owner_id == row.owner_id,
+                    ProjectInstructionSourceRow.project_id == row.project_id,
+                )
+                .order_by(ProjectInstructionSourceRow.ordinal)
+            )
+        )
+        if not sources:
+            raise ValueError("instruction snapshot has no durable sources")
+        rebuilt: list[InstructionSource] = []
+        for expected_ordinal, source in enumerate(sources):
+            if source.ordinal != expected_ordinal:
+                raise ValueError("instruction snapshot source order is not contiguous")
+            candidate = InstructionSource.from_content(
+                source.content,
+                source.relative_path,
+                source.scope_path,
+                source.family,
+                is_override=source.is_override,
+            )
+            if (
+                candidate.byte_count != source.byte_count
+                or candidate.content_hash != source.content_hash
+            ):
+                raise ValueError("instruction snapshot source integrity check failed")
+            rebuilt.append(candidate)
+        calculated = self._snapshot_hash(tuple(rebuilt))
+        legacy_hash = (
+            sources[0].content_hash if len(sources) == 1 and sources[0].family == "manual" else None
+        )
+        if row.content_hash not in {calculated, legacy_hash}:
+            raise ValueError("instruction snapshot manifest integrity check failed")
+        return ProjectInstructionSnapshot(row, sources)
+
+    async def get_snapshot(
         self, *, owner_id: str, project_id: str, revision_id: str
-    ) -> ProjectInstructionRevisionRow | None:
+    ) -> ProjectInstructionSnapshot | None:
         async with self._sessions() as session:
-            return await session.scalar(
+            row = await session.scalar(
                 select(ProjectInstructionRevisionRow).where(
                     ProjectInstructionRevisionRow.id == revision_id,
                     ProjectInstructionRevisionRow.owner_id == owner_id,
                     ProjectInstructionRevisionRow.project_id == project_id,
                 )
             )
+            return None if row is None else await self._snapshot_in_session(session, row)
+
+    async def get(
+        self, *, owner_id: str, project_id: str, revision_id: str
+    ) -> ProjectInstructionRevisionRow | None:
+        snapshot = await self.get_snapshot(
+            owner_id=owner_id, project_id=project_id, revision_id=revision_id
+        )
+        return None if snapshot is None else snapshot.revision
 
     async def set_current(
         self, *, owner_id: str, project_id: str, revision_id: str | None
     ) -> ProjectInstructionRevisionRow | None:
-        row = (
-            None
-            if revision_id is None
-            else await self.get(owner_id=owner_id, project_id=project_id, revision_id=revision_id)
-        )
-        if revision_id is not None and row is None:
-            return None
         async with self._sessions() as session, session.begin():
             workspace = await session.get(ProjectWorkspaceRow, (owner_id, project_id))
             if workspace is None:
                 return None
+            row = None
+            if revision_id is not None:
+                row = await session.scalar(
+                    select(ProjectInstructionRevisionRow).where(
+                        ProjectInstructionRevisionRow.id == revision_id,
+                        ProjectInstructionRevisionRow.owner_id == owner_id,
+                        ProjectInstructionRevisionRow.project_id == project_id,
+                    )
+                )
+                if row is None:
+                    return None
+                await self._snapshot_in_session(session, row)
+                row.review_state = "approved"
             workspace.current_instruction_revision_id = revision_id
             workspace.updated_at = datetime.now(tz=UTC)
-        return row
+            await session.flush()
+            return row
 
-    async def current(
+    async def current_snapshot(
         self, *, owner_id: str, project_id: str
-    ) -> ProjectInstructionRevisionRow | None:
+    ) -> ProjectInstructionSnapshot | None:
         async with self._sessions() as session:
             workspace = await session.get(ProjectWorkspaceRow, (owner_id, project_id))
             if workspace is None or workspace.current_instruction_revision_id is None:
                 return None
-            return await session.scalar(
+            row = await session.scalar(
                 select(ProjectInstructionRevisionRow).where(
                     ProjectInstructionRevisionRow.id == workspace.current_instruction_revision_id,
                     ProjectInstructionRevisionRow.owner_id == owner_id,
                     ProjectInstructionRevisionRow.project_id == project_id,
                 )
             )
+            return None if row is None else await self._snapshot_in_session(session, row)
+
+    async def current(
+        self, *, owner_id: str, project_id: str
+    ) -> ProjectInstructionRevisionRow | None:
+        snapshot = await self.current_snapshot(owner_id=owner_id, project_id=project_id)
+        return None if snapshot is None else snapshot.revision

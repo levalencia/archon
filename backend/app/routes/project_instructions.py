@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.instructions.loaders import (
-    InstructionFamily,
     InstructionLoadError,
     load_project_instructions,
 )
@@ -35,7 +34,7 @@ class InstructionCreate(StrictModel):
 
 class ScanRequest(StrictModel):
     target_path: str = Field(default=".", max_length=1000)
-    family: InstructionFamily = InstructionFamily.ARCHON
+    family: Literal["archon", "agents", "claude"] = "archon"
 
 
 class InstructionItem(StrictModel):
@@ -67,15 +66,15 @@ async def _limit(request: Request, user: dict[str, Any], action: str) -> None:
     await enforce_rate_limit(request, user, f"instructions_{action}")
 
 
-def _item(row: Any) -> InstructionItem:
+def _item(row: Any, source: Any) -> InstructionItem:
     return InstructionItem(
         id=row.id,
-        relative_path=".archon/instructions.md",
-        scope_path=".",
+        relative_path=source.relative_path,
+        scope_path=source.scope_path,
         revision=row.revision_number,
-        content_hash=row.content_hash,
+        content_hash=source.content_hash,
         trust_state=row.review_state,
-        byte_count=len(row.content.encode("utf-8")),
+        byte_count=source.byte_count,
     )
 
 
@@ -102,7 +101,12 @@ async def create_instruction(
         content=body.content,
         review_state="pending",
     )
-    return InstructionDetail(**_item(row).model_dump(), content=row.content)
+    snapshot = await _repo(request).get_snapshot(
+        owner_id=user["user_id"], project_id=project_id, revision_id=row.id
+    )
+    assert snapshot is not None
+    source = snapshot.sources[0]
+    return InstructionDetail(**_item(row, source).model_dump(), content=source.content)
 
 
 @router.get("/instructions", response_model=list[InstructionItem])
@@ -111,12 +115,16 @@ async def list_instructions(
     project_id: ProjectId, request: Request, user: dict[str, Any] = Depends(get_current_user)
 ) -> list[InstructionItem]:
     await _limit(request, user, "read")
-    return [
-        _item(x)
-        for x in await _repo(request).list_revisions(
-            owner_id=user["user_id"], project_id=project_id
+    result: list[InstructionItem] = []
+    for revision in await _repo(request).list_revisions(
+        owner_id=user["user_id"], project_id=project_id
+    ):
+        snapshot = await _repo(request).get_snapshot(
+            owner_id=user["user_id"], project_id=project_id, revision_id=revision.id
         )
-    ]
+        if snapshot is not None:
+            result.extend(_item(revision, source) for source in snapshot.sources)
+    return result
 
 
 @router.post("/instructions/scan", response_model=list[InstructionItem])
@@ -138,22 +146,13 @@ async def scan(
         raise HTTPException(422, detail={"code": "invalid_workspace_instructions"}) from None
     if not sources:
         return []
-    combined = "\n\n".join(f"<!-- {x.relative_path} -->\n{x.content}" for x in sources)
-    row = await _repo(request).append(
-        owner_id=user["user_id"], project_id=project_id, content=combined, review_state="pending"
+    snapshot = await _repo(request).append_sources(
+        owner_id=user["user_id"],
+        project_id=project_id,
+        sources=sources,
+        review_state="pending",
     )
-    return [
-        InstructionItem(
-            id=row.id,
-            relative_path=x.relative_path,
-            scope_path=x.scope_path,
-            revision=row.revision_number,
-            content_hash=x.content_hash,
-            trust_state="pending",
-            byte_count=x.byte_count,
-        )
-        for x in sources
-    ]
+    return [_item(snapshot.revision, source) for source in snapshot.sources]
 
 
 @router.post(
@@ -174,7 +173,11 @@ async def approve(
     )
     if row is None:
         raise HTTPException(404, detail={"code": "instruction_not_found"})
-    return _item(row).model_copy(update={"trust_state": "approved"})
+    snapshot = await _repo(request).get_snapshot(
+        owner_id=owner_id or user["user_id"], project_id=project_id, revision_id=row.id
+    )
+    assert snapshot is not None
+    return _item(row, snapshot.sources[0])
 
 
 @router.post("/instructions/revoke", status_code=status.HTTP_204_NO_CONTENT)
@@ -192,16 +195,27 @@ async def resolve(
     project_id: ProjectId, request: Request, user: dict[str, Any] = Depends(get_current_user)
 ) -> EffectiveSummary:
     await _limit(request, user, "read")
-    row = await _repo(request).current(owner_id=user["user_id"], project_id=project_id)
-    if row is None:
+    snapshot = await _repo(request).current_snapshot(
+        owner_id=user["user_id"], project_id=project_id
+    )
+    if snapshot is None or snapshot.revision.review_state != "approved":
         return EffectiveSummary(project_id=project_id, items=[], omitted=[], context_cost_bytes=0)
     from app.instructions.loaders import InstructionSource
 
-    source = InstructionSource.from_content(row.content, ".archon/instructions.md", ".", "archon")
-    effective = resolve_effective_context(project_instructions=[source], user_task="")
+    sources = tuple(
+        InstructionSource.from_content(
+            source.content,
+            source.relative_path,
+            source.scope_path,
+            source.family,
+            is_override=source.is_override,
+        )
+        for source in snapshot.sources
+    )
+    effective = resolve_effective_context(project_instructions=sources, user_task="")
     return EffectiveSummary(
         project_id=project_id,
-        items=[_item(row).model_copy(update={"trust_state": "approved"})],
+        items=[_item(snapshot.revision, source) for source in snapshot.sources],
         omitted=list(effective.omitted),
         context_cost_bytes=effective.context_cost_bytes,
     )

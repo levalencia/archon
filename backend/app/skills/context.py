@@ -53,26 +53,39 @@ class EffectiveContextEnrichmentService:
         skill_refs: list[SkillRevisionRef] = []
         rejected = [item.capability_id for item in selection.rejected]
         spent = 0
-        instruction = await self._instructions.current(owner_id=owner_id, project_id=project_id)
-        if instruction is not None and instruction.review_state == "approved":
-            cost = len(instruction.content.encode("utf-8"))
-            if cost > max_context_bytes:
+        snapshot = await self._instructions.current_snapshot(
+            owner_id=owner_id, project_id=project_id
+        )
+        if snapshot is not None and snapshot.revision.review_state == "approved":
+            instruction_cost = sum(source.byte_count for source in snapshot.sources)
+            if instruction_cost > max_context_bytes:
                 raise ValueError("context budget cannot fit project instructions")
-            blocks.append(
-                ContextBlock(
-                    "project_instruction",
-                    instruction.id,
-                    instruction.content,
-                    instruction.content_hash,
-                    "current_revision",
-                    0,
-                    cost,
+            for source in snapshot.sources:
+                order = len(blocks)
+                blocks.append(
+                    ContextBlock(
+                        "project_instruction",
+                        source.relative_path,
+                        source.content,
+                        source.content_hash,
+                        "current_snapshot_root_to_leaf",
+                        order,
+                        source.byte_count,
+                    )
                 )
-            )
-            instruction_refs.append(
-                InstructionRevisionRef(instruction.id, instruction.content_hash, 0)
-            )
-            spent += cost
+                instruction_refs.append(
+                    InstructionRevisionRef(
+                        revision_id=snapshot.revision.id,
+                        content_hash=source.content_hash,
+                        order=source.ordinal,
+                        relative_path=source.relative_path,
+                        scope_path=source.scope_path,
+                        family=source.family,
+                        is_override=source.is_override,
+                        byte_count=source.byte_count,
+                    )
+                )
+            spent += instruction_cost
         for selected in selection.selected:
             row = await self._skills.get_visible_revision(
                 owner_id=owner_id, revision_id=selected.revision_id

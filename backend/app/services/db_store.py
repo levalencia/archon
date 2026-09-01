@@ -923,10 +923,21 @@ class ProjectSkillPinRow(Base):
 
 
 class ProjectWorkspaceRow(Base):
-    """Durable owner/project root and pointer to current immutable instructions."""
+    """Durable owner/project root and scoped pointer to current instructions."""
 
     __tablename__ = "project_workspaces"
-    __table_args__ = (Index("ix_project_workspaces_owner_updated", "owner_id", "updated_at"),)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["current_instruction_revision_id", "owner_id", "project_id"],
+            [
+                "project_instruction_revisions.id",
+                "project_instruction_revisions.owner_id",
+                "project_instruction_revisions.project_id",
+            ],
+            name="fk_project_workspace_current_instruction_scope",
+        ),
+        Index("ix_project_workspaces_owner_updated", "owner_id", "updated_at"),
+    )
     owner_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     current_instruction_revision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -965,6 +976,46 @@ class ProjectInstructionRevisionRow(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     review_state: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ProjectInstructionSourceRow(Base):
+    """One immutable, ordered source body in an instruction snapshot."""
+
+    __tablename__ = "project_instruction_sources"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["revision_id", "owner_id", "project_id"],
+            [
+                "project_instruction_revisions.id",
+                "project_instruction_revisions.owner_id",
+                "project_instruction_revisions.project_id",
+            ],
+            ondelete="CASCADE",
+            name="fk_instruction_source_revision_scope",
+        ),
+        UniqueConstraint("revision_id", "ordinal", name="uq_instruction_source_order"),
+        CheckConstraint("ordinal >= 0", name="ck_instruction_source_ordinal"),
+        CheckConstraint(
+            "byte_count >= 0 AND byte_count <= 262144", name="ck_instruction_source_bytes"
+        ),
+        CheckConstraint(
+            "family IN ('archon','agents','claude','manual')",
+            name="ck_instruction_source_family",
+        ),
+        Index("ix_instruction_sources_revision_order", "revision_id", "ordinal"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    revision_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    relative_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    scope_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    family: Mapped[str] = mapped_column(String(16), nullable=False)
+    is_override: Mapped[bool] = mapped_column(nullable=False)
+    byte_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class ProjectSkillBindingRow(Base):
