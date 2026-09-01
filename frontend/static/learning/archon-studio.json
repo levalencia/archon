@@ -4459,6 +4459,7 @@
     "version": 1,
     "source_priority": [
       "docs/IMPLEMENTATION-EVIDENCE.md",
+      "docs/evidence/skills-project-instructions-implementation.md",
       "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
       "docs/REMAINING-DEFERRED-GAPS.md",
       "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4471,6 +4472,7 @@
         "purpose": "Understand Archon's mission, architecture, evidence posture, and explicit boundaries.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4490,7 +4492,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 9
+        "source_count": 10
       },
       {
         "id": "request-lifecycle",
@@ -4498,6 +4500,7 @@
         "purpose": "Follow one request through runtime, model, policy, approval, execution, and evidence.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4513,7 +4516,8 @@
           "docs/course/concepts/react.md",
           "docs/course/concepts/tool-contracts.md",
           "docs/course/concepts/policy-engine.md",
-          "docs/course/concepts/durable-approvals.md"
+          "docs/course/concepts/durable-approvals.md",
+          "docs/course/concepts/skills-project-instructions.md"
         ],
         "artifacts": [
           "audio",
@@ -4525,7 +4529,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 17
+        "source_count": 19
       },
       {
         "id": "memory-rag-evaluation",
@@ -4533,6 +4537,7 @@
         "purpose": "Distinguish transient context, durable memory, retrieval, grounding, citations, and evaluation.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4561,7 +4566,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 18
+        "source_count": 19
       },
       {
         "id": "reliability-operations",
@@ -4569,10 +4574,12 @@
         "purpose": "Understand failure containment, delegation, MCP, observability, and local operations.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
           "docs/course/README.md",
+          "docs/architecture/skills-project-instructions.md",
           "docs/CI-PIPELINES-AND-LOCAL-RUN.md",
           "docs/DR-RUNBOOK.md",
           "docs/course/modules/10-resilience/README.md",
@@ -4591,7 +4598,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 12
+        "source_count": 14
       },
       {
         "id": "interview-demo",
@@ -4599,6 +4606,7 @@
         "purpose": "Practice concise, credible explanations without overstating implementation evidence.",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
           "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
           "docs/REMAINING-DEFERRED-GAPS.md",
           "docs/ARCHITECTURE-DIAGRAMS.md",
@@ -4619,7 +4627,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 10
+        "source_count": 11
       }
     ],
     "promptbook_href": "https://github.com/levalencia/archon/blob/main/docs/visual-learning/notebooklm-promptbook.md",

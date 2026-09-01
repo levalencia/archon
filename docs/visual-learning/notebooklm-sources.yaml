@@ -1,6 +1,7 @@
 version: 1
 source_priority:
   - docs/IMPLEMENTATION-EVIDENCE.md
+  - docs/evidence/skills-project-instructions-implementation.md
   - docs/implementation/CAPABILITY-ACCEPTANCE.yaml
   - docs/REMAINING-DEFERRED-GAPS.md
   - docs/ARCHITECTURE-DIAGRAMS.md
@@ -14,6 +15,7 @@ notebooks:
       - README.md
       - docs/ARCHITECTURE-DIAGRAMS.md
       - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/evidence/skills-project-instructions-implementation.md
       - docs/REMAINING-DEFERRED-GAPS.md
       - docs/course/README.md
       - docs/course/concept-map.md
@@ -27,6 +29,7 @@ notebooks:
     sources:
       - docs/ARCHITECTURE-DIAGRAMS.md
       - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/evidence/skills-project-instructions-implementation.md
       - docs/course/modules/00-agent-anatomy/README.md
       - docs/course/modules/02-typed-runtime/README.md
       - docs/course/modules/03-react-loop/README.md
@@ -39,6 +42,7 @@ notebooks:
       - docs/course/concepts/tool-contracts.md
       - docs/course/concepts/policy-engine.md
       - docs/course/concepts/durable-approvals.md
+      - docs/course/concepts/skills-project-instructions.md
     artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: memory-rag-evaluation
@@ -68,6 +72,8 @@ notebooks:
     sources:
       - docs/ARCHITECTURE-DIAGRAMS.md
       - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/evidence/skills-project-instructions-implementation.md
+      - docs/architecture/skills-project-instructions.md
       - docs/REMAINING-DEFERRED-GAPS.md
       - docs/CI-PIPELINES-AND-LOCAL-RUN.md
       - docs/DR-RUNBOOK.md
@@ -85,6 +91,7 @@ notebooks:
       - README.md
       - docs/ARCHITECTURE-DIAGRAMS.md
       - docs/IMPLEMENTATION-EVIDENCE.md
+      - docs/evidence/skills-project-instructions-implementation.md
       - docs/REMAINING-DEFERRED-GAPS.md
       - docs/course/tracks/interview-preparation.md
       - docs/course/reference/code-bookmarks.md
