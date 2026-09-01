@@ -13,6 +13,7 @@ export type SkillCatalogItem = {
   risk_classes: string[];
   /** Forward-compatible: required for binding once the catalog exposes it. */
   revision_id?: string;
+  revision_owner_id?: string;
   source_revision?: string;
   source_path?: string;
 };
@@ -41,10 +42,10 @@ export async function listEffectiveSkills(projectId: string): Promise<SkillCatal
   const result = await request<{ items?: SkillCatalogItem[] }>(`/api/skills/projects/${encodeURIComponent(projectId)}/effective`);
   return Array.isArray(result.items) ? result.items : [];
 }
-export const bindSkill = (projectId: string, packageId: string, revisionId: string, enabled: boolean, pinned: boolean) =>
+export const bindSkill = (projectId: string, packageId: string, revisionId: string, revisionOwnerId: string | undefined, enabled: boolean, pinned: boolean) =>
   request<SkillCatalogItem>(`/api/skills/projects/${encodeURIComponent(projectId)}/${encodeURIComponent(packageId)}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ revision_id: revisionId, enabled, pinned }),
+    body: JSON.stringify({ revision_id: revisionId, revision_owner_id: revisionOwnerId, enabled, pinned }),
   });
 export const requestSkillInstall = (input: SkillInstallRequest) => request<SkillCatalogItem>('/api/skills/install-requests', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },

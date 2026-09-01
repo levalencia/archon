@@ -9,7 +9,7 @@
   async function update(item: SkillCatalogItem, enabled: boolean, pinned: boolean){
     if (!item.revision_id) return;
     busy=item.id; error='';
-    try { const next=await bindSkill(projectId,item.id,item.revision_id,enabled,pinned); skills=skills.map(s=>s.id===item.id?{...s,...next}:s); }
+    try { const next=await bindSkill(projectId,item.id,item.revision_id,item.revision_owner_id,enabled,pinned); skills=skills.map(s=>s.id===item.id?{...s,...next}:s); }
     catch(e){error=e instanceof Error?e.message:'Update failed';} finally{busy='';}
   }
   $effect(()=>{ projectId; queueMicrotask(()=>void load()); });

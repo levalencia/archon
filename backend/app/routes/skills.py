@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.security.auth import get_current_user, require_admin
 from app.security.dependencies import enforce_rate_limit
+from app.skills.bundled import ARCHON_OWNER_ID
 from app.skills.installer import PinnedSkillSource, SkillInstallationService, SkillSourceError
 from app.skills.parser import parse_skill_markdown
 from app.skills.persistence import SkillNotFoundError, SkillRepository
@@ -34,6 +35,8 @@ class StrictModel(BaseModel):
 
 class CatalogItem(StrictModel):
     id: str
+    revision_id: str | None = None
+    revision_owner_id: str | None = None
     name: str
     description: str
     kind: str = "skill"
@@ -66,6 +69,7 @@ class SkillCreateRequest(StrictModel):
 
 class BindingRequest(StrictModel):
     revision_id: str = Field(min_length=1, max_length=64)
+    revision_owner_id: str | None = Field(default=None, min_length=1, max_length=255)
     enabled: bool = True
     pinned: bool = True
 
@@ -85,30 +89,34 @@ def _repo(request: Request) -> SkillRepository:
 async def _items(
     request: Request, owner_id: str, project_id: str | None = None, query: str = ""
 ) -> list[CatalogItem]:
-    rows = await _repo(request).list_catalog(owner_id=owner_id, query=query)
+    catalogs = [
+        *(await _repo(request).list_catalog(owner_id=owner_id, query=query)),
+        *(await _repo(request).list_catalog(owner_id=ARCHON_OWNER_ID, query=query)),
+    ]
+    selected_revision_ids = (
+        set()
+        if project_id is None
+        else set(await _repo(request).list_pin_ids(owner_id=owner_id, project_id=project_id))
+    )
     result: list[CatalogItem] = []
-    for package, revision in rows:
-        binding = (
-            None
-            if project_id is None
-            else await _repo(request).binding(
-                owner_id=owner_id, project_id=project_id, package_id=package.id
-            )
-        )
+    for package, revision in catalogs:
+        enabled = revision.id in selected_revision_ids
         result.append(
             CatalogItem(
                 id=package.id,
+                revision_id=revision.id,
+                revision_owner_id=revision.owner_id,
                 name=package.name,
                 description=revision.description,
                 source=revision.source_url,
                 version=revision.declared_version,
                 trust_state=revision.review_state,
-                enabled=bool(binding and binding.enabled and revision.review_state == "approved"),
-                pinned=bool(binding and binding.revision_id == revision.id),
+                enabled=enabled,
+                pinned=enabled,
                 risk_classes=["read"],
             )
         )
-    return result
+    return sorted(result, key=lambda item: (item.name, item.revision_owner_id or ""))
 
 
 @router.get("", response_model=list[CatalogItem])
@@ -119,24 +127,7 @@ async def catalog(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> list[CatalogItem]:
     await _limit(request, user, "read")
-    durable = await _items(request, user["user_id"], project_id)
-    # Built-ins are immutable catalog entries; no mutable process-global registry is used.
-    if project_id is None:
-        durable.extend(
-            CatalogItem(
-                id=f"builtin:{x['name']}",
-                name=x["name"],
-                description=x["description"],
-                source="builtin",
-                version="1",
-                trust_state="verified",
-                enabled=True,
-                pinned=False,
-                risk_classes=["read"],
-            )
-            for x in create_default_skills().list_all()
-        )
-    return durable
+    return await _items(request, user["user_id"], project_id)
 
 
 @router.post("/search", response_model=list[CatalogItem])
@@ -313,17 +304,25 @@ async def bind(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> CatalogItem:
     await _limit(request, user, "write")
+    revision_owner_id = body.revision_owner_id or user["user_id"]
+    if revision_owner_id not in {user["user_id"], ARCHON_OWNER_ID}:
+        raise HTTPException(403, detail={"code": "skill_owner_forbidden"})
     try:
         revision = await _repo(request).get_revision(
-            owner_id=user["user_id"], package_id=package_id, revision_id=body.revision_id
+            owner_id=revision_owner_id,
+            package_id=package_id,
+            revision_id=body.revision_id,
         )
         if revision.review_state != "approved" and body.enabled:
             raise HTTPException(409, detail={"code": "skill_not_approved"})
+        if revision_owner_id == ARCHON_OWNER_ID and revision.trust_state != "verified":
+            raise HTTPException(409, detail={"code": "bundled_skill_not_verified"})
         await _repo(request).bind(
             owner_id=user["user_id"],
             project_id=project_id,
             package_id=package_id,
             revision_id=body.revision_id,
+            revision_owner_id=revision_owner_id,
             enabled=body.enabled,
         )
     except SkillNotFoundError:

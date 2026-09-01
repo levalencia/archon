@@ -61,7 +61,9 @@ def test_instruction_and_capability_apis_are_scoped_and_restart_safe(tmp_path: P
         assert approved.json()["trust_state"] == "approved"
         assert client.get("/api/projects/shared/instructions/revisions", headers=other).json() == []
 
-        found = client.post("/api/capabilities/search", json={"query": "research"}, headers=admin)
+        found = client.post(
+            "/api/capabilities/search", json={"query": "code-review"}, headers=admin
+        )
         assert found.status_code == 200
         capability = found.json()[0]
         assert set(capability) == {
@@ -99,6 +101,47 @@ def test_instruction_and_capability_apis_are_scoped_and_restart_safe(tmp_path: P
         )
         assert effective.status_code == 200
         assert effective.json()["summary"]["pinned"] == 1
+
+
+def test_bundled_skill_catalog_binding_is_revision_pinned_and_restart_safe(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "skills-catalog.db"
+    settings = _settings(database, admin_usernames=["admin"])
+    app = create_app(settings)
+    with TestClient(app) as client:
+        admin = _register(client, "admin")
+        catalog_response = client.get("/api/skills/catalog?project_id=project-a", headers=admin)
+        assert catalog_response.status_code == 200
+        catalog = catalog_response.json()
+        assert len(catalog) >= 10
+        review = next(item for item in catalog if item["name"] == "code-review")
+        assert review["revision_id"]
+        assert review["revision_owner_id"] == "archon"
+
+        bound = client.put(
+            f"/api/skills/projects/project-a/{review['id']}",
+            json={
+                "revision_id": review["revision_id"],
+                "revision_owner_id": review["revision_owner_id"],
+                "enabled": True,
+                "pinned": True,
+            },
+            headers=admin,
+        )
+        assert bound.status_code == 200
+        assert bound.json()["enabled"] is True
+        assert bound.json()["revision_id"] == review["revision_id"]
+
+    restarted = create_app(settings)
+    with TestClient(restarted) as client:
+        login = client.post(
+            "/api/auth/login", json={"username": "admin", "password": "StrongPass123!"}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        effective = client.get("/api/skills/projects/project-a/effective", headers=headers)
+        assert effective.status_code == 200
+        assert [item["name"] for item in effective.json()["items"]] == ["code-review"]
 
 
 def test_mcp_profiles_bootstrap_strictly_and_hide_configuration(tmp_path: Path) -> None:
