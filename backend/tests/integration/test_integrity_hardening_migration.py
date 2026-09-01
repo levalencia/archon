@@ -124,6 +124,14 @@ def test_revision_owner_fences_defaults_and_complete_immutability(
     engine.dispose()
 
 
+def test_postgresql_migration_runner_uses_session_advisory_lock() -> None:
+    backend = Path(__file__).parents[2]
+    source = (backend / "alembic" / "env.py").read_text(encoding="utf-8")
+    assert "pg_advisory_lock" in source
+    assert "pg_advisory_unlock" in source
+    assert "finally:" in source
+
+
 def test_postgresql_schema_compiles_owner_fences_and_false_default() -> None:
     dialect = postgresql.dialect()
     reference = str(CreateTable(SkillReferenceRow.__table__).compile(dialect=dialect))
