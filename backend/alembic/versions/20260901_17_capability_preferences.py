@@ -1,8 +1,8 @@
 # ruff: noqa: E501
 """Capability preferences and governed skill review transitions.
 
-Revision ID: 20260901_16
-Revises: 20260901_15
+Revision ID: 20260901_17
+Revises: 20260901_16
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "20260901_16"
-down_revision: str | None = "20260901_15"
+revision: str = "20260901_17"
+down_revision: str | None = "20260901_16"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
