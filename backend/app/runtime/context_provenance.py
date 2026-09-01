@@ -99,6 +99,23 @@ def _hash(value: str, label: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class CapabilityContextRef:
+    capability_id: str
+    name: str
+    permission: str
+    reason: str
+    schema_hash: str
+
+    def __post_init__(self) -> None:
+        _text(self.capability_id, "capability_id", 255)
+        _text(self.name, "capability name", 255)
+        if self.permission not in {"allow", "ask"}:
+            raise ValueError("provider-visible capability permission must be allow or ask")
+        _text(self.reason, "capability reason", 255)
+        _hash(self.schema_hash, "capability schema_hash")
+
+
+@dataclass(frozen=True, slots=True)
 class EffectiveContextManifest:
     owner_id: str
     project_id: str
@@ -110,6 +127,7 @@ class EffectiveContextManifest:
     skill_ids: tuple[str, ...] = ()
     instruction_revisions: tuple[InstructionRevisionRef, ...] = ()
     skill_revisions: tuple[SkillRevisionRef, ...] = ()
+    capability_references: tuple[CapabilityContextRef, ...] = ()
     selected_capability_ids: tuple[str, ...] = ()
     rejected_capability_ids: tuple[str, ...] = ()
     context_cost_bytes: int = 0
@@ -144,6 +162,7 @@ class EffectiveContextManifest:
         object.__setattr__(self, "skill_ids", _unique_text(tuple(self.skill_ids), "skill_ids", 100))
         object.__setattr__(self, "instruction_revisions", tuple(self.instruction_revisions))
         object.__setattr__(self, "skill_revisions", tuple(self.skill_revisions))
+        object.__setattr__(self, "capability_references", tuple(self.capability_references))
         object.__setattr__(
             self,
             "selected_capability_ids",
@@ -218,6 +237,16 @@ class EffectiveContextManifest:
                     "reasons": list(item.reasons),
                 }
                 for item in self.skill_revisions
+            ],
+            "capability_references": [
+                {
+                    "capability_id": item.capability_id,
+                    "name": item.name,
+                    "permission": item.permission,
+                    "reason": item.reason,
+                    "schema_hash": item.schema_hash,
+                }
+                for item in self.capability_references
             ],
             "selected_capability_ids": list(self.selected_capability_ids),
             "rejected_capability_ids": list(self.rejected_capability_ids),

@@ -336,8 +336,14 @@ async def get_run_effective_context(
             for item in snapshot.skill_revisions
         ],
         "capabilities": [
-            {"id": item, "name": item, "permission": "allow", "reason": "selected"}
-            for item in snapshot.selected_capability_ids
+            {
+                "id": item.capability_id,
+                "name": item.name,
+                "permission": item.permission,
+                "reason": item.reason,
+                "schema_hash": item.schema_hash,
+            }
+            for item in snapshot.capability_references
         ],
         "context_cost": {
             "estimated_tokens": snapshot.estimated_tokens,

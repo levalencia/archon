@@ -328,6 +328,7 @@ class ContextSnapshotRow(Base):
     skill_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     instruction_revisions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     skill_revisions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    capability_references_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     selected_capability_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     rejected_capability_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     context_cost_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
@@ -1181,8 +1182,8 @@ class DatabaseStore:
                 revisions = tuple(result.scalars())
             except Exception as exc:
                 raise RuntimeError("database schema is not managed by Alembic") from exc
-        if revisions != ("20260901_20",):
-            raise RuntimeError("database schema is not at expected Alembic head 20260901_20")
+        if revisions != ("20260901_21",):
+            raise RuntimeError("database schema is not at expected Alembic head 20260901_21")
         logger.info("database_schema_verified", alembic_revision=revisions[0])
 
     @property

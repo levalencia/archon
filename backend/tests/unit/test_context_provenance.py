@@ -10,7 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.runtime.context import build_effective_context, derive_context_asset_hmac_key
-from app.runtime.context_provenance import EffectiveContext, EffectiveContextManifest
+from app.runtime.context_provenance import (
+    CapabilityContextRef,
+    EffectiveContext,
+    EffectiveContextManifest,
+)
 from app.runtime.models import Message, Role
 from app.runtime.support import compact_effective_context
 from app.security.persistence_redactor import PersistenceRedactor
@@ -189,6 +193,16 @@ async def test_repository_is_idempotent_scoped_and_stores_no_content(tmp_path) -
         selected_message_ids=(11, 12),
         memory_ids=("memory-1",),
         skill_ids=("skill-1",),
+        capability_references=(
+            CapabilityContextRef(
+                capability_id="native.read_file",
+                name="read_file",
+                permission="allow",
+                reason="provider_visible_after_scope_policy",
+                schema_hash="a" * 64,
+            ),
+        ),
+        selected_capability_ids=("native.read_file",),
         estimated_tokens=50,
     )
 
@@ -217,6 +231,7 @@ async def test_repository_is_idempotent_scoped_and_stores_no_content(tmp_path) -
                 row.summarized_message_ids_json,
                 row.memory_ids_json,
                 row.skill_ids_json,
+                row.capability_references_json,
                 row.manifest_hash,
             ]
         )

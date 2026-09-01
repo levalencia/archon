@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
 from app.capabilities.models import PermissionDecision
 from app.capabilities.persistence import CapabilityPreferenceRepository
 from app.runtime.context import derive_context_asset_hmac_key
-from app.runtime.context_provenance import EffectiveContext
+from app.runtime.context_provenance import CapabilityContextRef, EffectiveContext
 from app.runtime.support import compact_effective_context, prepare_effective_context
 from app.services.context_snapshots import ContextSnapshotRepository
 from app.skills.context import EffectiveContextEnrichmentService
 from app.skills.discovery import DiscoveryRequest, SkillDiscoveryService
+
+
+def _plain_json(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _plain_json(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_plain_json(item) for item in value]
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,13 +127,46 @@ class RequestContextPreparationService:
             current_message_id=current_message_id,
             asset_hmac_key=derive_context_asset_hmac_key(application_secret),
         )
+        capability_references: list[CapabilityContextRef] = []
+        for definition in tools.definitions():
+            tool = tools.get_tool(definition.name)
+            if tool is None:
+                continue
+            schema_document = json.dumps(
+                _plain_json(definition.input_schema),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+            capability_references.append(
+                CapabilityContextRef(
+                    capability_id=str(tool.capability_id or definition.name),
+                    name=definition.name,
+                    permission="ask" if tool.requires_approval else "allow",
+                    reason=(
+                        "provider_visible_requires_approval"
+                        if tool.requires_approval
+                        else "provider_visible_after_scope_policy"
+                    ),
+                    schema_hash=hashlib.sha256(schema_document).hexdigest(),
+                )
+            )
+        selected_capability_ids = tuple(
+            dict.fromkeys(
+                (
+                    *enriched.manifest.selected_capability_ids,
+                    *(item.capability_id for item in capability_references),
+                )
+            )
+        )
         effective = replace(
             effective,
             manifest=replace(
                 effective.manifest,
                 instruction_revisions=enriched.manifest.instruction_revisions,
                 skill_revisions=enriched.manifest.skill_revisions,
-                selected_capability_ids=enriched.manifest.selected_capability_ids,
+                capability_references=tuple(capability_references),
+                selected_capability_ids=selected_capability_ids,
                 rejected_capability_ids=enriched.manifest.rejected_capability_ids,
                 context_cost_bytes=enriched.manifest.context_cost_bytes,
             ),

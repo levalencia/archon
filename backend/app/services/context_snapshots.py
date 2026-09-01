@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.runtime.context_provenance import (
+    CapabilityContextRef,
     EffectiveContextManifest,
     InstructionRevisionRef,
     SkillRevisionRef,
@@ -81,6 +82,18 @@ class ContextSnapshotRepository:
                         "reasons": list(item.reasons),
                     }
                     for item in manifest.skill_revisions
+                ]
+            ),
+            "capability_references_json": _json(
+                [
+                    {
+                        "capability_id": item.capability_id,
+                        "name": item.name,
+                        "permission": item.permission,
+                        "reason": item.reason,
+                        "schema_hash": item.schema_hash,
+                    }
+                    for item in manifest.capability_references
                 ]
             ),
             "selected_capability_ids_json": _json(manifest.selected_capability_ids),
@@ -179,6 +192,16 @@ class ContextSnapshotRepository:
                     tuple(item["reasons"]),
                 )
                 for item in json.loads(row.skill_revisions_json)
+            ),
+            capability_references=tuple(
+                CapabilityContextRef(
+                    capability_id=str(item["capability_id"]),
+                    name=str(item["name"]),
+                    permission=str(item["permission"]),
+                    reason=str(item["reason"]),
+                    schema_hash=str(item["schema_hash"]),
+                )
+                for item in json.loads(row.capability_references_json)
             ),
             selected_capability_ids=cast(
                 tuple[str, ...], _decode_ids(row.selected_capability_ids_json, integers=False)
