@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
+import app.instructions.loaders as loaders
 from app.instructions.loaders import (
     InstructionFamily,
     InstructionLimits,
@@ -119,3 +121,34 @@ def test_enforces_file_depth_total_bytes_and_directory_depth(tmp_path: Path) -> 
         load_project_instructions(
             tmp_path, "a/b/c/d.py", limits=InstructionLimits(max_directory_depth=2)
         )
+
+
+def test_rejects_hardlinked_instruction_source(tmp_path: Path) -> None:
+    source = tmp_path / "source.md"
+    _write(source, "shared inode")
+    target = tmp_path / ".archon/instructions.md"
+    target.parent.mkdir()
+    os.link(source, target)
+
+    with pytest.raises(InstructionLoadError, match="hardlinks"):
+        load_project_instructions(tmp_path, ".")
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO is POSIX-only")
+def test_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    target = tmp_path / ".archon/instructions.md"
+    target.parent.mkdir()
+    os.mkfifo(target)
+
+    with pytest.raises(InstructionLoadError, match="regular file"):
+        load_project_instructions(tmp_path, ".")
+
+
+def test_fails_closed_without_descriptor_relative_traversal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write(tmp_path / ".archon/instructions.md", "safe")
+    monkeypatch.setattr(loaders, "_SECURE_TRAVERSAL_AVAILABLE", False)
+
+    with pytest.raises(InstructionLoadError, match="secure workspace traversal"):
+        load_project_instructions(tmp_path, ".")
