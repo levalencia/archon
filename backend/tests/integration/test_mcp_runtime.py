@@ -86,7 +86,11 @@ async def _real_provider(
     )
     inventory = MCPInventoryService(repository, profiles={"official-test": profile})
     server = await inventory.create_server(
-        owner_id="alice", project_id="one", name="Official Server", profile_id="official-test"
+        owner_id="alice",
+        project_id="one",
+        name="Official Server",
+        profile_id="official-test",
+        enabled=True,
     )
     tools = await inventory.discover(owner_id="alice", project_id="one", server_id=server.id)
     echo = next(tool for tool in tools if tool.name == "echo_evidence")
@@ -180,7 +184,7 @@ async def test_scope_filter_risks_disable_toctou_and_schema_rejection(tmp_path: 
         repository, profiles={"safe": profile}, client_factory=lambda _profile: client
     )
     server = await repository.create(
-        owner_id="alice", project_id="one", name="same/name", profile_id="safe"
+        owner_id="alice", project_id="one", name="same/name", profile_id="safe", enabled=True
     )
     descriptors = (
         ToolDescriptor(
@@ -245,7 +249,7 @@ async def test_metadata_first_selection_never_parses_irrelevant_invalid_schema(
     profile = ServerProfile(command=sys.executable)
     provider = MCPRuntimeToolProvider(repository, profiles={"safe": profile})
     server = await repository.create(
-        owner_id="alice", project_id="one", name="utilities", profile_id="safe"
+        owner_id="alice", project_id="one", name="utilities", profile_id="safe", enabled=True
     )
     tools = await repository.replace_inventory(
         owner_id="alice",
@@ -317,4 +321,54 @@ async def test_metadata_first_selection_never_parses_irrelevant_invalid_schema(
     )
     async with store.session_factory() as session:
         assert not await session.scalar(select(MCPToolRow.enabled).where(MCPToolRow.id == bad.id))
+    await store.close()
+
+
+@pytest.mark.asyncio
+async def test_schema_budget_counts_serialized_schema_bytes(tmp_path: Path) -> None:
+    store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'schema-budget.db'}")
+    await store.initialize()
+    repository = MCPRepository(store.session_factory)
+    profile = ServerProfile(command=sys.executable)
+    provider = MCPRuntimeToolProvider(repository, profiles={"safe": profile})
+    server = await repository.create(
+        owner_id="alice", project_id="one", name="large", profile_id="safe", enabled=True
+    )
+    tools = await repository.replace_inventory(
+        owner_id="alice",
+        project_id="one",
+        server_id=server.id,
+        tools=(
+            ToolDescriptor(
+                "search_large",
+                "Search large",
+                "Search a large catalog",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "enum": ["x" * 4096]},
+                    },
+                },
+                True,
+                False,
+                "1",
+            ),
+        ),
+    )
+    await repository.set_tool_enabled(
+        owner_id="alice", project_id="one", server_id=server.id, tool_id=tools[0].id, enabled=True
+    )
+    await repository.update_health(
+        owner_id="alice", project_id="one", server_id=server.id, health=MCPHealth.HEALTHY
+    )
+
+    excluded = await provider.for_scope(
+        "alice", "one", intent="search large", schema_context_budget=1024
+    )
+    admitted = await provider.for_scope(
+        "alice", "one", intent="search large", schema_context_budget=8192
+    )
+
+    assert excluded == ()
+    assert [item.name for item in admitted] == ["mcp_large_search_large"]
     await store.close()

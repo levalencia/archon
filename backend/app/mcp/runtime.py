@@ -410,6 +410,7 @@ class MCPRuntimeToolProvider:
         candidates: list[
             tuple[MCPServerRecord, MCPToolMetadataRecord, MCPToolRecord, dict[str, Any]]
         ] = []
+        actual_schema_bytes = 0
         for server, metadata in selected:
             try:
                 loaded = await self._repository.load_tools(
@@ -434,6 +435,16 @@ class MCPRuntimeToolProvider:
                     tool_id=metadata.id,
                 )
                 continue
+            schema_bytes = len(
+                json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            )
+            description_bytes = len(
+                (loaded_tool.description or loaded_tool.title or loaded_tool.name).encode("utf-8")
+            )
+            admission_cost = schema_bytes + description_bytes
+            if actual_schema_bytes + admission_cost > schema_context_budget:
+                continue
+            actual_schema_bytes += admission_cost
             candidates.append((server, metadata, loaded_tool, schema))
 
         bases = [_base_name(server, tool) for server, _metadata, tool, _schema in candidates]
