@@ -17,9 +17,13 @@ pytestmark = pytest.mark.unit
 
 @pytest.mark.asyncio
 async def test_bundled_bootstrap_is_strict_idempotent_and_restart_safe(tmp_path: Path) -> None:
-    assert len(bundled_skills()) == 10
-    assert all(x.parsed.triggers and x.parsed.negative_triggers for x in bundled_skills())
-    assert all(x.parsed.required_capability_ids for x in bundled_skills())
+    catalog = bundled_skills()
+    assert len(catalog) == 10
+    assert all(x.parsed.triggers and x.parsed.negative_triggers for x in catalog)
+    assert all(x.parsed.required_capability_ids for x in catalog)
+    checklists = [next(iter(item.references.values())) for item in catalog]
+    assert all(len(checklist.encode("utf-8")) >= 500 for checklist in checklists)
+    assert len(set(checklists)) == len(checklists)
     url = f"sqlite+aiosqlite:///{tmp_path / 'bundled.db'}"
     store = DatabaseStore(url)
     await store.initialize()
