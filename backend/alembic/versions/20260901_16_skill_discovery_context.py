@@ -3,11 +3,13 @@
 Revision ID: 20260901_16
 Revises: 20260901_15
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260901_16"
@@ -19,11 +21,17 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     with op.batch_alter_table("skill_revisions") as batch:
         batch.add_column(sa.Column("triggers_json", sa.Text(), nullable=False, server_default="[]"))
-        batch.add_column(sa.Column("negative_triggers_json", sa.Text(), nullable=False, server_default="[]"))
         batch.add_column(
-            sa.Column("required_capability_ids_json", sa.Text(), nullable=False, server_default="[]")
+            sa.Column("negative_triggers_json", sa.Text(), nullable=False, server_default="[]")
         )
-        batch.add_column(sa.Column("context_cost", sa.Integer(), nullable=False, server_default="0"))
+        batch.add_column(
+            sa.Column(
+                "required_capability_ids_json", sa.Text(), nullable=False, server_default="[]"
+            )
+        )
+        batch.add_column(
+            sa.Column("context_cost", sa.Integer(), nullable=False, server_default="0")
+        )
     op.create_table(
         "skill_references",
         sa.Column(
@@ -72,10 +80,14 @@ def upgrade() -> None:
             sa.Column("skill_revisions_json", sa.Text(), nullable=False, server_default="[]")
         )
         batch.add_column(
-            sa.Column("selected_capability_ids_json", sa.Text(), nullable=False, server_default="[]")
+            sa.Column(
+                "selected_capability_ids_json", sa.Text(), nullable=False, server_default="[]"
+            )
         )
         batch.add_column(
-            sa.Column("rejected_capability_ids_json", sa.Text(), nullable=False, server_default="[]")
+            sa.Column(
+                "rejected_capability_ids_json", sa.Text(), nullable=False, server_default="[]"
+            )
         )
         batch.add_column(
             sa.Column("context_cost_bytes", sa.BigInteger(), nullable=False, server_default="0")

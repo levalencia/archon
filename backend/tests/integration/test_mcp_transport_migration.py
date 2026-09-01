@@ -24,8 +24,7 @@ def test_transport_migration_is_linear_and_accepts_http(tmp_path: Path, monkeypa
     command.upgrade(config, "20260901_19")
     engine = create_engine(f"sqlite:///{database}")
     constraints = {
-        item["name"]: item
-        for item in inspect(engine).get_check_constraints("mcp_servers")
+        item["name"]: item for item in inspect(engine).get_check_constraints("mcp_servers")
     }
     assert "streamable_http" in constraints["ck_mcp_servers_transport"]["sqltext"]
     with engine.begin() as connection:

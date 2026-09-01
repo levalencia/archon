@@ -39,7 +39,7 @@ def test_effect_budget_migration_is_single_head_and_round_trips(
     monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
     database = tmp_path / "effect-budget.db"
     config = _config(database)
-    assert ScriptDirectory.from_config(config).get_heads() == ["20260828_14"]
+    assert ScriptDirectory.from_config(config).get_heads() == ["20260901_19"]
 
     command.upgrade(config, "20260826_08")
     engine = create_engine(f"sqlite:///{database}")

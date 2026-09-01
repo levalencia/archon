@@ -41,9 +41,7 @@ def test_remote_profile_requires_https_unless_loopback_is_explicitly_allowed() -
         RemoteServerProfile(url="http://mcp.example.test/rpc")
     with pytest.raises(ValueError, match="insecure_remote_url"):
         RemoteServerProfile(url="http://127.0.0.1:8765/rpc")
-    profile = RemoteServerProfile(
-        url="http://127.0.0.1:8765/rpc", allow_insecure_loopback=True
-    )
+    profile = RemoteServerProfile(url="http://127.0.0.1:8765/rpc", allow_insecure_loopback=True)
     assert profile.url == "http://127.0.0.1:8765/rpc"
 
 
@@ -77,9 +75,7 @@ def test_remote_client_resolves_credentials_only_at_client_creation() -> None:
         def __init__(self, **kwargs: object) -> None:
             captured.update(kwargs)
 
-    profile = RemoteServerProfile(
-        url="https://mcp.example.test/rpc", credential_ref="vault:mcp"
-    )
+    profile = RemoteServerProfile(url="https://mcp.example.test/rpc", credential_ref="vault:mcp")
     client = RemoteMCPClient(
         profile, credential_provider=credentials, http_client_factory=FakeHTTPClient
     )
