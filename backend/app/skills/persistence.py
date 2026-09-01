@@ -157,7 +157,9 @@ class SkillRepository:
                 source_url=source_url,
                 source_revision=source_revision,
                 trust_state=trust_state,
-                review_state=review_state,
+                review_state=(
+                    "pending" if review_state == "approved" and reference_contents else review_state
+                ),
                 created_at=now,
             )
             session.add(row)
@@ -180,6 +182,9 @@ class SkillRepository:
                         )
                     )
                 await session.flush()
+                if row.review_state != review_state:
+                    row.review_state = review_state
+                    await session.flush()
             except IntegrityError as exc:
                 raise SkillConflictError("concurrent skill revision conflict") from exc
             return InstalledSkill(
