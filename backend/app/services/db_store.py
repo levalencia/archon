@@ -994,6 +994,28 @@ class ProjectSkillBindingRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class ProjectCapabilityPreferenceRow(Base):
+    """Durable owner/project pin and enable policy for indexed capabilities."""
+
+    __tablename__ = "project_capability_preferences"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_id", "project_id"],
+            ["project_workspaces.owner_id", "project_workspaces.project_id"],
+            ondelete="CASCADE",
+            name="fk_capability_preference_workspace",
+        ),
+        Index("ix_capability_preferences_scope", "owner_id", "project_id"),
+    )
+    owner_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    capability_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)
+    pinned: Mapped[bool] = mapped_column(nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class MCPServerRow(Base):
     """Safe durable MCP configuration (deployment profiles hold process details)."""
 

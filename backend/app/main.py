@@ -19,6 +19,9 @@ from fastapi.responses import JSONResponse
 load_dotenv()
 
 from app.agents.llm_factory import create_llm_client
+from app.capabilities.index import CapabilityIndex
+from app.capabilities.models import CapabilityDescriptor
+from app.capabilities.persistence import CapabilityPreferenceRepository
 from app.config import Settings, get_settings
 from app.delegation import (
     DelegationEnvelopeService,
@@ -29,8 +32,10 @@ from app.eval.candidates import OptimizationCandidateService
 from app.eval.drift import DriftService
 from app.eval.persistence import EvaluationRepository
 from app.eval.service import EvaluationService
+from app.mcp.client import CredentialProvider, create_mcp_client
+from app.mcp.config import load_mcp_profiles
 from app.mcp.inventory import MCPInventoryService
-from app.mcp.models import ServerProfile
+from app.mcp.models import MCPServerProfile
 from app.mcp.repository import MCPRepository
 from app.mcp.runtime import MCPRuntimeToolProvider
 from app.memory.keys import load_memory_keyring
@@ -44,6 +49,7 @@ from app.research.api import router as research_router
 from app.routes.admin import router as admin_router
 from app.routes.artifacts import router as artifacts_router
 from app.routes.auth import router as auth_router
+from app.routes.capabilities import router as capabilities_router
 from app.routes.chat import router as chat_router
 from app.routes.compliance import router as compliance_router
 from app.routes.conversations import router as conversations_router
@@ -54,6 +60,7 @@ from app.routes.log_stream import router as log_router
 from app.routes.mcp import router as mcp_router
 from app.routes.memory import router as memory_router
 from app.routes.multi_agent import router as multi_agent_router
+from app.routes.project_instructions import router as project_instructions_router
 from app.routes.red_team import router as red_team_router
 from app.routes.runs import router as runs_router
 from app.routes.sandbox import router as sandbox_router
@@ -82,6 +89,9 @@ from app.services.key_rotation import MemoryKeyRotationService
 from app.services.run_exports import RunExportService
 from app.services.sql_json_vector_store import SqlJsonVectorStore
 from app.services.task_queue import ClaimedJob, DurableJobQueue
+from app.skills.installer import HttpSkillFetcher, SkillInstallationService, SkillSourcePolicy
+from app.skills.persistence import ProjectInstructionRepository, SkillRepository
+from app.skills.registry import create_default_skills
 from app.tools.sandbox import SandboxExecutor
 from app.tools.sandbox_client import SandboxClientConfig, SandboxRunnerClient
 from app.workers.jobs import JobWorker, PermanentJobError, echo_handler
@@ -154,11 +164,44 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await repository.initialize()
     app.state.conversations = repository
     app.state.mcp_repository = MCPRepository(repository.session_factory)
+    app.state.skill_repository = SkillRepository(repository.session_factory)
+    app.state.instruction_repository = ProjectInstructionRepository(repository.session_factory)
+    app.state.skill_installer = SkillInstallationService(
+        app.state.skill_repository,
+        SkillSourcePolicy(
+            allowed_repositories=frozenset(
+                x.strip() for x in settings.skills_allowed_repositories.split(",") if x.strip()
+            )
+        ),
+        HttpSkillFetcher(),
+    )
+    app.state.capability_preferences = CapabilityPreferenceRepository(repository.session_factory)
+    app.state.capability_index = CapabilityIndex(
+        CapabilityDescriptor(
+            id=f"builtin-{skill.name}",
+            kind="skill",
+            name=skill.name,
+            description=skill.description,
+            tags=tuple(skill.tags),
+            context_cost=len(skill.content.encode("utf-8")),
+            version="1",
+            content_hash=None,
+        )
+        for skill in (
+            create_default_skills().get(name)
+            for name in ("research-assistant", "code-analysis", "data-extraction")
+        )
+        if skill is not None
+    )
+
+    def mcp_client_factory(profile: MCPServerProfile) -> Any:
+        return create_mcp_client(profile, credential_provider=app.state.mcp_credential_provider)
+
     app.state.mcp_inventory = MCPInventoryService(
-        app.state.mcp_repository, profiles=app.state.mcp_profiles
+        app.state.mcp_repository, client_factory=mcp_client_factory, profiles=app.state.mcp_profiles
     )
     app.state.mcp_runtime_tools = MCPRuntimeToolProvider(
-        app.state.mcp_repository, profiles=app.state.mcp_profiles
+        app.state.mcp_repository, client_factory=mcp_client_factory, profiles=app.state.mcp_profiles
     )
     app.state.evaluation_repository = EvaluationRepository(repository.session_factory)
     app.state.evaluation_service = EvaluationService(
@@ -315,12 +358,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app(
     settings: Settings | None = None,
     *,
-    mcp_profiles: Mapping[str, ServerProfile] | None = None,
+    mcp_profiles: Mapping[str, MCPServerProfile] | None = None,
     persistence_redactor_factory: Callable[[], PersistenceRedactor] = PersistenceRedactor,
     model_provider_factory: Callable[[Settings], object] = create_llm_client,
     sandbox_executor_factory: Callable[
         [SandboxClientConfig], SandboxExecutor
     ] = SandboxRunnerClient,
+    mcp_credential_provider: CredentialProvider | None = None,
 ) -> FastAPI:
     """Application factory. Accepts optional settings for testing."""
     if settings is None:
@@ -332,7 +376,9 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.settings = settings
-    app.state.mcp_profiles = dict(mcp_profiles or {})
+    app.state.mcp_credential_provider = mcp_credential_provider
+    configured_profiles = load_mcp_profiles(settings.mcp_profiles_json.get_secret_value())
+    app.state.mcp_profiles = dict(configured_profiles if mcp_profiles is None else mcp_profiles)
     app.state.persistence_redactor_factory = persistence_redactor_factory
     app.state.model_provider_factory = model_provider_factory
     app.state.sandbox_executor_factory = sandbox_executor_factory
@@ -367,6 +413,8 @@ def create_app(
     app.include_router(security_router)
     app.include_router(red_team_router)
     app.include_router(skills_router)
+    app.include_router(project_instructions_router)
+    app.include_router(capabilities_router)
     app.include_router(auth_router)
     app.include_router(artifacts_router)
     app.include_router(images_router)

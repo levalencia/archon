@@ -1,192 +1,349 @@
-"""Skills management API: list, search, import from GitHub, delete.
-
-GET    /api/skills              — List all registered skills
-POST   /api/skills/search       — Search skills by keyword
-POST   /api/skills/import       — Import a skill from a GitHub repo
-DELETE /api/skills/{name}       — Remove a skill
-GET    /api/skills/{name}       — Get full skill content
-"""
+# ruff: noqa: B008
+"""Durable owner/project-scoped skill catalog and governance API."""
 
 from __future__ import annotations
 
-import structlog
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from typing import Annotated, Any, cast
 
-from app.observability.logging import safe_value_metadata
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict, Field
+
 from app.security.auth import get_current_user, require_admin
-from app.skills.registry import Skill, SkillRegistry, create_default_skills
+from app.security.dependencies import enforce_rate_limit
+from app.skills.installer import PinnedSkillSource, SkillInstallationService, SkillSourceError
+from app.skills.parser import parse_skill_markdown
+from app.skills.persistence import SkillNotFoundError, SkillRepository
+from app.skills.registry import SkillRegistry, create_default_skills
 
-logger = structlog.get_logger()
-
-router = APIRouter(prefix="/api/skills", tags=["skills"], dependencies=[Depends(get_current_user)])
-
-# Module-level registry (shared with chat routes)
-_registry: SkillRegistry | None = None
+router = APIRouter(prefix="/api/skills", tags=["skills"])
 
 
 def get_skill_registry() -> SkillRegistry:
-    """Get or create the shared skill registry."""
-    global _registry
-    if _registry is None:
-        _registry = create_default_skills()
-    return _registry
+    """Compatibility adapter returning a fresh immutable built-in catalog."""
+    return create_default_skills()
 
 
-class SkillSearchRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=500)
-    limit: int = Field(default=5, ge=1, le=20)
+ProjectId = Annotated[
+    str, Field(min_length=1, max_length=255, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,254}$")
+]
 
 
-class SkillImportRequest(BaseModel):
-    repo: str = Field(
-        ...,
-        min_length=3,
-        description="GitHub repo in 'owner/repo' format",
-        examples=["mattpocock/skills"],
-    )
-    path: str = Field(
-        default="SKILL.md",
-        description="Path to SKILL.md in the repo",
-    )
-    branch: str = Field(default="main")
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
 
 
-class SkillCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    description: str = Field(..., min_length=1)
-    content: str = Field(..., min_length=1)
-    tags: list[str] = Field(default_factory=list)
-
-
-class SkillResponse(BaseModel):
+class CatalogItem(StrictModel):
+    id: str
     name: str
     description: str
-    source_url: str = ""
-    tags: list[str] = []
-    content_length: int = 0
+    kind: str = "skill"
+    source: str
+    version: str
+    trust_state: str
+    enabled: bool
+    pinned: bool
+    risk_classes: list[str]
 
 
-class SkillDetailResponse(BaseModel):
-    name: str
-    description: str
-    content: str
-    source_url: str = ""
-    tags: list[str] = []
+class SearchRequest(StrictModel):
+    query: str = Field(min_length=1, max_length=500)
+    project_id: ProjectId | None = None
+    limit: int = Field(default=20, ge=1, le=100)
 
 
-@router.get("", response_model=list[SkillResponse])
-async def list_skills() -> list[SkillResponse]:
-    """List all registered skills."""
-    registry = get_skill_registry()
-    return [SkillResponse(**s) for s in registry.list_all()]
+class InstallRequest(StrictModel):
+    repository: str = Field(min_length=3, max_length=255)
+    revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+    path: str = Field(default="SKILL.md", min_length=1, max_length=500)
 
 
-@router.get("/{name}", response_model=SkillDetailResponse)
-async def get_skill(name: str) -> SkillDetailResponse | dict:
-    """Get full skill content by name."""
-    registry = get_skill_registry()
-    skill = registry.get(name)
-    if not skill:
-        return {"error": f"Skill '{name}' not found"}
-    return SkillDetailResponse(
-        name=skill.name,
-        description=skill.description,
-        content=skill.content,
-        source_url=skill.source_url,
-        tags=skill.tags,
-    )
+class SkillCreateRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    description: str = Field(min_length=1, max_length=2000)
+    content: str = Field(min_length=1, max_length=262144)
+    tags: list[str] = Field(default_factory=list, max_length=64)
 
 
-@router.post("/search", response_model=list[SkillResponse])
-async def search_skills(body: SkillSearchRequest) -> list[SkillResponse]:
-    """Search skills by keyword."""
-    registry = get_skill_registry()
-    results = registry.search(body.query, limit=body.limit)
-    return [
-        SkillResponse(
-            name=s.name,
-            description=s.description,
-            source_url=s.source_url,
-            tags=s.tags,
-            content_length=len(s.content),
+class BindingRequest(StrictModel):
+    revision_id: str = Field(min_length=1, max_length=64)
+    enabled: bool = True
+    pinned: bool = True
+
+
+class ReviewRequest(StrictModel):
+    owner_id: str = Field(min_length=1, max_length=255)
+
+
+async def _limit(request: Request, user: dict[str, Any], action: str) -> None:
+    await enforce_rate_limit(request, user, f"skills_{action}")
+
+
+def _repo(request: Request) -> SkillRepository:
+    return cast(SkillRepository, request.app.state.skill_repository)
+
+
+async def _items(
+    request: Request, owner_id: str, project_id: str | None = None, query: str = ""
+) -> list[CatalogItem]:
+    rows = await _repo(request).list_catalog(owner_id=owner_id, query=query)
+    result: list[CatalogItem] = []
+    for package, revision in rows:
+        binding = (
+            None
+            if project_id is None
+            else await _repo(request).binding(
+                owner_id=owner_id, project_id=project_id, package_id=package.id
+            )
         )
-        for s in results
-    ]
+        result.append(
+            CatalogItem(
+                id=package.id,
+                name=package.name,
+                description=revision.description,
+                source=revision.source_url,
+                version=revision.declared_version,
+                trust_state=revision.review_state,
+                enabled=bool(binding and binding.enabled and revision.review_state == "approved"),
+                pinned=bool(binding and binding.revision_id == revision.id),
+                risk_classes=["read"],
+            )
+        )
+    return result
+
+
+@router.get("", response_model=list[CatalogItem])
+@router.get("/catalog", response_model=list[CatalogItem])
+async def catalog(
+    request: Request,
+    project_id: ProjectId | None = None,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[CatalogItem]:
+    await _limit(request, user, "read")
+    durable = await _items(request, user["user_id"], project_id)
+    # Built-ins are immutable catalog entries; no mutable process-global registry is used.
+    if project_id is None:
+        durable.extend(
+            CatalogItem(
+                id=f"builtin:{x['name']}",
+                name=x["name"],
+                description=x["description"],
+                source="builtin",
+                version="1",
+                trust_state="verified",
+                enabled=True,
+                pinned=False,
+                risk_classes=["read"],
+            )
+            for x in create_default_skills().list_all()
+        )
+    return durable
+
+
+@router.post("/search", response_model=list[CatalogItem])
+async def search(
+    body: SearchRequest, request: Request, user: dict[str, Any] = Depends(get_current_user)
+) -> list[CatalogItem]:
+    await _limit(request, user, "search")
+    return (await _items(request, user["user_id"], body.project_id, body.query))[: body.limit]
 
 
 @router.post(
-    "/import",
-    response_model=SkillResponse,
-    status_code=201,
+    "",
+    response_model=CatalogItem,
+    status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_admin)],
 )
-async def import_skill(body: SkillImportRequest) -> SkillResponse | dict:
-    """Import a skill from a GitHub repository.
-
-    Example: repo='mattpocock/skills', path='skills/engineering/tdd/SKILL.md'
-    """
-    registry = get_skill_registry()
-
-    logger.info(
-        "skill_import_started",
-        **safe_value_metadata("repo", body.repo),
-        **safe_value_metadata("path", body.path),
-        **safe_value_metadata("branch", body.branch),
+async def create_skill(
+    body: SkillCreateRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> CatalogItem:
+    await _limit(request, user, "admin")
+    markdown = (
+        f"---\nname: {body.name}\ndescription: {body.description}\n"
+        f"version: 1\ntags: [{', '.join(body.tags)}]\n---\n{body.content}"
+    )
+    parsed = parse_skill_markdown(markdown.encode("utf-8"))
+    installed = await _repo(request).install(
+        owner_id=user["user_id"],
+        parsed=parsed,
+        source_url="managed",
+        source_revision="managed",
+        trust_state="verified",
+        review_state="approved",
+    )
+    row = await _repo(request).get_revision(
+        owner_id=user["user_id"],
+        package_id=installed.package_id,
+        revision_id=installed.revision_id,
+    )
+    return CatalogItem(
+        id=installed.package_id,
+        name=body.name,
+        description=row.description,
+        source="managed",
+        version=row.declared_version,
+        trust_state=row.review_state,
+        enabled=False,
+        pinned=False,
+        risk_classes=["read"],
     )
 
-    skill = await registry.load_from_github(
-        repo=body.repo,
-        path=body.path,
-        branch=body.branch,
-    )
 
-    if not skill:
-        return {"error": f"Failed to import from {body.repo}/{body.path}"}
-
-    logger.info(
-        "skill_imported",
-        **safe_value_metadata("name", skill.name),
-        **safe_value_metadata("repo", body.repo),
-        content_length=len(skill.content),
-    )
-
-    return SkillResponse(
-        name=skill.name,
-        description=skill.description,
-        source_url=skill.source_url,
-        tags=skill.tags,
-        content_length=len(skill.content),
+@router.post("/install-requests", response_model=CatalogItem, status_code=status.HTTP_202_ACCEPTED)
+async def install(
+    body: InstallRequest, request: Request, user: dict[str, Any] = Depends(get_current_user)
+) -> CatalogItem:
+    await _limit(request, user, "install")
+    try:
+        installed = await cast(SkillInstallationService, request.app.state.skill_installer).install(
+            owner_id=user["user_id"],
+            source=PinnedSkillSource(body.repository, body.revision, body.path),
+        )
+        row = await _repo(request).get_revision(
+            owner_id=user["user_id"],
+            package_id=installed.package_id,
+            revision_id=installed.revision_id,
+        )
+    except SkillSourceError as error:
+        raise HTTPException(422, detail={"code": str(error)}) from None
+    return CatalogItem(
+        id=installed.package_id,
+        name=next(
+            package.name
+            for package, _ in await _repo(request).list_catalog(owner_id=user["user_id"])
+            if package.id == installed.package_id
+        ),
+        description=row.description,
+        source=row.source_url,
+        version=row.declared_version,
+        trust_state=row.review_state,
+        enabled=False,
+        pinned=False,
+        risk_classes=["read"],
     )
 
 
 @router.post(
-    "", response_model=SkillResponse, status_code=201, dependencies=[Depends(require_admin)]
+    "/{package_id}/revisions/{revision_id}/approve",
+    response_model=CatalogItem,
+    dependencies=[Depends(require_admin)],
 )
-async def create_skill(body: SkillCreateRequest) -> SkillResponse:
-    """Create a custom skill manually."""
-    registry = get_skill_registry()
-
-    skill = Skill(
-        name=body.name,
-        description=body.description,
-        content=body.content,
-        tags=body.tags,
+async def approve(
+    package_id: str,
+    revision_id: str,
+    body: ReviewRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> CatalogItem:
+    await _limit(request, user, "admin")
+    try:
+        row = await _repo(request).set_review_state(
+            owner_id=body.owner_id,
+            package_id=package_id,
+            revision_id=revision_id,
+            review_state="approved",
+        )
+    except SkillNotFoundError:
+        raise HTTPException(404, detail={"code": "skill_not_found"}) from None
+    package = next(
+        p
+        for p, r in await _repo(request).list_catalog(owner_id=body.owner_id)
+        if p.id == package_id
     )
-    registry.register(skill)
-
-    return SkillResponse(
-        name=skill.name,
-        description=skill.description,
-        tags=skill.tags,
-        content_length=len(skill.content),
+    return CatalogItem(
+        id=package.id,
+        name=package.name,
+        description=row.description,
+        source=row.source_url,
+        version=row.declared_version,
+        trust_state=row.review_state,
+        enabled=False,
+        pinned=False,
+        risk_classes=["read"],
     )
 
 
-@router.delete("/{name}", status_code=204, dependencies=[Depends(require_admin)])
-async def delete_skill(name: str) -> None:
-    """Remove a skill from the registry."""
-    registry = get_skill_registry()
-    if registry.get(name):
-        registry._skills.pop(name, None)
-        logger.info("skill_deleted", name=name)
+@router.post(
+    "/{package_id}/revisions/{revision_id}/revoke",
+    response_model=CatalogItem,
+    dependencies=[Depends(require_admin)],
+)
+async def revoke(
+    package_id: str,
+    revision_id: str,
+    body: ReviewRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> CatalogItem:
+    await _limit(request, user, "admin")
+    try:
+        row = await _repo(request).set_review_state(
+            owner_id=body.owner_id,
+            package_id=package_id,
+            revision_id=revision_id,
+            review_state="rejected",
+        )
+    except SkillNotFoundError:
+        raise HTTPException(404, detail={"code": "skill_not_found"}) from None
+    package = next(
+        p
+        for p, r in await _repo(request).list_catalog(owner_id=body.owner_id)
+        if p.id == package_id
+    )
+    return CatalogItem(
+        id=package.id,
+        name=package.name,
+        description=row.description,
+        source=row.source_url,
+        version=row.declared_version,
+        trust_state=row.review_state,
+        enabled=False,
+        pinned=False,
+        risk_classes=["read"],
+    )
+
+
+@router.put("/projects/{project_id}/{package_id}", response_model=CatalogItem)
+async def bind(
+    project_id: ProjectId,
+    package_id: str,
+    body: BindingRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> CatalogItem:
+    await _limit(request, user, "write")
+    try:
+        revision = await _repo(request).get_revision(
+            owner_id=user["user_id"], package_id=package_id, revision_id=body.revision_id
+        )
+        if revision.review_state != "approved" and body.enabled:
+            raise HTTPException(409, detail={"code": "skill_not_approved"})
+        await _repo(request).bind(
+            owner_id=user["user_id"],
+            project_id=project_id,
+            package_id=package_id,
+            revision_id=body.revision_id,
+            enabled=body.enabled,
+        )
+    except SkillNotFoundError:
+        raise HTTPException(404, detail={"code": "skill_not_found"}) from None
+    return next(x for x in await _items(request, user["user_id"], project_id) if x.id == package_id)
+
+
+@router.get("/projects/{project_id}/effective", response_model=dict[str, Any])
+async def effective(
+    project_id: ProjectId, request: Request, user: dict[str, Any] = Depends(get_current_user)
+) -> dict[str, Any]:
+    await _limit(request, user, "read")
+    items = await _items(request, user["user_id"], project_id)
+    enabled = [x for x in items if x.enabled]
+    return {
+        "project_id": project_id,
+        "items": enabled,
+        "summary": {
+            "enabled": len(enabled),
+            "pinned": sum(x.pinned for x in enabled),
+            "context_cost_bytes": 0,
+        },
+    }

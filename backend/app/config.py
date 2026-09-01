@@ -98,6 +98,9 @@ class Settings(BaseSettings):
 
     # Skills
     skills_top_k: int = 3
+    skills_allowed_repositories: str = ""
+    project_workspace_root: str = ""
+    mcp_profiles_json: SecretStr = SecretStr("")
     image_gen_provider: str = "mock"  # mock | together | openai
     image_gen_api_key: str = ""
 

@@ -142,6 +142,64 @@ class SkillRepository:
                 package.id, row.id, row.revision_number, row.content_hash, parsed.name
             )
 
+    async def list_catalog(
+        self, *, owner_id: str, query: str = ""
+    ) -> list[tuple[SkillPackageRow, SkillRevisionRow]]:
+        """Return latest owner revisions without exposing content."""
+        async with self._sessions() as session:
+            packages = list(
+                await session.scalars(
+                    select(SkillPackageRow)
+                    .where(SkillPackageRow.owner_id == owner_id)
+                    .order_by(SkillPackageRow.name)
+                )
+            )
+            result: list[tuple[SkillPackageRow, SkillRevisionRow]] = []
+            term = query.casefold().strip()
+            for package in packages:
+                revision = await session.scalar(
+                    select(SkillRevisionRow)
+                    .where(
+                        SkillRevisionRow.package_id == package.id,
+                        SkillRevisionRow.owner_id == owner_id,
+                    )
+                    .order_by(SkillRevisionRow.revision_number.desc())
+                    .limit(1)
+                )
+                if revision is not None and (
+                    not term
+                    or term in package.name.casefold()
+                    or term in revision.description.casefold()
+                    or term in revision.tags_json.casefold()
+                ):
+                    result.append((package, revision))
+            return result
+
+    async def set_review_state(
+        self, *, owner_id: str, package_id: str, revision_id: str, review_state: str
+    ) -> SkillRevisionRow:
+        if review_state not in {"approved", "rejected"}:
+            raise ValueError("invalid review state")
+        async with self._sessions() as session, session.begin():
+            row = await session.scalar(
+                select(SkillRevisionRow).where(
+                    SkillRevisionRow.id == revision_id,
+                    SkillRevisionRow.package_id == package_id,
+                    SkillRevisionRow.owner_id == owner_id,
+                )
+            )
+            if row is None:
+                raise SkillNotFoundError("skill revision not found in owner scope")
+            row.review_state = review_state
+            await session.flush()
+            return row
+
+    async def binding(
+        self, *, owner_id: str, project_id: str, package_id: str
+    ) -> ProjectSkillBindingRow | None:
+        async with self._sessions() as session:
+            return await session.get(ProjectSkillBindingRow, (owner_id, project_id, package_id))
+
     async def get_revision(
         self, *, owner_id: str, package_id: str, revision_id: str
     ) -> SkillRevisionRow:
@@ -379,8 +437,9 @@ class ProjectInstructionRepository:
                 )
             )
             if existing is not None:
-                workspace.current_instruction_revision_id = existing.id
-                workspace.updated_at = now
+                if review_state == "approved":
+                    workspace.current_instruction_revision_id = existing.id
+                    workspace.updated_at = now
                 return existing
             last = await session.scalar(
                 select(ProjectInstructionRevisionRow.revision_number)
@@ -403,9 +462,67 @@ class ProjectInstructionRepository:
             )
             session.add(row)
             await session.flush()
-            workspace.current_instruction_revision_id = row.id
-            workspace.updated_at = now
+            if review_state == "approved":
+                workspace.current_instruction_revision_id = row.id
+                workspace.updated_at = now
             return row
+
+    async def ensure_workspace(self, *, owner_id: str, project_id: str) -> ProjectWorkspaceRow:
+        now = datetime.now(tz=UTC)
+        async with self._sessions() as session, session.begin():
+            row = await session.get(ProjectWorkspaceRow, (owner_id, project_id))
+            if row is None:
+                row = ProjectWorkspaceRow(
+                    owner_id=owner_id, project_id=project_id, created_at=now, updated_at=now
+                )
+                session.add(row)
+                await session.flush()
+            return row
+
+    async def list_revisions(
+        self, *, owner_id: str, project_id: str
+    ) -> list[ProjectInstructionRevisionRow]:
+        async with self._sessions() as session:
+            return list(
+                await session.scalars(
+                    select(ProjectInstructionRevisionRow)
+                    .where(
+                        ProjectInstructionRevisionRow.owner_id == owner_id,
+                        ProjectInstructionRevisionRow.project_id == project_id,
+                    )
+                    .order_by(ProjectInstructionRevisionRow.revision_number.desc())
+                )
+            )
+
+    async def get(
+        self, *, owner_id: str, project_id: str, revision_id: str
+    ) -> ProjectInstructionRevisionRow | None:
+        async with self._sessions() as session:
+            return await session.scalar(
+                select(ProjectInstructionRevisionRow).where(
+                    ProjectInstructionRevisionRow.id == revision_id,
+                    ProjectInstructionRevisionRow.owner_id == owner_id,
+                    ProjectInstructionRevisionRow.project_id == project_id,
+                )
+            )
+
+    async def set_current(
+        self, *, owner_id: str, project_id: str, revision_id: str | None
+    ) -> ProjectInstructionRevisionRow | None:
+        row = (
+            None
+            if revision_id is None
+            else await self.get(owner_id=owner_id, project_id=project_id, revision_id=revision_id)
+        )
+        if revision_id is not None and row is None:
+            return None
+        async with self._sessions() as session, session.begin():
+            workspace = await session.get(ProjectWorkspaceRow, (owner_id, project_id))
+            if workspace is None:
+                return None
+            workspace.current_instruction_revision_id = revision_id
+            workspace.updated_at = datetime.now(tz=UTC)
+        return row
 
     async def current(
         self, *, owner_id: str, project_id: str
