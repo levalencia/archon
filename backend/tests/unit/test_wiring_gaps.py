@@ -118,18 +118,15 @@ class TestImageInputPlumbing:
 class TestWriteFileApproval:
     """write_file tool in chat.py registry should require approval."""
 
-    def test_write_file_requires_approval_in_chat_registry(self):
-        """The chat route's tool registry should mark write_file as requires_approval."""
-        # Reset singleton so we get a fresh registry
+    def test_write_file_requires_approval_in_chat_registry(self, tmp_path: Path):
+        """A configured tenant workspace exposes write_file behind approval."""
         import app.routes.chat as chat_mod
+        from app.tools.builtin import TenantWorkspace
 
-        old = chat_mod._tools_singleton
-        chat_mod._tools_singleton = None
-        try:
-            registry = chat_mod.get_tool_registry()
-            assert registry.tool_requires_approval("write_file") is True
-        finally:
-            chat_mod._tools_singleton = old
+        workspace = TenantWorkspace(tmp_path / "workspaces", ("owner-a", "project-a"))
+        workspace.path.mkdir(parents=True)
+        registry = chat_mod.get_tool_registry(workspace=workspace)
+        assert registry.tool_requires_approval("write_file") is True
 
     def test_write_file_requires_approval_in_builtin_registry(self):
         """The builtin register_builtin_tools should also mark write_file as requires_approval."""
