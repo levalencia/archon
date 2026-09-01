@@ -5,7 +5,7 @@
 - Candidate: local `feature/skills-project-instructions-mcp`; code evidence is anchored at `9eaf49e` before documentation-only commits.
 - Deployed baseline: `main` at `63215bf`.
 - Push/deploy: none for this candidate.
-- Integrated verification: no final `verify.sh` count is claimed in this packet.
+- Integrated verification: exact-head `./scripts/verify.sh` PASS at `26e36737`.
 
 This packet records only the implemented core and direct observations. It does not prove public deployment, broad semantic-selection quality, arbitrary repository trust, a public skill marketplace, generic MCP OAuth, or multi-region operation.
 
@@ -64,7 +64,9 @@ Focused and adversarial verification completed during implementation:
   `be9670e` closed it, including fail-closed post-approval reference inserts.
 
 These are overlapping focused suites and must not be summed into a synthetic total.
-The final integrated `verify.sh` result is recorded separately only after it completes.
+The exact-head integrated gate passed with backend **1537 passed / 4 skipped**,
+Svelte **0 errors / 0 warnings**, Vitest **53**, build PASS, Playwright **33**,
+and successful security, sandbox, container, benchmark, and clean-tree checks.
 
 ## Real Foundry acceptance
 

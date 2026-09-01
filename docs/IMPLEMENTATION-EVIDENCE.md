@@ -6,7 +6,7 @@
 
 - **Current candidate:** local `feature/skills-project-instructions-mcp`; code evidence is anchored at `9eaf49e` before documentation-only commits. No push or deployment is claimed.
 - **Deployed baseline:** `main` remains `63215bf`.
-- **Current acceptance scope:** focused Skills + Project Instructions tests, one operator-authorized Foundry run, and a disposable PostgreSQL migration round trip. The integrated `verify.sh` result is not claimed until the run has a final result.
+- **Current acceptance scope:** exact-head `verify.sh` PASS at code HEAD `26e36737`, focused/adversarial Skills + Project Instructions tests, one operator-authorized Foundry run, and a disposable PostgreSQL migration round trip.
 - **Capability status source:** `docs/implementation/CAPABILITY-ACCEPTANCE.yaml`; this prose must not override its per-dimension limits.
 - **Remote status:** no candidate push or candidate CI result is claimed.
 - **Deployment status:** production-like **local** target observed; no non-local/public deployment. Every `Deployed` value remains **No**.
@@ -58,8 +58,12 @@ Two direct observations are recorded for the local candidate:
   keys, `mcp_servers.enabled` defaulting to false, downgrade to revision 14,
   and re-upgrade to 21.
 
+- **Exact-head integrated gate — PASS:** backend **1537 passed / 4 skipped**,
+  Svelte **0/0**, Vitest **53**, build PASS, Playwright **33**, Bandit,
+  sandbox, backend-container health, benchmark, and clean-tree checks.
+
 These observations do not establish public deployment, broad skill-selection
-quality, arbitrary repository trust, or a final integrated-suite count.
+quality, arbitrary repository trust, or external production readiness.
 
 ## Quality gates
 

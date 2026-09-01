@@ -33,7 +33,7 @@ The Skills + Project Instructions work is a **local candidate** on
 before the documentation-only commits. It has not been pushed or deployed.
 The deployed `main` revision remains `63215bf`. The candidate has focused,
 adversarial, real-provider, temporary-PostgreSQL, frontend, and browser evidence;
-the final integrated `verify.sh` result is reported only after that exact run completes.
+the exact-head integrated `verify.sh` gate passed on `26e36737` with backend **1537 passed / 4 skipped**, Svelte **0 errors / 0 warnings**, Vitest **53**, production build PASS, Playwright **33**, Bandit, sandbox, backend-container health, benchmark, and clean-tree checks.
 
 | Evidence | Recorded result |
 |---|---|
