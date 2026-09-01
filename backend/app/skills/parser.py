@@ -105,7 +105,8 @@ def parse_skill_markdown(data: bytes, *, max_bytes: int = MAX_SKILL_BYTES) -> Pa
     if not instructions.strip():
         raise SkillParseError("SKILL.md instructions must not be empty")
     try:
-        manifest = yaml.load(raw_manifest, Loader=_UniqueKeyLoader)
+        # This loader subclasses SafeLoader and additionally rejects aliases and duplicate keys.
+        manifest = yaml.load(raw_manifest, Loader=_UniqueKeyLoader)  # nosec B506
     except (yaml.YAMLError, SkillParseError) as exc:
         raise SkillParseError(f"invalid YAML frontmatter: {exc}") from exc
     if not isinstance(manifest, dict) or not all(isinstance(k, str) for k in manifest):
