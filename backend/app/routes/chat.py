@@ -425,14 +425,33 @@ async def chat(
     decisions, disabled = await request.app.state.request_context_preparer.scope_policy(
         owner_id=user["user_id"], project_id=body.project_id
     )
+    preference_rows = await request.app.state.request_context_preparer.preferences.list(
+        owner_id=user["user_id"], project_id=body.project_id
+    )
+    pinned = frozenset(row.capability_id for row in preference_rows if row.enabled and row.pinned)
+    denied_permissions = frozenset(key for key, value in decisions.items() if value.value == "deny")
     bound_tools = await request.app.state.mcp_runtime_tools.for_scope(
-        user["user_id"], body.project_id, disabled_capability_ids=disabled
+        user["user_id"],
+        body.project_id,
+        intent=body.message,
+        pinned_capability_ids=pinned,
+        disabled_capability_ids=disabled,
+        denied_permissions=denied_permissions,
+        max_schema_count=8,
+        schema_context_budget=16_384,
+    )
+    mcp_metadata = await request.app.state.mcp_runtime_tools.metadata_for_scope(
+        user["user_id"],
+        body.project_id,
+        disabled_capability_ids=disabled,
+        denied_permissions=denied_permissions,
     )
     discovery_tools = GovernedSkillDiscoveryTools(
         request.app.state.skill_discovery,
         owner_id=user["user_id"],
         project_id=body.project_id,
         permission_decisions=decisions,
+        mcp_metadata=mcp_metadata,
     )
     tools = get_tool_registry(
         context=run_context,
@@ -443,7 +462,7 @@ async def chat(
         bound_tools=bound_tools,
         discovery_tools=discovery_tools,
         disabled_capability_ids=disabled,
-        denied_permissions=frozenset(k for k, v in decisions.items() if v.value == "deny"),
+        denied_permissions=denied_permissions,
     )
 
     logger.info(

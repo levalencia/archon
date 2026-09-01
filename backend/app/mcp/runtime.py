@@ -20,7 +20,13 @@ from app.mcp.models import (
     ServerProfile,
     profile_transport,
 )
-from app.mcp.repository import MCPHealth, MCPRepository, MCPServerRecord, MCPToolRecord
+from app.mcp.repository import (
+    MCPHealth,
+    MCPRepository,
+    MCPServerRecord,
+    MCPToolMetadataRecord,
+    MCPToolRecord,
+)
 from app.security.policy import RiskClass
 
 _NAME_PART = re.compile(r"[^a-z0-9]+")
@@ -175,7 +181,7 @@ def _name_part(value: str) -> str:
     return part or "unnamed"
 
 
-def _base_name(server: MCPServerRecord, tool: MCPToolRecord) -> str:
+def _base_name(server: MCPServerRecord, tool: MCPToolRecord | MCPToolMetadataRecord) -> str:
     return f"mcp_{_name_part(server.name)}_{_name_part(tool.name)}"
 
 
@@ -208,6 +214,20 @@ class MCPBoundToolSpec:
         object.__setattr__(self, "resource_identity", self.name)
         if self.capability_id is None:
             object.__setattr__(self, "capability_id", f"mcp.bound.{_name_part(self.name)}")
+
+
+@dataclass(frozen=True, slots=True)
+class MCPRuntimeToolMetadata:
+    """Compact, non-authorizing MCP discovery metadata."""
+
+    capability_id: str
+    name: str
+    title: str | None
+    description: str
+    read_only: bool
+    destructive: bool
+    version: str | None
+    schema_hash: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,14 +266,35 @@ class MCPRuntimeToolProvider:
         self._profiles: Mapping[str, MCPServerProfile] = MappingProxyType(copied)
         self._client_factory = client_factory
 
-    async def for_scope(
+    @staticmethod
+    def _risks(tool: MCPToolMetadataRecord | MCPToolRecord) -> frozenset[RiskClass]:
+        risks = {RiskClass.NETWORK}
+        if tool.read_only:
+            risks.add(RiskClass.READ)
+        else:
+            risks.update({RiskClass.WRITE, RiskClass.EXTERNAL_SIDE_EFFECT})
+        if tool.destructive:
+            risks.update({RiskClass.WRITE, RiskClass.EXTERNAL_SIDE_EFFECT})
+        return frozenset(risks)
+
+    @staticmethod
+    def _denied(tool: MCPToolMetadataRecord, denied_permissions: frozenset[str]) -> bool:
+        aliases = {
+            alias
+            for risk in MCPRuntimeToolProvider._risks(tool)
+            for alias in (risk.value, f"capability.{risk.value}")
+        }
+        return bool(aliases.intersection(denied_permissions))
+
+    async def _metadata_candidates(
         self,
         owner_id: str,
         project_id: str,
         *,
-        disabled_capability_ids: frozenset[str] = frozenset(),
-    ) -> tuple[MCPBoundToolSpec, ...]:
-        candidates: list[tuple[MCPServerRecord, MCPToolRecord, dict[str, Any]]] = []
+        disabled_capability_ids: frozenset[str],
+        denied_permissions: frozenset[str],
+    ) -> list[tuple[MCPServerRecord, MCPToolMetadataRecord]]:
+        candidates: list[tuple[MCPServerRecord, MCPToolMetadataRecord]] = []
         for server in await self._repository.list(owner_id=owner_id, project_id=project_id):
             if (
                 not server.enabled
@@ -267,33 +308,138 @@ class MCPRuntimeToolProvider:
                 for capability_id in disabled_capability_ids
                 if capability_id.startswith(prefix)
             )
-            for tool in await self._repository.list_tools(
+            metadata = await self._repository.list_tool_metadata(
                 owner_id=owner_id,
                 project_id=project_id,
                 server_id=server.id,
                 enabled_only=True,
                 excluded_tool_ids=excluded_tool_ids,
-            ):
-                if not tool.enabled:
-                    continue
-                try:
-                    schema = normalize_input_schema(tool.input_schema)
-                except MCPRuntimeError:
-                    # A selected schema that cannot be enforced must not remain selected.
-                    await self._repository.set_tool_enabled(
-                        owner_id=owner_id,
-                        project_id=project_id,
-                        server_id=server.id,
-                        tool_id=tool.id,
-                        enabled=False,
-                    )
-                    continue
-                candidates.append((server, tool, schema))
+            )
+            candidates.extend(
+                (server, tool) for tool in metadata if not self._denied(tool, denied_permissions)
+            )
+        return candidates
 
-        bases = [_base_name(server, tool) for server, tool, _schema in candidates]
+    async def metadata_for_scope(
+        self,
+        owner_id: str,
+        project_id: str,
+        *,
+        disabled_capability_ids: frozenset[str] = frozenset(),
+        denied_permissions: frozenset[str] = frozenset(),
+    ) -> tuple[MCPRuntimeToolMetadata, ...]:
+        """Expose compact policy-visible metadata; this never grants execution authority."""
+        result = []
+        for server, tool in await self._metadata_candidates(
+            owner_id,
+            project_id,
+            disabled_capability_ids=disabled_capability_ids,
+            denied_permissions=denied_permissions,
+        ):
+            result.append(
+                MCPRuntimeToolMetadata(
+                    capability_id=f"mcp.{server.id}.{tool.id}",
+                    name=_base_name(server, tool),
+                    title=tool.title,
+                    description=tool.description or tool.title or f"MCP tool {tool.name}",
+                    read_only=tool.read_only,
+                    destructive=tool.destructive,
+                    version=tool.version,
+                    schema_hash=tool.schema_hash,
+                )
+            )
+        return tuple(sorted(result, key=lambda item: item.capability_id))
+
+    async def for_scope(
+        self,
+        owner_id: str,
+        project_id: str,
+        *,
+        intent: str | None = None,
+        pinned_capability_ids: frozenset[str] = frozenset(),
+        disabled_capability_ids: frozenset[str] = frozenset(),
+        denied_permissions: frozenset[str] = frozenset(),
+        max_schema_count: int | None = None,
+        schema_context_budget: int = 16_384,
+    ) -> tuple[MCPBoundToolSpec, ...]:
+        """Select on schema-free metadata, then decode only selected schemas."""
+        if max_schema_count is not None and max_schema_count < 0:
+            raise ValueError("max_schema_count must be non-negative")
+        if schema_context_budget < 0:
+            raise ValueError("schema_context_budget must be non-negative")
+        metadata_candidates = await self._metadata_candidates(
+            owner_id,
+            project_id,
+            disabled_capability_ids=disabled_capability_ids,
+            denied_permissions=denied_permissions,
+        )
+        intent_words = set(re.findall(r"[a-z0-9]+", (intent or "").casefold()))
+        ranked: list[tuple[int, str, MCPServerRecord, MCPToolMetadataRecord]] = []
+        for server, tool in metadata_candidates:
+            capability_id = f"mcp.{server.id}.{tool.id}"
+            words = set(
+                re.findall(
+                    r"[a-z0-9]+",
+                    f"{tool.name} {tool.title or ''} {tool.description or ''}".casefold(),
+                )
+            )
+            overlap = len(intent_words.intersection(words))
+            score = overlap + (10_000 if capability_id in pinned_capability_ids else 0)
+            if intent is None:
+                score = max(score, 1)  # Backward-compatible administrative materialization.
+            if score:
+                ranked.append((score, capability_id, server, tool))
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+
+        selected: list[tuple[MCPServerRecord, MCPToolMetadataRecord]] = []
+        spent = 0
+        for _score, _capability_id, server, tool in ranked:
+            if max_schema_count is not None and len(selected) >= max_schema_count:
+                break
+            metadata_cost = max(
+                256,
+                len(tool.name.encode("utf-8"))
+                + len((tool.title or "").encode("utf-8"))
+                + len((tool.description or "").encode("utf-8")),
+            )
+            if spent + metadata_cost > schema_context_budget:
+                continue
+            selected.append((server, tool))
+            spent += metadata_cost
+
+        candidates: list[
+            tuple[MCPServerRecord, MCPToolMetadataRecord, MCPToolRecord, dict[str, Any]]
+        ] = []
+        for server, metadata in selected:
+            try:
+                loaded = await self._repository.load_tools(
+                    owner_id=owner_id,
+                    project_id=project_id,
+                    server_id=server.id,
+                    tool_ids=frozenset({metadata.id}),
+                )
+                loaded_tool = loaded[0] if len(loaded) == 1 else None
+                if (
+                    loaded_tool is None
+                    or not loaded_tool.enabled
+                    or _schema_hash(loaded_tool.input_schema) != metadata.schema_hash
+                ):
+                    raise MCPRuntimeError("unsupported_tool_schema")
+                schema = normalize_input_schema(loaded_tool.input_schema)
+            except (MCPRuntimeError, ValueError, TypeError):
+                await self._repository.disable_tool(
+                    owner_id=owner_id,
+                    project_id=project_id,
+                    server_id=server.id,
+                    tool_id=metadata.id,
+                )
+                continue
+            candidates.append((server, metadata, loaded_tool, schema))
+
+        bases = [_base_name(server, tool) for server, _metadata, tool, _schema in candidates]
         collisions = {name for name in bases if bases.count(name) > 1}
         specs: list[MCPBoundToolSpec] = []
-        for server, tool, schema in candidates:
+        for server, metadata, tool, schema in candidates:
             name = _base_name(server, tool)
             if name in collisions:
                 digest = hashlib.sha256(f"{server.id}:{tool.id}".encode()).hexdigest()[:12]
@@ -306,7 +452,7 @@ class MCPRuntimeToolProvider:
                 profile_id=server.profile_id,
                 tool_id=tool.id,
                 remote_name=tool.name,
-                schema_hash=_schema_hash(tool.input_schema),
+                schema_hash=metadata.schema_hash,
                 read_only=tool.read_only,
                 destructive=tool.destructive,
             )
@@ -314,13 +460,6 @@ class MCPRuntimeToolProvider:
             async def invoke(_binding: _Binding = binding, **arguments: Any) -> dict[str, Any]:
                 return await self._call(_binding, arguments)
 
-            risks = {RiskClass.NETWORK}
-            if tool.read_only:
-                risks.add(RiskClass.READ)
-            else:
-                risks.update({RiskClass.WRITE, RiskClass.EXTERNAL_SIDE_EFFECT})
-            if tool.destructive:
-                risks.update({RiskClass.WRITE, RiskClass.EXTERNAL_SIDE_EFFECT})
             specs.append(
                 MCPBoundToolSpec(
                     name=name,
@@ -334,7 +473,7 @@ class MCPRuntimeToolProvider:
                             + self._profiles[server.profile_id].call_timeout_seconds
                         ),
                     ),
-                    risk_classes=frozenset(risks),
+                    risk_classes=self._risks(tool),
                     capability_id=f"mcp.{server.id}.{tool.id}",
                 )
             )
@@ -357,12 +496,16 @@ class MCPRuntimeToolProvider:
         profile = self._profiles.get(server.profile_id)
         if profile is None or server.transport != profile_transport(profile):
             raise MCPRuntimeError("mcp_binding_changed")
-        tools = await self._repository.list_tools(
-            owner_id=binding.owner_id,
-            project_id=binding.project_id,
-            server_id=binding.server_id,
-        )
-        tool = next((item for item in tools if item.id == binding.tool_id), None)
+        try:
+            tools = await self._repository.load_tools(
+                owner_id=binding.owner_id,
+                project_id=binding.project_id,
+                server_id=binding.server_id,
+                tool_ids=frozenset({binding.tool_id}),
+            )
+        except (ValueError, TypeError) as error:
+            raise MCPRuntimeError("mcp_binding_changed") from error
+        tool = tools[0] if len(tools) == 1 else None
         if (
             tool is None
             or not tool.enabled

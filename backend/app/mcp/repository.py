@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
@@ -104,6 +105,21 @@ class MCPToolRecord:
     destructive: bool
     enabled: bool
     version: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class MCPToolMetadataRecord:
+    """Schema-free inventory row used to select tools before materialization."""
+
+    id: str
+    server_id: str
+    name: str
+    title: str | None
+    description: str | None
+    read_only: bool
+    destructive: bool
+    version: str | None
+    schema_hash: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,6 +300,80 @@ class MCPRepository:
             ).scalars()
             return tuple(self._tool(row) for row in rows)
 
+    async def list_tool_metadata(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        enabled_only: bool = False,
+        excluded_tool_ids: frozenset[str] = frozenset(),
+    ) -> tuple[MCPToolMetadataRecord, ...]:
+        """List compact tool metadata without decoding any persisted schema JSON."""
+        scope = self._scope(owner_id, project_id, server_id)
+        excluded = tuple(_uuid(value, "excluded_tool_id") for value in excluded_tool_ids)
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        MCPToolRow.id,
+                        MCPToolRow.server_id,
+                        MCPToolRow.name,
+                        MCPToolRow.title,
+                        MCPToolRow.description,
+                        MCPToolRow.read_only,
+                        MCPToolRow.destructive,
+                        MCPToolRow.version,
+                        MCPToolRow.input_schema_json,
+                    )
+                    .join(MCPServerRow, MCPServerRow.id == MCPToolRow.server_id)
+                    .where(
+                        *scope,
+                        *([MCPToolRow.enabled.is_(True)] if enabled_only else []),
+                        *([MCPToolRow.id.not_in(excluded)] if excluded else []),
+                    )
+                    .order_by(MCPToolRow.name, MCPToolRow.id)
+                )
+            ).all()
+        return tuple(
+            MCPToolMetadataRecord(
+                id=row.id,
+                server_id=row.server_id,
+                name=row.name,
+                title=row.title,
+                description=row.description,
+                read_only=bool(row.read_only),
+                destructive=bool(row.destructive),
+                version=row.version,
+                schema_hash=hashlib.sha256(row.input_schema_json.encode("utf-8")).hexdigest(),
+            )
+            for row in rows
+        )
+
+    async def load_tools(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        tool_ids: frozenset[str],
+    ) -> tuple[MCPToolRecord, ...]:
+        """Decode schemas only for explicitly selected tool IDs."""
+        if not tool_ids:
+            return ()
+        selected = tuple(_uuid(value, "tool_id") for value in tool_ids)
+        scope = self._scope(owner_id, project_id, server_id)
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(MCPToolRow)
+                    .join(MCPServerRow, MCPServerRow.id == MCPToolRow.server_id)
+                    .where(*scope, MCPToolRow.id.in_(selected))
+                    .order_by(MCPToolRow.name, MCPToolRow.id)
+                )
+            ).scalars()
+            return tuple(self._tool(row) for row in rows)
+
     async def replace_inventory(
         self,
         *,
@@ -383,6 +473,32 @@ class MCPRepository:
             )
         async with self._sessions() as session:
             result = await session.execute(update(MCPServerRow).where(*scope).values(**values))
+            await session.commit()
+            return bool(result.rowcount == 1)
+
+    async def disable_tool(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        server_id: str,
+        tool_id: str,
+    ) -> bool:
+        """Fail closed without decoding a potentially malformed persisted schema."""
+        scope = self._scope(owner_id, project_id, server_id)
+        async with self._sessions() as session:
+            server = (
+                await session.execute(select(MCPServerRow.id).where(*scope))
+            ).scalar_one_or_none()
+            if server is None:
+                return False
+            result = await session.execute(
+                update(MCPToolRow)
+                .where(
+                    MCPToolRow.server_id == server_id, MCPToolRow.id == _uuid(tool_id, "tool_id")
+                )
+                .values(enabled=False)
+            )
             await session.commit()
             return bool(result.rowcount == 1)
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from sqlalchemy import select, update
 
 from app.agents.mock_llm import MockLLM
 from app.mcp.inventory import MCPInventoryService
@@ -28,7 +29,7 @@ from app.runtime import (
 )
 from app.security.default_policy import default_policy_engine
 from app.security.policy import RiskClass
-from app.services.db_store import DatabaseStore
+from app.services.db_store import DatabaseStore, MCPToolRow
 
 _SCRIPT = Path(__file__).parents[1] / "fixtures" / "mcp_test_server.py"
 
@@ -231,4 +232,89 @@ async def test_scope_filter_risks_disable_toctou_and_schema_rejection(tmp_path: 
         await registry.execute(specs[0].name, {"note": "blocked"})
     assert client.calls == 0
     assert await provider.for_scope("alice", "one") == ()
+    await store.close()
+
+
+@pytest.mark.asyncio
+async def test_metadata_first_selection_never_parses_irrelevant_invalid_schema(
+    tmp_path: Path,
+) -> None:
+    store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'lazy-schema.db'}")
+    await store.initialize()
+    repository = MCPRepository(store.session_factory)
+    profile = ServerProfile(command=sys.executable)
+    provider = MCPRuntimeToolProvider(repository, profiles={"safe": profile})
+    server = await repository.create(
+        owner_id="alice", project_id="one", name="utilities", profile_id="safe"
+    )
+    tools = await repository.replace_inventory(
+        owner_id="alice",
+        project_id="one",
+        server_id=server.id,
+        tools=(
+            ToolDescriptor(
+                "weather_forecast",
+                "Weather",
+                "Get a weather forecast",
+                {"type": "object", "properties": {"city": {"type": "string"}}},
+                True,
+                False,
+                "1",
+            ),
+            ToolDescriptor(
+                "delete_database",
+                "Delete database",
+                "Permanently delete a database",
+                {"type": "object", "properties": {"name": {"type": "string"}}},
+                False,
+                True,
+                "1",
+            ),
+        ),
+    )
+    for tool in tools:
+        await repository.set_tool_enabled(
+            owner_id="alice", project_id="one", server_id=server.id, tool_id=tool.id, enabled=True
+        )
+    bad = next(tool for tool in tools if tool.name == "delete_database")
+    async with store.session_factory() as session:
+        await session.execute(
+            update(MCPToolRow).where(MCPToolRow.id == bad.id).values(input_schema_json="{broken")
+        )
+        await session.commit()
+    await repository.update_health(
+        owner_id="alice", project_id="one", server_id=server.id, health=MCPHealth.HEALTHY
+    )
+
+    selected = await provider.for_scope(
+        "alice", "one", intent="weather forecast", max_schema_count=2
+    )
+    streamed = await provider.for_scope(
+        "alice", "one", intent="weather forecast", max_schema_count=2
+    )
+    assert [item.name for item in selected] == ["mcp_utilities_weather_forecast"]
+    assert [(item.name, dict(item.input_schema)) for item in streamed] == [
+        (item.name, dict(item.input_schema)) for item in selected
+    ]
+    bad_capability_id = f"mcp.{server.id}.{bad.id}"
+    denied = await provider.for_scope(
+        "alice",
+        "one",
+        intent="delete database",
+        disabled_capability_ids=frozenset({bad_capability_id}),
+        max_schema_count=2,
+    )
+    assert denied == ()
+    assert all(
+        definition.name != "mcp_utilities_delete_database"
+        for definition in get_tool_registry(bound_tools=denied).definitions()
+    )
+    async with store.session_factory() as session:
+        assert await session.scalar(select(MCPToolRow.enabled).where(MCPToolRow.id == bad.id))
+
+    assert (
+        await provider.for_scope("alice", "one", intent="delete database", max_schema_count=2) == ()
+    )
+    async with store.session_factory() as session:
+        assert not await session.scalar(select(MCPToolRow.enabled).where(MCPToolRow.id == bad.id))
     await store.close()

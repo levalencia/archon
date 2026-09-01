@@ -70,18 +70,34 @@ async def _limit(request: Request, user: dict[str, Any], action: str) -> None:
 async def _scoped_index(request: Request, owner_id: str, project_id: str | None) -> CapabilityIndex:
     descriptors = list(_index(request).all())
     if project_id is not None:
-        specs = await request.app.state.mcp_runtime_tools.for_scope(owner_id, project_id)
+        metadata = await request.app.state.mcp_runtime_tools.metadata_for_scope(
+            owner_id, project_id
+        )
         descriptors.extend(
             CapabilityDescriptor(
-                id=spec.capability_id,
+                id=item.capability_id,
                 kind="mcp",
-                name=spec.name,
-                executable_name=spec.name,
-                description=spec.description,
-                tags=tuple(sorted(risk.value for risk in spec.risk_classes)),
+                name=item.name,
+                executable_name=item.name,
+                description=item.description,
+                tags=tuple(
+                    sorted(
+                        {
+                            "network",
+                            "read" if item.read_only else "write",
+                            *(
+                                {"external_side_effect"}
+                                if not item.read_only or item.destructive
+                                else set()
+                            ),
+                        }
+                    )
+                ),
                 context_cost=0,
+                version=item.version,
+                content_hash=item.schema_hash,
             )
-            for spec in specs
+            for item in metadata
         )
     return CapabilityIndex(descriptors)
 

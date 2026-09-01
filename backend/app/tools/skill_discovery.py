@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from app.capabilities.models import PermissionDecision
+from app.mcp.runtime import MCPRuntimeToolMetadata
 from app.security.policy import RiskClass
 from app.skills.discovery import DiscoveryRequest, SkillDiscoveryService
 from app.tools.registry import SecureToolRegistry
@@ -20,12 +22,14 @@ class GovernedSkillDiscoveryTools:
         project_id: str,
         permission_decisions: Mapping[str, PermissionDecision | str],
         context_budget: int = 16_384,
+        mcp_metadata: Sequence[MCPRuntimeToolMetadata] = (),
     ) -> None:
         self._service = service
         self._owner_id = owner_id
         self._project_id = project_id
         self._decisions = dict(permission_decisions)
         self._budget = context_budget
+        self._mcp_metadata = tuple(mcp_metadata)
         self._selected: set[str] = set()
 
     async def discover_capabilities(self, intent: str, explicit_id: str = "") -> dict[str, Any]:
@@ -40,6 +44,30 @@ class GovernedSkillDiscoveryTools:
             )
         )
         self._selected = {item.revision_id for item in result.selected}
+        intent_words = set(re.findall(r"[a-z0-9]+", intent.casefold()))
+        mcp = []
+        for item in self._mcp_metadata:
+            words = set(
+                re.findall(
+                    r"[a-z0-9]+",
+                    f"{item.name} {item.title or ''} {item.description}".casefold(),
+                )
+            )
+            if explicit_id == item.capability_id or intent_words.intersection(words):
+                mcp.append(
+                    {
+                        "capability_id": item.capability_id,
+                        "kind": "mcp",
+                        "name": item.name,
+                        "title": item.title,
+                        "description": item.description,
+                        "read_only": item.read_only,
+                        "destructive": item.destructive,
+                        "version": item.version,
+                        "schema_hash": item.schema_hash,
+                        "authorized": False,
+                    }
+                )
         return {
             "selected": [
                 dict(
@@ -49,7 +77,8 @@ class GovernedSkillDiscoveryTools:
                     reasons=item.reasons,
                 )
                 for item in result.selected
-            ],
+            ]
+            + sorted(mcp, key=lambda item: str(item["capability_id"])),
             "rejected": [
                 {"capability_id": item.capability_id, "reasons": item.reasons}
                 for item in result.rejected
