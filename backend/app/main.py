@@ -92,11 +92,11 @@ from app.services.run_exports import RunExportService
 from app.services.sql_json_vector_store import SqlJsonVectorStore
 from app.services.task_queue import ClaimedJob, DurableJobQueue
 from app.skills.bootstrap import BundledSkillBootstrap
+from app.skills.bundled import bundled_skills
 from app.skills.context import EffectiveContextEnrichmentService
 from app.skills.discovery import SkillDiscoveryService
 from app.skills.installer import HttpSkillFetcher, SkillInstallationService, SkillSourcePolicy
 from app.skills.persistence import ProjectInstructionRepository, SkillRepository
-from app.skills.bundled import bundled_skills
 from app.tools.sandbox import SandboxExecutor
 from app.tools.sandbox_client import SandboxClientConfig, SandboxRunnerClient
 from app.workers.jobs import JobWorker, PermanentJobError, echo_handler
