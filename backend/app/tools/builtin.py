@@ -43,6 +43,7 @@ class TenantWorkspace:
     def path(self) -> Path:
         return self.configured_root.joinpath(*self.tenant_components)
 
+
 _BINARY_OPERATORS = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,

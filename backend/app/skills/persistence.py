@@ -379,8 +379,7 @@ class SkillRepository:
         return [
             row
             for row in rows
-            if row.review_state == "approved"
-            and row.trust_state in {"allowlisted", "verified"}
+            if row.review_state == "approved" and row.trust_state in {"allowlisted", "verified"}
         ]
 
     async def list_pin_ids(self, *, owner_id: str, project_id: str) -> tuple[str, ...]:
@@ -424,10 +423,15 @@ class SkillRepository:
         """Revalidate an enabled exact revision in the current project."""
         async with self._sessions() as session:
             row = await session.get(SkillRevisionRow, revision_id)
-            if row is None or row.review_state != "approved" or row.trust_state not in {
-                "allowlisted",
-                "verified",
-            }:
+            if (
+                row is None
+                or row.review_state != "approved"
+                or row.trust_state
+                not in {
+                    "allowlisted",
+                    "verified",
+                }
+            ):
                 raise SkillNotFoundError("skill revision not enabled in project scope")
             if row.owner_id == owner_id:
                 binding = await session.get(
@@ -436,11 +440,7 @@ class SkillRepository:
                 visible = binding is not None and binding.enabled and binding.revision_id == row.id
             else:
                 pin = await session.get(ProjectSkillPinRow, (owner_id, project_id, row.id))
-                visible = (
-                    pin is not None
-                    and pin.enabled
-                    and pin.revision_owner_id == row.owner_id
-                )
+                visible = pin is not None and pin.enabled and pin.revision_owner_id == row.owner_id
             if not visible:
                 raise SkillNotFoundError("skill revision not enabled in project scope")
             return row

@@ -106,8 +106,7 @@ def project_tool_call(call: Mapping[str, Any]) -> dict[str, Any]:
         "tool": call.get("tool", call.get("name")),
         "tool_call_id": call.get("tool_call_id", call.get("id")),
         "status": call.get("status", "success"),
-        "arguments_hash": call.get("arguments_hash")
-        or hashlib.sha256(arguments_json).hexdigest(),
+        "arguments_hash": call.get("arguments_hash") or hashlib.sha256(arguments_json).hexdigest(),
         "arguments_size": call.get("arguments_size", len(arguments_json)),
         "output_hash": call.get("output_hash") or hashlib.sha256(result_json).hexdigest(),
         "output_size": call.get("output_size", len(result_json)),
