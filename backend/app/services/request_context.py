@@ -72,6 +72,7 @@ class RequestContextPreparationService:
         application_secret: str,
         max_context_bytes: int,
         max_tokens: int,
+        selection_limit: int = 3,
     ) -> PreparedRequestContext:
         decisions, disabled = await self.scope_policy(owner_id=owner_id, project_id=project_id)
         # Skill metadata is discovery guidance only. Tool authorization is
@@ -83,6 +84,7 @@ class RequestContextPreparationService:
                 intent=intent,
                 permission_decisions=decisions,
                 context_budget=max_context_bytes,
+                limit=selection_limit,
                 current_path=current_path,
                 disabled_ids=disabled,
             )

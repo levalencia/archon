@@ -184,7 +184,8 @@ async def chat_stream_real(
     )
     discovery_tools = GovernedSkillDiscoveryTools(
         request.app.state.skill_discovery,
-        owner_id=user["user_id"], project_id=body.project_id,
+        owner_id=user["user_id"],
+        project_id=body.project_id,
         permission_decisions=decisions,
     )
     tools = get_tool_registry(
@@ -227,12 +228,22 @@ async def chat_stream_real(
         if current_message_id is None:
             raise RuntimeError("context_message_persistence_failed")
         prepared = await request.app.state.request_context_preparer.prepare(
-            owner_id=user["user_id"], project_id=body.project_id, intent=user_message,
-            current_path=body.target_path, run_id=run_context.run_id, conversation_id=conv_id,
-            memory=memory, tools=tools, images=images,
-            persistent_memory_text=persistent_memory_text, memory_ids=memory_ids,
-            current_message_id=current_message_id, application_secret=settings.secret_key,
-            max_context_bytes=settings.context_length * 4, max_tokens=settings.context_length,
+            owner_id=user["user_id"],
+            project_id=body.project_id,
+            intent=user_message,
+            current_path=body.target_path,
+            run_id=run_context.run_id,
+            conversation_id=conv_id,
+            memory=memory,
+            tools=tools,
+            images=images,
+            persistent_memory_text=persistent_memory_text,
+            memory_ids=memory_ids,
+            current_message_id=current_message_id,
+            application_secret=settings.secret_key,
+            max_context_bytes=settings.context_length * 4,
+            max_tokens=settings.context_length,
+            selection_limit=settings.skills_top_k,
         )
         effective_context = prepared.effective_context
         skills_used = list(prepared.skills_used)

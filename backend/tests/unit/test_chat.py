@@ -63,6 +63,7 @@ class TestChatEndpoint:
         assert response.status_code == 200
         body = response.json()
         assert any(item["name"] == "archon.code-review" for item in body["skills_used"])
+        assert len(body["skills_used"]) <= 3
 
         provenance = client.get(f"/api/runs/{body['run_id']}/effective-context")
         assert provenance.status_code == 200
