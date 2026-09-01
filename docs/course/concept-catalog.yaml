@@ -704,16 +704,29 @@
 
 - id: skills-project-instructions
   title: "Skills and project instructions"
-  status: deferred
+  status: implemented
   module: docs/course/modules/06-context-and-memory/README.md
   sources:
-    - backend/app/skills/registry.py
+    - backend/app/instructions/loaders.py
+    - backend/app/instructions/resolver.py
+    - backend/app/skills/persistence.py
+    - backend/app/skills/discovery.py
+    - backend/app/skills/context.py
+    - backend/app/routes/project_instructions.py
     - backend/app/routes/chat.py
     - backend/app/routes/stream.py
+    - backend/app/runtime/context_provenance.py
   tests:
-    - backend/tests/unit/test_skills_security.py
-  evidence: []
-  limitations: "Keyword-selected skills are wired into sync/SSE and selected skill IDs appear in effective-context provenance. Filesystem project instructions, immutable content versions, scope ownership and a precedence resolver are deferred until Archon has an authorized project-workspace model."
+    - backend/tests/unit/test_instruction_loaders.py
+    - backend/tests/unit/test_instruction_precedence.py
+    - backend/tests/unit/test_instruction_snapshots.py
+    - backend/tests/unit/test_skill_discovery_enrichment.py
+    - backend/tests/integration/test_scoped_configuration_apis.py
+    - backend/tests/integration/test_instruction_snapshot_api.py
+    - backend/tests/integration/test_skill_migration.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: "At a642952 the local candidate implements immutable owner/project-scoped skill revisions, reviewed ordered project-instruction snapshots, deterministic precedence and budgets, metadata-first discovery, sync/SSE enrichment, and exact metadata-only provenance. Migrations 15-21 and repository tests cover the bounded contract; deployed remains no, and no public service, production workspace provisioning, hosted migration, managed MCP credential broker, or production SLO is claimed."
 
 - id: pii-redaction-data-boundaries
   title: "PII redaction and data boundaries"

@@ -24,7 +24,7 @@ roadmap:
   - id: coordination
     title: Delegation and governed integrations
     question: How does work cross agent and process boundaries safely?
-    outcome: Explain bounded delegation, lineage, signed envelopes, MCP transports, and inventory.
+    outcome: Explain bounded delegation, lineage, signed envelopes, governed stdio/Streamable HTTP MCP profiles, and scoped inventory.
     module_ids: [11-bounded-delegation, 12-governed-mcp]
   - id: product-operations
     title: Product surface and operations
@@ -141,7 +141,7 @@ stories:
         from: Conversation
         to: Context window
         relationship: SELECTS
-        explanation: Only scoped messages, instructions, memory, and provenance enter the current model context.
+        explanation: Approved immutable project-instruction snapshots and exact skill revisions join scoped messages and memory; hashes, order, and selection reasons enter provenance without raw bodies.
         concept_ids: [context-windows, conversation-lifecycle, skills-project-instructions]
       - title: Load durable memory
         from: Encrypted memory
@@ -292,8 +292,8 @@ architecture:
       components:
         - id: context-runtime
           title: Context builder
-          responsibility: Assemble scoped messages, memory, instructions, and provenance.
-          concept_ids: [context-windows, conversation-lifecycle]
+          responsibility: Assemble approved instruction snapshots and exact selected skill revisions with scoped messages, memory, budgets, and metadata-only provenance.
+          concept_ids: [context-windows, conversation-lifecycle, skills-project-instructions]
         - id: react-runtime
           title: Bounded ReAct engine
           responsibility: Coordinate provider calls, tool proposals, feedback, and stop reasons.
@@ -304,7 +304,7 @@ architecture:
           concept_ids: [provider-adapters-capability-parity, structured-output-prompt-caching]
         - id: tool-layer
           title: Tool and MCP layer
-          responsibility: Validate, govern, isolate, and invoke local or MCP tools.
+          responsibility: Select schemas lazily, then validate, govern, isolate, and invoke native or deployment-profiled stdio/Streamable HTTP MCP tools.
           concept_ids: [tool-contracts, mcp, mcp-transports-inventory]
     - id: data-evidence
       title: Data and evidence
