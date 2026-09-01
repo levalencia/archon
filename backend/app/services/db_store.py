@@ -324,6 +324,11 @@ class ContextSnapshotRow(Base):
     summarized_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     memory_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     skill_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    instruction_revisions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    skill_revisions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    selected_capability_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    rejected_capability_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    context_cost_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     input_asset_fingerprints_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     summary_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     estimated_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -867,11 +872,54 @@ class SkillRevisionRow(Base):
     manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     tags_json: Mapped[str] = mapped_column(Text, nullable=False)
     references_json: Mapped[str] = mapped_column(Text, nullable=False)
+    triggers_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    negative_triggers_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    required_capability_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    context_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source_url: Mapped[str] = mapped_column(String(2000), nullable=False)
     source_revision: Mapped[str] = mapped_column(String(255), nullable=False)
     trust_state: Mapped[str] = mapped_column(String(20), nullable=False)
     review_state: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SkillReferenceRow(Base):
+    # Bounded reference content loaded only after selection.
+    __tablename__ = "skill_references"
+    __table_args__ = (
+        CheckConstraint("byte_count >= 0 AND byte_count <= 65536", name="ck_skill_reference_bytes"),
+    )
+    revision_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("skill_revisions.id", ondelete="CASCADE"), primary_key=True
+    )
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class ProjectSkillPinRow(Base):
+    # Project pin supporting visible Archon-owned revisions.
+    __tablename__ = "project_skill_pins"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_id", "project_id"],
+            ["project_workspaces.owner_id", "project_workspaces.project_id"],
+            ondelete="CASCADE",
+            name="fk_skill_pin_workspace",
+        ),
+        Index("ix_skill_pins_scope_enabled", "owner_id", "project_id", "enabled"),
+    )
+    owner_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    revision_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("skill_revisions.id"), primary_key=True
+    )
+    revision_owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class ProjectWorkspaceRow(Base):

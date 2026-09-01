@@ -15,7 +15,17 @@ MAX_REFERENCES = 32
 MAX_REFERENCE_BYTES = 1024
 MAX_TAGS = 32
 _NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
-_ALLOWED_KEYS = {"name", "description", "version", "tags", "references"}
+_ALLOWED_KEYS = {
+    "name",
+    "description",
+    "version",
+    "tags",
+    "references",
+    "triggers",
+    "negative_triggers",
+    "required_capability_ids",
+    "context_cost",
+}
 
 
 class SkillParseError(ValueError):
@@ -23,10 +33,13 @@ class SkillParseError(ValueError):
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
-    def compose_node(self, parent: yaml.Node | None, index: int | None) -> yaml.Node:
+    def compose_node(self, parent: yaml.Node | None, index: int) -> yaml.Node:
         if self.check_event(yaml.AliasEvent):
             raise SkillParseError("YAML aliases are not allowed")
-        return super().compose_node(parent, index)
+        node = super().compose_node(parent, index)
+        if node is None:  # pragma: no cover - defensive against malformed loader state
+            raise SkillParseError("invalid YAML node")
+        return node
 
 
 def _construct_mapping(loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False) -> Any:
@@ -49,6 +62,10 @@ class ParsedSkill:
     version: str
     tags: tuple[str, ...]
     references: tuple[str, ...]
+    triggers: tuple[str, ...]
+    negative_triggers: tuple[str, ...]
+    required_capability_ids: tuple[str, ...]
+    context_cost: int
     instructions: str
     raw_content: str
     content_hash: str
@@ -114,6 +131,25 @@ def parse_skill_markdown(data: bytes, *, max_bytes: int = MAX_SKILL_BYTES) -> Pa
     if not isinstance(raw_references, list) or len(raw_references) > MAX_REFERENCES:
         raise SkillParseError(f"references must be a list with at most {MAX_REFERENCES} items")
     references = tuple(_safe_reference(item) for item in raw_references)
+
+    def terms(key: str, maximum: int = 32) -> tuple[str, ...]:
+        raw = manifest.get(key, [])
+        if not isinstance(raw, list) or len(raw) > maximum:
+            raise SkillParseError(f"{key} must be a list with at most {maximum} items")
+        if any(not isinstance(item, str) or not item.strip() or len(item) > 128 for item in raw):
+            raise SkillParseError(f"{key} must contain bounded non-empty strings")
+        if len(set(raw)) != len(raw):
+            raise SkillParseError(f"{key} values must be unique")
+        return tuple(raw)
+
+    triggers = terms("triggers")
+    negative_triggers = terms("negative_triggers")
+    required_capability_ids = terms("required_capability_ids")
+    if any(not _NAME.fullmatch(item) for item in required_capability_ids):
+        raise SkillParseError("required_capability_ids must contain capability identifiers")
+    context_cost = manifest.get("context_cost", len(instructions.encode("utf-8")))
+    if type(context_cost) is not int or not 0 <= context_cost <= MAX_SKILL_BYTES:
+        raise SkillParseError("context_cost must be a bounded non-negative integer")
     canonical_manifest = yaml.safe_dump(manifest, sort_keys=True, allow_unicode=True).encode(
         "utf-8"
     )
@@ -123,6 +159,10 @@ def parse_skill_markdown(data: bytes, *, max_bytes: int = MAX_SKILL_BYTES) -> Pa
         version=version.strip(),
         tags=tuple(raw_tags),
         references=references,
+        triggers=triggers,
+        negative_triggers=negative_triggers,
+        required_capability_ids=required_capability_ids,
+        context_cost=context_cost,
         instructions=instructions,
         raw_content=text,
         content_hash=hashlib.sha256(data).hexdigest(),

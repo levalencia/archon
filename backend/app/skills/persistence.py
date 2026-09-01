@@ -15,8 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.services.db_store import (
     ProjectInstructionRevisionRow,
     ProjectSkillBindingRow,
+    ProjectSkillPinRow,
     ProjectWorkspaceRow,
     SkillPackageRow,
+    SkillReferenceRow,
     SkillRevisionRow,
 )
 from app.skills.parser import ParsedSkill
@@ -36,6 +38,7 @@ class InstalledSkill:
     revision_id: str
     revision_number: int
     content_hash: str
+    name: str
 
 
 class SkillRepository:
@@ -53,6 +56,7 @@ class SkillRepository:
         source_revision: str,
         trust_state: str = "untrusted",
         review_state: str = "pending",
+        reference_contents: dict[str, str] | None = None,
     ) -> InstalledSkill:
         now = datetime.now(tz=UTC)
         async with self._sessions() as session, session.begin():
@@ -76,7 +80,11 @@ class SkillRepository:
             )
             if duplicate is not None:
                 return InstalledSkill(
-                    package.id, duplicate.id, duplicate.revision_number, duplicate.content_hash
+                    package.id,
+                    duplicate.id,
+                    duplicate.revision_number,
+                    duplicate.content_hash,
+                    parsed.name,
                 )
             last = await session.scalar(
                 select(SkillRevisionRow.revision_number)
@@ -96,6 +104,12 @@ class SkillRepository:
                 manifest_hash=parsed.manifest_hash,
                 tags_json=json.dumps(parsed.tags, separators=(",", ":")),
                 references_json=json.dumps(parsed.references, separators=(",", ":")),
+                triggers_json=json.dumps(parsed.triggers, separators=(",", ":")),
+                negative_triggers_json=json.dumps(parsed.negative_triggers, separators=(",", ":")),
+                required_capability_ids_json=json.dumps(
+                    parsed.required_capability_ids, separators=(",", ":")
+                ),
+                context_cost=parsed.context_cost,
                 source_url=source_url,
                 source_revision=source_revision,
                 trust_state=trust_state,
@@ -105,9 +119,28 @@ class SkillRepository:
             session.add(row)
             try:
                 await session.flush()
+                for path, content in sorted((reference_contents or {}).items()):
+                    if path not in parsed.references:
+                        raise ValueError("reference content is not declared by the manifest")
+                    encoded = content.encode("utf-8")
+                    if len(encoded) > 65_536:
+                        raise ValueError("skill reference exceeds 65536 bytes")
+                    session.add(
+                        SkillReferenceRow(
+                            revision_id=row.id,
+                            owner_id=owner_id,
+                            path=path,
+                            content=content,
+                            content_hash=hashlib.sha256(encoded).hexdigest(),
+                            byte_count=len(encoded),
+                        )
+                    )
+                await session.flush()
             except IntegrityError as exc:
                 raise SkillConflictError("concurrent skill revision conflict") from exc
-            return InstalledSkill(package.id, row.id, row.revision_number, row.content_hash)
+            return InstalledSkill(
+                package.id, row.id, row.revision_number, row.content_hash, parsed.name
+            )
 
     async def get_revision(
         self, *, owner_id: str, package_id: str, revision_id: str
@@ -132,7 +165,21 @@ class SkillRepository:
         package_id: str,
         revision_id: str,
         enabled: bool = True,
+        revision_owner_id: str | None = None,
     ) -> None:
+        revision_owner = revision_owner_id or owner_id
+        if revision_owner != owner_id:
+            await self.get_revision(
+                owner_id=revision_owner, package_id=package_id, revision_id=revision_id
+            )
+            await self._bind_shared(
+                owner_id=owner_id,
+                project_id=project_id,
+                revision_id=revision_id,
+                revision_owner_id=revision_owner,
+                enabled=enabled,
+            )
+            return
         await self.get_revision(owner_id=owner_id, package_id=package_id, revision_id=revision_id)
         now = datetime.now(tz=UTC)
         async with self._sessions() as session, session.begin():
@@ -161,6 +208,110 @@ class SkillRepository:
                 binding.enabled = enabled
                 binding.updated_at = now
 
+    async def _bind_shared(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        revision_id: str,
+        revision_owner_id: str,
+        enabled: bool,
+    ) -> None:
+        now = datetime.now(tz=UTC)
+        async with self._sessions() as session, session.begin():
+            workspace = await session.get(ProjectWorkspaceRow, (owner_id, project_id))
+            if workspace is None:
+                session.add(
+                    ProjectWorkspaceRow(
+                        owner_id=owner_id, project_id=project_id, created_at=now, updated_at=now
+                    )
+                )
+                await session.flush()
+            pin = await session.get(ProjectSkillPinRow, (owner_id, project_id, revision_id))
+            if pin is None:
+                session.add(
+                    ProjectSkillPinRow(
+                        owner_id=owner_id,
+                        project_id=project_id,
+                        revision_id=revision_id,
+                        revision_owner_id=revision_owner_id,
+                        enabled=enabled,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+            else:
+                pin.enabled = enabled
+                pin.updated_at = now
+
+    async def list_discoverable(self, *, owner_id: str) -> list[SkillRevisionRow]:
+        # Metadata-only query; content is fetched by get_visible_revision after selection.
+        from app.skills.bundled import ARCHON_OWNER_ID
+
+        async with self._sessions() as session:
+            rows = list(
+                await session.scalars(
+                    select(SkillRevisionRow)
+                    .where(
+                        SkillRevisionRow.owner_id.in_((owner_id, ARCHON_OWNER_ID)),
+                        SkillRevisionRow.review_state == "approved",
+                        SkillRevisionRow.trust_state.in_(("allowlisted", "verified")),
+                    )
+                    .order_by(
+                        SkillRevisionRow.owner_id,
+                        SkillRevisionRow.package_id,
+                        SkillRevisionRow.revision_number.desc(),
+                    )
+                )
+            )
+        latest: dict[str, SkillRevisionRow] = {}
+        for row in rows:
+            latest.setdefault(row.package_id, row)
+        return list(latest.values())
+
+    async def list_pin_ids(self, *, owner_id: str, project_id: str) -> tuple[str, ...]:
+        async with self._sessions() as session:
+            local = await session.scalars(
+                select(ProjectSkillBindingRow.revision_id).where(
+                    ProjectSkillBindingRow.owner_id == owner_id,
+                    ProjectSkillBindingRow.project_id == project_id,
+                    ProjectSkillBindingRow.enabled.is_(True),
+                )
+            )
+            shared = await session.scalars(
+                select(ProjectSkillPinRow.revision_id).where(
+                    ProjectSkillPinRow.owner_id == owner_id,
+                    ProjectSkillPinRow.project_id == project_id,
+                    ProjectSkillPinRow.enabled.is_(True),
+                )
+            )
+            return tuple(sorted((*local.all(), *shared.all())))
+
+    async def get_visible_revision(self, *, owner_id: str, revision_id: str) -> SkillRevisionRow:
+        from app.skills.bundled import ARCHON_OWNER_ID
+
+        async with self._sessions() as session:
+            row = await session.scalar(
+                select(SkillRevisionRow).where(
+                    SkillRevisionRow.id == revision_id,
+                    SkillRevisionRow.owner_id.in_((owner_id, ARCHON_OWNER_ID)),
+                    SkillRevisionRow.review_state == "approved",
+                )
+            )
+            if row is None:
+                raise SkillNotFoundError("skill revision not found in visible scope")
+            return row
+
+    async def get_reference(
+        self, *, owner_id: str, revision_id: str, path: str, max_bytes: int
+    ) -> SkillReferenceRow:
+        revision = await self.get_visible_revision(owner_id=owner_id, revision_id=revision_id)
+        async with self._sessions() as session:
+            row = await session.get(SkillReferenceRow, (revision_id, path))
+            if row is None or row.owner_id != revision.owner_id or row.byte_count > max_bytes:
+                raise SkillNotFoundError("skill reference not found in visible scope")
+            return row
+
     async def list_bound(self, *, owner_id: str, project_id: str) -> list[SkillRevisionRow]:
         async with self._sessions() as session:
             result = await session.scalars(
@@ -177,7 +328,18 @@ class SkillRepository:
                 )
                 .order_by(SkillRevisionRow.created_at, SkillRevisionRow.id)
             )
-            return list(result)
+            rows = list(result)
+            shared = await session.scalars(
+                select(SkillRevisionRow)
+                .join(ProjectSkillPinRow, ProjectSkillPinRow.revision_id == SkillRevisionRow.id)
+                .where(
+                    ProjectSkillPinRow.owner_id == owner_id,
+                    ProjectSkillPinRow.project_id == project_id,
+                    ProjectSkillPinRow.enabled.is_(True),
+                )
+                .order_by(SkillRevisionRow.created_at, SkillRevisionRow.id)
+            )
+            return [*rows, *shared]
 
 
 class ProjectInstructionRepository:

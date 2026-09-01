@@ -52,6 +52,40 @@ def _message_ids(values: tuple[int, ...], label: str) -> tuple[int, ...]:
 
 
 @dataclass(frozen=True, slots=True)
+class InstructionRevisionRef:
+    revision_id: str
+    content_hash: str
+    order: int
+
+    def __post_init__(self) -> None:
+        _text(self.revision_id, "instruction revision_id", 255)
+        _hash(self.content_hash, "instruction content_hash")
+        if type(self.order) is not int or self.order < 0:
+            raise ValueError("instruction order must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class SkillRevisionRef:
+    capability_id: str
+    revision_id: str
+    content_hash: str
+    reasons: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        _text(self.capability_id, "capability_id", 255)
+        _text(self.revision_id, "skill revision_id", 255)
+        _hash(self.content_hash, "skill content_hash")
+        _unique_text(tuple(self.reasons), "skill reasons", 32)
+
+
+def _hash(value: str, label: str) -> str:
+    value = _text(value, label, 64)
+    if len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
+        raise ValueError(f"{label} must be canonical SHA-256")
+    return value
+
+
+@dataclass(frozen=True, slots=True)
 class EffectiveContextManifest:
     owner_id: str
     project_id: str
@@ -61,6 +95,11 @@ class EffectiveContextManifest:
     summarized_message_ids: tuple[int, ...] = ()
     memory_ids: tuple[str, ...] = ()
     skill_ids: tuple[str, ...] = ()
+    instruction_revisions: tuple[InstructionRevisionRef, ...] = ()
+    skill_revisions: tuple[SkillRevisionRef, ...] = ()
+    selected_capability_ids: tuple[str, ...] = ()
+    rejected_capability_ids: tuple[str, ...] = ()
+    context_cost_bytes: int = 0
     input_asset_fingerprints: tuple[str, ...] = ()
     estimated_tokens: int = 0
     summary_version: str | None = None
@@ -90,6 +129,23 @@ class EffectiveContextManifest:
             self, "memory_ids", _unique_text(tuple(self.memory_ids), "memory_ids", 1000)
         )
         object.__setattr__(self, "skill_ids", _unique_text(tuple(self.skill_ids), "skill_ids", 100))
+        object.__setattr__(self, "instruction_revisions", tuple(self.instruction_revisions))
+        object.__setattr__(self, "skill_revisions", tuple(self.skill_revisions))
+        object.__setattr__(
+            self,
+            "selected_capability_ids",
+            _unique_text(tuple(self.selected_capability_ids), "selected_capability_ids", 100),
+        )
+        object.__setattr__(
+            self,
+            "rejected_capability_ids",
+            _unique_text(tuple(self.rejected_capability_ids), "rejected_capability_ids", 100),
+        )
+        if (
+            type(self.context_cost_bytes) is not int
+            or not 0 <= self.context_cost_bytes <= _MAX_BIGINT
+        ):
+            raise ValueError("context_cost_bytes must be a non-negative integer")
         asset_fingerprints = _unique_text(
             tuple(self.input_asset_fingerprints), "input_asset_fingerprints", 16
         )
@@ -128,6 +184,26 @@ class EffectiveContextManifest:
             "summarized_message_ids": list(self.summarized_message_ids),
             "memory_ids": list(self.memory_ids),
             "skill_ids": list(self.skill_ids),
+            "instruction_revisions": [
+                {
+                    "revision_id": item.revision_id,
+                    "content_hash": item.content_hash,
+                    "order": item.order,
+                }
+                for item in self.instruction_revisions
+            ],
+            "skill_revisions": [
+                {
+                    "capability_id": item.capability_id,
+                    "revision_id": item.revision_id,
+                    "content_hash": item.content_hash,
+                    "reasons": list(item.reasons),
+                }
+                for item in self.skill_revisions
+            ],
+            "selected_capability_ids": list(self.selected_capability_ids),
+            "rejected_capability_ids": list(self.rejected_capability_ids),
+            "context_cost_bytes": self.context_cost_bytes,
             "input_asset_fingerprints": list(self.input_asset_fingerprints),
             "estimated_tokens": self.estimated_tokens,
             "summary_version": self.summary_version,

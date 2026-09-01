@@ -85,3 +85,8 @@ omit = ["tests/*"]
 [tool.coverage.report]
 fail_under = 50
 
+[dependency-groups]
+dev = [
+    "types-pyyaml>=6.0.12.20260815",
+]
+

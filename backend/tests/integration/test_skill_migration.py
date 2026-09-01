@@ -44,7 +44,10 @@ def test_skill_instruction_migration_round_trip_and_guards(tmp_path: Path, monke
         )
         connection.execute(
             text(
-                "INSERT INTO skill_revisions VALUES "
+                "INSERT INTO skill_revisions "
+                "(id,package_id,owner_id,revision_number,declared_version,description,content,"
+                "content_hash,manifest_hash,tags_json,references_json,source_url,source_revision,"
+                "trust_state,review_state,created_at) VALUES "
                 "('rev','pkg','owner',1,'1.0','safe','content',"
                 "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',"
                 "'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',"
@@ -54,13 +57,18 @@ def test_skill_instruction_migration_round_trip_and_guards(tmp_path: Path, monke
         )
         connection.execute(
             text(
-                "INSERT INTO project_workspaces VALUES "
+                "INSERT INTO project_workspaces "
+                "(owner_id,project_id,current_instruction_revision_id,"
+                "created_at,updated_at) VALUES "
                 "('owner','project',NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
             )
         )
         connection.execute(
             text(
-                "INSERT INTO project_instruction_revisions VALUES "
+                "INSERT INTO project_instruction_revisions "
+                "(id,owner_id,project_id,revision_number,content,content_hash,"
+                "review_state,created_at) "
+                "VALUES "
                 "('inst','owner','project',1,'instructions',"
                 "'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',"
                 "'approved',CURRENT_TIMESTAMP)"
@@ -68,7 +76,8 @@ def test_skill_instruction_migration_round_trip_and_guards(tmp_path: Path, monke
         )
         connection.execute(
             text(
-                "INSERT INTO project_skill_bindings VALUES "
+                "INSERT INTO project_skill_bindings "
+                "(owner_id,project_id,package_id,revision_id,enabled,created_at,updated_at) VALUES "
                 "('owner','project','pkg','rev',1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
             )
         )
@@ -85,7 +94,9 @@ def test_skill_instruction_migration_round_trip_and_guards(tmp_path: Path, monke
         with pytest.raises(IntegrityError):
             connection.execute(
                 text(
-                    "INSERT INTO project_skill_bindings VALUES "
+                    "INSERT INTO project_skill_bindings "
+                    "(owner_id,project_id,package_id,revision_id,enabled,created_at,updated_at) "
+                    "VALUES "
                     "('other','project','pkg','rev',1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
                 )
             )
