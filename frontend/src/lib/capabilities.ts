@@ -1,35 +1,57 @@
-import { authenticatedFetch } from "$lib/auth";
+import { authenticatedFetch } from '$lib/auth';
 
-export type Permission = "allow" | "ask" | "deny";
 export type Capability = {
   id: string;
   name: string;
   description: string;
-  kind: "native_tool" | "mcp_tool" | "skill";
+  kind: string;
   source: string;
   version: string;
-  risk_classes: string[];
-  visible: boolean;
-  selected: boolean;
-  executable: boolean;
+  trust_state: string;
+  enabled: boolean;
   pinned: boolean;
-  permission: Permission;
-  transport?: "stdio" | "streamable_http" | null;
-  health?: "healthy" | "degraded" | "unavailable" | "unknown" | null;
-  schema_hash?: string | null;
-  estimated_tokens?: number;
-  selection_reason?: string | null;
+  risk_classes: string[];
 };
-export class CapabilitiesApiError extends Error { constructor(public status: number, message: string) { super(message); } }
+
+export class CapabilitiesApiError extends Error {
+  constructor(public status: number, public code: string) {
+    super(status === 401 ? 'Sign in required' : `Capabilities request failed (${code})`);
+    this.name = 'CapabilitiesApiError';
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await authenticatedFetch(url, init);
-  if (!response.ok) throw new CapabilitiesApiError(response.status, `Capabilities request failed (${response.status})`);
+  if (!response.ok) {
+    let code = `http_${response.status}`;
+    try {
+      const payload = await response.json();
+      code = payload?.detail?.code ?? payload?.code ?? code;
+    } catch { /* non-JSON error */ }
+    throw new CapabilitiesApiError(response.status, code);
+  }
   return response.json() as Promise<T>;
 }
-const base = (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/capabilities`;
+
+const base = (projectId: string) => `/api/capabilities/projects/${encodeURIComponent(projectId)}`;
+const body = (value: unknown): RequestInit => ({
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value),
+});
+
 export async function listEffectiveCapabilities(projectId: string): Promise<Capability[]> {
-  const result = await request<Capability[] | { items?: Capability[] }>(`${base(projectId)}/effective`);
-  return Array.isArray(result) ? result : Array.isArray(result.items) ? result.items : [];
+  const result = await request<{ items?: Capability[] }>(`${base(projectId)}/effective`, body({}));
+  return Array.isArray(result.items) ? result.items : [];
 }
-export const pinCapability = (projectId: string, capabilityId: string) => request<Capability>(`${base(projectId)}/${encodeURIComponent(capabilityId)}/pin`, { method: "POST" });
-export const disableCapability = (projectId: string, capabilityId: string) => request<Capability>(`${base(projectId)}/${encodeURIComponent(capabilityId)}/disable`, { method: "POST" });
+
+export const setCapabilityPreference = (
+  projectId: string,
+  capabilityId: string,
+  preference: { enabled: boolean; pinned: boolean },
+) => request<Capability>(`${base(projectId)}/${encodeURIComponent(capabilityId)}`, {
+  method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(preference),
+});
+
+export const pinCapability = (projectId: string, capability: Pick<Capability, 'id' | 'enabled'>) =>
+  setCapabilityPreference(projectId, capability.id, { enabled: capability.enabled, pinned: true });
+export const disableCapability = (projectId: string, capability: Pick<Capability, 'id' | 'pinned'>) =>
+  setCapabilityPreference(projectId, capability.id, { enabled: false, pinned: capability.pinned });

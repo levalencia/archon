@@ -16,8 +16,11 @@ export type ContextManifest = {
   truncation_reason: string | null; manifest_hash: string;
 };
 export type EffectiveContextEntry = {
-  id: string; name?: string; relative_path?: string; scope_path?: string; revision?: string; version?: string;
-  content_hash?: string; schema_hash?: string; selection_reason?: string; reason?: string;
+  id: string; name?: string; relative_path?: string; source_path?: string; path?: string; scope_path?: string;
+  revision?: string | number; revision_id?: string; version?: string;
+  content_hash?: string; hash?: string; schema_hash?: string;
+  selection_reason?: string; reason?: string; reasons?: string[];
+  order?: number; resolution_order?: number;
   estimated_tokens?: number; byte_count?: number; permission?: 'allow' | 'ask' | 'deny';
 };
 export type EffectiveContextManifest = {
