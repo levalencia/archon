@@ -3,9 +3,9 @@
   import { listProjectInstructions, scanProjectWorkspace, type ProjectInstruction } from '$lib/project-instructions';
   let { projectId }: { projectId: string } = $props();
   let instructions: ProjectInstruction[] = $state([]);
-  let loading = $state(true); let scanning = $state(false); let error = $state('');
-  async function load() { loading = true; error = ''; try { instructions = await listProjectInstructions(projectId); } catch (e) { error = e instanceof Error ? e.message : 'Instructions unavailable'; } finally { loading = false; } }
-  async function scan() { scanning = true; error = ''; try { await scanProjectWorkspace(projectId); await load(); } catch (e) { error = e instanceof Error ? e.message : 'Workspace scan failed'; } finally { scanning = false; } }
+  let loading = $state(true); let scanning = $state(false); let error = $state(''); let generation = 0;
+  async function load() { const scope=projectId; const current=++generation; loading = true; error = ''; try { const next=await listProjectInstructions(scope); if(current===generation&&scope===projectId) instructions=next; } catch (e) { if(current===generation) error = e instanceof Error ? e.message : 'Instructions unavailable'; } finally { if(current===generation) loading = false; } }
+  async function scan() { const scope=projectId; scanning = true; error = ''; try { await scanProjectWorkspace(scope); if(scope===projectId) await load(); } catch (e) { if(scope===projectId) error = e instanceof Error ? e.message : 'Workspace scan failed'; } finally { if(scope===projectId) scanning = false; } }
   $effect(() => { projectId; queueMicrotask(() => void load()); });
   const shortHash = (hash: string) => hash.length > 14 ? `${hash.slice(0, 12)}…` : hash;
 </script>

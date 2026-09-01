@@ -38,6 +38,10 @@ const body = (value: unknown): RequestInit => ({
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value),
 });
 
+export async function listCapabilityInventory(projectId: string): Promise<Capability[]> {
+  return request<Capability[]>('/api/capabilities/search', body({ query: '', project_id: projectId, limit: 100 }));
+}
+
 export async function listEffectiveCapabilities(projectId: string): Promise<Capability[]> {
   const result = await request<{ items?: Capability[] }>(`${base(projectId)}/effective`, body({}));
   return Array.isArray(result.items) ? result.items : [];
@@ -53,5 +57,7 @@ export const setCapabilityPreference = (
 
 export const pinCapability = (projectId: string, capability: Pick<Capability, 'id' | 'enabled'>) =>
   setCapabilityPreference(projectId, capability.id, { enabled: capability.enabled, pinned: true });
+export const enableCapability = (projectId: string, capability: Pick<Capability, 'id' | 'pinned'>) =>
+  setCapabilityPreference(projectId, capability.id, { enabled: true, pinned: capability.pinned });
 export const disableCapability = (projectId: string, capability: Pick<Capability, 'id' | 'pinned'>) =>
   setCapabilityPreference(projectId, capability.id, { enabled: false, pinned: capability.pinned });

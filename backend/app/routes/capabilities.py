@@ -103,7 +103,11 @@ async def _scoped_index(request: Request, owner_id: str, project_id: str | None)
 
 
 def _item(d: CapabilityDescriptor, enabled: bool = True, pinned: bool = False) -> CapabilityItem:
-    risks = sorted(set(d.required_permissions)) or ["read"]
+    risks = sorted(set(d.required_permissions))
+    if str(d.kind) == "mcp":
+        risks = sorted(set(d.tags)) or ["network"]
+    elif not risks:
+        risks = ["read"]
     return CapabilityItem(
         id=d.id,
         name=d.name,

@@ -15,6 +15,8 @@
   let loading = $state(true);
   let busy = $state('');
   let error = $state('');
+  let toolErrors: Record<string, string> = $state({});
+  let generation = 0;
 
   function errorMessage(value: unknown): string {
     if (value instanceof MCPApiError) {
@@ -27,68 +29,72 @@
   }
 
   async function load() {
-    loading = true; error = '';
+    const scope = projectId; const current = ++generation;
+    loading = true; error = ''; toolErrors = {};
     try {
-      profiles = await listProfiles();
-      if (!profileId && profiles.length) profileId = profiles[0].id;
-      servers = await listServers(projectId);
-      const entries = await Promise.all(servers.map(async (server) => {
-        try { return [server.id, await listTools(projectId, server.id)] as const; }
-        catch { return [server.id, []] as const; }
+      const nextProfiles = await listProfiles();
+      const nextServers = await listServers(scope);
+      const failures: Record<string, string> = {};
+      const entries = await Promise.all(nextServers.map(async (server) => {
+        try { return [server.id, await listTools(scope, server.id)] as const; }
+        catch (value) { failures[server.id] = errorMessage(value); return [server.id, []] as const; }
       }));
-      tools = Object.fromEntries(entries);
-    } catch (value) { error = errorMessage(value); }
-    finally { loading = false; }
+      if (current !== generation || scope !== projectId) return;
+      profiles = nextProfiles;
+      if (!profileId && profiles.length) profileId = profiles[0].id;
+      servers = nextServers; tools = Object.fromEntries(entries); toolErrors = failures;
+    } catch (value) { if(current===generation) error = errorMessage(value); }
+    finally { if(current===generation) loading = false; }
   }
 
   async function create() {
     if (!name.trim() || !profileId) return;
-    busy = 'create'; error = '';
+    const scope=projectId;busy = 'create'; error = '';
     try {
-      const server = await createServer(projectId, name.trim(), profileId);
-      servers = [...servers, server]; tools[server.id] = []; name = '';
-    } catch (value) { error = errorMessage(value); }
-    finally { busy = ''; }
+      const server = await createServer(scope, name.trim(), profileId);
+      if(scope===projectId){servers = [...servers, server]; tools[server.id] = []; name = '';}
+    } catch (value) { if(scope===projectId)error = errorMessage(value); }
+    finally { if(scope===projectId)busy = ''; }
   }
 
   async function discover(server: MCPServer) {
-    busy = `discover:${server.id}`; error = '';
+    const scope=projectId;busy = `discover:${server.id}`; error = '';
     try {
-      tools[server.id] = await discoverTools(projectId, server.id);
-      await refreshServer(server.id);
-    } catch (value) { error = errorMessage(value); }
-    finally { busy = ''; }
+      const next=await discoverTools(scope, server.id);
+      if(scope===projectId){tools[server.id] = next;await refreshServer(scope);}
+    } catch (value) { if(scope===projectId)error = errorMessage(value); }
+    finally { if(scope===projectId)busy = ''; }
   }
 
-  async function refreshServer(id: string) {
-    const refreshed = await listServers(projectId);
-    servers = refreshed;
+  async function refreshServer(scope: string) {
+    const refreshed = await listServers(scope);
+    if(scope===projectId)servers = refreshed;
   }
 
   async function remove(server: MCPServer) {
     if (!confirm(`Delete ${server.name}? Discovered tool metadata will also be removed.`)) return;
-    busy = `delete:${server.id}`; error = '';
-    try { await deleteServer(projectId, server.id); servers = servers.filter((item) => item.id !== server.id); }
-    catch (value) { error = errorMessage(value); }
-    finally { busy = ''; }
+    const scope=projectId;busy = `delete:${server.id}`; error = '';
+    try { await deleteServer(scope, server.id); if(scope===projectId)servers = servers.filter((item) => item.id !== server.id); }
+    catch (value) { if(scope===projectId)error = errorMessage(value); }
+    finally { if(scope===projectId)busy = ''; }
   }
 
   async function setServerEnabled(server: MCPServer) {
-    busy = `server:${server.id}`; error = '';
+    const scope=projectId;busy = `server:${server.id}`; error = '';
     try {
-      const updated = await updateServer(projectId, server.id, { enabled: !server.enabled });
-      servers = servers.map((item) => item.id === updated.id ? updated : item);
-    } catch (value) { error = errorMessage(value); }
-    finally { busy = ''; }
+      const updated = await updateServer(scope, server.id, { enabled: !server.enabled });
+      if(scope===projectId)servers = servers.map((item) => item.id === updated.id ? updated : item);
+    } catch (value) { if(scope===projectId)error = errorMessage(value); }
+    finally { if(scope===projectId)busy = ''; }
   }
 
   async function setToolEnabled(server: MCPServer, tool: MCPTool) {
-    busy = `tool:${tool.id}`; error = '';
+    const scope=projectId;busy = `tool:${tool.id}`; error = '';
     try {
-      const updated = await toggleTool(projectId, server.id, tool.name, !tool.enabled);
-      tools[server.id] = (tools[server.id] ?? []).map((item) => item.id === updated.id ? updated : item);
-    } catch (value) { error = errorMessage(value); }
-    finally { busy = ''; }
+      const updated = await toggleTool(scope, server.id, tool.name, !tool.enabled);
+      if(scope===projectId)tools[server.id] = (tools[server.id] ?? []).map((item) => item.id === updated.id ? updated : item);
+    } catch (value) { if(scope===projectId)error = errorMessage(value); }
+    finally { if(scope===projectId)busy = ''; }
   }
 
   const healthClass = (health: string) => health === 'healthy' ? 'text-[var(--success)]' :
@@ -141,7 +147,8 @@
               <button aria-label={`Delete ${server.name}`} onclick={() => remove(server)} disabled={busy === `delete:${server.id}`} class="min-h-11 min-w-11 p-1.5 text-[var(--error)]"><Trash2 size={14}/></button>
             </div>
           </div>
-          {#if (tools[server.id] ?? []).length === 0}<p class="text-xs text-[var(--text-muted)]">No tools discovered.</p>
+          {#if toolErrors[server.id]}<p class="text-xs text-[var(--error)]" role="alert">Tools unavailable: {toolErrors[server.id]}</p>
+          {:else if (tools[server.id] ?? []).length === 0}<p class="text-xs text-[var(--text-muted)]">No tools discovered.</p>
           {:else}<div class="grid gap-2">
             {#each tools[server.id] as tool (tool.id)}
               <div data-testid="mcp-tool" class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 bg-[var(--bg-tertiary)] rounded-lg p-3">

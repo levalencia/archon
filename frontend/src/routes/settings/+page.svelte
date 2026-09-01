@@ -1,10 +1,15 @@
 <script lang="ts">
+ import { onMount } from 'svelte';
  import { Settings, FolderKey } from 'lucide-svelte';
+ import { DEFAULT_PROJECT_ID, readProjectScope, writeProjectScope } from '$lib/project-scope';
  import WorkspaceInstructions from '$lib/components/settings/WorkspaceInstructions.svelte';
  import SkillsCatalog from '$lib/components/settings/SkillsCatalog.svelte';
  import CapabilityInventory from '$lib/components/settings/CapabilityInventory.svelte';
  import MCPIntegrations from '$lib/components/MCPIntegrations.svelte';
- let projectId=$state('default');
+ let projectId=$state(DEFAULT_PROJECT_ID);
+ let scopeReady=$state(false);
+ onMount(()=>{projectId=readProjectScope();scopeReady=true;});
+ $effect(()=>{if(scopeReady) writeProjectScope(projectId);});
 </script>
 <svelte:head><title>Project Settings · Archon</title></svelte:head>
 <div class="mx-auto min-w-0 max-w-5xl space-y-5 overflow-x-clip p-4 sm:p-6">

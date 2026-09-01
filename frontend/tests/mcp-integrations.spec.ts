@@ -8,7 +8,7 @@ async function mockSettingsBase(page: Page) {
   await page.addInitScript(() => localStorage.setItem('archon_token', 'test-token'));
   await page.route('**/api/projects/default/instructions', route => json(route, []));
   await page.route('**/api/skills/catalog?**', route => json(route, []));
-  await page.route('**/api/capabilities/projects/default/effective', route => json(route, { items: [] }));
+  await page.route('**/api/capabilities/search', route => json(route, []));
   await page.route('**/api/mcp/profiles', route => json(route, [{ id: 'official-docs', display_name: 'Official Docs' }]));
 }
 
