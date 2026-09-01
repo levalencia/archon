@@ -87,8 +87,8 @@ class EffectiveContextEnrichmentService:
                 )
             spent += instruction_cost
         for selected in selection.selected:
-            row = await self._skills.get_visible_revision(
-                owner_id=owner_id, revision_id=selected.revision_id
+            row = await self._skills.get_project_visible_revision(
+                owner_id=owner_id, project_id=project_id, revision_id=selected.revision_id
             )
             parsed = parse_skill_markdown(row.content.encode("utf-8"))
             cost = len(parsed.instructions.encode("utf-8"))

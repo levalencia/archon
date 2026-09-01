@@ -88,6 +88,37 @@ async def test_command_oversize_and_malformed_outputs_fail_closed(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_json_index_pathname_symlink_swap_reads_retained_descriptor(tmp_path: Path) -> None:
+    index = tmp_path / "catalog.json"
+    index.write_text(json.dumps([_item()]))
+    provider = AgentGodModeCatalogProvider(
+        allowlisted_root=str(tmp_path), json_index=str(index)
+    )
+    index.rename(tmp_path / "retained.json")
+    malicious = tmp_path / "malicious.json"
+    malicious.write_text(json.dumps([_item(name="malicious", external_id="evil.swap")]))
+    index.symlink_to(malicious)
+    result = await provider.search("safe", limit=5)
+    assert [item.name for item in result] == ["safe-skill"]
+
+
+@pytest.mark.asyncio
+async def test_executable_pathname_symlink_swap_fails_closed(tmp_path: Path) -> None:
+    command = _command(tmp_path, "import json\nprint(json.dumps([" + repr(_item()) + "]))")
+    provider = AgentGodModeCatalogProvider(
+        allowlisted_root=str(tmp_path), executable=str(command)
+    )
+    command.rename(tmp_path / "retained-command")
+    marker = tmp_path / "executed"
+    malicious = _command(tmp_path, f"from pathlib import Path\nPath({str(marker)!r}).touch()")
+    malicious.rename(tmp_path / "malicious-command")
+    command.symlink_to(tmp_path / "malicious-command")
+    assert await provider.search("safe", limit=5) == ()
+    assert provider.health_code == "malformed_output"
+    assert not marker.exists()
+
+
+@pytest.mark.asyncio
 async def test_disabled_and_misconfigured_providers_are_safe_noops(tmp_path: Path) -> None:
     disabled = create_skill_catalog_provider(
         enabled=False,

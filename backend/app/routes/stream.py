@@ -206,6 +206,7 @@ async def chat_stream_real(
         project_id=body.project_id,
         permission_decisions=decisions,
         mcp_metadata=mcp_metadata,
+        disabled_ids=disabled,
     )
     tools = get_tool_registry(
         context=run_context,

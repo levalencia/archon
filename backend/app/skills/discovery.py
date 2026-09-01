@@ -85,7 +85,9 @@ class SkillDiscoveryService:
         return self._repository
 
     async def discover(self, request: DiscoveryRequest) -> DiscoveryResult:
-        rows = await self._repository.list_discoverable(owner_id=request.owner_id)
+        rows = await self._repository.list_project_discoverable(
+            owner_id=request.owner_id, project_id=request.project_id
+        )
         pins = set(
             await self._repository.list_pin_ids(
                 owner_id=request.owner_id, project_id=request.project_id
@@ -160,9 +162,11 @@ class SkillDiscoveryService:
             visible, chosen, rejected, selection.hidden_ids, selection.context_cost, available
         )
 
-    async def load_selected(self, *, owner_id: str, revision_id: str) -> LoadedSkill:
-        row = await self._repository.get_visible_revision(
-            owner_id=owner_id, revision_id=revision_id
+    async def load_selected(
+        self, *, owner_id: str, project_id: str, revision_id: str
+    ) -> LoadedSkill:
+        row = await self._repository.get_project_visible_revision(
+            owner_id=owner_id, project_id=project_id, revision_id=revision_id
         )
         parsed = parse_skill_markdown(row.content.encode("utf-8"))
         prefix = "archon" if row.owner_id == ARCHON_OWNER_ID else "owner"
@@ -175,12 +179,30 @@ class SkillDiscoveryService:
         )
 
     async def load_reference(
-        self, *, owner_id: str, revision_id: str, path: str, max_bytes: int = 16_384
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        revision_id: str,
+        path: str,
+        disabled_ids: frozenset[str] = frozenset(),
+        max_bytes: int = 16_384,
     ) -> LoadedReference:
         if not 1 <= max_bytes <= 65_536:
             raise ValueError("max_bytes must be between 1 and 65536")
+        revision = await self._repository.get_project_visible_revision(
+            owner_id=owner_id, project_id=project_id, revision_id=revision_id
+        )
+        parsed = parse_skill_markdown(revision.content.encode("utf-8"))
+        prefix = "archon" if revision.owner_id == ARCHON_OWNER_ID else "owner"
+        if f"{prefix}.{parsed.name}" in disabled_ids:
+            raise PermissionError("skill is disabled in the current scope")
         row = await self._repository.get_reference(
-            owner_id=owner_id, revision_id=revision_id, path=path, max_bytes=max_bytes
+            owner_id=owner_id,
+            project_id=project_id,
+            revision_id=revision_id,
+            path=path,
+            max_bytes=max_bytes,
         )
         return LoadedReference(
             row.revision_id, row.path, row.content, row.content_hash, row.byte_count

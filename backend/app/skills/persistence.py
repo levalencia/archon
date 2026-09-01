@@ -305,7 +305,7 @@ class SkillRepository:
                 pin.updated_at = now
 
     async def list_discoverable(self, *, owner_id: str) -> list[SkillRevisionRow]:
-        # Metadata-only query; content is fetched by get_visible_revision after selection.
+        """Return the approved catalog for administrative/search use, never runtime scope."""
         from app.skills.bundled import ARCHON_OWNER_ID
 
         async with self._sessions() as session:
@@ -329,6 +329,18 @@ class SkillRepository:
             latest.setdefault(row.package_id, row)
         return list(latest.values())
 
+    async def list_project_discoverable(
+        self, *, owner_id: str, project_id: str
+    ) -> list[SkillRevisionRow]:
+        """Return only exact revisions enabled for this owner/project runtime."""
+        rows = await self.list_bound(owner_id=owner_id, project_id=project_id)
+        return [
+            row
+            for row in rows
+            if row.review_state == "approved"
+            and row.trust_state in {"allowlisted", "verified"}
+        ]
+
     async def list_pin_ids(self, *, owner_id: str, project_id: str) -> tuple[str, ...]:
         async with self._sessions() as session:
             local = await session.scalars(
@@ -348,6 +360,7 @@ class SkillRepository:
             return tuple(sorted((*local.all(), *shared.all())))
 
     async def get_visible_revision(self, *, owner_id: str, revision_id: str) -> SkillRevisionRow:
+        """Catalog visibility lookup; runtime callers use get_project_visible_revision."""
         from app.skills.bundled import ARCHON_OWNER_ID
 
         async with self._sessions() as session:
@@ -362,10 +375,45 @@ class SkillRepository:
                 raise SkillNotFoundError("skill revision not found in visible scope")
             return row
 
+    async def get_project_visible_revision(
+        self, *, owner_id: str, project_id: str, revision_id: str
+    ) -> SkillRevisionRow:
+        """Revalidate an enabled exact revision in the current project."""
+        async with self._sessions() as session:
+            row = await session.get(SkillRevisionRow, revision_id)
+            if row is None or row.review_state != "approved" or row.trust_state not in {
+                "allowlisted",
+                "verified",
+            }:
+                raise SkillNotFoundError("skill revision not enabled in project scope")
+            if row.owner_id == owner_id:
+                binding = await session.get(
+                    ProjectSkillBindingRow, (owner_id, project_id, row.package_id)
+                )
+                visible = binding is not None and binding.enabled and binding.revision_id == row.id
+            else:
+                pin = await session.get(ProjectSkillPinRow, (owner_id, project_id, row.id))
+                visible = (
+                    pin is not None
+                    and pin.enabled
+                    and pin.revision_owner_id == row.owner_id
+                )
+            if not visible:
+                raise SkillNotFoundError("skill revision not enabled in project scope")
+            return row
+
     async def get_reference(
-        self, *, owner_id: str, revision_id: str, path: str, max_bytes: int
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        revision_id: str,
+        path: str,
+        max_bytes: int,
     ) -> SkillReferenceRow:
-        revision = await self.get_visible_revision(owner_id=owner_id, revision_id=revision_id)
+        revision = await self.get_project_visible_revision(
+            owner_id=owner_id, project_id=project_id, revision_id=revision_id
+        )
         async with self._sessions() as session:
             row = await session.get(SkillReferenceRow, (revision_id, path))
             if row is None or row.owner_id != revision.owner_id or row.byte_count > max_bytes:

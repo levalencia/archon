@@ -23,6 +23,7 @@ class GovernedSkillDiscoveryTools:
         permission_decisions: Mapping[str, PermissionDecision | str],
         context_budget: int = 16_384,
         mcp_metadata: Sequence[MCPRuntimeToolMetadata] = (),
+        disabled_ids: frozenset[str] = frozenset(),
     ) -> None:
         self._service = service
         self._owner_id = owner_id
@@ -30,6 +31,7 @@ class GovernedSkillDiscoveryTools:
         self._decisions = dict(permission_decisions)
         self._budget = context_budget
         self._mcp_metadata = tuple(mcp_metadata)
+        self._disabled_ids = frozenset(disabled_ids)
         self._selected: set[str] = set()
 
     async def discover_capabilities(self, intent: str, explicit_id: str = "") -> dict[str, Any]:
@@ -41,6 +43,7 @@ class GovernedSkillDiscoveryTools:
                 explicit_ids=(explicit_id,) if explicit_id else (),
                 permission_decisions=self._decisions,
                 context_budget=self._budget,
+                disabled_ids=self._disabled_ids,
             )
         )
         self._selected = {item.revision_id for item in result.selected}
@@ -106,7 +109,11 @@ class GovernedSkillDiscoveryTools:
         if revision_id not in self._selected:
             raise PermissionError("reference requires a skill selected in the current scope")
         item = await self._service.load_reference(
-            owner_id=self._owner_id, revision_id=revision_id, path=path
+            owner_id=self._owner_id,
+            project_id=self._project_id,
+            revision_id=revision_id,
+            path=path,
+            disabled_ids=self._disabled_ids,
         )
         return {
             "revision_id": item.revision_id,

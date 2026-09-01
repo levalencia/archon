@@ -10,6 +10,22 @@ from app.config import Settings
 from app.main import create_app
 
 
+def _bind_code_review(client: TestClient) -> None:
+    item = next(
+        row for row in client.get("/api/skills/catalog").json() if row["name"] == "code-review"
+    )
+    response = client.put(
+        f"/api/skills/projects/default/{item['id']}",
+        json={
+            "revision_id": item["revision_id"],
+            "revision_owner_id": item["revision_owner_id"],
+            "enabled": True,
+            "pinned": True,
+        },
+    )
+    assert response.status_code == 200
+
+
 @pytest.fixture
 def client(tmp_path) -> TestClient:
     settings = Settings(
@@ -56,6 +72,7 @@ class TestChatEndpoint:
 
     @pytest.mark.unit
     def test_durable_skill_selection_is_visible_in_run_provenance(self, client: TestClient) -> None:
+        _bind_code_review(client)
         response = client.post(
             "/api/chat",
             json={"message": "Review this Python code for security and correctness."},
@@ -140,6 +157,7 @@ class TestChatStreamEndpoint:
 
     @pytest.mark.unit
     def test_stream_uses_same_durable_skill_selection(self, client: TestClient) -> None:
+        _bind_code_review(client)
         response = client.post(
             "/api/chat/stream",
             json={"message": "Review this Python code for security and correctness."},

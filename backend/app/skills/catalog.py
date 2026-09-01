@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import re
+import stat
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
@@ -23,6 +26,32 @@ _ALLOWED_KEYS = {
     "path",
     "revision",
 }
+
+
+def _open_regular_beneath(root: Path, source: Path) -> tuple[int, os.stat_result]:
+    """Open a resolved file through a no-follow descriptor chain rooted at ``root``."""
+    relative = source.relative_to(root)
+    directory_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+    )
+    descriptor = os.open(root, directory_flags)
+    try:
+        for component in relative.parts[:-1]:
+            child = os.open(component, directory_flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        file_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        opened = os.open(relative.parts[-1], file_flags, dir_fd=descriptor)
+    finally:
+        os.close(descriptor)
+    source_stat = os.fstat(opened)
+    if not stat.S_ISREG(source_stat.st_mode) or source_stat.st_nlink != 1:
+        os.close(opened)
+        raise ValueError("catalog source must be a singly-linked regular file")
+    return opened, source_stat
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,16 +116,55 @@ class AgentGodModeCatalogProvider:
         if not root.is_dir():
             raise ValueError("catalog root is not a directory")
         source = Path(executable or json_index).expanduser().resolve(strict=True)
-        if not source.is_relative_to(root) or not source.is_file():
+        if not source.is_relative_to(root):
             raise ValueError("catalog source is outside the allowlisted root")
-        if executable and not os.access(source, os.X_OK):
-            raise ValueError("catalog executable is not executable")
+        descriptor, source_stat = _open_regular_beneath(root, source)
+        try:
+            if executable and not source_stat.st_mode & 0o111:
+                raise ValueError("catalog executable is not executable")
+        except BaseException:
+            os.close(descriptor)
+            raise
+        self._source_path = source
+        self._source_fd = descriptor
+        self._source_identity = (source_stat.st_dev, source_stat.st_ino)
         self._executable = source if executable else None
         self._json_index = source if json_index else None
+        self._execution_dir: str | None = None
+        self._safe_executable: Path | None = None
+        self._execution_identity: tuple[int, int] | None = None
+        if executable:
+            execution_dir = tempfile.mkdtemp(prefix="archon-skill-catalog-")
+            safe_executable = Path(execution_dir) / "catalog"
+            copy_fd = os.open(safe_executable, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o500)
+            with os.fdopen(copy_fd, "wb") as stream:
+                offset = 0
+                while chunk := os.pread(descriptor, 65_536, offset):
+                    stream.write(chunk)
+                    offset += len(chunk)
+            execution_stat = os.lstat(safe_executable)
+            self._execution_dir = execution_dir
+            self._safe_executable = safe_executable
+            self._execution_identity = (execution_stat.st_dev, execution_stat.st_ino)
         self._timeout = timeout_seconds
         self._max_bytes = max_stdout_bytes
         self._max_results = max_results
         self._health_code = "available"
+
+    def __del__(self) -> None:
+        descriptor = getattr(self, "_source_fd", -1)
+        if descriptor >= 0:
+            with contextlib.suppress(OSError):
+                os.close(descriptor)
+            self._source_fd = -1
+        safe_executable = getattr(self, "_safe_executable", None)
+        execution_dir = getattr(self, "_execution_dir", None)
+        if safe_executable is not None:
+            with contextlib.suppress(OSError):
+                safe_executable.unlink()
+        if execution_dir is not None:
+            with contextlib.suppress(OSError):
+                os.rmdir(execution_dir)
 
     @property
     def health_code(self) -> str:
@@ -140,8 +208,27 @@ class AgentGodModeCatalogProvider:
 
     async def _run_command(self, query: str) -> bytes:
         assert self._executable is not None
+        current = os.fstat(self._source_fd)
+        pathname = os.lstat(self._source_path)
+        if (
+            not stat.S_ISREG(current.st_mode)
+            or current.st_nlink != 1
+            or not stat.S_ISREG(pathname.st_mode)
+            or pathname.st_nlink != 1
+            or (current.st_dev, current.st_ino) != self._source_identity
+            or (pathname.st_dev, pathname.st_ino) != self._source_identity
+        ):
+            raise OSError("catalog executable identity changed")
+        assert self._safe_executable is not None
+        safe = os.lstat(self._safe_executable)
+        if (
+            not stat.S_ISREG(safe.st_mode)
+            or safe.st_nlink != 1
+            or (safe.st_dev, safe.st_ino) != self._execution_identity
+        ):
+            raise OSError("private catalog executable identity changed")
         process = await asyncio.create_subprocess_exec(
-            str(self._executable),
+            str(self._safe_executable),
             query,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
@@ -166,11 +253,16 @@ class AgentGodModeCatalogProvider:
 
     async def _read_index(self) -> bytes:
         assert self._json_index is not None
-        index = self._json_index
 
         def read() -> bytes:
-            with index.open("rb") as stream:
-                data = stream.read(self._max_bytes + 1)
+            current = os.fstat(self._source_fd)
+            if (
+                not stat.S_ISREG(current.st_mode)
+                or current.st_nlink != 1
+                or (current.st_dev, current.st_ino) != self._source_identity
+            ):
+                raise OSError("catalog index identity changed")
+            data = os.pread(self._source_fd, self._max_bytes + 1, 0)
             if len(data) > self._max_bytes:
                 raise _OutputTooLargeError
             return data
