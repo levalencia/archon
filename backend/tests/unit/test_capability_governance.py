@@ -51,7 +51,16 @@ def test_live_native_inventory_has_safe_stable_execution_mapping() -> None:
     first = get_tool_registry().capability_descriptors()
     second = get_tool_registry().capability_descriptors()
     assert first == second
-    assert len(first) >= 9
+    assert {item.id for item in first} == {
+        "native.calculator",
+        "native.datetime",
+        "native.web_search",
+        "native.image_gen",
+        "native.memory",
+        "native.session_search",
+        "native.background_task",
+    }
+    assert {item.name for item in first}.isdisjoint({"read_file", "list_directory", "write_file"})
     assert all(item.id.startswith("native.") for item in first)
     assert all(item.executable_name == item.name for item in first)
     assert len({item.id for item in first}) == len(first)
