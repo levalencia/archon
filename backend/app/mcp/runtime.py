@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Protocol, cast
 
-from app.mcp.client import StdioMCPClient
-from app.mcp.models import MCPCallResult, ServerProfile
+from app.mcp.client import create_mcp_client
+from app.mcp.models import MCPCallResult, MCPServerProfile, RemoteServerProfile, ServerProfile
 from app.mcp.repository import MCPHealth, MCPRepository, MCPServerRecord, MCPToolRecord
 from app.security.policy import RiskClass
 
@@ -37,7 +37,7 @@ class MCPRuntimeClient(Protocol):
     async def call_tool(self, name: str, arguments: Mapping[str, Any]) -> MCPCallResult: ...
 
 
-MCPRuntimeClientFactory = Callable[[ServerProfile], MCPRuntimeClient]
+MCPRuntimeClientFactory = Callable[[MCPServerProfile], MCPRuntimeClient]
 
 
 def _freeze(value: Any) -> Any:
@@ -222,17 +222,19 @@ class MCPRuntimeToolProvider:
         self,
         repository: MCPRepository,
         *,
-        profiles: Mapping[str, ServerProfile],
-        client_factory: MCPRuntimeClientFactory = StdioMCPClient,
+        profiles: Mapping[str, MCPServerProfile],
+        client_factory: MCPRuntimeClientFactory = create_mcp_client,
     ) -> None:
         copied = dict(profiles)
         if any(
-            type(key) is not str or not key or not isinstance(value, ServerProfile)
+            type(key) is not str
+            or not key
+            or not isinstance(value, (ServerProfile, RemoteServerProfile))
             for key, value in copied.items()
         ):
             raise ValueError("invalid MCP profile allowlist")
         self._repository = repository
-        self._profiles: Mapping[str, ServerProfile] = MappingProxyType(copied)
+        self._profiles: Mapping[str, MCPServerProfile] = MappingProxyType(copied)
         self._client_factory = client_factory
 
     async def for_scope(self, owner_id: str, project_id: str) -> tuple[MCPBoundToolSpec, ...]:
