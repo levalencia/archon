@@ -818,6 +818,134 @@ class MemoryFactRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class SkillPackageRow(Base):
+    """Owner-scoped skill identity; content lives in immutable revisions."""
+
+    __tablename__ = "skill_packages"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_skill_packages_owner_name"),
+        UniqueConstraint("id", "owner_id", name="uq_skill_packages_scope"),
+        Index("ix_skill_packages_owner", "owner_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SkillRevisionRow(Base):
+    """Append-only package snapshot with provenance, hashes, and review disposition."""
+
+    __tablename__ = "skill_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["package_id", "owner_id"],
+            ["skill_packages.id", "skill_packages.owner_id"],
+            ondelete="CASCADE",
+            name="fk_skill_revisions_package_scope",
+        ),
+        UniqueConstraint("package_id", "revision_number", name="uq_skill_revision_number"),
+        UniqueConstraint("package_id", "content_hash", name="uq_skill_revision_content"),
+        UniqueConstraint("id", "package_id", "owner_id", name="uq_skill_revision_scope"),
+        CheckConstraint("revision_number >= 1", name="ck_skill_revision_number"),
+        CheckConstraint(
+            "trust_state IN ('untrusted','allowlisted','verified')", name="ck_skill_trust_state"
+        ),
+        CheckConstraint(
+            "review_state IN ('pending','approved','rejected')", name="ck_skill_review_state"
+        ),
+        Index("ix_skill_revisions_owner_package", "owner_id", "package_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    package_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    declared_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str] = mapped_column(String(2000), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    tags_json: Mapped[str] = mapped_column(Text, nullable=False)
+    references_json: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str] = mapped_column(String(2000), nullable=False)
+    source_revision: Mapped[str] = mapped_column(String(255), nullable=False)
+    trust_state: Mapped[str] = mapped_column(String(20), nullable=False)
+    review_state: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ProjectWorkspaceRow(Base):
+    """Durable owner/project root and pointer to current immutable instructions."""
+
+    __tablename__ = "project_workspaces"
+    __table_args__ = (Index("ix_project_workspaces_owner_updated", "owner_id", "updated_at"),)
+    owner_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    current_instruction_revision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ProjectInstructionRevisionRow(Base):
+    """Append-only project instruction content."""
+
+    __tablename__ = "project_instruction_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_id", "project_id"],
+            ["project_workspaces.owner_id", "project_workspaces.project_id"],
+            ondelete="CASCADE",
+            name="fk_instruction_revision_workspace",
+        ),
+        UniqueConstraint(
+            "owner_id", "project_id", "revision_number", name="uq_instruction_revision"
+        ),
+        UniqueConstraint("owner_id", "project_id", "content_hash", name="uq_instruction_content"),
+        UniqueConstraint("id", "owner_id", "project_id", name="uq_instruction_revision_scope"),
+        CheckConstraint("revision_number >= 1", name="ck_instruction_revision_number"),
+        CheckConstraint(
+            "review_state IN ('pending','approved','rejected')",
+            name="ck_instruction_review_state",
+        ),
+        Index("ix_instruction_revisions_scope", "owner_id", "project_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    review_state: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ProjectSkillBindingRow(Base):
+    """A project pins one explicit immutable revision per package."""
+
+    __tablename__ = "project_skill_bindings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_id", "project_id"],
+            ["project_workspaces.owner_id", "project_workspaces.project_id"],
+            ondelete="CASCADE",
+            name="fk_skill_binding_workspace",
+        ),
+        ForeignKeyConstraint(
+            ["revision_id", "package_id", "owner_id"],
+            ["skill_revisions.id", "skill_revisions.package_id", "skill_revisions.owner_id"],
+            name="fk_skill_binding_revision_scope",
+        ),
+        Index("ix_skill_bindings_scope_enabled", "owner_id", "project_id", "enabled"),
+    )
+    owner_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    package_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    revision_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class MCPServerRow(Base):
     """Safe durable MCP configuration (deployment profiles hold process details)."""
 
