@@ -71,7 +71,7 @@ async def test_profile_change_atomically_invalidates_inventory_and_same_profile_
 ) -> None:
     store, repository = await _repository(tmp_path / "profile-change.db")
     server = await repository.create(
-        owner_id="alice", project_id="one", name="local", profile_id="old"
+        owner_id="alice", project_id="one", name="local", profile_id="old", enabled=True
     )
     descriptor = ToolDescriptor(
         "item", None, None, {"type": "object", "properties": {}}, True, False, "1"
@@ -148,7 +148,7 @@ async def test_profile_update_wins_against_in_flight_discovery(tmp_path: Path) -
         profiles={"old": old_profile, "new": new_profile},
     )
     server = await service.create_server(
-        owner_id="alice", project_id="one", name="racy", profile_id="old"
+        owner_id="alice", project_id="one", name="racy", profile_id="old", enabled=True
     )
     discovery = asyncio.create_task(
         service.discover(owner_id="alice", project_id="one", server_id=server.id)
@@ -183,7 +183,7 @@ async def test_unknown_profile_and_failure_do_not_persist_raw_secret(tmp_path: P
     profile = ServerProfile(command="not-a-real-executable-secret-123")
     service = MCPInventoryService(repository, profiles={"safe": profile})
     server = await service.create_server(
-        owner_id="alice", project_id="one", name="safe", profile_id="safe"
+        owner_id="alice", project_id="one", name="safe", profile_id="safe", enabled=True
     )
     with pytest.raises(MCPInventoryError) as error:
         await service.discover(owner_id="alice", project_id="one", server_id=server.id)
@@ -207,7 +207,11 @@ async def test_real_official_stdio_discovery_persists_three_tools(tmp_path: Path
     )
     service = MCPInventoryService(repository, profiles={"official-test": profile})
     server = await service.create_server(
-        owner_id="alice", project_id="one", name="official", profile_id="official-test"
+        owner_id="alice",
+        project_id="one",
+        name="official",
+        profile_id="official-test",
+        enabled=True,
     )
     tools = await service.discover(owner_id="alice", project_id="one", server_id=server.id)
     assert {tool.name for tool in tools} == {"echo_evidence", "write_note", "env_probe"}
