@@ -2,7 +2,7 @@
 
 ## Scope and claim boundary
 
-- Candidate: local `feature/spi-docscore`, based on `a642952` before this documentation commit.
+- Candidate: local `feature/skills-project-instructions-mcp`; code evidence is anchored at `9eaf49e` before documentation-only commits.
 - Deployed baseline: `main` at `63215bf`.
 - Push/deploy: none for this candidate.
 - Integrated verification: no final `verify.sh` count is claimed in this packet.
@@ -51,23 +51,20 @@ backend/tests/unit/test_capability_acceptance_manifest.py
 backend/tests/unit/test_ci_local_run_documentation.py
 ```
 
-Verification during this documentation update was intentionally recorded without
-turning it into a full-suite claim:
+Focused and adversarial verification completed during implementation:
 
-- the 15 focused files above collected 67 tests: 66 passed and
-  `test_live_native_inventory_has_safe_stable_execution_mapping` failed because
-  the live registry returned seven descriptors while the pre-existing test
-  requires at least nine;
-- the documentation/manifest selection passed 10 tests, with the strict baseline
-  check deselected; when included, that check rejects the new capability ID
-  because `app/capabilities/acceptance.py` still fixes the baseline to the prior
-  16 IDs;
-- schema parsing with `require_baseline=False` loaded all 17 entries and every
-  source, test, evidence, and owner-module path resolved;
-- `git diff --check` passed.
+- integrated skill/instruction/filesystem/data-security gate: **137 passed**;
+- tenant filesystem and redacted tool-event gate: **116 passed**;
+- MCP runtime/lazy-schema/budget gate: **19 passed**;
+- exact context-provenance/chat/migration gate: **26 passed**;
+- final immutability, capability-inventory, and runtime-event gate: **82 passed**;
+- parser and skill security gate: **22 passed**;
+- independent blocker re-review at `245b7f9`: **no remaining P0/P1 security findings**;
+- subsequent data re-review found one mutable revision-ID/reference-set gap; commit
+  `be9670e` closed it, including fail-closed post-approval reference inserts.
 
-Those two failures require application/test ownership outside this docs-only
-change. They are not hidden by a focused-pass or integrated-pass claim.
+These are overlapping focused suites and must not be summed into a synthetic total.
+The final integrated `verify.sh` result is recorded separately only after it completes.
 
 ## Real Foundry acceptance
 
@@ -103,4 +100,4 @@ The observed controls are migration-level evidence on temporary PostgreSQL. They
 
 ## Evidence interpretation
 
-`Exists`, `Wired`, `Tested`, `Observed`, `UI`, `Live provider`, and `Deployed` remain independent. For `skills-project-instructions`, the capability manifest records all implemented/local dimensions explicitly and keeps `deployed: no`.
+`Exists`, `Wired`, `Tested`, `Observed`, `UI`, `Live provider`, and `Deployed` remain independent. The 16-entry capability manifest retains its stable baseline; the 66-concept course catalog records `skills-project-instructions` as implemented on the local candidate with deployment explicitly false.

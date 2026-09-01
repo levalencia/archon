@@ -29,21 +29,23 @@ Archon is a serious local portfolio system. It is not a public production servic
 ## Verified status
 
 The Skills + Project Instructions work is a **local candidate** on
-`feature/spi-docscore` (based on `a642952`). It has not been pushed or deployed.
+`feature/skills-project-instructions-mcp`; its code evidence is anchored at `9eaf49e`
+before the documentation-only commits. It has not been pushed or deployed.
 The deployed `main` revision remains `63215bf`. The candidate has focused,
-real-provider, and temporary-PostgreSQL evidence; the integrated `verify.sh`
-result is intentionally not reported here until that run has a final result.
+adversarial, real-provider, temporary-PostgreSQL, frontend, and browser evidence;
+the final integrated `verify.sh` result is reported only after that exact run completes.
 
 | Evidence | Recorded result |
 |---|---|
-| Deployment target | Production-like local Docker Compose on macOS |
-| Local services | 7 containers; only the loopback gateway publishes a host port |
-| Backend | **1,415 passed, 2 expected skips, 87.23% coverage** |
-| Frontend | Svelte **0 errors / 0 warnings**, **48 Vitest**, production build, **30 Playwright** |
-| Capability manifest | **17 entries**, including the local Skills + Project Instructions candidate |
-| Portfolio benchmark | **12 scenarios, 120/120 iterations passed**, zero external cost |
-| Disaster recovery | **0 selected-record differences at snapshot**, observed **restore-to-ready 24.787 seconds** |
-| Live provider evidence | Foundry Claude tool call, cache-metric transport, and multimodal probe passed |
+| Deployment target | Existing production-like local Docker Compose on macOS; candidate not deployed |
+| Local services | 7 retained baseline containers; only the loopback gateway publishes a host port |
+| Deployed baseline backend | **1,415 passed, 2 expected skips, 87.23% coverage** |
+| Candidate frontend | Svelte **0 errors / 0 warnings**, **53 Vitest**, production build, **33 Playwright** |
+| Capability manifest | **16 stable acceptance entries**; Skills + Project Instructions is tracked in the 66-concept course catalog |
+| Candidate concept totals | **59 implemented / 7 deferred / 0 partial** |
+| Portfolio benchmark | Historical deployed-baseline result: **12 scenarios, 120/120 iterations passed**, zero external cost |
+| Disaster recovery | Historical deployed-baseline result: **0 selected-record differences**, observed **restore-to-ready 24.787 seconds** |
+| Candidate live provider evidence | Foundry `claude-opus-4-6`: one selected skill, one instruction revision, nine capability refs |
 | Public/cloud deployment | **No. Deliberately deferred.** |
 
 The canonical details and limits live in [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md).

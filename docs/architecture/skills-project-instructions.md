@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented on the local `feature/spi-docscore` candidate based on `a642952`.
+Implemented on the local `feature/skills-project-instructions-mcp` candidate; code evidence is anchored at `9eaf49e` before documentation-only commits.
 It is not pushed or deployed; deployed `main` remains `63215bf`. This document
 describes the implemented core contract, while revision-scoped observations live
 in `docs/evidence/skills-project-instructions-implementation.md`.

@@ -4,7 +4,7 @@
 
 ## Baseline
 
-- **Current candidate:** local `feature/spi-docscore`, based on `a642952`; no push or deployment is claimed.
+- **Current candidate:** local `feature/skills-project-instructions-mcp`; code evidence is anchored at `9eaf49e` before documentation-only commits. No push or deployment is claimed.
 - **Deployed baseline:** `main` remains `63215bf`.
 - **Current acceptance scope:** focused Skills + Project Instructions tests, one operator-authorized Foundry run, and a disposable PostgreSQL migration round trip. The integrated `verify.sh` result is not claimed until the run has a final result.
 - **Capability status source:** `docs/implementation/CAPABILITY-ACCEPTANCE.yaml`; this prose must not override its per-dimension limits.
@@ -40,7 +40,7 @@ persisting raw instruction or skill bodies there.
 The optional GodMode catalog adapter is metadata-only and disabled by default;
 it does not install, trust, or inject remote content. Governed MCP supports both
 allowlisted stdio and bounded Streamable HTTP profiles. Discovery is not
-authorization: project policy/approval, schema-hash checks, and execution-time
+authorization: project enablement, disabled/deny filtering, schema-hash checks, and execution-time
 revalidation remain separate.
 
 Focused evidence covers the existing skill parser/catalog/persistence/security,
