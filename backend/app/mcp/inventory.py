@@ -77,7 +77,7 @@ class MCPInventoryService:
         project_id: str,
         name: str,
         profile_id: str,
-        enabled: bool = True,
+        enabled: bool = False,
     ) -> MCPServerRecord:
         if profile_id not in self._profiles:
             raise MCPInventoryError("unknown_profile")

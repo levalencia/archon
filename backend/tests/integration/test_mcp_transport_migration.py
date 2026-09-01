@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
@@ -37,7 +38,14 @@ def test_transport_migration_is_linear_and_accepts_http(tmp_path: Path, monkeypa
             ),
             {"id": "00000000-0000-0000-0000-000000000001", "now": "2026-09-01"},
         )
-    command.downgrade(config, "20260901_18")
+    with pytest.raises(RuntimeError, match="streamable_http"):
+        command.downgrade(config, "20260901_18")
     with engine.connect() as connection:
-        assert connection.execute(text("SELECT transport FROM mcp_servers")).scalar_one() == "stdio"
+        assert (
+            connection.execute(text("SELECT transport FROM mcp_servers")).scalar_one()
+            == "streamable_http"
+        )
+        connection.execute(text("DELETE FROM mcp_servers"))
+        connection.commit()
+    command.downgrade(config, "20260901_18")
     engine.dispose()

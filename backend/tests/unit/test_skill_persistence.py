@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -79,3 +80,43 @@ async def test_repositories_are_scoped_immutable_and_restart_safe(tmp_path: Path
     assert current.content == "Use approved tools only."
     assert current.content_hash == revision.content_hash
     await restarted.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_revision_allocation_is_serialized(tmp_path: Path) -> None:
+    store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'concurrent.db'}")
+    await store.initialize()
+    skills = SkillRepository(store.session_factory)
+    instructions = ProjectInstructionRepository(store.session_factory)
+    first = parse_skill_markdown(SKILL)
+    second = parse_skill_markdown(
+        SKILL.replace(b"Always persist safely.", b"Persist concurrently safely.")
+    )
+
+    installed = await asyncio.gather(
+        skills.install(
+            owner_id="owner",
+            parsed=first,
+            source_url="https://example.invalid/one",
+            source_revision="one",
+            trust_state="allowlisted",
+            review_state="approved",
+        ),
+        skills.install(
+            owner_id="owner",
+            parsed=second,
+            source_url="https://example.invalid/two",
+            source_revision="two",
+            trust_state="allowlisted",
+            review_state="approved",
+        ),
+    )
+    assert sorted(item.revision_number for item in installed) == [1, 2]
+
+    await asyncio.gather(
+        instructions.append(owner_id="owner", project_id="project", content="first"),
+        instructions.append(owner_id="owner", project_id="project", content="second"),
+    )
+    revisions = await instructions.list_revisions(owner_id="owner", project_id="project")
+    assert sorted(item.revision_number for item in revisions) == [1, 2]
+    await store.close()

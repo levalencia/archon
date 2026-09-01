@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.instructions.loaders import InstructionFamily, InstructionSource
@@ -28,6 +29,13 @@ from app.skills.parser import ParsedSkill
 
 class SkillConflictError(ValueError):
     pass
+
+
+class ProjectInstructionConflictError(ValueError):
+    pass
+
+
+_MAX_REVISION_WRITE_ATTEMPTS = 3
 
 
 class SkillNotFoundError(LookupError):
@@ -60,6 +68,34 @@ class SkillRepository:
         review_state: str = "pending",
         reference_contents: dict[str, str] | None = None,
     ) -> InstalledSkill:
+        for attempt in range(_MAX_REVISION_WRITE_ATTEMPTS):
+            try:
+                return await self._install_once(
+                    owner_id=owner_id,
+                    parsed=parsed,
+                    source_url=source_url,
+                    source_revision=source_revision,
+                    trust_state=trust_state,
+                    review_state=review_state,
+                    reference_contents=reference_contents,
+                )
+            except (IntegrityError, OperationalError, SkillConflictError) as exc:
+                if attempt + 1 == _MAX_REVISION_WRITE_ATTEMPTS:
+                    raise SkillConflictError("concurrent skill revision conflict") from exc
+                await asyncio.sleep(0.01 * (attempt + 1))
+        raise AssertionError("unreachable")
+
+    async def _install_once(
+        self,
+        *,
+        owner_id: str,
+        parsed: ParsedSkill,
+        source_url: str,
+        source_revision: str,
+        trust_state: str = "untrusted",
+        review_state: str = "pending",
+        reference_contents: dict[str, str] | None = None,
+    ) -> InstalledSkill:
         now = datetime.now(tz=UTC)
         async with self._sessions() as session, session.begin():
             package = await session.scalar(
@@ -74,6 +110,12 @@ class SkillRepository:
                 )
                 session.add(package)
                 await session.flush()
+            # A harmless write serializes allocation on both PostgreSQL and SQLite.
+            await session.execute(
+                update(SkillPackageRow)
+                .where(SkillPackageRow.id == package.id, SkillPackageRow.owner_id == owner_id)
+                .values(created_at=SkillPackageRow.created_at)
+            )
             duplicate = await session.scalar(
                 select(SkillRevisionRow).where(
                     SkillRevisionRow.package_id == package.id,
@@ -369,6 +411,7 @@ class SkillRepository:
                     SkillRevisionRow.id == revision_id,
                     SkillRevisionRow.owner_id.in_((owner_id, ARCHON_OWNER_ID)),
                     SkillRevisionRow.review_state == "approved",
+                    SkillRevisionRow.trust_state.in_(("allowlisted", "verified")),
                 )
             )
             if row is None:
@@ -415,8 +458,24 @@ class SkillRepository:
             owner_id=owner_id, project_id=project_id, revision_id=revision_id
         )
         async with self._sessions() as session:
-            row = await session.get(SkillReferenceRow, (revision_id, path))
-            if row is None or row.owner_id != revision.owner_id or row.byte_count > max_bytes:
+            row = await session.scalar(
+                select(SkillReferenceRow)
+                .join(
+                    SkillRevisionRow,
+                    (SkillReferenceRow.revision_id == SkillRevisionRow.id)
+                    & (SkillReferenceRow.owner_id == SkillRevisionRow.owner_id),
+                )
+                .where(
+                    SkillReferenceRow.revision_id == revision_id,
+                    SkillReferenceRow.path == path,
+                    SkillReferenceRow.byte_count <= max_bytes,
+                    SkillReferenceRow.owner_id == revision.owner_id,
+                    SkillRevisionRow.owner_id == revision.owner_id,
+                    SkillRevisionRow.review_state == "approved",
+                    SkillRevisionRow.trust_state.in_(("allowlisted", "verified")),
+                )
+            )
+            if row is None:
                 raise SkillNotFoundError("skill reference not found in visible scope")
             return row
 
@@ -426,24 +485,33 @@ class SkillRepository:
                 select(SkillRevisionRow)
                 .join(
                     ProjectSkillBindingRow,
-                    ProjectSkillBindingRow.revision_id == SkillRevisionRow.id,
+                    (ProjectSkillBindingRow.revision_id == SkillRevisionRow.id)
+                    & (ProjectSkillBindingRow.owner_id == SkillRevisionRow.owner_id),
                 )
                 .where(
                     ProjectSkillBindingRow.owner_id == owner_id,
                     ProjectSkillBindingRow.project_id == project_id,
                     ProjectSkillBindingRow.enabled.is_(True),
                     SkillRevisionRow.owner_id == owner_id,
+                    SkillRevisionRow.review_state == "approved",
+                    SkillRevisionRow.trust_state.in_(("allowlisted", "verified")),
                 )
                 .order_by(SkillRevisionRow.created_at, SkillRevisionRow.id)
             )
             rows = list(result)
             shared = await session.scalars(
                 select(SkillRevisionRow)
-                .join(ProjectSkillPinRow, ProjectSkillPinRow.revision_id == SkillRevisionRow.id)
+                .join(
+                    ProjectSkillPinRow,
+                    (ProjectSkillPinRow.revision_id == SkillRevisionRow.id)
+                    & (ProjectSkillPinRow.revision_owner_id == SkillRevisionRow.owner_id),
+                )
                 .where(
                     ProjectSkillPinRow.owner_id == owner_id,
                     ProjectSkillPinRow.project_id == project_id,
                     ProjectSkillPinRow.enabled.is_(True),
+                    SkillRevisionRow.review_state == "approved",
+                    SkillRevisionRow.trust_state.in_(("allowlisted", "verified")),
                 )
                 .order_by(SkillRevisionRow.created_at, SkillRevisionRow.id)
             )
@@ -525,6 +593,30 @@ class ProjectInstructionRepository:
         sources: tuple[InstructionSource, ...],
         review_state: str = "pending",
     ) -> ProjectInstructionSnapshot:
+        for attempt in range(_MAX_REVISION_WRITE_ATTEMPTS):
+            try:
+                return await self._append_sources_once(
+                    owner_id=owner_id,
+                    project_id=project_id,
+                    sources=sources,
+                    review_state=review_state,
+                )
+            except (IntegrityError, OperationalError) as exc:
+                if attempt + 1 == _MAX_REVISION_WRITE_ATTEMPTS:
+                    raise ProjectInstructionConflictError(
+                        "concurrent project instruction revision conflict"
+                    ) from exc
+                await asyncio.sleep(0.01 * (attempt + 1))
+        raise AssertionError("unreachable")
+
+    async def _append_sources_once(
+        self,
+        *,
+        owner_id: str,
+        project_id: str,
+        sources: tuple[InstructionSource, ...],
+        review_state: str = "pending",
+    ) -> ProjectInstructionSnapshot:
         self._validate_sources(sources)
         digest = self._snapshot_hash(sources)
         now = datetime.now(tz=UTC)
@@ -536,6 +628,15 @@ class ProjectInstructionRepository:
                 )
                 session.add(workspace)
                 await session.flush()
+            # Serialize revision-number allocation per owner/project on every supported DB.
+            await session.execute(
+                update(ProjectWorkspaceRow)
+                .where(
+                    ProjectWorkspaceRow.owner_id == owner_id,
+                    ProjectWorkspaceRow.project_id == project_id,
+                )
+                .values(updated_at=ProjectWorkspaceRow.updated_at)
+            )
             existing = await session.scalar(
                 select(ProjectInstructionRevisionRow).where(
                     ProjectInstructionRevisionRow.owner_id == owner_id,

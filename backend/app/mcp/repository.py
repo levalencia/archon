@@ -151,7 +151,7 @@ class MCPRepository:
         project_id: str,
         name: str,
         profile_id: str,
-        enabled: bool = True,
+        enabled: bool = False,
         transport: str = "stdio",
         now: datetime | None = None,
     ) -> MCPServerRecord:

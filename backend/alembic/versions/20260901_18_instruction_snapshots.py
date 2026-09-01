@@ -160,6 +160,21 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     dialect = op.get_bind().dialect.name
+    boolean_false = "0" if dialect == "sqlite" else "false"
+    unrepresentable = op.get_bind().execute(
+        sa.text(
+            "SELECT 1 FROM project_instruction_revisions AS revision WHERE "
+            "(SELECT count(*) FROM project_instruction_sources AS source "
+            "WHERE source.revision_id=revision.id) != 1 OR NOT EXISTS "
+            "(SELECT 1 FROM project_instruction_sources AS source WHERE "
+            "source.revision_id=revision.id AND source.id=revision.id AND source.ordinal=0 "
+            "AND source.relative_path='.archon/instructions.md' AND source.scope_path='.' "
+            "AND source.family='manual' AND source.is_override="
+            f"{boolean_false} AND source.content=revision.content) LIMIT 1"
+        )
+    ).first()
+    if unrepresentable is not None:
+        raise RuntimeError("cannot downgrade: exact instruction snapshot is not representable")
     if dialect == "sqlite":
         for operation in ("update", "delete"):
             op.execute(f"DROP TRIGGER IF EXISTS trg_project_instruction_sources_{operation}")

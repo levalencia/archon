@@ -30,8 +30,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # The legacy schema cannot represent HTTP. Keep the downgrade deterministic and non-secret.
-    op.execute(sa.text("UPDATE mcp_servers SET transport = 'stdio' WHERE transport != 'stdio'"))
+    # Never silently reinterpret a remote server as a local stdio process.
+    if op.get_bind().execute(
+        sa.text("SELECT 1 FROM mcp_servers WHERE transport = 'streamable_http' LIMIT 1")
+    ).first() is not None:
+        raise RuntimeError("cannot downgrade: streamable_http MCP servers are not representable")
     with op.batch_alter_table("mcp_servers") as batch:
         batch.drop_constraint("ck_mcp_servers_transport", type_="check")
         batch.create_check_constraint("ck_mcp_servers_transport", "transport = 'stdio'")

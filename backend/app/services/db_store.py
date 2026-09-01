@@ -30,8 +30,10 @@ from sqlalchemy import (
     UniqueConstraint,
     delete,
     event,
+    false,
     func,
     select,
+    text,
 )
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
@@ -852,6 +854,7 @@ class SkillRevisionRow(Base):
         UniqueConstraint("package_id", "revision_number", name="uq_skill_revision_number"),
         UniqueConstraint("package_id", "content_hash", name="uq_skill_revision_content"),
         UniqueConstraint("id", "package_id", "owner_id", name="uq_skill_revision_scope"),
+        UniqueConstraint("id", "owner_id", name="uq_skill_revision_owner"),
         CheckConstraint("revision_number >= 1", name="ck_skill_revision_number"),
         CheckConstraint(
             "trust_state IN ('untrusted','allowlisted','verified')", name="ck_skill_trust_state"
@@ -887,11 +890,15 @@ class SkillReferenceRow(Base):
     # Bounded reference content loaded only after selection.
     __tablename__ = "skill_references"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["revision_id", "owner_id"],
+            ["skill_revisions.id", "skill_revisions.owner_id"],
+            ondelete="CASCADE",
+            name="fk_skill_reference_revision_owner",
+        ),
         CheckConstraint("byte_count >= 0 AND byte_count <= 65536", name="ck_skill_reference_bytes"),
     )
-    revision_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("skill_revisions.id", ondelete="CASCADE"), primary_key=True
-    )
+    revision_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
     path: Mapped[str] = mapped_column(String(1024), primary_key=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -909,13 +916,16 @@ class ProjectSkillPinRow(Base):
             ondelete="CASCADE",
             name="fk_skill_pin_workspace",
         ),
+        ForeignKeyConstraint(
+            ["revision_id", "revision_owner_id"],
+            ["skill_revisions.id", "skill_revisions.owner_id"],
+            name="fk_skill_pin_revision_owner",
+        ),
         Index("ix_skill_pins_scope_enabled", "owner_id", "project_id", "enabled"),
     )
     owner_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    revision_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("skill_revisions.id"), primary_key=True
-    )
+    revision_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     revision_owner_id: Mapped[str] = mapped_column(String(255), nullable=False)
     enabled: Mapped[bool] = mapped_column(nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -1088,7 +1098,7 @@ class MCPServerRow(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     profile_id: Mapped[str] = mapped_column(String(255), nullable=False)
     transport: Mapped[str] = mapped_column(String(16), nullable=False, default="stdio")
-    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=False, server_default=false())
     health: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
     last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -1158,11 +1168,22 @@ class DatabaseStore:
         )
 
     async def initialize(self) -> None:
-        """Create all tables."""
-        async with self._engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        ensure_private_sqlite_file(str(self._engine.url))
-        logger.info("database_initialized", tables=len(Base.metadata.tables))
+        """Create SQLite test/dev schema; production databases must be at Alembic head."""
+        if self._engine.url.drivername.startswith("sqlite"):
+            async with self._engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            ensure_private_sqlite_file(str(self._engine.url))
+            logger.info("database_initialized", tables=len(Base.metadata.tables))
+            return
+        async with self._engine.connect() as conn:
+            try:
+                result = await conn.execute(text("SELECT version_num FROM alembic_version"))
+                revisions = tuple(result.scalars())
+            except Exception as exc:
+                raise RuntimeError("database schema is not managed by Alembic") from exc
+        if revisions != ("20260901_20",):
+            raise RuntimeError("database schema is not at expected Alembic head 20260901_20")
+        logger.info("database_schema_verified", alembic_revision=revisions[0])
 
     @property
     def session_factory(self) -> async_sessionmaker[AsyncSession]:

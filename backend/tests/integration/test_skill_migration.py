@@ -76,6 +76,16 @@ def test_skill_instruction_migration_round_trip_and_guards(tmp_path: Path, monke
         )
         connection.execute(
             text(
+                "INSERT INTO project_instruction_sources "
+                "(id,revision_id,owner_id,project_id,ordinal,relative_path,scope_path,family,"
+                "is_override,byte_count,content_hash,content) VALUES "
+                "('inst','inst','owner','project',0,'.archon/instructions.md','.',"
+                "'manual',0,12,'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',"
+                "'instructions')"
+            )
+        )
+        connection.execute(
+            text(
                 "INSERT INTO project_skill_bindings "
                 "(owner_id,project_id,package_id,revision_id,enabled,created_at,updated_at) VALUES "
                 "('owner','project','pkg','rev',1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
