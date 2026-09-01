@@ -15,6 +15,18 @@ export type ContextManifest = {
   input_asset_fingerprints: string[]; estimated_tokens: number; summary_version: string | null;
   truncation_reason: string | null; manifest_hash: string;
 };
+export type EffectiveContextEntry = {
+  id: string; name?: string; relative_path?: string; scope_path?: string; revision?: string; version?: string;
+  content_hash?: string; schema_hash?: string; selection_reason?: string; reason?: string;
+  estimated_tokens?: number; byte_count?: number; permission?: 'allow' | 'ask' | 'deny';
+};
+export type EffectiveContextManifest = {
+  run_id: string; project_id: string; manifest_hash: string;
+  instruction_revisions: EffectiveContextEntry[]; skill_revisions: EffectiveContextEntry[];
+  capabilities: EffectiveContextEntry[];
+  context_cost: { estimated_tokens: number; byte_count: number };
+  omission_reasons: string[];
+};
 export type RunExport = {
   export_id: string; run_id: string; schema_version: number; content_checksum: string;
   manifest_checksum: string; created_at: string;
@@ -46,6 +58,17 @@ export async function listRuns(options: { conversationId?: string; projectId?: s
 export const getRun = (id: string) => json<Run>(`/api/runs/${encodeURIComponent(id)}`);
 export const getRunContext = (id: string) =>
   json<ContextManifest>(`/api/runs/${encodeURIComponent(id)}/context`);
+export async function getRunEffectiveContext(id: string): Promise<EffectiveContextManifest> {
+  const value = await json<Partial<EffectiveContextManifest>>(`/api/runs/${encodeURIComponent(id)}/effective-context`);
+  return {
+    run_id: value.run_id || id, project_id: value.project_id || '', manifest_hash: value.manifest_hash || '',
+    instruction_revisions: Array.isArray(value.instruction_revisions) ? value.instruction_revisions : [],
+    skill_revisions: Array.isArray(value.skill_revisions) ? value.skill_revisions : [],
+    capabilities: Array.isArray(value.capabilities) ? value.capabilities : [],
+    context_cost: value.context_cost || { estimated_tokens: 0, byte_count: 0 },
+    omission_reasons: Array.isArray(value.omission_reasons) ? value.omission_reasons : [],
+  };
+}
 export async function getRunEvents(id: string): Promise<RunEvent[]> {
   const result = await json<{ items?: RunEvent[] }>(`/api/runs/${encodeURIComponent(id)}/events?limit=200`);
   return (Array.isArray(result.items) ? result.items : []).slice().sort((a, b) => a.sequence - b.sequence);

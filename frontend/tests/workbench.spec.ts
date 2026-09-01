@@ -342,7 +342,7 @@ test('all top-level routes and a refreshed chat deep link render without browser
   page.on('pageerror', error => errors.push(error.message));
   const routes: Array<[string, RegExp]> = [
     ['/login', /^Archon$/], ['/dashboard', /^Dashboard$/], ['/documents', /Documents & RAG/],
-    ['/eval', /Recorded Run Evaluations/], ['/memory', /Memory Inspector/], ['/settings', /Skills & Integrations/],
+    ['/eval', /Recorded Run Evaluations/], ['/memory', /Memory Inspector/], ['/settings', /^Settings$/],
     ['/learn', /Choose the view that matches your question/],
   ];
   for (const [path, heading] of routes) {
