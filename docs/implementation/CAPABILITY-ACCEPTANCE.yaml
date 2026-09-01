@@ -160,16 +160,6 @@
       "tests": ["backend/tests/unit/test_embedding_hardening.py", "backend/tests/unit/test_embedding_config.py", "backend/tests/unit/test_provider_acceptance_scripts.py"],
       "evidence": ["docs/course/concepts/embeddings.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-rag-hardening.json"],
       "limitation": "Azure Foundry text-embedding-3-small passed live finite-vector and persisted ingest/query acceptance in the development deployment; broad semantic-quality benchmarking and public deployment are not claimed."
-    },
-    {
-      "id": "skills-project-instructions",
-      "owner_module": "docs/course/modules/06-context-and-memory/README.md",
-      "status": "implemented",
-      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "partial", "live_provider": "yes", "deployed": "no"},
-      "sources": ["backend/app/skills/persistence.py", "backend/app/skills/bootstrap.py", "backend/app/instructions/loaders.py", "backend/app/instructions/resolver.py", "backend/app/capabilities/index.py", "backend/app/capabilities/selector.py", "backend/app/services/request_context.py", "backend/app/services/context_snapshots.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py", "backend/app/routes/project_instructions.py", "backend/app/routes/capabilities.py", "backend/app/mcp/client.py"],
-      "tests": ["backend/tests/unit/test_skill_parser.py", "backend/tests/unit/test_skills_security.py", "backend/tests/unit/test_skill_catalog.py", "backend/tests/unit/test_skill_persistence.py", "backend/tests/unit/test_skill_discovery_enrichment.py", "backend/tests/unit/test_instruction_loaders.py", "backend/tests/unit/test_instruction_precedence.py", "backend/tests/unit/test_instruction_snapshots.py", "backend/tests/unit/test_capability_selector.py", "backend/tests/unit/test_capability_governance.py", "backend/tests/integration/test_skill_migration.py", "backend/tests/integration/test_instruction_snapshot_api.py", "backend/tests/integration/test_instruction_snapshot_migration.py", "backend/tests/integration/test_mcp_transport_governance.py", "backend/tests/integration/test_mcp_transport_migration.py"],
-      "evidence": ["docs/architecture/skills-project-instructions.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/skills-project-instructions-implementation.md"],
-      "limitation": "Local candidate only: ten bundled skills, exact project bindings, approved instruction snapshots, metadata-first discovery, shared sync/SSE preparation, optional metadata-only GodMode search, governed stdio/HTTP MCP, and exact Run Ledger provenance. One Foundry run observed one skill, one instruction and nine capability references. No push, deployment, generic OAuth, arbitrary external trust, broad routing-quality, or final integrated-suite claim."
     }
   ]
 }
