@@ -74,6 +74,11 @@ def test_instruction_and_capability_apis_are_scoped_and_restart_safe(tmp_path: P
         assert instruction_ref["scope_path"] == "."
         assert instruction_ref["order"] == 0
         assert instruction_ref["content_hash"] == approved.json()["content_hash"]
+        capability_refs = effective_context.json()["capabilities"]
+        assert capability_refs
+        assert all(item["permission"] in {"allow", "ask"} for item in capability_refs)
+        assert all(len(item["schema_hash"]) == 64 for item in capability_refs)
+        assert all(item["reason"].startswith("provider_visible_") for item in capability_refs)
         assert client.get("/api/projects/shared/instructions/revisions", headers=other).json() == []
 
         found = client.post(
