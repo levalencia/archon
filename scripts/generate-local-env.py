@@ -166,7 +166,7 @@ def generate_values(provider_env: Path | None = None) -> dict[str, str]:
         "ARCHON_DELEGATION_SIGNING_KEY": secrets.token_urlsafe(48),
         "ARCHON_DURABLE_MONETARY_BUDGET_ENABLED": "true",
         "ARCHON_DURABLE_EFFECT_LEDGER_ENABLED": "true",
-        "ARCHON_AGENT_DEADLINE_SECONDS": "90",
+        "ARCHON_AGENT_DEADLINE_SECONDS": "300",
         "ARCHON_VERIFIER_ENABLED": "false",
         "ARCHON_LOCAL_PORT": os.environ.get("ARCHON_LOCAL_PORT") or str(18_000 + secrets.randbelow(20_000)),
         "ARCHON_RUNTIME_MODE": "mock",
