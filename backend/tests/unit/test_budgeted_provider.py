@@ -102,6 +102,7 @@ def wrapper(
     candidates=None,
     limit=1_000_000_000,
     max_input=1_000,
+    quote_headroom=0,
 ):
     return DurableBudgetedProvider(
         delegate,
@@ -111,6 +112,7 @@ def wrapper(
         project_limit_nusd=limit,
         max_input_tokens=max_input,
         pricing_candidates=candidates or (PricingCandidate("openai", "gpt-4o"),),
+        quote_input_headroom_tokens=quote_headroom,
     )
 
 
@@ -229,6 +231,141 @@ async def test_lazy_open_once_ordinals_ids_and_actual_cache_reconciliation(tmp_p
 
 
 @pytest.mark.asyncio
+async def test_growing_multi_tool_history_uses_per_call_quotes_and_releases_excess(
+    tmp_path: Path,
+) -> None:
+    repo, engine = await repository(tmp_path / "growing-history.db")
+    responses = [
+        ModelResponse(
+            "one",
+            usage=TokenUsage(4_145, 184),
+            actual_provider="foundry",
+            actual_model="claude-opus-4-6",
+        ),
+        ModelResponse(
+            "two",
+            usage=TokenUsage(10_459, 194),
+            actual_provider="foundry",
+            actual_model="claude-opus-4-6",
+        ),
+        ModelResponse(
+            "three",
+            usage=TokenUsage(16_000, 400),
+            actual_provider="foundry",
+            actual_model="claude-opus-4-6",
+        ),
+    ]
+    delegate = FakeProvider(responses)
+    candidate = PricingCandidate("foundry", "claude-opus-4-6")
+    max_input = 196_000
+    headroom = 4_096
+    budgeted = wrapper(
+        delegate,
+        repo,
+        candidates=(candidate,),
+        limit=50_000_000_000,
+        max_input=max_input,
+        quote_headroom=headroom,
+    )
+    user = Message(Role.USER, "research, execute code, then produce HTML")
+    web_call = ToolCall("web-1", "web_search", {"query": "reliable agent patterns"})
+    code_call = ToolCall("code-1", "code_execution", {"language": "python"})
+    requests = [
+        (user,),
+        (
+            user,
+            Message(Role.ASSISTANT, "", tool_calls=(web_call,)),
+            Message(Role.TOOL, "w" * 35_000, tool_call_id=web_call.id),
+        ),
+        (
+            user,
+            Message(Role.ASSISTANT, "", tool_calls=(web_call,)),
+            Message(Role.TOOL, "w" * 35_000, tool_call_id=web_call.id),
+            Message(Role.ASSISTANT, "", tool_calls=(code_call,)),
+            Message(Role.TOOL, "c" * 45_000, tool_call_id=code_call.id),
+        ),
+    ]
+    estimates = [estimate_request_input_tokens(messages, ()) for messages in requests]
+    assert estimates[0] < 64_000
+    assert estimates[1] < 64_000
+    assert 64_000 < estimates[2] < max_input
+
+    for messages in requests[:2]:
+        await budgeted.complete(messages, max_tokens=4_096)
+
+    charges_before_third = await repo.list(owner_id="alice", project_id="project", run_id="run-1")
+    summary_before_third = await repo.summary(
+        owner_id="alice", project_id="project", run_id="run-1"
+    )
+    assert [charge.actual_nusd for charge in charges_before_third] == [25_325_000, 57_145_000]
+    assert summary_before_third is not None
+    assert summary_before_third.run_spent_nusd == 82_470_000
+    assert summary_before_third.run_reserved_nusd == 0
+
+    await budgeted.complete(requests[2], max_tokens=4_096)
+
+    charges = await repo.list(owner_id="alice", project_id="project", run_id="run-1")
+    expected_quotes = [
+        quote_model_call_nusd(
+            ((candidate.provider, candidate.model),),
+            min(max_input, estimate + headroom),
+            4_096,
+        )
+        for estimate in estimates
+    ]
+    assert len(delegate.calls) == 3
+    assert [charge.reserved_nusd for charge in charges] == expected_quotes
+    assert all(charge.state is ChargeState.RECONCILED for charge in charges)
+    summary = await repo.summary(owner_id="alice", project_id="project", run_id="run-1")
+    assert summary is not None
+    assert summary.run_reserved_nusd == 0
+    assert summary.run_spent_nusd == sum(charge.actual_nusd or 0 for charge in charges)
+    assert summary.run_spent_nusd < 50_000_000_000
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_dynamic_quote_covers_full_cache_write_usage_at_reservation_boundary(
+    tmp_path: Path,
+) -> None:
+    repo, engine = await repository(tmp_path / "cache-write-boundary.db")
+    candidate = PricingCandidate("foundry", "claude-opus-4-6")
+    messages = (Message(Role.USER, "x" * 50_000),)
+    max_input = 196_000
+    headroom = 4_096
+    quoted_input = min(max_input, estimate_request_input_tokens(messages, ()) + headroom)
+    expected_quote = quote_model_call_nusd(
+        ((candidate.provider, candidate.model),), quoted_input, 4_096
+    )
+    response = ModelResponse(
+        "complete",
+        usage=TokenUsage(
+            quoted_input,
+            4_096,
+            cache_write_input_tokens=quoted_input,
+        ),
+        actual_provider="foundry",
+        actual_model="claude-opus-4-6",
+    )
+    budgeted = wrapper(
+        FakeProvider([response]),
+        repo,
+        candidates=(candidate,),
+        limit=1_000_000_000,
+        max_input=max_input,
+        quote_headroom=headroom,
+    )
+
+    await budgeted.complete(messages, max_tokens=4_096)
+
+    charge = (await repo.list(owner_id="alice", project_id="project", run_id="run-1"))[0]
+    assert charge.state is ChargeState.RECONCILED
+    assert charge.reserved_nusd == expected_quote
+    assert charge.actual_nusd == expected_quote
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_max_candidate_quote_exact_budget_and_zero_budget_block_before_delegate(
     tmp_path: Path,
 ) -> None:
@@ -236,11 +373,13 @@ async def test_max_candidate_quote_exact_budget_and_zero_budget_block_before_del
         PricingCandidate("openai", "gpt-4o-mini"),
         PricingCandidate("openai", "gpt-4o"),
     )
-    quote = quote_model_call_nusd(candidates, 1_000, 10)
+    message = Message(Role.USER, "x")
+    estimated_input = estimate_request_input_tokens((message,), ())
+    quote = quote_model_call_nusd(candidates, estimated_input, 10)
     repo, engine = await repository(tmp_path / "exact.db")
     delegate = FakeProvider()
     budgeted = wrapper(delegate, repo, candidates=candidates, limit=quote)
-    await budgeted.complete([Message(Role.USER, "x")], max_tokens=10)
+    await budgeted.complete([message], max_tokens=10)
     charges = await repo.list(owner_id="alice", project_id="project", run_id="run-1")
     assert charges[0].reserved_nusd == quote
 

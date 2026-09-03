@@ -28,6 +28,7 @@ from app.services.monetary_budget import MonetaryBudgetRepository
 from app.tools.registry import SecureToolRegistry
 
 _SUPPORTED_PRICING_PROVIDERS = frozenset({"mock", "openai", "anthropic", "foundry", "ollama"})
+_CONTEXT_OUTPUT_RESERVE_TOKENS = 4_096
 
 
 def _pricing_candidates(settings: Any) -> tuple[PricingCandidate, ...]:
@@ -67,14 +68,18 @@ def budget_model_provider(
     session_factory = getattr(repository, "session_factory", None)
     if session_factory is None:
         raise RuntimeError("durable budget requires a repository session factory")
+    max_input_tokens = settings.context_length - _CONTEXT_OUTPUT_RESERVE_TOKENS
+    if max_input_tokens < 1:
+        raise ValueError("context length must exceed the output reservation")
     return DurableBudgetedProvider(
         provider,
         MonetaryBudgetRepository(session_factory),
         BudgetRunContext(user_id, project_id, run_id),
-        usd_limit_to_nusd(settings.agent_run_budget_usd),
-        usd_limit_to_nusd(settings.agent_project_budget_usd),
-        settings.agent_model_input_reservation_tokens,
-        _pricing_candidates(settings),
+        run_limit_nusd=usd_limit_to_nusd(settings.agent_run_budget_usd),
+        project_limit_nusd=usd_limit_to_nusd(settings.agent_project_budget_usd),
+        max_input_tokens=max_input_tokens,
+        pricing_candidates=_pricing_candidates(settings),
+        quote_input_headroom_tokens=settings.agent_model_input_quote_headroom_tokens,
     )
 
 
@@ -160,7 +165,7 @@ def create_chat_runtime(
             max_seconds=settings.agent_deadline_seconds,
             max_structured_retries=settings.structured_output_retries,
             max_context_tokens=settings.context_length,
-            context_output_reserve_tokens=4_096,
+            context_output_reserve_tokens=_CONTEXT_OUTPUT_RESERVE_TOKENS,
         ),
         policy_engine=default_policy_engine(),
         authorizer=authorizer,

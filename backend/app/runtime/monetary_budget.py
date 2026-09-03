@@ -18,7 +18,6 @@ from decimal import Decimal
 from typing import Any, Generic, TypeVar
 
 from app.observability.cost_tracker import (
-    price_model_usage_nusd,
     quote_model_call_nusd,
     validated_pricing_pair,
 )
@@ -310,6 +309,7 @@ class DurableBudgetedProvider:
         project_limit_nusd: int,
         max_input_tokens: int,
         pricing_candidates: Sequence[PricingCandidate],
+        quote_input_headroom_tokens: int = 0,
     ) -> None:
         if not isinstance(context, BudgetRunContext):
             raise TypeError("context must be a BudgetRunContext")
@@ -329,6 +329,9 @@ class DurableBudgetedProvider:
         self._run_limit_nusd = _amount(run_limit_nusd, "run_limit_nusd")
         self._project_limit_nusd = _amount(project_limit_nusd, "project_limit_nusd")
         self._max_input_tokens = _amount(max_input_tokens, "max_input_tokens")
+        self._quote_input_headroom_tokens = _amount(
+            quote_input_headroom_tokens, "quote_input_headroom_tokens"
+        )
         self._pricing_candidates = candidates
         self._allowed_pairs = frozenset((item.provider, item.model) for item in candidates)
         self._quote_pairs = tuple((item.provider, item.model) for item in candidates)
@@ -360,6 +363,10 @@ class DurableBudgetedProvider:
         return self._max_input_tokens
 
     @property
+    def quote_input_headroom_tokens(self) -> int:
+        return self._quote_input_headroom_tokens
+
+    @property
     def pricing_candidates(self) -> tuple[PricingCandidate, ...]:
         return self._pricing_candidates
 
@@ -387,19 +394,18 @@ class DurableBudgetedProvider:
             self._next_ordinal += 1
             return ordinal
 
-    def _quoted_candidate(self, max_tokens: int) -> tuple[int, PricingCandidate]:
+    def _quoted_candidate(self, input_tokens: int, max_tokens: int) -> tuple[int, PricingCandidate]:
         quote = quote_model_call_nusd(
             self._quote_pairs,
-            self._max_input_tokens,
+            input_tokens,
             max_tokens,
         )
-        # Persist a priceable pair whose no-cache price equals the reservation.
+        # Persist the candidate whose worst eligible input-class price equals the reservation.
         quoted = max(
             self._pricing_candidates,
-            key=lambda candidate: price_model_usage_nusd(
-                candidate.model,
-                candidate.provider,
-                self._max_input_tokens,
+            key=lambda candidate: quote_model_call_nusd(
+                ((candidate.provider, candidate.model),),
+                input_tokens,
                 max_tokens,
             ),
         )
@@ -482,17 +488,19 @@ class DurableBudgetedProvider:
             raise ValueError("response_contract and response_format are mutually exclusive")
 
         # Validate and calculate before opening/allocating so malformed calls have no ledger effect.
-        if (
-            estimate_request_input_tokens(
-                messages,
-                tools,
-                response_contract=response_contract,
-                response_format=response_format,
-            )
-            > self._max_input_tokens
-        ):
+        estimated_input_tokens = estimate_request_input_tokens(
+            messages,
+            tools,
+            response_contract=response_contract,
+            response_format=response_format,
+        )
+        if estimated_input_tokens > self._max_input_tokens:
             raise ModelBudgetExhausted
-        quote, quoted_candidate = self._quoted_candidate(max_tokens)
+        quoted_input_tokens = min(
+            self._max_input_tokens,
+            estimated_input_tokens + self._quote_input_headroom_tokens,
+        )
+        quote, quoted_candidate = self._quoted_candidate(quoted_input_tokens, max_tokens)
         kwargs: dict[str, Any] = {"max_tokens": max_tokens}
         if response_contract is not None:
             kwargs["response_contract"] = response_contract
