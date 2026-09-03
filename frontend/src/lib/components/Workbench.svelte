@@ -190,7 +190,25 @@
     if (event.event === 'token') {
       am.content += payload;
     } else if (event.event === 'thinking') {
-      am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: payload, elapsed_ms: elapsed }];
+      // Tool-progress events carry a tool_call_id; coalesce them so only the
+      // latest status for each tool_call_id is shown instead of N duplicates.
+      let parsed: Record<string, unknown> | null = null;
+      try { if (typeof payload === 'string' && payload.startsWith('{')) parsed = JSON.parse(payload); } catch { /* not JSON */ }
+      const tcId = parsed?.tool_call_id;
+      if (tcId && typeof tcId === 'string') {
+        const existing = (am.thinking_steps || []).findIndex(
+          (s) => { try { const d = typeof s.detail === 'string' && s.detail.startsWith('{') ? JSON.parse(s.detail) : null; return d?.tool_call_id === tcId; } catch { return false; } }
+        );
+        if (existing >= 0) {
+          const updated = [...(am.thinking_steps || [])];
+          updated[existing] = { type: 'thinking', detail: payload, elapsed_ms: elapsed };
+          am.thinking_steps = updated;
+        } else {
+          am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: payload, elapsed_ms: elapsed }];
+        }
+      } else {
+        am.thinking_steps = [...(am.thinking_steps || []), { type: 'thinking', detail: payload, elapsed_ms: elapsed }];
+      }
     } else if (event.event === 'skill') {
       try { am.skills_used = [...(am.skills_used || []), JSON.parse(payload)]; } catch { /* skip */ }
     } else if (event.event === 'tool_call') {
