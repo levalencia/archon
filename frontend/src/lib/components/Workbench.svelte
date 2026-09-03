@@ -65,6 +65,25 @@
     'Create a reliability test plan',
   ];
 
+  // Reconstruct HTML artifacts from durable chat history. Live runs receive
+  // artifact summaries over SSE, while history stores the complete answer.
+  function detectArtifacts(content: string, messageIndex: number): Artifact[] {
+    const htmlStart = content.search(/<(!DOCTYPE\s+html|html[\s>])/i);
+    if (htmlStart < 0) return [];
+    const htmlEnd = content.toLowerCase().indexOf('</html>', htmlStart);
+    const htmlContent = htmlEnd >= 0
+      ? content.slice(htmlStart, htmlEnd + 7)
+      : content.slice(htmlStart);
+    return [{
+      id: `local-html-${currentId}-${messageIndex}`,
+      title: 'Generated HTML',
+      type: 'html',
+      language: 'html',
+      content: htmlContent,
+      content_length: htmlContent.length,
+    }];
+  }
+
   // ── Lifecycle ──────────────────────────────────────────────────────
   onMount(() => {
     hydrated = true;
@@ -152,7 +171,9 @@
         role: m.role,
         content: m.content,
         timestamp: '',
+        artifacts: m.role === 'assistant' ? detectArtifacts(m.content, i) : undefined,
       }));
+      artifacts = messages.flatMap((message) => message.artifacts || []);
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not load conversation';
       messages = [];
@@ -587,7 +608,7 @@
     {#if messages.length === 0}
       <EmptyState {prompts} onSend={send} />
     {:else}
-      <ChatMessages {messages} {loading} />
+      <ChatMessages {messages} {loading} onOpenArtifact={() => artifactOpen = true} />
     {/if}
 
     <ChatInput onSend={send} onCancel={cancel} disabled={false} streaming={loading} />

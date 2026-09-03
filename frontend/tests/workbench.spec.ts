@@ -30,6 +30,70 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/documents', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
 });
 
+test('history HTML artifact renders inside a scriptless isolated preview', async ({ page }) => {
+  const html = `<!doctype html><html><head><style>h1{color:rgb(1,2,3)}</style></head><body>
+    <h1>Rendered artifact</h1><table><tbody><tr><td>Mercury</td></tr></tbody></table>
+    <script>window.__artifactExecuted = true</script>
+    <img src="https://example.invalid/track.png" onerror="window.__artifactExecuted = true">
+  </body></html>`;
+  let externalRequests = 0;
+  page.on('request', request => {
+    if (request.url().startsWith('https://example.invalid/')) externalRequests += 1;
+  });
+  await page.unroute('**/api/chat/history/*');
+  await page.route('**/api/chat/history/html-artifact', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ messages: [{ role: 'assistant', content: `Generated page:\n${html}` }] }),
+  }));
+
+  await page.goto('/chat/html-artifact');
+  await page.getByRole('button', { name: /Generated HTML.*Open preview/ }).click();
+
+  const iframe = page.locator('iframe[title="Artifact preview"]');
+  await expect(iframe).toHaveAttribute('sandbox', '');
+  const preview = page.frameLocator('iframe[title="Artifact preview"]');
+  await expect(preview.getByRole('heading', { name: 'Rendered artifact' })).toBeVisible();
+  await expect(preview.getByText('Mercury')).toBeVisible();
+  expect(
+    await preview.getByRole('heading', { name: 'Rendered artifact' }).evaluate(
+      element => getComputedStyle(element).color,
+    ),
+  ).toBe('rgb(1, 2, 3)');
+  expect(await preview.locator('body').evaluate(() => (window as any).__artifactExecuted)).toBeUndefined();
+  expect(externalRequests).toBe(0);
+});
+
+test('persisted HTML artifact fetches owned content and renders it as a document', async ({ page }) => {
+  const html = '<!doctype html><html><body><h1>Persisted artifact</h1><p>Rendered, not escaped.</p></body></html>';
+  let authorization = '';
+  await page.route('**/api/artifacts/artifact-live', route => {
+    authorization = route.request().headers().authorization || '';
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'artifact-live', title: 'Generated HTML', type: 'html',
+        content: html, content_length: html.length,
+      }),
+    });
+  });
+  await page.unroute('**/api/chat/stream');
+  await page.route('**/api/chat/stream', route => route.fulfill({
+    status: 200,
+    contentType: 'text/event-stream',
+    body: 'event: token\ndata: Created artifact.\n\nevent: artifact\ndata: {"id":"artifact-live","title":"Generated HTML","type":"html","content_length":102}\n\nevent: done\ndata: {"iterations":1,"tools_used":0,"elapsed_ms":42}\n\n',
+  }));
+
+  await page.goto('/');
+  await page.getByRole('textbox', { name: 'Message' }).fill('create html');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await page.getByRole('button', { name: /Generated HTML.*Open preview/ }).click();
+
+  const preview = page.frameLocator('iframe[title="Artifact preview"]');
+  await expect(preview.getByRole('heading', { name: 'Persisted artifact' })).toBeVisible();
+  await expect(preview.getByText('Rendered, not escaped.')).toBeVisible();
+  expect(authorization).toBe('Bearer playwright-token');
+});
+
 test('mock provider is disclosed before the user sends a message', async ({ page }) => {
   await page.route('**/healthz', route => route.fulfill({
     contentType: 'application/json',
