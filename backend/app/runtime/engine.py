@@ -91,10 +91,10 @@ class StopReason(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RuntimeBudget:
-    max_iterations: int = 8
-    max_tool_calls: int = 8
+    max_iterations: int = 15
+    max_tool_calls: int = 20
     max_tokens: int = 64_000
-    max_seconds: float = 90.0
+    max_seconds: float = 300.0
     max_tool_result_chars: int = 12_000
     final_synthesis_tokens: int = 2_048
     max_structured_retries: int = 1
@@ -365,7 +365,9 @@ class AgentRuntime:
                         calls,
                         usage,
                     )
-                except Exception:
+                except Exception as exc:
+                    import structlog as _sl
+                    _sl.get_logger().error("provider_call_exception", error=str(exc), exc_info=True)
                     return await self._stop(
                         StopReason.PROVIDER_ERROR,
                         content,

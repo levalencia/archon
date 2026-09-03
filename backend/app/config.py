@@ -195,7 +195,7 @@ class Settings(BaseSettings):
     # Agent
     agent_max_iterations: int = 5
     agent_token_budget: int = 64_000
-    agent_deadline_seconds: float = Field(default=90.0, ge=1.0, le=600.0)
+    agent_deadline_seconds: float = Field(default=300.0, ge=1.0, le=600.0)
     rag_deadline_seconds: float = Field(default=60.0, ge=1.0, le=300.0)
     structured_output_retries: int = Field(default=1, ge=0, le=2)
     durable_monetary_budget_enabled: bool = False
