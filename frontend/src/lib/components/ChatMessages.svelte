@@ -4,13 +4,23 @@
   import { CheckCircle2, LoaderCircle, XCircle, ChevronRight, ExternalLink, FileOutput } from 'lucide-svelte';
   import type { Message } from '$lib/types';
 
-  let { messages = [], loading = false }: { messages?: Message[]; loading?: boolean } = $props();
+  let { messages = [], loading = false, onOpenArtifact = () => {} }: { messages?: Message[]; loading?: boolean; onOpenArtifact?: () => void } = $props();
   let container: HTMLDivElement;
   let now = $state(typeof performance === 'undefined' ? 0 : performance.now());
   let nearBottom = true;
 
+  function protectArtifactHtml(text: string): string {
+    const start = text.search(/<(!DOCTYPE\s+html|html[\s>])/i);
+    if (start < 0) return text;
+    const fencesBefore = text.slice(0, start).match(/```/g)?.length || 0;
+    if (fencesBefore % 2 === 1) return text;
+    const end = text.toLowerCase().indexOf('</html>', start);
+    const stop = end >= 0 ? end + 7 : text.length;
+    const html = text.slice(start, stop).replaceAll('```', '``\u200b`');
+    return `${text.slice(0, start)}\n\n\`\`\`html\n${html}\n\`\`\`\n${text.slice(stop)}`;
+  }
   function markdown(text: string) {
-    return DOMPurify.sanitize(marked.parse(text, { async: false }) as string, { USE_PROFILES: { html: true } });
+    return DOMPurify.sanitize(marked.parse(protectArtifactHtml(text), { async: false }) as string, { USE_PROFILES: { html: true } });
   }
   $effect(() => { if (!loading) return; const id = setInterval(() => { now = performance.now(); }, 100); return () => clearInterval(id); });
   $effect(() => { messages; requestAnimationFrame(() => { if (container && nearBottom) container.scrollTop = container.scrollHeight; }); });
@@ -57,7 +67,7 @@
                 {#each msg.sources as src, i}<div class="flex min-h-11 items-center gap-2 border-b border-[var(--border)] px-3 text-xs last:border-0"><span class="font-mono font-bold text-[var(--accent)]">S{i + 1}</span>{#if src.url}<a href={src.url} target="_blank" rel="noopener" class="min-w-0 flex-1 truncate text-[var(--text)]">{src.title || src.url}</a><ExternalLink size={13}/>{:else}<span class="min-w-0 flex-1 truncate">{src.title}</span>{/if}{#if src.score != null}<span class="font-mono text-[var(--muted)]">{(src.score * 100).toFixed(0)}%</span>{/if}</div>{/each}
               </section>
             {/if}
-            {#if msg.artifacts?.length}<div class="artifact-chips mt-3 flex flex-wrap gap-2">{#each msg.artifacts as art}<span class="flex items-center gap-2"><FileOutput size={14}/> {art.title}</span>{/each}</div>{/if}
+            {#if msg.artifacts?.length}<div class="artifact-chips mt-3 flex flex-wrap gap-2">{#each msg.artifacts as art}<button class="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--accent)] bg-[rgba(85,214,190,.08)] px-3 py-1.5 text-xs text-[var(--accent)] transition-colors hover:bg-[rgba(85,214,190,.18)]" onclick={onOpenArtifact}><FileOutput size={14}/> {art.title} · Open preview</button>{/each}</div>{/if}
           {:else}<p class="user-copy">{msg.content}</p>{/if}
         </div>
       </article>
