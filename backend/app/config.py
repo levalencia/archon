@@ -201,8 +201,8 @@ class Settings(BaseSettings):
     durable_monetary_budget_enabled: bool = False
     durable_effect_ledger_enabled: bool = False
     effect_identity_secret: SecretStr = SecretStr("")
-    agent_run_budget_usd: Decimal = Field(default=Decimal("10.00"), ge=0, le=1_000_000)
-    agent_project_budget_usd: Decimal = Field(default=Decimal("100.00"), ge=0, le=1_000_000)
+    agent_run_budget_usd: Decimal = Field(default=Decimal("50.00"), ge=0, le=1_000_000)
+    agent_project_budget_usd: Decimal = Field(default=Decimal("500.00"), ge=0, le=1_000_000)
     agent_model_input_reservation_tokens: int = Field(default=64_000, ge=1, le=10_000_000)
 
     @field_validator("agent_run_budget_usd", "agent_project_budget_usd")
