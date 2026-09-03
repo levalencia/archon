@@ -1463,15 +1463,68 @@ async def test_policy_batch_authorizes_all_before_executing_in_order() -> None:
 @pytest.mark.asyncio
 async def test_policy_batch_budget_exhaustion_prevents_first_execution() -> None:
     tools = PolicyTools()
+    first = ToolCall("first", "reader", {"sequence": 1})
+    second = ToolCall("second", "reader", {"sequence": 2})
+    provider = batch_provider(first, second)
     result = await AgentRuntime(
-        batch_provider(
-            ToolCall("first", "reader", {"sequence": 1}),
-            ToolCall("second", "reader", {"sequence": 2}),
-        ),
+        provider,
         tools,
         policy_engine=FixedPolicy(PolicyAction.ALLOW),
         budget=RuntimeBudget(max_tool_calls=1),
     ).run([Message(Role.USER, "batch")])
 
     assert result.stop_reason is StopReason.TOOL_BUDGET_EXHAUSTED
+    assert result.content == "done"
     assert tools.executed == []
+    final_messages = provider.call_history[1]["messages"]
+    synthetic = [message for message in final_messages if message.role is Role.TOOL]
+    assert [message.tool_call_id for message in synthetic] == [first.id, second.id]
+    assert all('"reason_code":"tool_budget_exhausted"' in message.content for message in synthetic)
+
+
+@pytest.mark.asyncio
+async def test_eight_executed_tools_and_ninth_request_still_produce_final_answer() -> None:
+    tools = PolicyTools()
+    first_batch = tuple(
+        ToolCall(f"first-{index}", "reader", {"sequence": index}) for index in range(6)
+    )
+    second_batch = tuple(
+        ToolCall(f"second-{index}", "reader", {"sequence": index + 6}) for index in range(2)
+    )
+    pending = ToolCall("ninth", "reader", {"sequence": 9})
+    provider = MockLLM(
+        [
+            ModelResponse(
+                "first progress", tool_calls=first_batch, provider_stop_reason="tool_use"
+            ),
+            ModelResponse(
+                "second progress", tool_calls=second_batch, provider_stop_reason="tool_use"
+            ),
+            ModelResponse(
+                "final progress:", tool_calls=(pending,), provider_stop_reason="tool_use"
+            ),
+            ModelResponse("Complete synthesized answer."),
+        ]
+    )
+
+    result = await AgentRuntime(
+        provider,
+        tools,
+        policy_engine=FixedPolicy(PolicyAction.ALLOW),
+        budget=RuntimeBudget(max_tool_calls=8, max_iterations=5),
+    ).run([Message(Role.USER, "use every tool")])
+
+    assert result.stop_reason is StopReason.TOOL_BUDGET_EXHAUSTED
+    assert result.content == "Complete synthesized answer."
+    assert len(tools.executed) == 8
+    assert len(provider.call_history) == 4
+    final_messages = provider.call_history[3]["messages"]
+    pending_index = next(
+        index
+        for index, message in enumerate(final_messages)
+        if message.role is Role.ASSISTANT and message.tool_calls == (pending,)
+    )
+    assert final_messages[pending_index + 1].role is Role.TOOL
+    assert final_messages[pending_index + 1].tool_call_id == pending.id
+    assert final_messages[pending_index + 2].role is Role.USER
+    assert provider.call_history[3]["tools"] == ()

@@ -160,7 +160,7 @@ def create_chat_runtime(
         events=sink,
         budget=RuntimeBudget(
             max_iterations=settings.agent_max_iterations,
-            max_tool_calls=8,
+            max_tool_calls=settings.agent_max_tool_calls,
             max_tokens=settings.agent_token_budget,
             max_seconds=settings.agent_deadline_seconds,
             max_structured_retries=settings.structured_output_retries,

@@ -194,6 +194,7 @@ class Settings(BaseSettings):
 
     # Agent
     agent_max_iterations: int = 5
+    agent_max_tool_calls: int = Field(default=20, ge=0, le=1_000)
     agent_token_budget: int = 64_000
     agent_deadline_seconds: float = Field(default=300.0, ge=1.0, le=600.0)
     rag_deadline_seconds: float = Field(default=60.0, ge=1.0, le=300.0)
