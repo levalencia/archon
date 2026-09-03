@@ -168,7 +168,7 @@ def generate_values(provider_env: Path | None = None) -> dict[str, str]:
         "ARCHON_DURABLE_EFFECT_LEDGER_ENABLED": "true",
         "ARCHON_AGENT_DEADLINE_SECONDS": "90",
         "ARCHON_VERIFIER_ENABLED": "false",
-        "ARCHON_LOCAL_PORT": str(18_000 + secrets.randbelow(20_000)),
+        "ARCHON_LOCAL_PORT": os.environ.get("ARCHON_LOCAL_PORT") or str(18_000 + secrets.randbelow(20_000)),
         "ARCHON_RUNTIME_MODE": "mock",
         "ARCHON_LLM_PROVIDER": "mock",
         "ARCHON_LLM_MODEL": "mock-model",
