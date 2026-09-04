@@ -34,6 +34,33 @@ class ColumnContract(NamedTuple):
     autoincrement: bool = False
 
 
+# ---------------------------------------------------------------------------
+# Known historical server-defaults from pre-Alembic ``create_all`` on
+# PostgreSQL.  These are safe to accept during adoption because they mirror
+# the Python-level Column(default=…) values that were active when the
+# retained production database was originally created.  Any default string
+# NOT in this set still triggers fail-closed RuntimeError.
+# ---------------------------------------------------------------------------
+_KNOWN_LEGACY_SERVER_DEFAULTS: dict[str, dict[str, frozenset[str]]] = {
+    "users": {
+        "email": frozenset({"''::character varying"}),
+        "is_admin": frozenset({"0"}),
+    },
+    "conversations": {
+        "title": frozenset({"'New Conversation'::character varying"}),
+        "user_id": frozenset({"'default'::character varying"}),
+        "is_active": frozenset({"1"}),
+    },
+    "audit_entries": {
+        "result": frozenset({"'success'::character varying"}),
+        "security_level": frozenset({"'info'::character varying"}),
+    },
+    "artifacts": {
+        "version": frozenset({"1"}),
+    },
+}
+
+
 _COLUMN_CONTRACTS: dict[str, dict[str, ColumnContract]] = {
     "users": {
         "id": ColumnContract("varchar", False, 36),
@@ -147,7 +174,11 @@ def _validate_legacy_table(inspector: Inspector, table_name: str) -> None:
             and isinstance(server_default, str)
             and server_default.startswith("nextval(")
         )
-        if server_default is not None and not generated_identity:
+        known_legacy = _KNOWN_LEGACY_SERVER_DEFAULTS.get(table_name, {}).get(
+            column_name, frozenset()
+        )
+        accepted_legacy = isinstance(server_default, str) and server_default in known_legacy
+        if server_default is not None and not generated_identity and not accepted_legacy:
             raise RuntimeError(
                 f"legacy {table_name}.{column_name} server-default contract mismatch: "
                 f"actual={server_default!r}"

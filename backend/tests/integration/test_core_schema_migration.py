@@ -268,3 +268,116 @@ def test_core_reconciliation_offline_sql_fails_closed(tmp_path: Path, monkeypatc
     config.output_buffer = output
     with pytest.raises(RuntimeError, match="requires online Alembic"):
         command.upgrade(config, "20260901_21:20260902_22", sql=True)
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQL-representative legacy server-default regression tests
+# ---------------------------------------------------------------------------
+# SQLite reflects DEFAULT values as bare strings; PostgreSQL adds type casts
+# (e.g. ''::character varying).  We monkey-patch the reflected column metadata
+# to simulate the exact PostgreSQL-style defaults from the retained database.
+
+
+def _patch_inspector_columns_with_pg_defaults(engine, monkeypatch):
+    """Override reflected ``get_columns`` to inject PG-style server defaults."""
+    pg_defaults: dict[str, dict[str, str]] = {
+        "users": {"email": "''::character varying", "is_admin": "0"},
+        "conversations": {
+            "title": "'New Conversation'::character varying",
+            "user_id": "'default'::character varying",
+            "is_active": "1",
+        },
+        "audit_entries": {
+            "result": "'success'::character varying",
+            "security_level": "'info'::character varying",
+        },
+        "artifacts": {"version": "1"},
+        "messages": {},
+        "api_keys": {},
+    }
+    from sqlalchemy.engine.reflection import Inspector
+
+    original_get_columns = Inspector.get_columns
+
+    def patched_get_columns(self, table_name, *args, **kwargs):
+        cols = original_get_columns(self, table_name, *args, **kwargs)
+        defaults = pg_defaults.get(table_name, {})
+        for col in cols:
+            if col["name"] in defaults:
+                col["default"] = defaults[col["name"]]
+        return cols
+
+    monkeypatch.setattr(Inspector, "get_columns", patched_get_columns)
+
+
+def test_known_pg_legacy_defaults_accepted(tmp_path: Path, monkeypatch) -> None:
+    """Known historical PG server defaults must be accepted during adoption."""
+    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    database = tmp_path / "pg-defaults.db"
+    engine = create_engine(f"sqlite:///{database}")
+    Base.metadata.create_all(engine, tables=[Base.metadata.tables[t] for t in CORE_TABLES])
+    engine.dispose()
+
+    _patch_inspector_columns_with_pg_defaults(engine, monkeypatch)
+
+    config = _config(database)
+    # Must succeed — known legacy defaults should be accepted
+    command.upgrade(config, "head")
+
+
+def test_unknown_pg_server_default_rejected(tmp_path: Path, monkeypatch) -> None:
+    """An unexpected server default must still trigger fail-closed RuntimeError."""
+    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    database = tmp_path / "bad-pg-defaults.db"
+    engine = create_engine(f"sqlite:///{database}")
+    Base.metadata.create_all(engine, tables=[Base.metadata.tables[t] for t in CORE_TABLES])
+    engine.dispose()
+
+    from sqlalchemy.engine.reflection import Inspector
+
+    original_get_columns = Inspector.get_columns
+
+    def inject_bad_default(self, table_name, *args, **kwargs):
+        cols = original_get_columns(self, table_name, *args, **kwargs)
+        if table_name == "users":
+            for col in cols:
+                if col["name"] == "email":
+                    col["default"] = "'HACKED'::character varying"
+        return cols
+
+    monkeypatch.setattr(Inspector, "get_columns", inject_bad_default)
+
+    config = _config(database)
+    with pytest.raises(RuntimeError, match="users.email server-default contract mismatch"):
+        command.upgrade(config, "head")
+
+
+def test_known_pg_defaults_with_data_preserved(tmp_path: Path, monkeypatch) -> None:
+    """Adoption with known PG defaults must preserve existing row data."""
+    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    database = tmp_path / "pg-defaults-data.db"
+    engine = create_engine(f"sqlite:///{database}")
+    tables = Base.metadata.tables
+    Base.metadata.create_all(engine, tables=[tables[t] for t in CORE_TABLES])
+    with engine.begin() as conn:
+        conn.execute(
+            tables["users"]
+            .insert()
+            .values(id="u1", username="pguser", email="", password_hash="h", is_admin=0)
+        )
+        conn.execute(
+            tables["conversations"]
+            .insert()
+            .values(id="c1", title="New Conversation", user_id="default", is_active=1)
+        )
+    before = _core_counts(engine)
+    engine.dispose()
+
+    _patch_inspector_columns_with_pg_defaults(engine, monkeypatch)
+
+    config = _config(database)
+    command.upgrade(config, "head")
+
+    engine2 = create_engine(f"sqlite:///{database}")
+    assert _core_counts(engine2) == before
+    engine2.dispose()
