@@ -220,8 +220,7 @@ def test_live_code_generation_prompt(session: requests.Session) -> None:
     token_payloads = _extract_sse_data(sse_text, "token")
     combined = "".join(token_payloads)
     assert len(combined) > 50, (
-        f"Expected substantial code + explanation, got {len(combined)} chars: "
-        f"{combined[:200]!r}"
+        f"Expected substantial code + explanation, got {len(combined)} chars: {combined[:200]!r}"
     )
 
     # Should have used web_search

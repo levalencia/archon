@@ -26,13 +26,15 @@ async def _assemble_messages(
     user_id: str,
     persistent_memory_text: str,
     current_message_id: int | None = None,
+    *,
+    tool_budget: int,
 ) -> tuple[tuple[Message, ...], tuple[int | None, ...]]:
     descriptions = (
         json.dumps(tools.list_tools(), indent=2) if tools.list_tools() else "None configured"
     )
     prompt = (
         SYSTEM_PROMPT.replace("{tool_descriptions}", descriptions)
-        .replace("{tool_budget}", "8")
+        .replace("{tool_budget}", str(tool_budget))
         .replace(
             "{current_date}",
             datetime.datetime.now(ZoneInfo("Europe/Brussels")).strftime(
@@ -141,6 +143,7 @@ async def build_effective_context(
     skill_ids: tuple[str, ...] = (),
     current_message_id: int | None = None,
     asset_hmac_key: bytes | None = None,
+    tool_budget: int = 20,
 ) -> EffectiveContext:
     messages, source_ids = await _assemble_messages(
         user_input,
@@ -152,6 +155,7 @@ async def build_effective_context(
         user_id,
         persistent_memory_text,
         current_message_id,
+        tool_budget=tool_budget,
     )
     return EffectiveContext(
         messages=messages,
@@ -187,6 +191,8 @@ async def build_messages(
     images: list[str] | None = None,
     user_id: str = "default",
     persistent_memory_text: str = "",
+    *,
+    tool_budget: int = 20,
 ) -> list[Message]:
     messages, _ = await _assemble_messages(
         user_input,
@@ -197,5 +203,6 @@ async def build_messages(
         images,
         user_id,
         persistent_memory_text,
+        tool_budget=tool_budget,
     )
     return list(messages)
