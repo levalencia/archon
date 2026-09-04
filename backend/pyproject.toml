@@ -63,6 +63,7 @@ markers = [
     "unit: Unit tests (no external deps)",
     "integration: Integration tests (needs Docker services)",
     "security: Security probe tests",
+    "live: Live API tests (opt-in, run with ARCHON_LIVE_TESTS=1)",
 ]
 
 [tool.ruff]
