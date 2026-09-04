@@ -28,24 +28,26 @@ Archon is a serious local portfolio system. It is not a public production servic
 
 ## Verified status
 
-The Skills + Project Instructions work is a **local candidate** on
-`feature/skills-project-instructions-mcp`; its code evidence is anchored at `9eaf49e`
-before the documentation-only commits. It has not been pushed or deployed.
-The deployed `main` revision remains `63215bf`. The candidate has focused,
-adversarial, real-provider, temporary-PostgreSQL, frontend, and browser evidence;
-the exact-head integrated `verify.sh` gate passed on `26e36737` with backend **1537 passed / 4 skipped**, Svelte **0 errors / 0 warnings**, Vitest **53**, production build PASS, Playwright **33**, Bandit, sandbox, backend-container health, benchmark, and clean-tree checks.
+Skills + Project Instructions and core-table reconciliation are merged to `main`
+at `1f71f0e`. PR #10 (tool-budget exhaustion synthesis, `041ff75`) and PR #11
+(legacy core-table reconciliation, `1f71f0e`) are the most recent merges.
+GitHub Actions CI run `33858051794` passed at the exact merge SHA.
+The configured tool-call limit now reaches both the model prompt and runtime
+enforcement, and over-budget native calls are closed before bounded final
+synthesis. This wiring is deterministic-test evidence; a live run exceeding
+eight approved tool calls has not yet been accepted.
 
 | Evidence | Recorded result |
 |---|---|
-| Deployment target | Existing production-like local Docker Compose on macOS; candidate not deployed |
+| Deployment target | Existing production-like local Docker Compose on macOS; not publicly deployed |
 | Local services | 7 retained baseline containers; only the loopback gateway publishes a host port |
-| Deployed baseline backend | **1,415 passed, 2 expected skips, 87.23% coverage** |
-| Candidate frontend | Svelte **0 errors / 0 warnings**, **53 Vitest**, production build, **33 Playwright** |
+| Main-branch CI backend | **1,579 passed, 6 skipped, 87.15% coverage** |
+| Main-branch CI frontend | Svelte **0 errors / 0 warnings**, **15 Vitest files**, **35 Playwright** |
 | Capability manifest | **16 stable acceptance entries**; Skills + Project Instructions is tracked in the 66-concept course catalog |
-| Candidate concept totals | **59 implemented / 7 deferred / 0 partial** |
-| Portfolio benchmark | Historical deployed-baseline result: **12 scenarios, 120/120 iterations passed**, zero external cost |
-| Disaster recovery | Historical deployed-baseline result: **0 selected-record differences**, observed **restore-to-ready 24.787 seconds** |
-| Candidate live provider evidence | Foundry `claude-opus-4-6`: one selected skill, one instruction revision, nine capability refs |
+| Concept totals | **59 implemented / 7 deferred / 0 partial** |
+| Portfolio benchmark | Historical local result: **12 scenarios, 120/120 iterations passed**, zero external cost |
+| Disaster recovery | Historical local result: **0 selected-record differences**, observed **restore-to-ready 24.787 seconds** |
+| Live provider evidence | Foundry `claude-opus-4-6`: one selected skill, one instruction revision, nine capability refs (historical candidate observation) |
 | Public/cloud deployment | **No. Deliberately deferred.** |
 
 The canonical details and limits live in [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md).
@@ -180,7 +182,7 @@ The model proposes actions. Deterministic code owns authority, limits, persisten
 - REST and SSE parity;
 - structured logs, metrics, and OpenTelemetry traces;
 - liveness and dependency readiness;
-- Alembic migrations through `20260901_21` on the local candidate;
+- Alembic migrations through `20260902_22` on merged `main`;
 - Docker Compose deployment;
 - checksum-verified backup and clean restore;
 - measured RPO/RTO;
@@ -189,13 +191,12 @@ The model proposes actions. Deterministic code owns authority, limits, persisten
 ## Data model
 
 The deployed target uses one PostgreSQL database named `archon` and one Redis data store.
-The local candidate migrates the schema from revision 14 through revisions 15–21.
+The schema migrates from revision 14 through revision 22 on merged `main`.
 
-The candidate ORM declares **41 tables**. The added persistence covers immutable
+The ORM declares **41 tables**. The added persistence covers immutable
 skill revisions/references, exact project bindings, project-instruction
-snapshots, capability preferences/provenance, and governed MCP transport
-profiles. This is a code-and-migration claim, not evidence that revision 21 is
-deployed on `main`.
+snapshots, capability preferences/provenance, governed MCP transport
+profiles, and forward-head core-table reconciliation.
 
 Redis stores rate-limit windows and temporary state. It is not a relational database.
 
@@ -243,7 +244,7 @@ For an operator-authorized Foundry demo, stop the current mode and start live:
 ./scripts/local-stack.sh status
 ```
 
-Live mode imports only an allowlist of `ARCHON_LLM_*` settings from the mode-`0600` `backend/.env` into the generated protected Compose env; it never passes `backend/.env` directly to Compose. The startup smoke performs one real chat request and therefore incurs provider usage. Embeddings remain mock/non-production unless separately evidenced. Switching modes always requires an explicit `stop`.
+Live mode imports only an allowlist of `ARCHON_LLM_*` settings from the mode-`0600` `backend/.env` into the generated protected Compose env; it never passes `backend/.env` directly to Compose. The startup smoke performs one real chat request and therefore incurs provider usage. Switching modes always requires an explicit `stop`.
 
 Do **not** invoke `docker compose` with `backend/.env`, a nonexistent root `.env`, or dummy secrets. Those files/values do not satisfy the deployment contract. Use `local-stack.sh` so every status/log/stop command reuses the exact generated context.
 
@@ -289,7 +290,7 @@ Operator-authorized acceptance against Azure AI Foundry and `claude-opus-4-6` ob
 - one bounded one-pixel multimodal semantic probe;
 - one managed loopback deployment using the Foundry model through authenticated API chat and browser SSE chat, with provider/model identity visible in the UI.
 
-The configured adapter did not advertise native JSON Schema. The embedding provider remained `mock`, so no live embedding request was made.
+The configured adapter did not advertise native JSON Schema. Embedding support was subsequently added with Azure Foundry `text-embedding-3-small` in a superseding hardening acceptance (see [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md)); the initial provider acceptance predated that work.
 
 This is partial live evidence. A zero cache counter is not a cache-hit or billing-savings claim. A one-pixel probe is not a vision-quality benchmark.
 
@@ -332,7 +333,7 @@ Archon does not claim:
 - anonymous public sharing;
 - autonomous unapproved production optimization;
 - complete provider parity;
-- live embeddings or native JSON Schema acceptance.
+- native JSON Schema acceptance.
 
 These omissions are documented with the architecture and evidence required to revisit them in [Remaining Deferred Gaps](docs/REMAINING-DEFERRED-GAPS.md).
 

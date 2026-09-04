@@ -5,6 +5,7 @@
 ReAct is an iterative action/observation pattern: the model proposes a tool action, controlled code executes it, and the resulting observation informs the model's next response.
 Archon uses provider-native `ToolCall` values rather than parsing actions from model prose.
 It does not expose or require private chain-of-thought; observable progress, calls, results, and final answers are enough to run the loop.
+One configured tool-call allowance is shown to the model and enforced by the runtime; when the boundary is reached, unexecuted native calls are closed with synthetic observations before bounded final synthesis.
 
 ## Prerequisites and vocabulary
 
@@ -14,7 +15,7 @@ It does not expose or require private chain-of-thought; observable progress, cal
 - **Iteration:** one provider completion plus processing of its result.
 - **Progress text:** model content accompanying tool calls; not yet a final answer.
 - **Synthesis:** final tool-free response after evidence or a budget boundary.
-- **Reflection:** generic critique/revision phase; this is **not implemented** in Archon.
+- **Reflection:** generic critique/revision phase; Archon implements this as an **optional bounded final-answer reflection** through `BoundedReflectionService`, disabled by default (see [generic self-reflection](generic-self-reflection.md)).
 
 ## Problem and mental model
 
@@ -58,6 +59,16 @@ Policy mode snapshots all provider calls and preauthorizes a batch before any ha
 Tool exceptions become JSON error observations with a `reflexion_hint`, allowing the model to choose corrected parameters or another tool.
 Large serialized outputs emit progress chunks and are truncated before insertion into model history according to [`RuntimeBudget.max_tool_result_chars`](../../../backend/app/runtime/engine.py).
 [`AgentRuntime._finalize`](../../../backend/app/runtime/engine.py) requests bounded tool-free synthesis for selected budget stops.
+
+## Tool-budget alignment and synthesis
+
+`Settings.agent_max_tool_calls` (default 20) is passed to three aligned consumers:
+
+1. **System prompt** — the `{tool_budget}` placeholder in the assembled context tells the model its call allowance.
+2. **`RuntimeBudget.max_tool_calls`** — wired through `factory.py`, governs the deterministic tool-count enforcement in `AgentRuntime.run`.
+3. **`RequestContextBuilder.prepare`** — both sync (`chat.py`) and SSE (`stream.py`) pass `tool_budget=settings.agent_max_tool_calls`.
+
+When a model response would exceed the tool budget, `_append_unexecuted_tool_results` inserts synthetic `Role.TOOL` messages for every unexecuted call, each containing `{"error":"Tool call was not executed.","reason_code":"tool_budget_exhausted"}`. These close the provider tool-use block so the subsequent `_finalize` call can request bounded tool-free synthesis with the evidence already in history. If synthesis itself fails (deadline, provider error, structured-output rejection), the original budget stop reason is preserved in the `AgentResult`; the runtime does not pretend the run succeeded.
 
 ## Reflection terminology boundary
 

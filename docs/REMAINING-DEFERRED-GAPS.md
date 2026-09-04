@@ -1,7 +1,8 @@
 # Remaining Deferred Gaps
 
-**Current boundary:** local Skills + Project Instructions candidate based on
-`a642952`; deployed `main` remains `63215bf`. No push or deployment is claimed.
+**Current boundary:** merged `main` at `1f71f0e` with Alembic head
+`20260902_22`. CI run `33858051794` passed at the exact SHA. No public
+deployment is claimed.
 
 Archon is an evidence-rich **local Agent Reliability Workbench**. The omissions below are deliberate product and evidence boundaries, not hidden implementation promises. `Deferred` means outside the current capstone scope with no delivery date. A nearby file, manifest, test double, or local observation does not change that status.
 
@@ -165,16 +166,17 @@ The local DR drill measures one checksummed dump/restore path, but observations 
 
 A status review requires Luis or a service owner to adopt scoped objectives; select a production database/backup/PITR topology; define outage start and recovery completion; run repeated representative-volume drills including post-snapshot writes, key recovery, regional/provider failure, alerting and rollback; and retain signed drill history demonstrating compliance distributions rather than one local number.
 
-## Candidate acceptance boundary
+## Merged main acceptance boundary
 
-The local candidate now implements owner/project-bound instruction snapshots,
-deterministic precedence, exact skill bindings, shared sync/SSE preparation, and
-Run Ledger provenance. Local filesystem loading remains restricted to configured
-trusted roots; arbitrary user/model host paths, automatic trust of repository
-text, public catalogs, and silent multi-family merging remain outside the claim.
-The candidate does **not**:
+Merged `main` now implements owner/project-bound instruction snapshots,
+deterministic precedence, exact skill bindings, shared sync/SSE preparation,
+Run Ledger provenance, and forward-head core-table reconciliation. Local
+filesystem loading remains restricted to configured trusted roots; arbitrary
+user/model host paths, automatic trust of repository text, public catalogs,
+and silent multi-family merging remain outside the claim. Merged `main` does
+**not**:
 
-- claim a final integrated `verify.sh` result;
+- treat the green three-job GitHub workflow as an exact-head local `verify.sh` run;
 - convert local tests, fixtures, manifests, or historical evidence into live/provider/deployment evidence;
 - assign a delivery date to any deferred item;
 - change any `Deployed` value from **No**.

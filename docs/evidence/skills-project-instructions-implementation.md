@@ -2,17 +2,17 @@
 
 ## Scope and claim boundary
 
-- Candidate: local `feature/skills-project-instructions-mcp`; code evidence is anchored at `9eaf49e` before documentation-only commits.
-- Deployed baseline: `main` at `63215bf`.
-- Push/deploy: none for this candidate.
-- Integrated verification: exact-head `./scripts/verify.sh` PASS at `26e36737`.
+- Merged to `main` at `1f71f0e`. Alembic head is `20260902_22`.
+- Historical candidate code evidence was anchored at `9eaf49e`; integrated verification at `26e36737`.
+- CI acceptance: GitHub Actions run `33858051794` passed at the exact main SHA.
+- Push/deploy: merged to main; no public deployment.
 
-This packet records only the implemented core and direct observations. It does not prove public deployment, broad semantic-selection quality, arbitrary repository trust, a public skill marketplace, generic MCP OAuth, or multi-region operation.
+This packet records the implemented core and direct observations. It does not prove public deployment, broad semantic-selection quality, arbitrary repository trust, a public skill marketplace, generic MCP OAuth, or multi-region operation.
 
 ## Implemented core
 
-- Alembic migrations `20260901_15` through `20260901_21`.
-- 41 ORM tables at candidate head.
+- Alembic migrations `20260901_15` through `20260902_22`.
+- 41 ORM tables at merged head.
 - Ten repository-owned bundled skills.
 - Immutable skill revisions and exact owner/project/revision bindings.
 - Approved immutable project-instruction snapshots with deterministic precedence.
@@ -91,15 +91,15 @@ A disposable PostgreSQL database was created on the retained local stack, migrat
 
 | Check | Result |
 |---|---|
-| Upgrade head | PASS — `20260901_21` |
+| Upgrade head | PASS — `20260901_21` (historical; current head is `20260902_22`) |
 | Candidate integrity triggers | 5 |
 | Composite owner foreign keys | 2 |
 | `mcp_servers.enabled` default | `false` |
-| Round trip | PASS — revision 14 → 21 |
+| Round trip | PASS — revision 14 → 21 (historical observation) |
 | Cleanup | Temporary database dropped |
 
-The observed controls are migration-level evidence on temporary PostgreSQL. They do not mean revision 21 is deployed on `main`.
+The observed controls are migration-level evidence on temporary PostgreSQL. Migration `20260902_22` (core-table reconciliation) was merged subsequently.
 
 ## Evidence interpretation
 
-`Exists`, `Wired`, `Tested`, `Observed`, `UI`, `Live provider`, and `Deployed` remain independent. The 16-entry capability manifest retains its stable baseline; the 66-concept course catalog records `skills-project-instructions` as implemented on the local candidate with deployment explicitly false.
+`Exists`, `Wired`, `Tested`, `Observed`, `UI`, `Live provider`, and `Deployed` remain independent. The 16-entry capability manifest retains its stable baseline; the 66-concept course catalog records `skills-project-instructions` as implemented on merged `main` with deployment explicitly false.

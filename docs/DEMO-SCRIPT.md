@@ -114,10 +114,10 @@ Show the limitations section.
 
 Say:
 
-> This candidate is local and not pushed or deployed; deployed main remains
-> `63215bf`. A bounded Foundry acceptance and disposable PostgreSQL migration
-> round trip passed. I am not presenting an unfinished integrated verification
-> run as a final count.
+> Skills + Project Instructions and core-table reconciliation are merged to
+> `main` at `1f71f0e`. A bounded Foundry acceptance and disposable PostgreSQL
+> migration round trip passed during candidate development. No public deployment
+> is claimed.
 
 ## Live commands
 

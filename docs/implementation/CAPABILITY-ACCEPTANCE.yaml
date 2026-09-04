@@ -97,9 +97,9 @@
       "status": "implemented",
       "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "yes", "deployed": "no"},
       "sources": ["backend/app/services/monetary_budget.py", "backend/app/runtime/monetary_budget.py", "backend/app/runtime/factory.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py"],
-      "tests": ["backend/tests/unit/test_monetary_budget.py", "backend/tests/unit/test_budgeted_provider.py", "backend/tests/unit/test_durable_budget_wiring.py", "backend/tests/integration/test_effect_budget_migration.py"],
+      "tests": ["backend/tests/unit/test_monetary_budget.py", "backend/tests/unit/test_budgeted_provider.py", "backend/tests/unit/test_durable_budget_wiring.py", "backend/tests/unit/test_tool_budget_wiring.py", "backend/tests/unit/test_runtime_policy.py", "backend/tests/unit/test_runtime_v2.py", "backend/tests/integration/test_effect_budget_migration.py"],
       "evidence": ["docs/course/concepts/cost-usage-budgets.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-rag-hardening.json"],
-      "limitation": "Atomic run/project reservation, input-bound admission and reconciliation are proven with PostgreSQL contention and live Foundry calls; price-book lifecycle, invoice parity and public deployment remain outside the claim."
+      "limitation": "Atomic run/project reservation, input-bound admission and reconciliation are proven with PostgreSQL contention and live Foundry calls. Tool-budget (Settings.agent_max_tool_calls) is deterministically wired through system prompt, RuntimeBudget, and both sync/SSE request context, but live runs exceeding 8 tool calls have not been acceptance-tested. Price-book lifecycle, invoice parity and public deployment remain outside the claim."
     },
     {
       "id": "multimodal-e2e",

@@ -1,14 +1,23 @@
 # Database schema map
 
-> **Generated snapshot boundary:** manually extracted from SQLAlchemy rows in [`db_store.py`](../../../backend/app/services/db_store.py) and Alembic revisions through head `20260826_08` at Git revision `3577b00`. This is a review aid, not executable DDL. ORM models, migrations, and the schema of a running database are three distinct evidence sources.
+> **Selected-schema boundary:** manually maintained from SQLAlchemy rows in [`db_store.py`](../../../backend/app/services/db_store.py) and Alembic revisions through head `20260902_22` at Git revision `1f71f0e`. This is a non-exhaustive review aid, not executable DDL. ORM models, migrations, and the schema of a running database are three distinct evidence sources.
 
 ## Migration chain
 
-`20260826_01 approval_requests` → `02 memory_facts` → `03 run_ledger` → `04 run_checkpoints` → `05 durable_documents` → `06 durable_evaluations` → `07 run_parent_fk` → `08 mcp_inventory`
+`20260826_01 approval_requests` → `02 memory_facts` → `03 run_ledger` → `04 run_checkpoints` → `05 durable_documents` → `06 durable_evaluations` → `07 run_parent_fk` → `08 mcp_inventory` → `09 effect_budget` → `10 context_snapshots` → `11 memory_key_fencing` → `12 run_exports_and_share_grants` → `13 durable_jobs_and_nonces` → `14 drift_and_candidates` → `15 skills_and_project_instructions` → `16 skill_discovery_context` → `17 capability_preferences` → `18 instruction_snapshots` → `19 mcp_transport_profiles` → `20 integrity_hardening` → `21 capability_provenance` → `22 core_table_reconciliation`
 
-See [`backend/alembic/versions`](../../../backend/alembic/versions/20260826_08_mcp_inventory.py). `DatabaseStore.initialize` also calls `Base.metadata.create_all`; that convenience path does not prove a deployed database has applied the Alembic chain.
+See [`backend/alembic/versions`](../../../backend/alembic/versions/20260902_22_core_table_reconciliation.py). `DatabaseStore.initialize` calls `Base.metadata.create_all` only for SQLite test/development databases; PostgreSQL startup requires Alembic head.
 
-## Table inventory
+### Forward-head core-table reconciliation (revision 22)
+
+Migration `20260902_22` adopts or creates the six pre-Alembic core tables (`users`, `api_keys`, `conversations`, `messages`, `audit_entries`, `artifacts`). For each table:
+
+- If the table already exists (created by historical `create_all`), the migration validates every column's type family, length, nullability, and autoincrement against a strict contract. Unknown server defaults fail closed; known legacy PostgreSQL defaults (e.g. `''::character varying`, `'New Conversation'::character varying`) are explicitly accepted.
+- If a unique index created by PostgreSQL `create_all` appears as a non-unique index plus a separate named UNIQUE constraint (e.g. `ix_users_username` + `uq_users_username`), the historical pair is accepted as satisfying uniqueness.
+- If the table does not exist, it is created with the canonical schema.
+- Downgrade deliberately preserves core data because Alembic did not originally own these tables.
+
+## Selected table inventory
 
 | Table / ORM row | Purpose and principal columns | Important boundary |
 |---|---|---|
@@ -47,4 +56,4 @@ Other identifiers such as `messages.conversation_id`, `artifacts.conversation_id
 
 ## Refresh and verify
 
-From `backend`, inspect `uv run alembic heads` and `uv run alembic current` against a disposable configured database, then compare migration DDL with `Base.metadata`. Never run upgrades against an unknown/shared database for a documentation check. Focused tests: [`test_database.py`](../../../backend/tests/unit/test_database.py), [`test_run_ledger_migration.py`](../../../backend/tests/integration/test_run_ledger_migration.py), [`test_evaluation_migration.py`](../../../backend/tests/integration/test_evaluation_migration.py), and [`test_mcp_inventory_migration.py`](../../../backend/tests/integration/test_mcp_inventory_migration.py).
+From `backend`, inspect `uv run alembic heads` and `uv run alembic current` against a disposable configured database, then compare migration DDL with `Base.metadata`. Never run upgrades against an unknown/shared database for a documentation check. Focused tests: [`test_database.py`](../../../backend/tests/unit/test_database.py), [`test_run_ledger_migration.py`](../../../backend/tests/integration/test_run_ledger_migration.py), [`test_evaluation_migration.py`](../../../backend/tests/integration/test_evaluation_migration.py), [`test_mcp_inventory_migration.py`](../../../backend/tests/integration/test_mcp_inventory_migration.py), and [`test_effect_budget_migration.py`](../../../backend/tests/integration/test_effect_budget_migration.py).

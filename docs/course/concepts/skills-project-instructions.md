@@ -89,9 +89,9 @@ MCP remains a tool boundary. Enabled, healthy, owner/project-scoped MCP metadata
 | [`backend/app/mcp/runtime.py::MCPRuntimeToolProvider.for_scope`](../../../backend/app/mcp/runtime.py) | Selects scoped MCP metadata first and materializes only enabled schemas under count/byte limits. |
 | [`backend/app/runtime/context_provenance.py::EffectiveContextManifest`](../../../backend/app/runtime/context_provenance.py) | Records exact instruction/skill revisions and provider-visible capability schema hashes without raw bodies. |
 
-### Migration chain 15–21
+### Migration chain 15–22
 
-The linear Alembic chain `20260901_15` through `20260901_21` introduces skill packages/revisions and project instruction state, skill references and project pins, capability preferences, ordered instruction snapshot sources, MCP transport-profile evolution, owner/integrity hardening, and exact capability provenance. Migration tests check round trips, scope fences, immutability, Streamable HTTP compatibility, and the serialized PostgreSQL migration runner. Schema migration evidence is still local test evidence, not proof that any deployed database was upgraded.
+The linear Alembic chain `20260901_15` through `20260902_22` introduces skill packages/revisions and project instruction state, skill references and project pins, capability preferences, ordered instruction snapshot sources, MCP transport-profile evolution, owner/integrity hardening, exact capability provenance, and forward-head core-table reconciliation. Migration tests check round trips, scope fences, immutability, Streamable HTTP compatibility, the serialized PostgreSQL migration runner, and legacy schema adoption. Schema migration evidence is still local test evidence, not proof that any public deployment was upgraded.
 
 ### Tests
 
@@ -109,7 +109,7 @@ The linear Alembic chain `20260901_15` through `20260901_21` introduces skill pa
 
 ### Evidence boundary
 
-The implementation is present and covered by repository tests in this local candidate. `implemented` means the bounded code path exists and is tested; **deployed remains no**. No public endpoint, hosted database migration, external secret broker, remote production MCP observation, production SLO, or adversarial multi-tenant certification is claimed. The existing [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md) remains the central evidence index and is not rewritten by this course update.
+The implementation is present and covered by repository tests on merged `main`. `implemented` means the bounded code path exists and is tested; **deployed remains no**. No public endpoint, hosted database migration, external secret broker, remote production MCP observation, production SLO, or adversarial multi-tenant certification is claimed. The existing [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md) remains the central evidence index and is not rewritten by this course update.
 
 ## Try it: bounded study exercise
 

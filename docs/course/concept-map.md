@@ -23,7 +23,7 @@ Only those four values belong in the [concept catalog](concept-catalog.yaml). Ev
 | **Deterministic claim verification** | Rule-based comparison of candidate claims with retrieved evidence, conservatively rejecting unsupported, unknown, negated, numeric, or partial claims. | A grounded-workflow control, not another agent and not introspection. |
 | **Verifier delegation** | One bounded child run receives selected claims and evidence only, has no tools, returns a strict verdict contract, and is linked to its parent. | A constrained specialist; not a dynamic swarm and not generic self-reflection. |
 | **Post-run evaluation** | A versioned evaluation process scores or checks an already persisted run for regression evidence. | Measurement after execution; it does not alter the run or prove continuous learning. |
-| **Generic self-reflection** | A general mechanism that critiques its own reasoning/output against explicit criteria and deliberately revises it, potentially across a broader workflow. | **Not implemented as a generic capability.** Do not infer it from ReAct, retries, tool-error feedback, verification, delegation, or evaluation. |
+| **Generic self-reflection** | A general mechanism that critiques its own reasoning/output against explicit criteria and deliberately revises it, potentially across a broader workflow. | **Implemented** as optional bounded final-answer reflection through `BoundedReflectionService`: one tool-free critique and at most one bounded revision, disabled by default. Not recursive, not a learned memory, and not inferred from ReAct, retries, tool-error feedback, verification, delegation, or evaluation alone. |
 
 ## Module dependency graph
 
@@ -129,11 +129,11 @@ flowchart LR
     Resilience --> Observability
     Observability --> Operations[Local operations and recovery]
 
-    Reflection[Generic self-reflection]:::absent
-    classDef absent fill:#fff4f4,stroke:#b42318,stroke-dasharray: 5 5
+    Reflection[Generic self-reflection — optional bounded]:::implemented
+    classDef implemented fill:#f0fff0,stroke:#2e7d32
 ```
 
-The disconnected, dashed-style **Generic self-reflection** node is intentional: it is vocabulary needed for honest comparison, not a dependency backed by a generic implementation claim.
+The **Generic self-reflection** node is now `implemented` as an optional, bounded, disabled-by-default final-answer reflection mechanism. It is not recursive, not learned, and its scope remains vocabulary needed for honest comparison alongside ReAct, verification, and evaluation.
 
 ## Reading rules
 
