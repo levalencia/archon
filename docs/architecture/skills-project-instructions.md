@@ -2,8 +2,7 @@
 
 ## Status
 
-Implemented on the local `feature/skills-project-instructions-mcp` candidate; code evidence is anchored at `9eaf49e` before documentation-only commits.
-It is not pushed or deployed; deployed `main` remains `63215bf`. This document
+Merged to `main` at `1f71f0e`. No public deployment is claimed. This document
 describes the implemented core contract, while revision-scoped observations live
 in `docs/evidence/skills-project-instructions-implementation.md`.
 
@@ -215,17 +214,18 @@ instruction and skill revision references plus capability IDs and schema hashes.
 
 ## Acceptance boundary
 
-- ORM metadata declares 41 tables; Alembic revisions 15–21 cover this slice.
+- ORM metadata declares 41 tables; Alembic revisions 15–21 cover this feature slice, and forward-head revision 22 reconciles the six pre-Alembic core tables.
 - Ten bundled, repository-owned skills are bootstrapped.
 - Sync and SSE call the same request-context preparation service.
 - One real Foundry run with `claude-opus-4-6` recorded one skill revision, one
   approved instruction revision, and nine capability references.
-- A disposable PostgreSQL round trip reached head 21, observed five integrity
+- A historical disposable PostgreSQL round trip reached head 21, observed five integrity
   triggers, two owner-scope foreign keys and a false MCP enabled default, then
   completed 14 → 21 again.
 
-No final integrated-suite count, public deployment, arbitrary external skill
-trust, generic OAuth, or broad semantic-selection quality is claimed.
+The merged-main CI count is recorded in `docs/IMPLEMENTATION-EVIDENCE.md`.
+No public deployment, arbitrary external skill trust, generic OAuth, or broad
+semantic-selection quality is claimed.
 
 ## Threat model
 

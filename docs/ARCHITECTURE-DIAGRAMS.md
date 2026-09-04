@@ -2,8 +2,8 @@
 
 These diagrams describe the current evidence-backed system. Historical diagrams that implied pgvector, Azure Blob, Jaeger, dynamic swarms, or host-process sandboxing were removed because those paths were not the verified product.
 
-The Skills + Project Instructions additions shown here are a local candidate
-based on `a642952`, not a deployed revision. Deployed `main` remains `63215bf`.
+Skills + Project Instructions and core-table reconciliation are merged to `main`
+at `1f71f0e`. No public deployment is claimed.
 
 ## 1. Agent Reliability Workbench
 

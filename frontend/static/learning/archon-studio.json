@@ -585,7 +585,7 @@
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/03-react-loop/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/react.md",
       "content_source": "concept",
-      "summary": "ReAct is an iterative action/observation pattern: the model proposes a tool action, controlled code executes it, and the resulting observation informs the model's next response. Archon uses provider-native ToolCall values rather than parsing actions from model prose. It does not expose or require private chain-of-thought; observable progress, calls, results, and final answers are enough to run the loop.",
+      "summary": "ReAct is an iterative action/observation pattern: the model proposes a tool action, controlled code executes it, and the resulting observation informs the model's next response. Archon uses provider-native ToolCall values rather than parsing actions from model prose. It does not expose or require private chain-of-thought; observable progress, calls, results, and final answers are enough to run the loop. One configured tool-call allowance is shown to the model and enforced by the runtime; when the boundary is…",
       "mental_model": "Models cannot directly know fresh external state. The loop turns tools into controlled sensors/actuators and lets observations update the next proposal. The runtime is a referee: it limits rounds, blocks repeated plays, authorizes actions, and decides when the game ends.",
       "limitations": "Tool-error feedback is not generic self-reflection.",
       "sources": [
@@ -3043,7 +3043,7 @@
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/07-run-ledger/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/cost-usage-budgets.md",
       "content_source": "concept",
-      "summary": "Usage reports what a model call consumed. Pricing converts that usage into money. A budget must reserve an upper bound before dispatch, then reconcile actual usage afterward. Reporting cost after a run is observability; preventing an over-budget call is enforcement. Archon uses integer nano-US-dollars ( nUSD ) for enforcement. It does not use binary floating point in authoritative counters.",
+      "summary": "Usage reports what a model call consumed. Pricing converts that usage into money. A budget must reserve an upper bound before dispatch, then reconcile actual usage afterward. Reporting cost after a run is observability; preventing an over-budget call is enforcement. Archon uses integer nano-US-dollars ( nUSD ) for enforcement. It does not use binary floating point in authoritative counters. The reservation is sized from the current serialized request plus bounded headroom and the maximum eligible provider/cache…",
       "mental_model": "The ledger is a flight recorder. RunRow is the flight summary; RuntimeEventRow records ordered instrument readings. It deliberately stores hashes, IDs, counts, and decisions rather than prompts, chain-of-thought, tool arguments, or results.",
       "limitations": "Atomic run/project reservation and reconciliation are live-proven for chat, RAG and verifier calls; price-book versioning, period policies, operator resolution of indeterminate charges and budget-management UI remain future work.",
       "sources": [

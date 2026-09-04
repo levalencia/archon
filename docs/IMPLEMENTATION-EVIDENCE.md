@@ -4,14 +4,18 @@
 
 ## Baseline
 
-- **Current candidate:** local `feature/skills-project-instructions-mcp`; code evidence is anchored at `9eaf49e` before documentation-only commits. No push or deployment is claimed.
-- **Deployed baseline:** `main` remains `63215bf`.
-- **Current acceptance scope:** exact-head `verify.sh` PASS at code HEAD `26e36737`, focused/adversarial Skills + Project Instructions tests, one operator-authorized Foundry run, and a disposable PostgreSQL migration round trip.
+- **Current main:** `1f71f0e1ada7da4989ef7e313581b7476f82c804` (PR #11 merge). Skills + Project Instructions and core-table reconciliation are merged.
+- **CI acceptance:** GitHub Actions run `33858051794` passed at the exact main SHA: backend **1,579 passed / 6 skipped / 87.15% coverage**, Svelte **0 errors / 0 warnings**, **15 Vitest files**, **35 Playwright**.
+- **Migration head:** `20260902_22` (core-table reconciliation).
+- **Runtime hardening:** `Settings.agent_max_tool_calls` now drives the sync/SSE prompt context and `RuntimeBudget`; over-budget native calls receive synthetic unexecuted-tool results before bounded final synthesis. Monetary admission quotes the current serialized request plus bounded headroom against the most expensive eligible input class. These paths have deterministic coverage, but no live run exceeding eight approved tool calls is claimed.
 - **Capability status source:** `docs/implementation/CAPABILITY-ACCEPTANCE.yaml`; this prose must not override its per-dimension limits.
-- **Remote status:** no candidate push or candidate CI result is claimed.
 - **Deployment status:** production-like **local** target observed; no non-local/public deployment. Every `Deployed` value remains **No**.
 
 This document separates code presence, wiring, tests, direct observation, UI, and deployment. Local tests, mocks, Docker smokes, and manifests are not public-production evidence.
+
+### Historical candidate baseline (superseded)
+
+The following records the pre-merge candidate status at `feature/skills-project-instructions-mcp` for historical traceability. Code evidence was anchored at `9eaf49e`; exact-head `verify.sh` PASS at `26e36737` with backend 1,537 passed / 4 skipped, Svelte 0/0, Vitest 53, Playwright 33. These numbers are superseded by the merged main CI results above.
 
 The executable [capability acceptance manifest](implementation/CAPABILITY-ACCEPTANCE.yaml)
 provides the validated, machine-readable baseline for capstone gap status and evidence pointers.
@@ -27,9 +31,9 @@ provides the validated, machine-readable baseline for capstone gap status and ev
 
 Legend: **Yes**, **Partial**, **No**, **N/A**.
 
-## Skills + Project Instructions local candidate
+## Skills + Project Instructions (merged to main)
 
-The candidate implements migrations `20260901_15` through `20260901_21`, 41
+The merged main implements migrations `20260901_15` through `20260902_22`, 41
 ORM tables, ten owned bundled skills, immutable skill revisions and exact
 owner/project/revision bindings, approved project-instruction snapshots,
 metadata-first capability discovery, and one request-context preparation path
@@ -48,7 +52,7 @@ instruction loader/precedence/snapshot, capability selector/governance,
 scoped-API, MCP transport, and migration tests listed in
 [`docs/evidence/skills-project-instructions-implementation.md`](evidence/skills-project-instructions-implementation.md).
 
-Two direct observations are recorded for the local candidate:
+Two direct observations were recorded for the pre-merge candidate and remain valid historical evidence:
 
 - **Foundry acceptance — PASS:** `claude-opus-4-6`, no mock fallback, with one
   selected skill revision, one approved instruction revision, and nine
@@ -58,9 +62,10 @@ Two direct observations are recorded for the local candidate:
   keys, `mcp_servers.enabled` defaulting to false, downgrade to revision 14,
   and re-upgrade to 21.
 
-- **Exact-head integrated gate — PASS:** backend **1537 passed / 4 skipped**,
+- **Exact-head integrated gate — PASS (historical at `26e36737`):** backend **1537 passed / 4 skipped**,
   Svelte **0/0**, Vitest **53**, build PASS, Playwright **33**, Bandit,
   sandbox, backend-container health, benchmark, and clean-tree checks.
+  Superseded by CI run `33858051794` at merged `1f71f0e`.
 
 These observations do not establish public deployment, broad skill-selection
 quality, arbitrary repository trust, or external production readiness.
@@ -168,14 +173,14 @@ Evidence files:
 | Recorded-run evaluations | Yes | Yes | Yes | Yes | Yes | No | Versioned datasets evaluate persisted runs; legacy fabricated A/B endpoints return 410. |
 | Bounded verifier child | Yes | Yes | Yes | Yes | Yes | No | Evidence-only context, no tools, real token/time/retry budgets, durable parent-child runs and benefit fixture. One specialist, not a swarm. |
 | Governed MCP stdio + HTTP | Yes | Yes | Yes | Yes | Yes | No | Allowlisted stdio and bounded Streamable HTTP profiles, durable inventory, protected credential references, project enablement, per-tool policy/approval, schema-hash/TOCTOU checks, and UI. No generic OAuth platform or public gateway claim. |
-| Skills, project instructions, and capability discovery | Yes | Yes | Yes | Yes | Partial | No | Local candidate: ten bundled skills, immutable exact project bindings, approved instruction snapshots, shared sync/SSE preparation, metadata-first discovery, and exact Run Ledger provenance. One Foundry run observed 1 skill, 1 instruction and 9 capability refs. GodMode is optional metadata-only; UI code exists but this evidence packet does not claim a completed browser acceptance; no deployment or broad selection-quality claim. |
+| Skills, project instructions, and capability discovery | Yes | Yes | Yes | Yes | Partial | No | Ten bundled skills, immutable exact project bindings, approved instruction snapshots, shared sync/SSE preparation, metadata-first discovery, and exact Run Ledger provenance. One Foundry run observed 1 skill, 1 instruction and 9 capability refs. GodMode is optional metadata-only; UI code exists but this evidence packet does not claim a completed browser acceptance; no deployment or broad selection-quality claim. |
 | Evidence-first Workbench | Yes | Yes | Yes | Yes | Yes | No | Full-width responsive shell, contextual inspector, inline evidence, mobile/tablet focus containment, route coverage. |
 | OpenTelemetry | Yes | Yes | Yes | Yes | No | No | Real SDK/exporter in the local image; readiness and collector logs prove export. Archon has no hosted trace backend or embedded trace UI. |
 | Local container target | Yes | Yes | Yes | Yes | N/A | No | Digest-pinned, loopback-only gateway, non-root/read-only app containers, internal PostgreSQL/Redis/OTEL. Local evidence is not deployment. |
 | Backup/restore | Yes | Yes | Yes | Yes | No | No | SHA-256 verified custom dump, clean-target guard, full restore and exact record/hash checks with an observed restore-to-ready measurement and selected-record snapshot comparison. |
 | Portfolio benchmark | Yes | Yes | Yes | Yes | No | No | Deterministic local control-plane benchmark; not model quality, load, cost, or production latency evidence. |
 | Public/cloud deployment | No | No | No | No | No | No | Historical manifests are non-authoritative artifacts; public deployment is explicitly deferred and no live public endpoint is claimed. |
-| Remote CI | Yes | Yes | Yes | Yes | No | No | GitHub Actions backend, frontend and backend-image jobs passed in run `33042478912` at `9696ad8`. CI evidence is not deployment. |
+| Remote CI | Yes | Yes | Yes | Yes | No | No | GitHub Actions backend, frontend and backend-image jobs passed in run `33858051794` at merged main `1f71f0e`. CI evidence is not deployment. |
 
 ## Directly observed local scenarios
 

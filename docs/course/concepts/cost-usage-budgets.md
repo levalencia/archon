@@ -10,15 +10,19 @@
 Usage reports what a model call consumed. Pricing converts that usage into money. A budget must reserve an upper bound **before** dispatch, then reconcile actual usage afterward. Reporting cost after a run is observability; preventing an over-budget call is enforcement.
 
 Archon uses integer nano-US-dollars (`nUSD`) for enforcement. It does not use binary floating point in authoritative counters.
+The reservation is sized from the current serialized request plus bounded headroom and the maximum eligible provider/cache input price class—not from a fixed input-token reservation.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Runtime --> Quote[Maximum no-cache quote]
+    Runtime --> Estimate[Serialized-request input estimate]
+    Estimate -->|exceeds max_input_tokens| Block1[Reject before reserve]
+    Estimate -->|within limit| Headroom[Add configured headroom]
+    Headroom --> Quote[Maximum eligible provider/cache input price class + output allowance]
     Quote --> Reserve[Atomic run + project reserve]
     Reserve -->|capacity available| Provider
-    Reserve -->|limit exceeded| Block[Fail before provider call]
+    Reserve -->|limit exceeded| Block2[Fail before provider call]
     Provider --> Usage[Actual provider/model usage]
     Usage --> Reconcile[Exact nUSD reconciliation]
     Reconcile --> Run[(Run counters)]
@@ -43,14 +47,15 @@ stateDiagram-v2
 
 1. `DurableBudgetedProvider` opens immutable run/project limits.
 2. It allocates a deterministic run-local call ordinal and charge ID.
-3. `quote_model_call_nusd` prices the maximum applicable candidate without assuming cache discounts.
-4. `MonetaryBudgetRepository.reserve_call` updates project then run counters atomically.
-5. A rejected reserve returns `monetary_budget_exhausted` before provider invocation.
-6. Immediately before the provider await, the charge becomes `dispatched`.
-7. The returned provider/model and token usage are detached from provider-owned objects.
-8. `price_model_usage_nusd` recomputes actual cost; caller-supplied cost is not trusted.
-9. Reconciliation moves reserved funds to spent and releases the unused quote.
-10. Sync, SSE, and run detail project the durable counters; in-memory `CostTracker` remains observational.
+3. `estimate_request_input_tokens` conservatively bounds every serialized request field (roles, content, tool-call IDs/JSON, tool definitions, response contract, images at 22 000 tokens each); one UTF-8 byte counts as one token plus per-field framing. If the estimate exceeds `max_input_tokens` (context length minus the configured 4 096-token output reserve), the call is rejected before any ledger effect.
+4. The quoted input is `min(max_input_tokens, estimate + quote_input_headroom_tokens)`. `quote_model_call_nusd` prices this quoted input plus the provider-specified `max_tokens` output allowance across every candidate provider/model pair and every eligible cache input price class (uncached, cache-read, cache-write), and returns the maximum quote.
+5. `MonetaryBudgetRepository.reserve_call` updates project then run counters atomically using the maximum-eligible-price quote.
+6. A rejected reserve returns `monetary_budget_exhausted` before provider invocation.
+7. Immediately before the provider await, the charge becomes `dispatched`.
+8. The returned provider/model and token usage are detached from provider-owned objects.
+9. `price_model_usage_nusd` recomputes actual cost; caller-supplied cost is not trusted.
+10. Reconciliation moves reserved funds to spent and releases the unused quote.
+11. Sync, SSE, and run detail project the durable counters; in-memory `CostTracker` remains observational.
 
 ## Source walkthrough
 
