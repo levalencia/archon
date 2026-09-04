@@ -126,6 +126,24 @@ _INDEX_CONTRACTS: dict[str, dict[str, tuple[tuple[str, ...], bool]]] = {
     "artifacts": {"ix_artifacts_conversation_id": (("conversation_id",), False)},
 }
 
+# ---------------------------------------------------------------------------
+# Historical PostgreSQL uniqueness representation.
+#
+# Pre-Alembic ``create_all`` on PostgreSQL created both a plain (non-unique)
+# index *and* a separate UNIQUE constraint for columns with ``unique=True``
+# on the ORM model.  The Inspector sees the plain index as non-unique and
+# reports the UNIQUE constraint separately via ``get_unique_constraints``.
+#
+# Mapping: index_name -> required_unique_constraint_name
+# When the index is found as non-unique we accept it only if the matching
+# named UNIQUE constraint exists on the same columns.  A non-unique index
+# without the companion constraint fails closed.
+# ---------------------------------------------------------------------------
+_HISTORICAL_PG_UNIQUE_PAIRS: dict[str, dict[str, str]] = {
+    "users": {"ix_users_username": "uq_users_username"},
+    "api_keys": {"ix_api_keys_key_hash": "uq_api_keys_key_hash"},
+}
+
 
 def _type_contract(
     type_: sa.types.TypeEngine, dialect_name: str
@@ -200,12 +218,35 @@ def _validate_legacy_table(inspector: Inspector, table_name: str) -> None:
         str(index["name"]): (tuple(index["column_names"]), bool(index["unique"]))
         for index in inspector.get_indexes(table_name)
     }
+    # Build unique-constraint lookup for historical PostgreSQL pair validation.
+    pg_unique_pairs = _HISTORICAL_PG_UNIQUE_PAIRS.get(table_name, {})
+    unique_constraints: dict[str, tuple[str, ...]] | None = None
+    if pg_unique_pairs:
+        unique_constraints = {
+            str(uc["name"]): tuple(uc["column_names"])
+            for uc in inspector.get_unique_constraints(table_name)
+            if uc.get("name")
+        }
     for index_name, expected_index in _INDEX_CONTRACTS[table_name].items():
-        if actual_indexes.get(index_name) != expected_index:
-            raise RuntimeError(
-                f"legacy {table_name} index contract mismatch for {index_name}: "
-                f"expected={expected_index!r} actual={actual_indexes.get(index_name)!r}"
-            )
+        actual = actual_indexes.get(index_name)
+        if actual == expected_index:
+            continue  # Canonical form matches exactly.
+        # Accept historical PostgreSQL form: nonunique ix + named UNIQUE constraint.
+        expected_cols, expected_unique = expected_index
+        required_uc_name = pg_unique_pairs.get(index_name)
+        if (
+            expected_unique
+            and required_uc_name is not None
+            and actual is not None
+            and actual == (expected_cols, False)
+            and unique_constraints is not None
+            and unique_constraints.get(required_uc_name) == expected_cols
+        ):
+            continue  # Historical pair satisfies uniqueness.
+        raise RuntimeError(
+            f"legacy {table_name} index contract mismatch for {index_name}: "
+            f"expected={expected_index!r} actual={actual!r}"
+        )
     if inspector.get_foreign_keys(table_name):
         raise RuntimeError(f"legacy {table_name} foreign-key contract mismatch")
 
