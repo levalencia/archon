@@ -81,7 +81,7 @@ def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
     assert "${ARCHON_EFFECT_IDENTITY_SECRET:?" in text
     assert "${ARCHON_DELEGATION_SIGNING_KEY:?" in text
     assert "ARCHON_VERIFIER_ENABLED: ${ARCHON_VERIFIER_ENABLED:-false}" in text
-    assert "ARCHON_AGENT_DEADLINE_SECONDS: ${ARCHON_AGENT_DEADLINE_SECONDS:-90}" in text
+    assert "ARCHON_AGENT_DEADLINE_SECONDS: ${ARCHON_AGENT_DEADLINE_SECONDS:-300}" in text
     assert "ARCHON_EMBEDDING_PROVIDER: ${ARCHON_EMBEDDING_PROVIDER:-mock}" in text
     assert "ARCHON_EMBEDDING_MODEL: ${ARCHON_EMBEDDING_MODEL:-mock-embedding}" in text
     assert "ARCHON_EMBEDDING_API_KEY: ${ARCHON_EMBEDDING_API_KEY:-}" in text

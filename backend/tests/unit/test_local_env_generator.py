@@ -45,7 +45,7 @@ def test_default_values_are_mock_and_contain_valid_generated_secrets() -> None:
     assert values["ARCHON_DELEGATION_SIGNING_KEY"]
     assert values["ARCHON_DURABLE_MONETARY_BUDGET_ENABLED"] == "true"
     assert values["ARCHON_DURABLE_EFFECT_LEDGER_ENABLED"] == "true"
-    assert values["ARCHON_AGENT_DEADLINE_SECONDS"] == "90"
+    assert values["ARCHON_AGENT_DEADLINE_SECONDS"] == "300"
     assert values["ARCHON_VERIFIER_ENABLED"] == "false"
     assert 18_000 <= int(values["ARCHON_LOCAL_PORT"]) < 38_000
 

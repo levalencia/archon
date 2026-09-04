@@ -59,7 +59,7 @@ class TestHealthEndpoints:
                 "runtime_controls": {
                     "durable_monetary_budget": "disabled",
                     "durable_effect_ledger": "disabled",
-                    "agent_deadline_seconds": 90.0,
+                    "agent_deadline_seconds": 300.0,
                     "rag_deadline_seconds": 60.0,
                 },
                 "embeddings": {
@@ -106,7 +106,7 @@ class TestHealthEndpoints:
                 "runtime_controls": {
                     "durable_monetary_budget": "disabled",
                     "durable_effect_ledger": "disabled",
-                    "agent_deadline_seconds": 90.0,
+                    "agent_deadline_seconds": 300.0,
                     "rag_deadline_seconds": 60.0,
                 },
                 "embeddings": {
