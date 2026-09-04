@@ -1798,7 +1798,6 @@ class AgentRuntime:
                 usage,
                 error="final_synthesis_failed",
             )
-        return await self._stop(reason, content, iterations, calls, usage)
 
     async def _deadline_result(self, state: _RuntimeDeadlineState) -> AgentResult:
         """Return promptly and attempt terminal persistence on a separate short budget."""

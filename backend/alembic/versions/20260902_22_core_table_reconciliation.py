@@ -299,3 +299,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Preserve pre-Alembic core tables and their data below the reconciliation head."""
+    pass
