@@ -575,6 +575,7 @@ async def chat(
         max_context_bytes=settings.context_length * 4,
         max_tokens=settings.context_length,
         selection_limit=settings.skills_top_k,
+        tool_budget=settings.agent_max_tool_calls,
     )
     effective_context = prepared.effective_context
     compact_stats = prepared.compact_stats

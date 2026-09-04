@@ -84,6 +84,7 @@ class RequestContextPreparationService:
         max_context_bytes: int,
         max_tokens: int,
         selection_limit: int = 3,
+        tool_budget: int = 20,
     ) -> PreparedRequestContext:
         decisions, disabled = await self.scope_policy(owner_id=owner_id, project_id=project_id)
         # Skill metadata is discovery guidance only. Tool authorization is
@@ -126,6 +127,7 @@ class RequestContextPreparationService:
             skill_ids=enriched.manifest.skill_ids,
             current_message_id=current_message_id,
             asset_hmac_key=derive_context_asset_hmac_key(application_secret),
+            tool_budget=tool_budget,
         )
         capability_references: list[CapabilityContextRef] = []
         for definition in tools.definitions():

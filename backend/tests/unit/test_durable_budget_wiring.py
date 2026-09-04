@@ -80,9 +80,19 @@ def test_budget_settings_fail_fast_on_fractional_nusd() -> None:
 def test_budget_environment_uses_archon_prefix(monkeypatch) -> None:
     monkeypatch.setenv("ARCHON_DURABLE_MONETARY_BUDGET_ENABLED", "true")
     monkeypatch.setenv("ARCHON_AGENT_RUN_BUDGET_USD", "0.25")
+    monkeypatch.setenv("ARCHON_AGENT_MAX_TOOL_CALLS", "12")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     assert settings.durable_monetary_budget_enabled is True
     assert settings.agent_run_budget_usd == Decimal("0.25")
+    assert settings.agent_max_tool_calls == 12
+
+
+@pytest.mark.unit
+def test_legacy_input_reservation_environment_fails_with_migration_message(monkeypatch) -> None:
+    monkeypatch.setenv("ARCHON_AGENT_MODEL_INPUT_RESERVATION_TOKENS", "64000")
+
+    with pytest.raises(ValidationError, match="ARCHON_AGENT_MODEL_INPUT_QUOTE_HEADROOM_TOKENS"):
+        Settings(_env_file=None)  # type: ignore[call-arg]
 
 
 @pytest.mark.unit
@@ -136,6 +146,9 @@ def test_factory_wraps_only_when_durable_budget_is_enabled(tmp_path) -> None:
     )
     assert isinstance(enabled._model, DurableBudgetedProvider)
     assert enabled._model.context.run_id == "run-1"
+    assert enabled._model.max_input_tokens == 200_000 - 4_096
+    assert enabled._model.quote_input_headroom_tokens == 4_096
+    assert enabled._budget.max_tool_calls == 20
 
 
 @pytest.mark.unit
@@ -205,7 +218,7 @@ async def test_live_factory_budget_blocks_and_reconciles_with_real_run_repositor
                 durable_monetary_budget_enabled=True,
                 agent_run_budget_usd=run_limit,
                 agent_project_budget_usd=Decimal("2"),
-                agent_model_input_reservation_tokens=1_000,
+                agent_model_input_quote_headroom_tokens=1_234,
             ),
             repository=memory,
             exporter=None,

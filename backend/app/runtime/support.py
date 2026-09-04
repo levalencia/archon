@@ -102,6 +102,7 @@ async def prepare_effective_context(
     skill_ids: tuple[str, ...] = (),
     current_message_id: int | None = None,
     asset_hmac_key: bytes | None = None,
+    tool_budget: int = 20,
 ) -> EffectiveContext:
     return await build_effective_context(
         user_input,
@@ -118,6 +119,7 @@ async def prepare_effective_context(
         skill_ids=skill_ids,
         current_message_id=current_message_id,
         asset_hmac_key=asset_hmac_key,
+        tool_budget=tool_budget,
     )
 
 
@@ -172,6 +174,8 @@ async def prepare_messages(
     images: list[str] | None = None,
     user_id: str = "default",
     persistent_memory_text: str = "",
+    *,
+    tool_budget: int = 20,
 ) -> list[Message]:
     return await build_messages(
         user_input,
@@ -182,4 +186,5 @@ async def prepare_messages(
         images,
         user_id,
         persistent_memory_text,
+        tool_budget=tool_budget,
     )

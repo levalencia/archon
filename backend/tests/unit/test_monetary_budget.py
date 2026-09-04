@@ -37,6 +37,7 @@ def test_exact_pricing_cache_unknown_and_bounds() -> None:
         quote_model_call_nusd([("openai", "gpt-4o-mini"), ("openai", "gpt-4o")], 1_000, 1_000)
         == 12_500_000
     )
+    assert quote_model_call_nusd([("foundry", "claude-opus-4-6")], 1_000, 0) == 6_250_000
     with pytest.raises(UnknownModelPricing):
         price_model_usage_nusd("missing", "openai", 1, 1)
     for invalid in (-1, True, 2**63):

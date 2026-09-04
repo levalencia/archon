@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
 from alembic import command
+from app.services.db_store import Base
+
+CORE_TABLES = (
+    "users",
+    "api_keys",
+    "conversations",
+    "messages",
+    "audit_entries",
+    "artifacts",
+)
 
 
 def config(database: Path) -> Config:
@@ -20,10 +29,14 @@ def config(database: Path) -> Config:
 def test_migration_existing_schema_downgrade_and_upgrade(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
     database = tmp_path / "migration.db"
-    # Representative pre-Alembic create_all database: migration must preserve existing tables.
-    with sqlite3.connect(database) as connection:
-        connection.execute("CREATE TABLE conversations (id VARCHAR(36) PRIMARY KEY)")
-        connection.commit()
+    # Representative pre-Alembic create_all database: the baseline must adopt
+    # complete core tables without recreating or dropping their data.
+    legacy_engine = create_engine(f"sqlite:///{database}")
+    Base.metadata.create_all(
+        legacy_engine,
+        tables=[Base.metadata.tables[name] for name in CORE_TABLES],
+    )
+    legacy_engine.dispose()
 
     alembic = config(database)
     command.upgrade(alembic, "head")

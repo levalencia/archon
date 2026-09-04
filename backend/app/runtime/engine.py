@@ -367,6 +367,7 @@ class AgentRuntime:
                     )
                 except Exception as exc:
                     import structlog as _sl
+
                     _sl.get_logger().error("provider_call_exception", error=str(exc), exc_info=True)
                     return await self._stop(
                         StopReason.PROVIDER_ERROR,
@@ -572,6 +573,9 @@ class AgentRuntime:
                             budget_keys.add(budget_key)
                             batch_tool_count += 1
                     if len(calls) + batch_tool_count > self._budget.max_tool_calls:
+                        self._append_unexecuted_tool_results(
+                            history, tool_calls, StopReason.TOOL_BUDGET_EXHAUSTED.value
+                        )
                         return await self._finalize(
                             StopReason.TOOL_BUDGET_EXHAUSTED,
                             history,
@@ -604,6 +608,11 @@ class AgentRuntime:
                         execution_call, policy_binding = prepared_call
                     else:
                         if len(calls) >= self._budget.max_tool_calls:
+                            self._append_unexecuted_tool_results(
+                                history,
+                                tool_calls[call_index:],
+                                StopReason.TOOL_BUDGET_EXHAUSTED.value,
+                            )
                             return await self._finalize(
                                 StopReason.TOOL_BUDGET_EXHAUSTED,
                                 history,
@@ -1610,6 +1619,27 @@ class AgentRuntime:
             data["arguments_hash"] = arguments_hash
         await self._emit(AgentEventKind.TOOL_DENIED, iteration, data)
 
+    @staticmethod
+    def _append_unexecuted_tool_results(
+        history: list[Message], tool_calls: Sequence[ToolCall], reason_code: str
+    ) -> None:
+        """Close provider tool-use blocks without executing calls that exceeded a budget."""
+
+        for call in tool_calls:
+            history.append(
+                Message(
+                    Role.TOOL,
+                    json.dumps(
+                        {
+                            "error": "Tool call was not executed.",
+                            "reason_code": reason_code,
+                        },
+                        separators=(",", ":"),
+                    ),
+                    tool_call_id=call.id,
+                )
+            )
+
     async def _finalize(
         self,
         reason: StopReason,
@@ -1754,10 +1784,20 @@ class AgentRuntime:
                 calls,
                 usage,
             )
-        except Exception:
-            # Preserve the best content already produced; stop reason remains explicit.
-            pass
-        return await self._stop(reason, content, iterations, calls, usage)
+        except Exception as error:
+            logger.warning(
+                "final_synthesis_failed",
+                stop_reason=reason.value,
+                error_type=type(error).__name__,
+            )
+            return await self._stop(
+                reason,
+                content,
+                iterations,
+                calls,
+                usage,
+                error="final_synthesis_failed",
+            )
 
     async def _deadline_result(self, state: _RuntimeDeadlineState) -> AgentResult:
         """Return promptly and attempt terminal persistence on a separate short budget."""

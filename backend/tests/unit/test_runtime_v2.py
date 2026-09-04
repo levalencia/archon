@@ -105,6 +105,73 @@ async def test_explicit_budget_stop_reasons(budget, response, reason, calls) -> 
 
 
 @pytest.mark.asyncio
+async def test_tool_budget_exhaustion_balances_pending_tool_use_before_final_synthesis() -> None:
+    pending = ToolCall("pending-1", "weather", {"city": "Brussels"})
+    provider = MockLLM(
+        [
+            ModelResponse(
+                "I will call one more tool.",
+                tool_calls=(pending,),
+                provider_stop_reason="tool_use",
+            ),
+            ModelResponse("Final answer from completed evidence."),
+        ]
+    )
+
+    result = await AgentRuntime(
+        provider,
+        registry(),
+        budget=RuntimeBudget(max_tool_calls=0),
+    ).run([Message(Role.USER, "use every tool")])
+
+    assert result.stop_reason is StopReason.TOOL_BUDGET_EXHAUSTED
+    assert result.content == "Final answer from completed evidence."
+    assert len(provider.call_history) == 2
+    final_messages = provider.call_history[1]["messages"]
+    pending_index = next(
+        index
+        for index, message in enumerate(final_messages)
+        if message.role is Role.ASSISTANT and message.tool_calls == (pending,)
+    )
+    synthetic_result = final_messages[pending_index + 1]
+    assert synthetic_result.role is Role.TOOL
+    assert synthetic_result.tool_call_id == pending.id
+    assert '"reason_code":"tool_budget_exhausted"' in synthetic_result.content
+    assert final_messages[pending_index + 2].role is Role.USER
+    assert provider.call_history[1]["tools"] == ()
+
+
+@pytest.mark.asyncio
+async def test_final_synthesis_failure_is_not_silently_reported_as_success() -> None:
+    class FinalFailure:
+        capabilities = ProviderCapabilities(native_tools=True)
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def complete(self, messages, tools=(), *, max_tokens=4096, response_contract=None):
+            del messages, tools, max_tokens, response_contract
+            self.calls += 1
+            if self.calls == 1:
+                return ModelResponse(
+                    "Progress only:",
+                    tool_calls=(ToolCall("pending-1", "weather", {"city": "Brussels"}),),
+                    provider_stop_reason="tool_use",
+                )
+            raise RuntimeError("provider detail must not escape")
+
+    result = await AgentRuntime(
+        FinalFailure(),
+        registry(),
+        budget=RuntimeBudget(max_tool_calls=0),
+    ).run([Message(Role.USER, "use every tool")])
+
+    assert result.stop_reason is StopReason.TOOL_BUDGET_EXHAUSTED
+    assert result.error == "final_synthesis_failed"
+    assert "provider detail" not in (result.error or "")
+
+
+@pytest.mark.asyncio
 async def test_timeout_stop_reason() -> None:
     class Slow:
         capabilities = ProviderCapabilities(native_tools=True)

@@ -194,6 +194,7 @@ class Settings(BaseSettings):
 
     # Agent
     agent_max_iterations: int = 5
+    agent_max_tool_calls: int = Field(default=20, ge=0, le=1_000)
     agent_token_budget: int = 64_000
     agent_deadline_seconds: float = Field(default=300.0, ge=1.0, le=600.0)
     rag_deadline_seconds: float = Field(default=60.0, ge=1.0, le=300.0)
@@ -203,7 +204,11 @@ class Settings(BaseSettings):
     effect_identity_secret: SecretStr = SecretStr("")
     agent_run_budget_usd: Decimal = Field(default=Decimal("50.00"), ge=0, le=1_000_000)
     agent_project_budget_usd: Decimal = Field(default=Decimal("500.00"), ge=0, le=1_000_000)
-    agent_model_input_reservation_tokens: int = Field(default=64_000, ge=1, le=10_000_000)
+    agent_model_input_quote_headroom_tokens: int = Field(default=4_096, ge=0, le=1_000_000)
+    # Recognized only to fail fast when an old env/.env contract remains deployed.
+    agent_model_input_reservation_tokens: int | None = Field(
+        default=None, ge=1, exclude=True, repr=False
+    )
 
     @field_validator("agent_run_budget_usd", "agent_project_budget_usd")
     @classmethod
@@ -212,6 +217,15 @@ class Settings(BaseSettings):
         if scaled != scaled.to_integral_value():
             raise ValueError("budget USD values support at most nine decimal places")
         return value
+
+    @model_validator(mode="after")
+    def reject_legacy_input_reservation_setting(self) -> Settings:
+        if self.agent_model_input_reservation_tokens is not None:
+            raise ValueError(
+                "ARCHON_AGENT_MODEL_INPUT_RESERVATION_TOKENS was replaced by "
+                "ARCHON_AGENT_MODEL_INPUT_QUOTE_HEADROOM_TOKENS"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_effect_identity_secret(self) -> Settings:

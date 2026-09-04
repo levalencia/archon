@@ -162,7 +162,7 @@ def price_model_usage_nusd(
 
 
 def quote_model_call_nusd(candidates: object, max_input_tokens: int, max_output_tokens: int) -> int:
-    """Return the maximum no-cache quote across safe provider/model candidates."""
+    """Return the maximum quote across candidates and eligible input price classes."""
     _token_count(max_input_tokens, "max_input_tokens")
     _token_count(max_output_tokens, "max_output_tokens")
     if isinstance(candidates, (str, bytes)):
@@ -188,7 +188,33 @@ def quote_model_call_nusd(candidates: object, max_input_tokens: int, max_output_
             )
         if not isinstance(provider, str) or not provider or not isinstance(model, str) or not model:
             raise ValueError("each candidate must contain safe provider and model strings")
-        quotes.append(price_model_usage_nusd(model, provider, max_input_tokens, max_output_tokens))
+        provider, model = validated_pricing_pair(model, provider)
+        candidate_quotes = [
+            price_model_usage_nusd(model, provider, max_input_tokens, max_output_tokens)
+        ]
+        if _supports_cache_pricing(provider):
+            pricing = MODEL_PRICING[model]
+            if pricing.cache_read is not None:
+                candidate_quotes.append(
+                    price_model_usage_nusd(
+                        model,
+                        provider,
+                        max_input_tokens,
+                        max_output_tokens,
+                        cache_read=max_input_tokens,
+                    )
+                )
+            if pricing.cache_write is not None:
+                candidate_quotes.append(
+                    price_model_usage_nusd(
+                        model,
+                        provider,
+                        max_input_tokens,
+                        max_output_tokens,
+                        cache_write=max_input_tokens,
+                    )
+                )
+        quotes.append(max(candidate_quotes))
     return max(quotes)
 
 
