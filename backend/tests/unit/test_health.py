@@ -16,6 +16,9 @@ def settings() -> Settings:
     return Settings(
         llm_provider="mock",
         llm_model="test-model",
+        embedding_provider="mock",
+        embedding_model="text-embedding-3-small",
+        embedding_dimensions=256,
         debug=True,
         database_url="sqlite+aiosqlite:///:memory:",
     )

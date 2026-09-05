@@ -142,6 +142,16 @@
       "limitation": "The active verifier path requires a parent-issued HMAC envelope bound to bounded claim/evidence content, scope, budget, freshness, nonce, schema, and key version, with constant-time verification and durable replay receipts. This authenticates in-process delegation metadata; it does not encrypt message content or establish a remote multi-host PKI."
     },
     {
+      "id": "hybrid-agent-orchestration-pilot",
+      "owner_module": "docs/course/modules/11-bounded-delegation/README.md",
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "yes", "ui": "yes", "live_provider": "yes", "deployed": "no"},
+      "sources": ["backend/app/orchestration/models.py", "backend/app/orchestration/routing.py", "backend/app/orchestration/profiles.py", "backend/app/orchestration/tools.py", "backend/app/orchestration/service.py", "backend/app/orchestration/runtime.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py", "frontend/src/lib/components/ChatInput.svelte", "frontend/src/lib/components/AgentOrchestrationPanel.svelte"],
+      "tests": ["backend/tests/unit/test_hybrid_orchestration.py", "backend/tests/unit/test_chat.py", "frontend/src/lib/components/ChatInput.test.ts", "frontend/src/lib/components/AgentOrchestrationPanel.test.ts", "frontend/tests/workbench.spec.ts"],
+      "evidence": ["docs/architecture/hybrid-agent-orchestration.md", "docs/ARCHITECTURE-DIAGRAMS.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/hybrid-agent-live-acceptance-summary.json"],
+      "limitation": "The feature-flagged pilot uses a deterministic Auto router, a fixed researcher and one server-templated dynamic analyst, sequential depth-one execution, read-only capability subsets, signed one-use envelopes, finite child budgets, durable lineage, and an Agents inspector with Run Ledger reconstruction. Three paired Foundry cases proved non-degraded execution and durable accounting, but Team was slower in all three and independent review found zero Team quality wins. Parallel fan-out, atomic parent-wide budget reservation, distributed execution, public deployment, and a statistically powered quality benchmark remain unclaimed."
+    },
+    {
       "id": "isolated-sandbox-live-target",
       "owner_module": "docs/course/modules/05-policy-and-approvals/README.md",
       "status": "implemented",

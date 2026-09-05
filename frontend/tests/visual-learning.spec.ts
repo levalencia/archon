@@ -65,23 +65,18 @@ test('evidence view preserves status and proof boundaries', async ({ page }) => 
   await expect(details).toContainText('No evidence details are available');
 });
 
-test('Present, Listen, and Study expose prepared NotebookLM recipes', async ({ page }) => {
+test('Present, Listen, and Study expose explicit unpublished-library states', async ({ page }) => {
   await openStudio(page, 'present');
   await expect(page.getByRole('heading', { name: 'Explain Archon visually' })).toBeVisible();
-  await expect(page.getByText('Prepared, not yet generated.')).toBeVisible();
-  await expect(page.getByText('Slide Deck', { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Open NotebookLM promptbook/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Open step-by-step runbook/ })).toBeVisible();
+  await expect(page.getByText('Learning media is not published in this runtime.')).toBeVisible();
 
   await page.getByRole('link', { name: /Listen/ }).click();
-  await expect(page.getByRole('heading', { name: 'Review Archon through audio' })).toBeVisible();
-  await expect(page.getByText('Audio', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review Archon through English audio' })).toBeVisible();
+  await expect(page.getByText('Learning media is not published in this runtime.')).toBeVisible();
 
   await page.getByRole('link', { name: /Study/ }).click();
   await expect(page.getByRole('heading', { name: 'Practice retrieval and comprehension' })).toBeVisible();
-  await expect(page.getByText('Flashcards', { exact: true })).toBeVisible();
-  await expect(page.getByText('Quiz', { exact: true })).toBeVisible();
-  await expect(page.getByText('Report', { exact: true })).toBeVisible();
+  await expect(page.getByText('Learning media is not published in this runtime.')).toBeVisible();
 });
 
 test('browser history restores the previous studio mode', async ({ page }) => {

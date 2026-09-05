@@ -43,7 +43,7 @@
       </a>
       <nav class="flex-1 space-y-1 overflow-y-auto p-3">
         {#each navItems as item}
-          <a href={item.href} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm no-underline transition-colors {isActive(item.href, $page.url.pathname) ? 'bg-[rgba(85,214,190,.1)] text-[var(--accent)]' : 'text-[var(--secondary)] hover:bg-[var(--raised)] hover:text-[var(--text)]'}">
+          <a href={item.href} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm no-underline transition-colors {isActive(item.href, $page.url.pathname) ? 'bg-[var(--accent-glow)] text-[var(--accent)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'text-[var(--secondary)] hover:bg-[var(--raised)] hover:text-[var(--text)]'}">
             <item.icon size={18}/><span>{item.label}</span>
           </a>
         {/each}

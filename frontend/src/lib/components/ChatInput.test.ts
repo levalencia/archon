@@ -21,4 +21,19 @@ describe('ChatInput image contract', () => {
       expect.stringMatching(/^data:image\/png;base64,/),
     );
   });
+
+  it('offers Auto, Single, and Team without changing mode while streaming', async () => {
+    render(ChatInput, {
+      props: { executionMode: 'auto' },
+    });
+
+    await fireEvent.click(screen.getByRole('radio', { name: 'Team' }));
+    expect((screen.getByRole('radio', { name: 'Team' }) as HTMLInputElement).checked).toBe(true);
+
+    cleanup();
+    render(ChatInput, { props: { executionMode: 'auto', streaming: true } });
+    expect((screen.getByRole('radio', { name: 'Auto' }) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole('radio', { name: 'Single' }) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole('radio', { name: 'Team' }) as HTMLInputElement).disabled).toBe(true);
+  });
 });

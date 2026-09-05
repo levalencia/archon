@@ -1,0 +1,31 @@
+{
+  "schema": "archon.learning-artifact-review",
+  "version": 1,
+  "artifact_id": "<artifact id>",
+  "pack_id": "<learning pack id>",
+  "source_commit": "<40-character git commit>",
+  "source_checksums": {},
+  "prompt_version": "<version>",
+  "generator_profile": "archon-learning",
+  "language": "en",
+  "generated_at": "<UTC ISO-8601 timestamp>",
+  "automated_checks": {
+    "schema": false,
+    "source_allowlist": false,
+    "checksums": false,
+    "media_probe": false,
+    "accessibility": false,
+    "visual_review": false
+  },
+  "review": {
+    "comprehension": 0,
+    "structure": 0,
+    "relationships": 0,
+    "accuracy": 0,
+    "boundaries": 0,
+    "interview_value": 0,
+    "english_clarity": 0,
+    "notes": "",
+    "accepted": false
+  }
+}

@@ -4,7 +4,7 @@
 
 <svelte:head>
   <title>Visual Learning Studio · Archon</title>
-  <meta name="description" content="Learn Archon through stable roadmaps, guided stories, layered architecture, evidence, and NotebookLM media recipes." />
+  <meta name="description" content="Learn Archon through stable roadmaps, guided stories, layered architecture, evidence, and Hermes-authored English learning media." />
 </svelte:head>
 
 <VisualLearningStudio />

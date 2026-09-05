@@ -135,6 +135,7 @@ llm = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "jsonschema" },
     { name = "types-pyyaml" },
 ]
 
@@ -180,7 +181,10 @@ requires-dist = [
 provides-extras = ["dev", "llm"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "types-pyyaml", specifier = ">=6.0.12.20260815" }]
+dev = [
+    { name = "jsonschema", specifier = ">=4.23.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20260815" },
+]
 
 [[package]]
 name = "ast-serialize"

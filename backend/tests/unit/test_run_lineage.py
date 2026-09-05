@@ -75,6 +75,8 @@ async def test_concurrent_child_ensures_are_idempotent_and_parent_delete_is_rest
     async with store.session_factory() as session:
         children = tuple(await session.scalars(select(RunRow).where(RunRow.run_id == "child")))
         assert len(children) == 1
+        assert str(children[0].conversation_id) == "conversation"
+        assert str(children[0].correlation_id) == "correlation"
         with pytest.raises(IntegrityError):
             await session.execute(delete(RunRow).where(RunRow.run_id == "parent"))
         await session.rollback()

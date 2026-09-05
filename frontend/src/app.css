@@ -37,6 +37,23 @@
 
 /* ─── Dark theme design tokens (always-dark app) ─── */
 :root {
+  /* Archon Evidence Dark — shared brand and learning-media palette */
+  --archon-canvas: #050b16;
+  --archon-surface: #0f172a;
+  --archon-surface-raised: #111c2e;
+  --archon-border: #334155;
+  --archon-text: #f8fafc;
+  --archon-text-secondary: #cbd5e1;
+  --archon-text-muted: #94a3b8;
+  --archon-orange: #f59e0b;
+  --archon-orange-strong: #d97706;
+  --archon-orange-glow: rgba(245, 158, 11, 0.22);
+  --archon-orange-glow-strong: rgba(245, 158, 11, 0.34);
+  --archon-green: #22c55e;
+  --archon-blue: #3b82f6;
+  --archon-purple: #a78bfa;
+  --archon-coral: #fb7185;
+
   /* System A — original short tokens */
   --bg: #080b10;
   --panel: #10151d;
@@ -46,8 +63,8 @@
   --text: #f3f7fb;
   --secondary: #a9b5c4;
   --muted: #7f8b9b;
-  --accent: #55d6be;
-  --accent-2: #2cbba2;
+  --accent: var(--archon-orange);
+  --accent-2: var(--archon-orange-strong);
   --danger: #ff6b72;
   --warning: #f0bd62;
   --font-mono: 'SFMono-Regular', Consolas, monospace;
@@ -60,8 +77,8 @@
   --bg-secondary: #10151d;
   --bg-tertiary: #1b2430;
   --bg-hover: #1e2a38;
-  --accent-glow: rgba(85, 214, 190, 0.12);
-  --accent-hover: #2cbba2;
+  --accent-glow: var(--archon-orange-glow);
+  --accent-hover: #fbbf24;
   --error: #ff6b72;
   --success: #3fb950;
   --purple: #7fa7ff;
@@ -74,7 +91,7 @@
   --card-foreground: #f3f7fb;
   --popover: #10151d;
   --popover-foreground: #f3f7fb;
-  --sc-primary: #55d6be;
+  --sc-primary: var(--archon-orange);
   --primary-foreground: #07110f;
   --sc-secondary: #1b2430;
   --secondary-foreground: #a9b5c4;
@@ -86,15 +103,15 @@
   --destructive-foreground: #f3f7fb;
   --sc-border: #283342;
   --input: #283342;
-  --ring: #55d6be;
+  --ring: var(--archon-orange);
   --sidebar: #10151d;
   --sidebar-foreground: #a9b5c4;
-  --sidebar-primary: #55d6be;
+  --sidebar-primary: var(--archon-orange);
   --sidebar-primary-foreground: #07110f;
-  --sidebar-accent: rgba(85, 214, 190, 0.1);
+  --sidebar-accent: var(--archon-orange-glow);
   --sidebar-accent-foreground: #f3f7fb;
   --sidebar-border: #283342;
-  --sidebar-ring: #55d6be;
+  --sidebar-ring: var(--archon-orange);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -186,7 +203,7 @@ button {
 .avatar {
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--accent), #7fa7ff);
+  background: linear-gradient(135deg, var(--archon-orange), #fb923c);
   color: #07100f;
   font-weight: 800;
 }
@@ -221,7 +238,7 @@ button {
 }
 
 .primary:hover {
-  background: #73e7d1;
+  background: var(--accent-hover);
 }
 
 .primary:disabled {
@@ -264,7 +281,7 @@ button {
 }
 
 .conversation-row.active {
-  background: rgba(85, 214, 190, 0.1);
+  background: var(--archon-orange-glow);
 }
 
 .conversation-select {
@@ -297,7 +314,7 @@ button {
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(85, 214, 190, 0.1);
+  box-shadow: 0 0 0 3px var(--archon-orange-glow);
   flex: 0 0 auto;
 }
 
@@ -523,7 +540,7 @@ button {
 
 .composer:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(85, 214, 190, 0.12);
+  box-shadow: 0 0 0 3px var(--archon-orange-glow);
 }
 
 .composer textarea {
@@ -747,7 +764,7 @@ button {
 .artifact-chips span {
   display: inline-block;
   padding: 7px 10px;
-  border: 1px solid rgba(85, 214, 190, 0.3);
+  border: 1px solid color-mix(in srgb, var(--archon-orange) 30%, transparent);
   border-radius: 8px;
   color: var(--accent);
   font-size: 12px;

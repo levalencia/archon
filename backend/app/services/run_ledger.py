@@ -77,6 +77,9 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
     AgentEventKind.GROUNDED_ANSWER.value: frozenset(
         {"answer_hash", "citation_ids", "supported_count", "unsupported_count"}
     ),
+    AgentEventKind.ORCHESTRATION_ROUTED.value: frozenset(
+        {"requested_mode", "resolved_mode", "reason_code", "router_version", "degraded"}
+    ),
     AgentEventKind.DELEGATION_REQUESTED.value: frozenset(
         {
             "child_id",
@@ -94,6 +97,9 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
             "reason_code",
             "input_tokens",
             "output_tokens",
+            "profile_id",
+            "specialist_kind",
+            "tool_count",
         }
     ),
     AgentEventKind.DELEGATION_COMPLETED.value: frozenset(
@@ -115,6 +121,9 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
             "input_tokens",
             "output_tokens",
             "total_tokens",
+            "profile_id",
+            "specialist_kind",
+            "tool_count",
         }
     ),
     AgentEventKind.REFLECTION_STARTED.value: frozenset(
@@ -308,6 +317,8 @@ class RunRepository:
         project_id: str,
         provider: str,
         model: str,
+        conversation_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Create a child with explicit, immutable owner-scoped lineage."""
         now = datetime.now(tz=UTC)
@@ -333,8 +344,8 @@ class RunRepository:
                 "parent_run_id": parent_run_id,
                 "user_id": user_id,
                 "project_id": project_id,
-                "conversation_id": parent_run_id,
-                "correlation_id": run_id,
+                "conversation_id": conversation_id or str(parent.conversation_id),
+                "correlation_id": correlation_id or str(parent.correlation_id),
                 "provider": provider,
                 "model": model,
                 "schema_version": SCHEMA_VERSION,

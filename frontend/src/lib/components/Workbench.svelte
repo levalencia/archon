@@ -11,7 +11,9 @@
   import { SSEParser, type SSEEvent } from '$lib/sse';
   import type {
     Artifact,
+    ChildAgentStatus,
     ContextStats,
+    ExecutionMode,
     InspectorTab,
     LogEntry,
     Message,
@@ -36,6 +38,7 @@
   let provider = $state('');
   let hydrated = $state(false);
   let activeTab: InspectorTab = $state('run');
+  let executionMode: ExecutionMode = $state('auto');
   let stats: RunStats = $state({ latency: '—', tokens: '—', tools: 0, iterations: 0 });
   let pendingApproval: { tool: string; run_id: string; tool_call_id: string; parameters: Record<string, any> } | null = $state(null);
   let lastOverlayTrigger: HTMLElement | null = null;
@@ -242,13 +245,30 @@
           }];
         }
       } catch { /* skip */ }
+    } else if (event.event === 'orchestration') {
+      try {
+        am.orchestration = JSON.parse(payload);
+      } catch { /* skip malformed orchestration metadata */ }
+    } else if (event.event === 'agent_status') {
+      try {
+        const child = JSON.parse(payload) as ChildAgentStatus;
+        const existing = (am.child_agents || []).findIndex((item) => item.child_id === child.child_id);
+        if (existing >= 0) {
+          const updated = [...(am.child_agents || [])];
+          updated[existing] = { ...updated[existing], ...child };
+          am.child_agents = updated;
+        } else {
+          am.child_agents = [...(am.child_agents || []), child];
+        }
+      } catch { /* skip malformed child metadata */ }
     } else if (event.event === 'done') {
       try {
         const d = JSON.parse(payload);
+        am.run_id = d.run_id;
         am.iterations = d.iterations;
         am.elapsed_ms = d.elapsed_ms;
         am.status = 'completed';
-        const tokensUsed = d.tokens_used || 0;
+        const tokensUsed = d.total_tokens_with_children || d.tokens_used || 0;
         stats = {
           iterations: d.iterations || 0,
           tools: d.tools_used || 0,
@@ -415,6 +435,7 @@
           conversation_id: currentId,
           image: image || '',
           project_id: readProjectScope(),
+          execution_mode: executionMode,
         }),
         signal: controller.signal,
       });
@@ -629,7 +650,13 @@
       <ChatMessages {messages} {loading} onOpenArtifact={() => artifactOpen = true} />
     {/if}
 
-    <ChatInput onSend={send} onCancel={cancel} disabled={false} streaming={loading} />
+    <ChatInput
+      onSend={send}
+      onCancel={cancel}
+      disabled={false}
+      streaming={loading}
+      bind:executionMode
+    />
   </main>
 
   <!-- Inspector panel -->

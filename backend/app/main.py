@@ -56,6 +56,7 @@ from app.routes.conversations import router as conversations_router
 from app.routes.documents import router as documents_router
 from app.routes.evaluations import router as evaluations_router
 from app.routes.images import router as images_router
+from app.routes.learning_media import router as learning_media_router
 from app.routes.log_stream import router as log_router
 from app.routes.mcp import router as mcp_router
 from app.routes.memory import router as memory_router
@@ -250,7 +251,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.job_queue = DurableJobQueue(repository.session_factory)
     app.state.delegation_envelopes = None
-    if settings.verifier_enabled:
+    if settings.verifier_enabled or settings.hybrid_orchestration_enabled:
         app.state.delegation_envelopes = DelegationEnvelopeService(
             repository.session_factory,
             {1: derive_delegation_hmac_key(settings.delegation_signing_key.get_secret_value(), 1)},
@@ -419,6 +420,13 @@ def create_app(
     app.state.sandbox_executor_factory = sandbox_executor_factory
     app.state.sandbox_executor = None
     app.state.evidence_verifier = None
+    app.state.learning_media_catalog = None
+    if settings.learning_media_enabled:
+        from app.learning_media.catalog import LearningMediaCatalog
+
+        app.state.learning_media_catalog = LearningMediaCatalog(
+            settings.learning_media_library_root
+        )
 
     # --- Middleware (order matters: last added = first executed) ---
 
@@ -453,6 +461,8 @@ def create_app(
     app.include_router(auth_router)
     app.include_router(artifacts_router)
     app.include_router(images_router)
+    if settings.learning_media_enabled:
+        app.include_router(learning_media_router)
     app.include_router(research_router)
     if settings.memory_encryption_enabled:
         app.include_router(memory_router)
@@ -480,6 +490,9 @@ def create_app(
             "status": "alive",
             "llm_model": app.state.settings.llm_model,
             "llm_provider": app.state.settings.llm_provider,
+            "hybrid_orchestration": (
+                "enabled" if app.state.settings.hybrid_orchestration_enabled else "disabled"
+            ),
         }
 
     @app.get("/readyz")

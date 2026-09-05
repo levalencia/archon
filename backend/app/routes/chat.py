@@ -25,7 +25,9 @@ from pydantic import BaseModel, Field
 from app.mcp.runtime import MCPBoundToolSpec
 from app.memory.scoped import ScopedEncryptedMemoryRepository
 from app.observability.logging import get_correlation_id
-from app.runtime.factory import RunContext, create_chat_runtime
+from app.orchestration.models import ExecutionMode
+from app.orchestration.runtime import prepare_hybrid_messages
+from app.runtime.factory import RunContext, create_chat_event_sink, create_chat_runtime
 from app.runtime.images import ImageValidationError
 from app.security.auth import get_current_user
 from app.security.compliance import ComplianceViolationError
@@ -417,6 +419,7 @@ class ChatRequest(BaseModel):
     )
     image: str = Field(default="", max_length=7_000_000)
     target_path: str | None = Field(default=None, max_length=1000)
+    execution_mode: ExecutionMode = ExecutionMode.AUTO
 
 
 class ChatResponse(BaseModel):
@@ -431,6 +434,12 @@ class ChatResponse(BaseModel):
     skills_used: list[dict[str, Any]]
     image_analyzed: bool = False
     artifacts: list[dict[str, Any]] = []
+    requested_mode: ExecutionMode
+    resolved_mode: ExecutionMode
+    orchestration_degraded: bool = False
+    agents_used: list[dict[str, Any]] = []
+    child_tokens_used: int = 0
+    total_tokens_with_children: int = 0
 
 
 @router.post("", response_model=ChatResponse)
@@ -586,8 +595,19 @@ async def chat(
         estimated_tokens=int(compact_stats.get("tokens", 0)),
     )
     messages = list(effective_context.messages)
-    runtime = create_chat_runtime(
+    event_sink = create_chat_event_sink(
         context=run_context,
+        settings=settings,
+        repository=memory,
+        exporter=request.app.state.otel_exporter,
+        redactor=request.app.state.persistence_redactor,
+        log_buffer=request.app.state.log_buffer,
+    )
+    orchestration = await prepare_hybrid_messages(
+        query=body.message,
+        requested_mode=body.execution_mode,
+        messages=messages,
+        parent_context=run_context,
         provider=provider,
         tools=tools,
         settings=settings,
@@ -595,6 +615,25 @@ async def chat(
         exporter=request.app.state.otel_exporter,
         redactor=request.app.state.persistence_redactor,
         log_buffer=request.app.state.log_buffer,
+        envelopes=getattr(request.app.state, "delegation_envelopes", None),
+        event_sink=event_sink,
+    )
+    messages = list(orchestration.messages)
+    parent_tools = (
+        SecureToolRegistry()
+        if orchestration.decision.resolved_mode is ExecutionMode.TEAM
+        else tools
+    )
+    runtime = create_chat_runtime(
+        context=run_context,
+        provider=provider,
+        tools=parent_tools,
+        settings=settings,
+        repository=memory,
+        exporter=request.app.state.otel_exporter,
+        redactor=request.app.state.persistence_redactor,
+        log_buffer=request.app.state.log_buffer,
+        event_sink=event_sink,
         result_recorder=lambda answer: memory.store(conv_id, "assistant", answer, user["user_id"]),
     )
     result = await runtime.run(messages)
@@ -699,6 +738,26 @@ async def chat(
         skills_used=skills_used,
         image_analyzed=bool(images),
         artifacts=saved_artifacts,
+        requested_mode=orchestration.decision.requested_mode,
+        resolved_mode=orchestration.decision.resolved_mode,
+        orchestration_degraded=orchestration.degraded,
+        agents_used=[
+            {
+                "child_run_id": child.child_run_id,
+                "profile_id": child.profile_id,
+                "kind": child.kind.value,
+                "status": child.status.value,
+                "reason_code": child.reason_code,
+                "tokens_used": child.usage.total_tokens,
+                "iterations": child.iterations,
+            }
+            for child in orchestration.children
+        ],
+        child_tokens_used=sum(child.usage.total_tokens for child in orchestration.children),
+        total_tokens_with_children=(
+            result.usage.total_tokens
+            + sum(child.usage.total_tokens for child in orchestration.children)
+        ),
     )
 
 

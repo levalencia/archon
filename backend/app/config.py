@@ -112,6 +112,11 @@ class Settings(BaseSettings):
     image_gen_provider: str = "mock"  # mock | together | openai
     image_gen_api_key: str = ""
 
+    # Published visual-learning media (generated offline by Hermes)
+    learning_media_enabled: bool = False
+    learning_media_library_root: str = ""
+    learning_media_signed_url_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+
     # Database
     database_url: str = "sqlite+aiosqlite:///archon.db"
     vector_store_backend: Literal["sql-json"] = "sql-json"
@@ -172,7 +177,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_delegation_signing_key(self) -> Settings:
-        if self.verifier_enabled:
+        if self.verifier_enabled or self.hybrid_orchestration_enabled:
             value = self.delegation_signing_key.get_secret_value().encode("utf-8")
             if len(value) < 32:
                 raise ValueError("delegation signing key must contain at least 32 UTF-8 bytes")
@@ -205,12 +210,27 @@ class Settings(BaseSettings):
     agent_run_budget_usd: Decimal = Field(default=Decimal("50.00"), ge=0, le=1_000_000)
     agent_project_budget_usd: Decimal = Field(default=Decimal("500.00"), ge=0, le=1_000_000)
     agent_model_input_quote_headroom_tokens: int = Field(default=4_096, ge=0, le=1_000_000)
+    hybrid_orchestration_enabled: bool = False
+    hybrid_orchestration_max_children: int = Field(default=2, ge=1, le=2)
+    hybrid_orchestration_child_max_iterations: int = Field(default=4, ge=1, le=8)
+    hybrid_orchestration_child_max_tool_calls: int = Field(default=6, ge=0, le=12)
+    hybrid_orchestration_child_token_budget: int = Field(default=64_000, ge=1, le=64_000)
+    hybrid_orchestration_child_max_tool_result_chars: int = Field(default=3_000, ge=500, le=12_000)
+    hybrid_orchestration_child_deadline_seconds: float = Field(default=120.0, ge=1.0, le=120.0)
+    hybrid_orchestration_total_deadline_seconds: float = Field(default=240.0, ge=1.0, le=300.0)
+    hybrid_orchestration_child_run_budget_usd: Decimal = Field(
+        default=Decimal("5.00"), ge=0, le=1_000_000
+    )
     # Recognized only to fail fast when an old env/.env contract remains deployed.
     agent_model_input_reservation_tokens: int | None = Field(
         default=None, ge=1, exclude=True, repr=False
     )
 
-    @field_validator("agent_run_budget_usd", "agent_project_budget_usd")
+    @field_validator(
+        "agent_run_budget_usd",
+        "agent_project_budget_usd",
+        "hybrid_orchestration_child_run_budget_usd",
+    )
     @classmethod
     def validate_budget_decimal_scale(cls, value: Decimal) -> Decimal:
         scaled = value * Decimal(1_000_000_000)
@@ -233,6 +253,18 @@ class Settings(BaseSettings):
             secret = self.effect_identity_secret.get_secret_value().encode("utf-8")
             if len(secret) < 32:
                 raise ValueError("effect identity secret must contain at least 32 UTF-8 bytes")
+        return self
+
+    @model_validator(mode="after")
+    def validate_learning_media_library(self) -> Settings:
+        if self.learning_media_enabled:
+            from pathlib import Path
+
+            root = Path(self.learning_media_library_root).expanduser()
+            if not self.learning_media_library_root or not root.is_absolute():
+                raise ValueError(
+                    "enabled learning media requires an absolute learning_media_library_root"
+                )
         return self
 
     approval_timeout_seconds: float = Field(default=30.0, gt=0)

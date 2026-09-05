@@ -50,7 +50,7 @@
     <div class="text-center mb-8">
       <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--purple)]
         flex items-center justify-center text-3xl font-bold text-white mx-auto mb-4
-        shadow-[0_0_30px_rgba(56,189,248,0.2)]">
+        shadow-[0_0_30px_var(--archon-orange-glow)]">
         A
       </div>
       <h1 class="text-2xl font-semibold text-[var(--text-primary)]">Archon</h1>
@@ -172,7 +172,7 @@
               transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
               {loading
                 ? 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
-                : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] shadow-[0_0_12px_rgba(56,189,248,0.15)]'}"
+                : 'bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] shadow-[0_0_18px_var(--archon-orange-glow)]'}"
           >
             {#if loading}
               <span class="w-4 h-4 border-2 border-[var(--text-muted)] border-t-transparent rounded-full animate-spin"></span>

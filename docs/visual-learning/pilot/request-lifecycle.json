@@ -1,0 +1,1068 @@
+{
+  "pack_id": "request-lifecycle",
+  "title": "Archon Request Lifecycle",
+  "purpose": "Follow one request from the browser through governance, execution, evidence, and evaluation.",
+  "language": "en",
+  "sources": [
+    "docs/ARCHITECTURE-DIAGRAMS.md",
+    "docs/IMPLEMENTATION-EVIDENCE.md",
+    "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
+    "docs/evidence/skills-project-instructions-implementation.md",
+    "docs/REMAINING-DEFERRED-GAPS.md",
+    "docs/course/modules/02-typed-runtime/README.md",
+    "docs/course/modules/03-react-loop/README.md",
+    "docs/course/modules/04-tools-and-schemas/README.md",
+    "docs/course/modules/05-policy-and-approvals/README.md",
+    "docs/course/modules/07-run-ledger/README.md"
+  ],
+  "limitations": [
+    "This is derivative learning material, not canonical implementation evidence.",
+    "Archon is locally verified; this artifact does not claim public or cloud deployment.",
+    "Deterministic tests, local runtime evidence, and live-provider evidence are distinct proof levels."
+  ],
+  "slides": [
+    {
+      "id": "s1",
+      "title": "One Request, Many Trust Boundaries",
+      "message": "Archon treats an agent request as a governed state transition, not a single model call.",
+      "visual": "browser-to-ledger",
+      "notes": "Start with the mental model: the model proposes; deterministic systems authorize, execute, and record.",
+      "sources": [
+        "docs/ARCHITECTURE-DIAGRAMS.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “One Request, Many Trust Boundaries.” Start with the mental model: the model proposes; deterministic systems authorize, execute, and record. Explain the visible browser to ledger from left to right and connect it to this mental model: Archon treats an agent request as a governed state transition, not a single model call. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “System Boundary” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Browser To Ledger",
+          "definition": "The part of the request lifecycle represented by the browser to ledger visual."
+        }
+      ],
+      "common_misconception": "The model directly controls the application after receiving a prompt.",
+      "transition": "Next: System Boundary."
+    },
+    {
+      "id": "s2",
+      "title": "System Boundary",
+      "message": "The browser reaches one gateway; application services remain behind that boundary.",
+      "visual": "system-boundary",
+      "notes": "A healthy gateway proves reachability, not that every downstream capability is ready.",
+      "sources": [
+        "docs/ARCHITECTURE-DIAGRAMS.md",
+        "docs/IMPLEMENTATION-EVIDENCE.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “System Boundary.” A healthy gateway proves reachability, not that every downstream capability is ready. Explain the visible system boundary from left to right and connect it to this mental model: The browser reaches one gateway; application services remain behind that boundary. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “Authentication Before Agency” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "System Boundary",
+          "definition": "The part of the request lifecycle represented by the system boundary visual."
+        }
+      ],
+      "common_misconception": "A successful gateway response proves every dependency and agent capability is ready.",
+      "transition": "Next: Authentication Before Agency."
+    },
+    {
+      "id": "s3",
+      "title": "Authentication Before Agency",
+      "message": "Identity and ownership checks happen before conversation state or tools are exposed.",
+      "visual": "auth-gate",
+      "notes": "Authentication answers who the caller is. Authorization answers what that caller may access.",
+      "sources": [
+        "docs/course/modules/13-auth-ui-observability/README.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “Authentication Before Agency.” Authentication answers who the caller is. Authorization answers what that caller may access. Explain the visible auth gate from left to right and connect it to this mental model: Identity and ownership checks happen before conversation state or tools are exposed. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “Context Is Assembled, Not Remembered Magically” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Auth Gate",
+          "definition": "The part of the request lifecycle represented by the auth gate visual."
+        }
+      ],
+      "common_misconception": "Authentication automatically authorizes every project and conversation.",
+      "transition": "Next: Context Is Assembled, Not Remembered Magically."
+    },
+    {
+      "id": "s4",
+      "title": "Context Is Assembled, Not Remembered Magically",
+      "message": "Conversation history, project instructions, skills, and retrieval results become explicit model context.",
+      "visual": "context-build",
+      "notes": "Durable memory, retrieved documents, and the finite context window are separate mechanisms.",
+      "sources": [
+        "docs/course/modules/06-context-and-memory/README.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “Context Is Assembled, Not Remembered Magically.” Durable memory, retrieved documents, and the finite context window are separate mechanisms. Explain the visible context build from left to right and connect it to this mental model: Conversation history, project instructions, skills, and retrieval results become explicit model context. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “The Runtime Is a Bounded Interpreter” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Context Build",
+          "definition": "The part of the request lifecycle represented by the context build visual."
+        }
+      ],
+      "common_misconception": "Anything stored by Archon is automatically present in every model prompt.",
+      "transition": "Next: The Runtime Is a Bounded Interpreter."
+    },
+    {
+      "id": "s5",
+      "title": "The Runtime Is a Bounded Interpreter",
+      "message": "A typed state machine limits iterations, tool calls, tokens, time, and money.",
+      "visual": "runtime-bounds",
+      "notes": "Budgets are controls, not performance claims. A timeout is a stop reason, not a pass.",
+      "sources": [
+        "docs/course/modules/02-typed-runtime/README.md",
+        "docs/IMPLEMENTATION-EVIDENCE.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “The Runtime Is a Bounded Interpreter.” Budgets are controls, not performance claims. A timeout is a stop reason, not a pass. Explain the visible runtime bounds from left to right and connect it to this mental model: A typed state machine limits iterations, tool calls, tokens, time, and money. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “The Model Proposes Structured Intent” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Runtime Bounds",
+          "definition": "The part of the request lifecycle represented by the runtime bounds visual."
+        }
+      ],
+      "common_misconception": "A timeout or exhausted budget can still count as successful completion.",
+      "transition": "Next: The Model Proposes Structured Intent."
+    },
+    {
+      "id": "s6",
+      "title": "The Model Proposes Structured Intent",
+      "message": "The provider can answer directly or request a typed tool call; it does not execute side effects itself.",
+      "visual": "model-decision",
+      "notes": "Provider output is untrusted input to deterministic validation and policy.",
+      "sources": [
+        "docs/course/modules/03-react-loop/README.md",
+        "docs/course/modules/04-tools-and-schemas/README.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “The Model Proposes Structured Intent.” Provider output is untrusted input to deterministic validation and policy. Explain the visible model decision from left to right and connect it to this mental model: The provider can answer directly or request a typed tool call; it does not execute side effects itself. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “Schema Validation Narrows the Request” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Model Decision",
+          "definition": "The part of the request lifecycle represented by the model decision visual."
+        }
+      ],
+      "common_misconception": "A syntactically valid tool call means the requested action already happened.",
+      "transition": "Next: Schema Validation Narrows the Request."
+    },
+    {
+      "id": "s7",
+      "title": "Schema Validation Narrows the Request",
+      "message": "Tool name and arguments must match the registry contract before policy evaluation.",
+      "visual": "schema-gate",
+      "notes": "Structured output reduces ambiguity but does not establish authorization.",
+      "sources": [
+        "docs/course/modules/04-tools-and-schemas/README.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “Schema Validation Narrows the Request.” Structured output reduces ambiguity but does not establish authorization. Explain the visible schema gate from left to right and connect it to this mental model: Tool name and arguments must match the registry contract before policy evaluation. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “Policy Decides ALLOW, ASK, or DENY” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Schema Gate",
+          "definition": "The part of the request lifecycle represented by the schema gate visual."
+        }
+      ],
+      "common_misconception": "JSON Schema validation proves that an action is safe and authorized.",
+      "transition": "Next: Policy Decides ALLOW, ASK, or DENY."
+    },
+    {
+      "id": "s8",
+      "title": "Policy Decides ALLOW, ASK, or DENY",
+      "message": "The effect policy separates safe reads from actions that need approval or must be refused.",
+      "visual": "policy-gate",
+      "notes": "Policy is deterministic. The model cannot grant itself permission.",
+      "sources": [
+        "docs/course/modules/05-policy-and-approvals/README.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “Policy Decides ALLOW, ASK, or DENY.” Policy is deterministic. The model cannot grant itself permission. Explain the visible policy gate from left to right and connect it to this mental model: The effect policy separates safe reads from actions that need approval or must be refused. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “Durable Approval Binds the Exact Effect” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Policy Gate",
+          "definition": "The part of the request lifecycle represented by the policy gate visual."
+        }
+      ],
+      "common_misconception": "The model can grant itself permission by explaining why an action is useful.",
+      "transition": "Next: Durable Approval Binds the Exact Effect."
+    },
+    {
+      "id": "s9",
+      "title": "Durable Approval Binds the Exact Effect",
+      "message": "Approval is tied to the user, tool, normalized arguments, and execution identity.",
+      "visual": "approval-binding",
+      "notes": "A generic yes is not reusable authorization for a different side effect.",
+      "sources": [
+        "docs/course/modules/05-policy-and-approvals/README.md",
+        "docs/evidence/skills-project-instructions-implementation.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “Durable Approval Binds the Exact Effect.” A generic yes is not reusable authorization for a different side effect. Explain the visible approval binding from left to right and connect it to this mental model: Approval is tied to the user, tool, normalized arguments, and execution identity. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “Execution Is Isolated and Bounded” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Approval Binding",
+          "definition": "The part of the request lifecycle represented by the approval binding visual."
+        }
+      ],
+      "common_misconception": "One approval can be reused when a later tool call changes its arguments.",
+      "transition": "Next: Execution Is Isolated and Bounded."
+    },
+    {
+      "id": "s10",
+      "title": "Execution Is Isolated and Bounded",
+      "message": "Approved code execution crosses a separate sandbox boundary with constrained resources.",
+      "visual": "sandbox",
+      "notes": "Isolation is a concrete boundary. It does not make arbitrary code harmless.",
+      "sources": [
+        "docs/IMPLEMENTATION-EVIDENCE.md",
+        "docs/ARCHITECTURE-DIAGRAMS.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “Execution Is Isolated and Bounded.” Isolation is a concrete boundary. It does not make arbitrary code harmless. Explain the visible sandbox from left to right and connect it to this mental model: Approved code execution crosses a separate sandbox boundary with constrained resources. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “The Run Ledger Preserves Evidence” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Sandbox",
+          "definition": "The part of the request lifecycle represented by the sandbox visual."
+        }
+      ],
+      "common_misconception": "Approved code no longer needs isolation or resource limits.",
+      "transition": "Next: The Run Ledger Preserves Evidence."
+    },
+    {
+      "id": "s11",
+      "title": "The Run Ledger Preserves Evidence",
+      "message": "Events, tool outcomes, stop reasons, and usage become inspectable run evidence.",
+      "visual": "ledger",
+      "notes": "A trace helps explain what happened; it is not the same as an evaluation score.",
+      "sources": [
+        "docs/course/modules/07-run-ledger/README.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “The Run Ledger Preserves Evidence.” A trace helps explain what happened; it is not the same as an evaluation score. Explain the visible ledger from left to right and connect it to this mental model: Events, tool outcomes, stop reasons, and usage become inspectable run evidence. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “Evaluation Is a Separate Judgment” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Ledger",
+          "definition": "The part of the request lifecycle represented by the ledger visual."
+        }
+      ],
+      "common_misconception": "The final answer alone is enough to reconstruct and prove the run.",
+      "transition": "Next: Evaluation Is a Separate Judgment."
+    },
+    {
+      "id": "s12",
+      "title": "Evaluation Is a Separate Judgment",
+      "message": "Post-run evaluators judge qualities such as groundedness without rewriting history.",
+      "visual": "evaluation",
+      "notes": "Separate execution facts from evaluator judgments and from user-visible explanation.",
+      "sources": [
+        "docs/IMPLEMENTATION-EVIDENCE.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “Evaluation Is a Separate Judgment.” Separate execution facts from evaluator judgments and from user-visible explanation. Explain the visible evaluation from left to right and connect it to this mental model: Post-run evaluators judge qualities such as groundedness without rewriting history. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “Failure Is Part of the Contract” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Evaluation",
+          "definition": "The part of the request lifecycle represented by the evaluation visual."
+        }
+      ],
+      "common_misconception": "Observability facts and evaluation judgments are the same evidence.",
+      "transition": "Next: Failure Is Part of the Contract."
+    },
+    {
+      "id": "s13",
+      "title": "Failure Is Part of the Contract",
+      "message": "Budget exhaustion, provider errors, denied tools, and timeouts terminate with explicit reasons.",
+      "visual": "failure-paths",
+      "notes": "A graceful stop is operationally useful, but it is still not success.",
+      "sources": [
+        "docs/IMPLEMENTATION-EVIDENCE.md",
+        "docs/REMAINING-DEFERRED-GAPS.md"
+      ],
+      "presenter_script": "Start with the practical meaning of “Failure Is Part of the Contract.” A graceful stop is operationally useful, but it is still not success. Explain the visible failure paths from left to right and connect it to this mental model: Budget exhaustion, provider errors, denied tools, and timeouts terminate with explicit reasons. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “What This Proves—and Does Not” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Failure Paths",
+          "definition": "The part of the request lifecycle represented by the failure paths visual."
+        }
+      ],
+      "common_misconception": "A gracefully handled failure should be reported as a successful task.",
+      "transition": "Next: What This Proves—and Does Not."
+    },
+    {
+      "id": "s14",
+      "title": "What This Proves—and Does Not",
+      "message": "The request lifecycle is implemented and tested locally; this deck does not claim public production deployment.",
+      "visual": "evidence-levels",
+      "notes": "Close with the evidence ladder: code, deterministic tests, local observation, live provider, public deployment.",
+      "sources": [
+        "docs/IMPLEMENTATION-EVIDENCE.md",
+        "docs/implementation/CAPABILITY-ACCEPTANCE.yaml"
+      ],
+      "presenter_script": "Start with the practical meaning of “What This Proves—and Does Not.” Close with the evidence ladder: code, deterministic tests, local observation, live provider, public deployment. Explain the visible evidence levels from left to right and connect it to this mental model: The request lifecycle is implemented and tested locally; this deck does not claim public production deployment. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “questions and evidence inspection” so the lifecycle remains one causal story rather than isolated boxes.",
+      "key_terms": [
+        {
+          "term": "Evidence Levels",
+          "definition": "The part of the request lifecycle represented by the evidence levels visual."
+        }
+      ],
+      "common_misconception": "Local tests and a live provider prove public production deployment.",
+      "transition": "Next: questions and evidence inspection."
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "browser-to-ledger",
+      "title": "Governed Request Path",
+      "description": "A request enters through the gateway, passes authentication and bounded runtime controls, then records evidence.",
+      "nodes": [
+        [
+          "Browser",
+          "frontend"
+        ],
+        [
+          "Gateway",
+          "frontend"
+        ],
+        [
+          "Authentication",
+          "security"
+        ],
+        [
+          "Runtime",
+          "backend"
+        ],
+        [
+          "Model",
+          "external"
+        ],
+        [
+          "Policy",
+          "security"
+        ],
+        [
+          "Tool",
+          "backend"
+        ],
+        [
+          "Run Ledger",
+          "database"
+        ],
+        [
+          "Evaluation",
+          "backend"
+        ]
+      ],
+      "edges": [
+        [
+          "Browser",
+          "Gateway",
+          "HTTP request"
+        ],
+        [
+          "Gateway",
+          "Authentication",
+          "routes request"
+        ],
+        [
+          "Authentication",
+          "Runtime",
+          "identity"
+        ],
+        [
+          "Runtime",
+          "Model",
+          "context"
+        ],
+        [
+          "Model",
+          "Policy",
+          "tool intent"
+        ],
+        [
+          "Policy",
+          "Tool",
+          "authorized effect"
+        ],
+        [
+          "Tool",
+          "Run Ledger",
+          "result event"
+        ],
+        [
+          "Run Ledger",
+          "Evaluation",
+          "run evidence"
+        ]
+      ]
+    },
+    {
+      "id": "policy-gate",
+      "title": "Tool Governance Decision",
+      "description": "Schema validity and deterministic policy stand between model intent and execution.",
+      "nodes": [
+        [
+          "Model intent",
+          "external"
+        ],
+        [
+          "Schema validation",
+          "backend"
+        ],
+        [
+          "Policy",
+          "security"
+        ],
+        [
+          "Approval",
+          "security"
+        ],
+        [
+          "Executor",
+          "backend"
+        ],
+        [
+          "Denied result",
+          "database"
+        ]
+      ],
+      "edges": [
+        [
+          "Model intent",
+          "Schema validation",
+          "tool request"
+        ],
+        [
+          "Schema validation",
+          "Policy",
+          "valid request"
+        ],
+        [
+          "Policy",
+          "Executor",
+          "ALLOW"
+        ],
+        [
+          "Policy",
+          "Approval",
+          "ASK"
+        ],
+        [
+          "Approval",
+          "Executor",
+          "bound approval"
+        ],
+        [
+          "Policy",
+          "Denied result",
+          "DENY"
+        ]
+      ]
+    },
+    {
+      "id": "evidence-levels",
+      "title": "Evidence Ladder",
+      "description": "Each proof level supports a narrower claim than the next.",
+      "nodes": [
+        [
+          "Source exists",
+          "backend"
+        ],
+        [
+          "Deterministic tests",
+          "backend"
+        ],
+        [
+          "Local runtime",
+          "database"
+        ],
+        [
+          "Live provider",
+          "external"
+        ],
+        [
+          "Public deployment",
+          "external"
+        ]
+      ],
+      "edges": [
+        [
+          "Source exists",
+          "Deterministic tests",
+          "behavior checked"
+        ],
+        [
+          "Deterministic tests",
+          "Local runtime",
+          "stack observed"
+        ],
+        [
+          "Local runtime",
+          "Live provider",
+          "provider exercised"
+        ],
+        [
+          "Live provider",
+          "Public deployment",
+          "separate deployment proof"
+        ]
+      ]
+    }
+  ],
+  "mind_map": {
+    "id": "request-lifecycle",
+    "label": "Archon Request Lifecycle",
+    "summary": "A governed path from request to evidence.",
+    "sources": [
+      "docs/ARCHITECTURE-DIAGRAMS.md"
+    ],
+    "children": [
+      {
+        "id": "entry",
+        "label": "Entry and identity",
+        "summary": "Gateway routing, authentication, and ownership.",
+        "sources": [
+          "docs/course/modules/13-auth-ui-observability/README.md"
+        ],
+        "children": [
+          {
+            "id": "gateway",
+            "label": "Gateway",
+            "summary": "Single ingress routes browser traffic.",
+            "details": "Single ingress routes browser traffic. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/13-auth-ui-observability/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "authentication",
+            "label": "Identity check",
+            "summary": "Establishes caller identity before data access.",
+            "details": "Establishes caller identity before data access. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/13-auth-ui-observability/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "ownership",
+            "label": "Ownership",
+            "summary": "Scopes conversations and projects to the authenticated user.",
+            "details": "Scopes conversations and projects to the authenticated user. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/13-auth-ui-observability/README.md"
+            ],
+            "children": []
+          }
+        ],
+        "details": "Gateway routing, authentication, and ownership. Select a child concept to inspect the specific responsibility and its supporting documentation."
+      },
+      {
+        "id": "context",
+        "label": "Context construction",
+        "summary": "History, instructions, skills, and retrieval are assembled explicitly.",
+        "sources": [
+          "docs/course/modules/06-context-and-memory/README.md"
+        ],
+        "children": [
+          {
+            "id": "history",
+            "label": "Conversation history",
+            "summary": "Provides the bounded recent exchange.",
+            "details": "Provides the bounded recent exchange. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/06-context-and-memory/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "instructions",
+            "label": "Instructions and skills",
+            "summary": "Constrain behavior and add reusable procedures.",
+            "details": "Constrain behavior and add reusable procedures. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/06-context-and-memory/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "retrieval",
+            "label": "Retrieval",
+            "summary": "Adds relevant candidate evidence when needed.",
+            "details": "Adds relevant candidate evidence when needed. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/06-context-and-memory/README.md"
+            ],
+            "children": []
+          }
+        ],
+        "details": "History, instructions, skills, and retrieval are assembled explicitly. Select a child concept to inspect the specific responsibility and its supporting documentation."
+      },
+      {
+        "id": "runtime",
+        "label": "Bounded runtime",
+        "summary": "Iterations, tools, tokens, time, and cost are bounded.",
+        "sources": [
+          "docs/course/modules/02-typed-runtime/README.md"
+        ],
+        "children": [
+          {
+            "id": "iterations",
+            "label": "Iterations",
+            "summary": "Bound how long the reasoning loop can continue.",
+            "details": "Bound how long the reasoning loop can continue. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/02-typed-runtime/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "tokens",
+            "label": "Tokens and context",
+            "summary": "Bound provider input and output.",
+            "details": "Bound provider input and output. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/02-typed-runtime/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "cost",
+            "label": "Time and cost",
+            "summary": "Stop work when operational budgets are exhausted.",
+            "details": "Stop work when operational budgets are exhausted. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/02-typed-runtime/README.md"
+            ],
+            "children": []
+          }
+        ],
+        "details": "Iterations, tools, tokens, time, and cost are bounded. Select a child concept to inspect the specific responsibility and its supporting documentation."
+      },
+      {
+        "id": "governance",
+        "label": "Tool governance",
+        "summary": "Schema, policy, approval, and effect identity control execution.",
+        "sources": [
+          "docs/course/modules/04-tools-and-schemas/README.md",
+          "docs/course/modules/05-policy-and-approvals/README.md"
+        ],
+        "children": [
+          {
+            "id": "schema",
+            "label": "Schema validation",
+            "summary": "Checks tool name and argument shape.",
+            "details": "Checks tool name and argument shape. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/04-tools-and-schemas/README.md",
+              "docs/course/modules/05-policy-and-approvals/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "policy",
+            "label": "Policy",
+            "summary": "Returns ALLOW, ASK, or DENY.",
+            "details": "Returns ALLOW, ASK, or DENY. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/04-tools-and-schemas/README.md",
+              "docs/course/modules/05-policy-and-approvals/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "approval",
+            "label": "Durable approval",
+            "summary": "Binds consent to the exact intended effect.",
+            "details": "Binds consent to the exact intended effect. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/04-tools-and-schemas/README.md",
+              "docs/course/modules/05-policy-and-approvals/README.md"
+            ],
+            "children": []
+          }
+        ],
+        "details": "Schema, policy, approval, and effect identity control execution. Select a child concept to inspect the specific responsibility and its supporting documentation."
+      },
+      {
+        "id": "evidence",
+        "label": "Evidence and evaluation",
+        "summary": "The ledger records facts; evaluators add judgments.",
+        "sources": [
+          "docs/course/modules/07-run-ledger/README.md"
+        ],
+        "children": [
+          {
+            "id": "ledger",
+            "label": "Run Ledger",
+            "summary": "Preserves ordered execution facts.",
+            "details": "Preserves ordered execution facts. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/07-run-ledger/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "observability",
+            "label": "Observability",
+            "summary": "Explains operational behavior and resource use.",
+            "details": "Explains operational behavior and resource use. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/07-run-ledger/README.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "evaluation",
+            "label": "Evaluation",
+            "summary": "Adds quality judgments without rewriting run history.",
+            "details": "Adds quality judgments without rewriting run history. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/course/modules/07-run-ledger/README.md"
+            ],
+            "children": []
+          }
+        ],
+        "details": "The ledger records facts; evaluators add judgments. Select a child concept to inspect the specific responsibility and its supporting documentation."
+      },
+      {
+        "id": "failure",
+        "label": "Failure semantics",
+        "summary": "Denied, exhausted, timed-out, and provider-failed runs stop explicitly.",
+        "sources": [
+          "docs/IMPLEMENTATION-EVIDENCE.md"
+        ],
+        "children": [
+          {
+            "id": "denied",
+            "label": "Denied",
+            "summary": "Records a controlled refusal.",
+            "details": "Records a controlled refusal. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/IMPLEMENTATION-EVIDENCE.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "timed-out",
+            "label": "Timed out",
+            "summary": "Records deadline exhaustion, never PASS.",
+            "details": "Records deadline exhaustion, never PASS. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/IMPLEMENTATION-EVIDENCE.md"
+            ],
+            "children": []
+          },
+          {
+            "id": "provider-failed",
+            "label": "Provider failure",
+            "summary": "Stops explicitly when the model service fails.",
+            "details": "Stops explicitly when the model service fails. This concept is part of the governed request lifecycle and remains bounded by explicit runtime evidence.",
+            "sources": [
+              "docs/IMPLEMENTATION-EVIDENCE.md"
+            ],
+            "children": []
+          }
+        ],
+        "details": "Denied, exhausted, timed-out, and provider-failed runs stop explicitly. Select a child concept to inspect the specific responsibility and its supporting documentation."
+      }
+    ],
+    "details": "The central map connects entry, context, bounded reasoning, governed execution, evidence, and explicit failure semantics."
+  },
+  "flashcards": [
+    [
+      "Who executes a tool: the model or the runtime?",
+      "The runtime executes it after validation and policy checks.",
+      "The model proposes structured intent; deterministic code owns execution.",
+      "The model directly runs application code."
+    ],
+    [
+      "What does authentication establish?",
+      "The caller's identity.",
+      "Ownership and authorization decisions depend on a verified identity.",
+      "Authentication automatically authorizes every resource."
+    ],
+    [
+      "Why is JSON Schema validation not enough?",
+      "It validates shape, not permission or safety.",
+      "A well-formed destructive request can still require approval or denial.",
+      "Valid JSON is safe to execute."
+    ],
+    [
+      "What are the three policy outcomes?",
+      "ALLOW, ASK, and DENY.",
+      "They separate immediate execution, human approval, and refusal.",
+      "Policy only returns true or false."
+    ],
+    [
+      "What must a durable approval bind?",
+      "User, tool, normalized arguments, and execution identity.",
+      "Binding prevents approval replay for a different effect.",
+      "A generic approval can authorize future tools."
+    ],
+    [
+      "What is the runtime mental model?",
+      "A bounded interpreter.",
+      "It repeatedly interprets model output under explicit budgets and state transitions.",
+      "An unrestricted autonomous process."
+    ],
+    [
+      "What does a timeout prove?",
+      "Only that the deadline was reached.",
+      "It is a stop reason and never counts as PASS.",
+      "The operation probably succeeded."
+    ],
+    [
+      "What does the Run Ledger store?",
+      "Inspectable execution events and outcomes.",
+      "It preserves evidence needed for traceability and replay analysis.",
+      "Only the final answer."
+    ],
+    [
+      "How does evaluation differ from tracing?",
+      "Tracing records what happened; evaluation judges qualities of the result.",
+      "A trace is evidence input, not a quality score.",
+      "Observability and evaluation are synonyms."
+    ],
+    [
+      "How does retrieval differ from grounding?",
+      "Retrieval finds candidates; grounding measures whether claims are supported.",
+      "Similarity alone does not establish factual support.",
+      "The nearest chunk proves the answer."
+    ],
+    [
+      "Why keep Hermes outside the runtime request path?",
+      "Playback remains available without a generation provider.",
+      "Offline publishing isolates cost, variability, and review from normal users.",
+      "It makes generation real-time."
+    ],
+    [
+      "What does published mean for a learning artifact?",
+      "It passed automated checks and human acceptance.",
+      "Generated candidates remain quarantined until reviewed.",
+      "Any generated file is immediately public."
+    ],
+    [
+      "What makes an artifact stale?",
+      "A dependency checksum changes.",
+      "Staleness is based on relevant source content, not appearance.",
+      "A new unrelated commit always invalidates everything."
+    ],
+    [
+      "Why use structured deck JSON?",
+      "It enables validation, safe rendering, and multiple outputs.",
+      "The same content can drive Svelte and standalone HTML renderers.",
+      "Raw model JavaScript is safer."
+    ],
+    [
+      "Why are media files outside Git?",
+      "They are large generated derivatives.",
+      "Git keeps schemas and reproducible inputs while the library stores binaries.",
+      "Their provenance is unimportant."
+    ],
+    [
+      "Why do audio and video require transcripts?",
+      "For accessibility, review, search, and factual comparison.",
+      "A transcript is also a review surface for unsupported claims.",
+      "Captions are optional decoration."
+    ],
+    [
+      "What does local deployment prove?",
+      "The retained local stack served and exercised the capability.",
+      "It does not prove a public production deployment.",
+      "Local and public deployments are equivalent."
+    ],
+    [
+      "Why are effect IDs important?",
+      "They support idempotency and bind repeated actions to one intended effect.",
+      "Retries must not silently duplicate side effects.",
+      "Every retry should create a new effect."
+    ],
+    [
+      "Where should a denied tool result go?",
+      "Back into explicit run evidence and user-visible behavior.",
+      "Denial is a controlled outcome, not an invisible exception.",
+      "Denied calls should disappear from traces."
+    ],
+    [
+      "What is the strongest learning check?",
+      "Explain the architecture and trade-offs in your own words.",
+      "Recognition in a flashcard is weaker than a causal explanation.",
+      "Completing cards proves production readiness."
+    ]
+  ],
+  "quiz": [
+    {
+      "scenario": "A model emits a perfectly valid tool call that deletes data, but policy returns ASK.",
+      "options": [
+        "Execute because schema validation passed",
+        "Wait for a bound approval",
+        "Rewrite it as a read operation",
+        "Hide the tool call"
+      ],
+      "correct_index": 1,
+      "explanation": "Schema validity and authorization are separate. ASK requires durable approval before execution."
+    },
+    {
+      "scenario": "The local health endpoint returns 200 while the model provider is unavailable.",
+      "options": [
+        "Agent functionality is proven",
+        "Only process liveness is proven",
+        "Public deployment is proven",
+        "The run must be marked successful"
+      ],
+      "correct_index": 1,
+      "explanation": "Liveness, dependency readiness, and user-facing functionality are distinct evidence levels."
+    },
+    {
+      "scenario": "A retrieval query returns a highly similar document chunk.",
+      "options": [
+        "The final answer is automatically faithful",
+        "The chunk is a candidate source, not proof",
+        "Evaluation is unnecessary",
+        "The chunk can override canonical evidence"
+      ],
+      "correct_index": 1,
+      "explanation": "Retrieval similarity does not establish grounding or faithfulness."
+    },
+    {
+      "scenario": "A tool execution times out after its deadline.",
+      "options": [
+        "Record PASS because it probably ran",
+        "Retry forever",
+        "Record an explicit timeout stop reason",
+        "Remove it from the ledger"
+      ],
+      "correct_index": 2,
+      "explanation": "A timeout is evidence of deadline exhaustion, not successful completion."
+    },
+    {
+      "scenario": "A generated deck contradicts IMPLEMENTATION-EVIDENCE.md.",
+      "options": [
+        "Publish because it looks good",
+        "Mark it as creative interpretation",
+        "Reject it before publication",
+        "Change the evidence document to match"
+      ],
+      "correct_index": 2,
+      "explanation": "Generated learning media is derivative and cannot overrule canonical evidence."
+    },
+    {
+      "scenario": "A user approves one shell command, then the model changes its arguments.",
+      "options": [
+        "Reuse the approval",
+        "Execute only the changed portion",
+        "Require a new bound approval",
+        "Let the model decide"
+      ],
+      "correct_index": 2,
+      "explanation": "Approval must bind normalized arguments and effect identity."
+    },
+    {
+      "scenario": "A new unrelated README typo is committed.",
+      "options": [
+        "Regenerate every artifact",
+        "Use dependency checksums to determine relevance",
+        "Delete all published media",
+        "Mark public deployment complete"
+      ],
+      "correct_index": 1,
+      "explanation": "Relevant source checksums avoid unnecessary regeneration from unrelated commits."
+    },
+    {
+      "scenario": "A podcast was generated but nobody reviewed its technical claims.",
+      "options": [
+        "Publish it as generated",
+        "Publish only the transcript",
+        "Keep it as a candidate",
+        "Call it canonical evidence"
+      ],
+      "correct_index": 2,
+      "explanation": "Generation is not acceptance; candidates remain quarantined until review."
+    },
+    {
+      "scenario": "The browser needs to seek inside an authenticated MP4.",
+      "options": [
+        "Load the entire file into memory",
+        "Expose the filesystem path",
+        "Use a short-lived signed URL with byte ranges",
+        "Disable authentication globally"
+      ],
+      "correct_index": 2,
+      "explanation": "Signed capability URLs allow native media seeking without exposing paths or long-lived credentials."
+    },
+    {
+      "scenario": "Luis completes every flashcard once.",
+      "options": [
+        "Mark the course complete",
+        "Treat it as practice evidence only",
+        "Claim interview mastery",
+        "Upgrade capability status"
+      ],
+      "correct_index": 1,
+      "explanation": "Study interaction is not proof of course completion or implementation maturity."
+    }
+  ],
+  "study_guide": [
+    {
+      "heading": "Learning outcomes",
+      "body": "Explain the full request path, identify deterministic trust boundaries, distinguish execution evidence from evaluation, and describe failure behavior without overclaiming."
+    },
+    {
+      "heading": "Mental model",
+      "body": "Think of Archon as a bounded interpreter around a probabilistic model. The model proposes the next step; typed state, schemas, policy, approvals, budgets, and executors constrain what can happen."
+    },
+    {
+      "heading": "Entry and identity",
+      "body": "The browser sends a request through the gateway. Authentication establishes caller identity before owner-scoped conversation data or protected tools are exposed."
+    },
+    {
+      "heading": "Context and model decision",
+      "body": "The runtime assembles bounded context from conversation state, instructions, skills, and retrieval. The model returns either answer text or structured tool intent."
+    },
+    {
+      "heading": "Governed tools",
+      "body": "Schema validation checks shape. Policy returns ALLOW, ASK, or DENY. ASK requires approval bound to the exact effect; only then may the executor run the tool."
+    },
+    {
+      "heading": "Evidence and evaluation",
+      "body": "The Run Ledger preserves events and outcomes. Observability explains what happened. Evaluation separately judges groundedness and related qualities."
+    },
+    {
+      "heading": "Failure semantics",
+      "body": "Provider errors, budget exhaustion, denied tools, and timeouts are explicit stop conditions. A timeout is not a pass, and a mock is not live evidence."
+    },
+    {
+      "heading": "Interview explanation",
+      "body": "Archon separates probabilistic planning from deterministic control. The model can propose a tool call, but schemas, policy, durable approval, bounded execution, and an append-only evidence trail determine whether and how it runs."
+    },
+    {
+      "heading": "What this does not prove",
+      "body": "This guide does not prove public deployment, universal provider behavior, benchmark performance, or capabilities marked deferred in canonical evidence."
+    }
+  ],
+  "audio_script": [
+    {
+      "chapter": "The mental model",
+      "text": "Imagine an AI agent not as an autonomous employee with unlimited authority, but as a probabilistic planner inside a deterministic control system. That is the central mental model for Archon. A user request begins in the browser, but it does not travel directly to a model and then straight into a tool. It crosses explicit trust boundaries. The gateway routes the request. Authentication establishes the caller. The runtime assembles context and enforces budgets. The model may answer or propose a structured action. Validation, policy, and approval decide whether that proposal can become an effect. Finally, the Run Ledger records what actually happened. This distinction matters because model intent is not execution evidence."
+    },
+    {
+      "chapter": "From request to governed action",
+      "text": "After identity and ownership checks, Archon constructs the model context from bounded conversation history, project instructions, relevant skills, and retrieval results when needed. The runtime behaves like a bounded interpreter. It limits iterations, tool calls, tokens, time, and cost. When the model proposes a tool call, the registry first checks the tool name and argument schema. A valid shape is still not authorization. The policy layer returns one of three outcomes: allow, ask, or deny. Allow can continue immediately. Ask pauses for a durable approval bound to the user, tool, normalized arguments, and execution identity. Deny produces an explicit controlled result. The model cannot approve its own request, and a previous approval cannot silently authorize changed arguments."
+    },
+    {
+      "chapter": "Execution, evidence, and limits",
+      "text": "Approved execution crosses another boundary. Code execution uses an isolated runner with bounded resources. Other tools return structured results to the runtime. Events, outcomes, usage, and stop reasons are preserved in the Run Ledger so the system can explain what happened. Evaluation is separate: it judges qualities such as groundedness after or around execution, while observability records operational facts. Failures remain part of the contract. A timeout means the deadline was reached; it is not a pass. A mock test proves deterministic wiring, not live provider behavior. A healthy process proves liveness, not complete readiness. And a locally verified stack does not imply public deployment. If you can explain those boundaries clearly, you understand the core of Archon's request lifecycle."
+    },
+    {
+      "chapter": "Context is assembled deliberately",
+      "text": "Context is not magical memory. A production agent has several sources of information, and each has a different purpose. Recent conversation messages preserve the immediate exchange. Project instructions constrain behavior for the current workspace. Skills provide reusable procedures selected for the request. Retrieval can add relevant document chunks. Durable memory can preserve approved facts across sessions. The runtime must decide what enters the finite model window, in what order, and under what token budget. Too little context creates blind decisions. Too much context can hide the important evidence or exceed the provider limit. Archon therefore treats context construction as an explicit, observable stage. It can record token estimates and compaction behavior without pretending that a larger prompt is automatically a better prompt. When explaining this in an interview, separate storage from retrieval, retrieval from selection, and selected context from the model's final interpretation."
+    },
+    {
+      "chapter": "Tool contracts and policy",
+      "text": "A tool is not merely a function name. It has a contract: a name, description, argument schema, result shape, permissions, and operational limits. The model sees the callable contract and may propose arguments, but deterministic validation checks that proposal before any handler runs. This protects the runtime from missing fields, unexpected values, and unsupported tool names. After validation, policy evaluates the requested effect. Reads, writes, external calls, and code execution do not carry the same risk. An allow decision means the configured policy permits immediate execution. Ask means a human decision is required. Deny means execution must not occur. This separation is essential because a model can produce syntactically perfect output that is still unauthorized or unsafe. Structured output reduces ambiguity; it does not replace governance."
+    },
+    {
+      "chapter": "Approval, retries, and effect identity",
+      "text": "Human approval must describe the exact action being authorized. Archon binds a durable approval to the owner, run, tool call, tool name, normalized arguments, and an effect identity. If the arguments change, the previous approval is not silently reused. Effect identity also supports idempotency. Distributed systems retry when networks fail or acknowledgements are lost, but repeating a side effect can charge a card twice, send duplicate messages, or modify the same resource more than once. The system therefore records whether an effect was reserved, executed, or completed. Exactly-once behavior cannot be promised universally across every external system, but Archon can enforce an at-most-once boundary for the effects under its durable control. The honest claim is as important as the mechanism."
+    },
+    {
+      "chapter": "Isolation and failure containment",
+      "text": "Once an action is authorized, execution still needs containment. The sandbox runner is a separate service with no network access, a read-only filesystem outside temporary work areas, dropped capabilities, process and memory limits, and a constrained security profile. Those controls reduce blast radius, but they do not make arbitrary code trustworthy. Every tool also has deadlines and bounded output. If execution times out, returns malformed data, or violates a boundary, the runtime records an explicit failure instead of inventing success. The model may receive a sanitized error and decide whether a safe retry is appropriate, but retries remain inside the same budgets and effect rules. This is the practical meaning of resilience: not pretending failures disappear, but containing them and preserving enough evidence to understand the outcome."
+    },
+    {
+      "chapter": "Ledger, observability, and evaluation",
+      "text": "The Run Ledger is the durable account of a run. It records ordered events such as model decisions, tool calls, approval states, results, usage, and terminal stop reasons. Observability uses those facts to answer operational questions: what happened, how long it took, where it failed, and which resources were used. Evaluation asks a different question: was the result good? Groundedness, citation quality, or task success are judgments applied to recorded behavior. Keeping these layers separate prevents a common mistake. A beautiful trace does not prove a correct answer, and a high evaluation score does not prove that every operational control worked. Together, the ledger and evaluators create evidence that can be inspected, compared, and discussed without rewriting the original run."
+    },
+    {
+      "chapter": "Evidence-first explanation",
+      "text": "A credible Archon explanation always names the evidence level. Source code proves that an implementation exists. Deterministic tests prove selected contracts under controlled inputs. A local runtime check proves that a retained stack served the behavior on a specific machine. A live-provider run proves that one configured provider completed a real interaction. Public deployment requires separate operational evidence. These levels must not be collapsed. The same discipline applies to learning media. A generated deck or podcast can explain architecture, but it cannot upgrade a capability from deferred to implemented. The strongest interview answer is not a long feature list. It is a precise explanation of where probabilistic reasoning ends, where deterministic controls begin, what was actually observed, and which limitations remain."
+    }
+  ]
+}

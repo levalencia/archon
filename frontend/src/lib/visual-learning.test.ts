@@ -27,14 +27,14 @@ const concepts: LearningConcept[] = [
 ];
 
 const studio = {
-  schema: 'archon.visual-learning-studio', version: 2, generated_from: [],
+  schema: 'archon.visual-learning-studio', version: 3, generated_from: [],
   stats: {
-    concepts: 66, modules: 16, stories: 5, architecture_layers: 5, notebooks: 5,
+    concepts: 66, modules: 16, stories: 5, architecture_layers: 5, learning_packs: 5,
     statuses: { implemented: 46, partial: 14, deferred: 6 },
   },
   roadmap: [], modules: [], concepts, stories: [],
   architecture: { layers: [], relations: [] },
-  notebooklm: { version: 1, source_priority: [], promptbook_href: '', runbook_href: '', notebooks: [] },
+  learning_library: { version: 1, language: 'en', source_priority: [], promptbook_href: '', runbook_href: '', packs: [] },
 } satisfies VisualLearningStudio;
 
 describe('Visual Learning Studio helpers', () => {

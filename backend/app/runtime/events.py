@@ -29,6 +29,7 @@ class AgentEventKind(StrEnum):
     EVIDENCE_RETRIEVED = "evidence_retrieved"
     CLAIM_VERIFIED = "claim_verified"
     GROUNDED_ANSWER = "grounded_answer"
+    ORCHESTRATION_ROUTED = "orchestration_routed"
     DELEGATION_REQUESTED = "delegation_requested"
     DELEGATION_COMPLETED = "delegation_completed"
     REFLECTION_STARTED = "reflection_started"

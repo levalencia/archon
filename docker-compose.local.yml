@@ -43,6 +43,7 @@ services:
       ARCHON_VERIFIER_MODEL: ${ARCHON_VERIFIER_MODEL:-verifier-model}
       ARCHON_VERIFIER_RETRIES: ${ARCHON_VERIFIER_RETRIES:-1}
       ARCHON_DELEGATION_SIGNING_KEY: ${ARCHON_DELEGATION_SIGNING_KEY:?ARCHON_DELEGATION_SIGNING_KEY is required}
+      ARCHON_HYBRID_ORCHESTRATION_ENABLED: ${ARCHON_HYBRID_ORCHESTRATION_ENABLED:-false}
       ARCHON_EMBEDDING_PROVIDER: ${ARCHON_EMBEDDING_PROVIDER:-mock}
       ARCHON_EMBEDDING_MODEL: ${ARCHON_EMBEDDING_MODEL:-mock-embedding}
       ARCHON_EMBEDDING_API_KEY: ${ARCHON_EMBEDDING_API_KEY:-}
@@ -55,6 +56,8 @@ services:
       ARCHON_RATE_LIMIT_BACKEND: redis
       ARCHON_OTEL_ENDPOINT: http://otel-collector:4317
       ARCHON_OTEL_SERVICE_NAME: archon-local
+      ARCHON_LEARNING_MEDIA_ENABLED: ${ARCHON_LEARNING_MEDIA_ENABLED:-false}
+      ARCHON_LEARNING_MEDIA_LIBRARY_ROOT: /var/lib/archon-learning
       OTEL_BSP_SCHEDULE_DELAY: "200"
       ARCHON_DEBUG: "false"
     depends_on:
@@ -68,6 +71,7 @@ services:
         condition: service_healthy
     volumes:
       - sandbox-socket:/run/archon-sandbox
+      - ${ARCHON_LEARNING_MEDIA_HOST_DIR:-../archon-learning-media}:/var/lib/archon-learning:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
       interval: 5s

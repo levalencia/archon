@@ -20,7 +20,7 @@
       {#each studio.roadmap as phase, phaseIndex}
         <article class="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 md:p-5">
           <div class="mb-4 flex gap-3">
-            <span class="grid size-10 shrink-0 place-items-center rounded-full border border-[var(--accent)] bg-[rgba(85,214,190,.1)] font-mono text-sm text-[var(--accent)]">{phaseIndex + 1}</span>
+            <span class="grid size-10 shrink-0 place-items-center rounded-full border border-[var(--accent)] bg-[var(--accent-glow)] font-mono text-sm text-[var(--accent)] shadow-[0_0_14px_var(--archon-orange-glow)]">{phaseIndex + 1}</span>
             <div>
               <h3 class="m-0 text-lg font-semibold">{phase.title}</h3>
               <p class="mt-1 text-sm text-[var(--secondary)]">{phase.question}</p>
@@ -31,7 +31,7 @@
             {#each phase.module_ids as moduleId}
               {@const item = studio.modules.find(candidate => candidate.id === moduleId)}
               {#if item}
-                <button onclick={() => selectedModule = moduleId} aria-pressed={selectedModule === moduleId} class="min-h-16 rounded-xl border p-3 text-left transition {selectedModule === moduleId ? 'border-[var(--accent)] bg-[rgba(85,214,190,.1)]' : 'border-[var(--border)] bg-[var(--bg)] hover:border-[var(--accent)]'}">
+                <button onclick={() => selectedModule = moduleId} aria-pressed={selectedModule === moduleId} class="min-h-16 rounded-xl border p-3 text-left transition {selectedModule === moduleId ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'border-[var(--border)] bg-[var(--bg)] hover:border-[var(--accent)]'}">
                   <span class="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">{moduleId.slice(0, 2)} · {item.concept_count} concepts</span>
                   <strong class="mt-1 flex items-center justify-between gap-2 text-sm"><span>{item.title.replace(/^Module\s+\d+\s*[—-]\s*/, '')}</span><ChevronRight size={15}/></strong>
                 </button>

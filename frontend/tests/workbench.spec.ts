@@ -116,7 +116,35 @@ test('desktop workbench streams an answer and exposes inspector tabs', async ({ 
   await page.getByRole('textbox', { name: 'Message' }).fill('Is this grounded?'); await page.getByRole('button', { name: 'Send' }).click();
   const chatRequest = await requestPromise;
   expect(chatRequest.postDataJSON().project_id).toBe('project-a');
+  expect(chatRequest.postDataJSON().execution_mode).toBe('auto');
   await expect(page.getByText('Grounded answer')).toBeVisible(); await expect(page).toHaveURL(/\/chat\/run-123/);
+});
+
+test('team mode renders fixed and dynamic child evidence', async ({ page }) => {
+  await page.unroute('**/api/chat/stream');
+  await page.route('**/api/chat/stream', route => route.fulfill({
+    status: 200,
+    contentType: 'text/event-stream',
+    body: [
+      'event: orchestration\ndata: {"requested_mode":"team","resolved_mode":"team","reason_code":"user_forced_team","degraded":false}\n\n',
+      'event: agent_status\ndata: {"child_id":"child-1","profile_id":"researcher-v1","specialist_kind":"fixed","status":"completed","total_tokens":42,"tool_count":1}\n\n',
+      'event: agent_status\ndata: {"child_id":"child-2","profile_id":"dynamic-analyst-v1","specialist_kind":"dynamic","status":"completed","total_tokens":31,"tool_count":0}\n\n',
+      'event: token\ndata: Team answer\n\n',
+      'event: done\ndata: {"iterations":1,"tools_used":0,"elapsed_ms":42,"requested_mode":"team","resolved_mode":"team","children_used":2}\n\n',
+    ].join(''),
+  }));
+  await page.goto('/');
+  await page.getByRole('radio', { name: 'Team' }).check();
+  await expect(page.getByRole('radio', { name: 'Team' })).toBeChecked();
+  const requestPromise = page.waitForRequest('**/api/chat/stream');
+  await page.getByRole('textbox', { name: 'Message' }).fill('Compare the architecture');
+  await page.getByRole('button', { name: 'Send' }).click();
+  expect((await requestPromise).postDataJSON().execution_mode).toBe('team');
+  await page.getByRole('tab', { name: 'Agents' }).click();
+  await expect(page.getByText('auto → team')).toHaveCount(0);
+  await expect(page.getByText('team → team')).toBeVisible();
+  await expect(page.getByText('researcher-v1')).toBeVisible();
+  await expect(page.getByText('dynamic-analyst-v1')).toBeVisible();
 });
 
 test('mobile uses navigation drawer and inspector bottom sheet', async ({ page }) => {
