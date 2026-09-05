@@ -75,7 +75,10 @@ flowchart TB
     Gateway --> Frontend[SvelteKit Workbench]
     Gateway --> Backend[FastAPI control plane]
 
-    Backend --> Runtime[Typed AgentRuntime]
+    Backend --> Router[Auto / Single / Team router]
+    Router --> Runtime[Typed AgentRuntime]
+    Router --> Children[Bounded child runtimes]
+    Children --> Runtime
     Runtime --> Provider[Model provider]
     Runtime --> Policy[Policy engine]
     Policy --> Approval[Durable approvals]
@@ -114,14 +117,16 @@ See [Architecture Diagrams](docs/ARCHITECTURE-DIAGRAMS.md) for request, approval
 
 1. Nginx routes the request to SvelteKit or FastAPI.
 2. FastAPI authenticates the caller and preserves owner/project scope.
-3. `create_chat_runtime` injects provider, policy, approval, tool, event, and persistence ports.
-4. `AgentRuntime.run` executes a bounded model/tool loop.
-5. The policy engine evaluates every proposed tool call.
-6. `ASK` creates a durable approval bound to the exact run, call, tool, and argument hash.
-7. Authorized tools execute through the secure registry, governed MCP, or sandbox.
-8. The Run Ledger stores ordered, redacted events.
-9. REST/SSE sends inspectable progress and results to the Workbench.
-10. Recorded runs can feed replay, comparison, grounding, evaluation, and drift analysis.
+3. The feature-flagged execution router resolves Auto, Single, or Team; disabled mode falls back explicitly to Single.
+4. Team may run one fixed researcher and one dynamic-template analyst with signed scope, read-only tools, finite budgets, and durable child lineage.
+5. `create_chat_runtime` injects provider, policy, approval, tool, event, and persistence ports for parent and child runtimes.
+6. `AgentRuntime.run` executes each bounded model/tool loop.
+7. The policy engine evaluates every proposed tool call.
+8. `ASK` creates a durable approval bound to the exact run, call, tool, and argument hash.
+9. Authorized tools execute through the secure registry, governed MCP, or sandbox.
+10. The Run Ledger stores ordered, redacted events and parent-child links.
+11. REST/SSE sends inspectable progress and results to the Workbench.
+12. Recorded runs can feed replay, comparison, grounding, evaluation, and drift analysis.
 
 The model proposes actions. Deterministic code owns authority, limits, persistence, and execution.
 
@@ -137,6 +142,7 @@ The model proposes actions. Deterministic code owns authority, limits, persisten
 - circuit breaker and fallback;
 - validated structured output;
 - bounded self-reflection;
+- feature-flagged Auto/Single/Team orchestration with fixed and dynamic-template children;
 - validated multimodal input.
 
 ### Policy and execution
@@ -351,7 +357,7 @@ docker-compose.local.yml Verified seven-service local target
 
 ## Documentation routes
 
-- [Visual Learning Studio](docs/visual-learning/README.md): Roadmap, Stories, Architecture, Evidence, and NotebookLM media recipes at `/learn`
+- [Visual Learning Studio](docs/visual-learning/README.md): Roadmap, Stories, Architecture, Evidence, and review-ready Hermes-authored English learning media at `/learn`
 - [Course home](docs/course/README.md): 16 modules and 66 canonical concepts
 - [Learn from zero](docs/course/tracks/learn-from-zero.md)
 - [Interview preparation](docs/course/tracks/interview-preparation.md)

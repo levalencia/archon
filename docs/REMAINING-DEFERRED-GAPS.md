@@ -14,7 +14,7 @@ For every gap, distinguish architecture artifacts from exercised capability. Sta
 
 | Deferred gap | Current adjacent capability | Missing claim |
 |---|---|---|
-| Distributed multi-node agent network | One signed, bounded, evidence-only verifier child; durable local jobs | Cross-node agent orchestration |
+| Distributed multi-node agent network | One signed evidence verifier plus a feature-flagged, depth-one local Team pilot with two read-only children; durable local jobs | Cross-node agent orchestration |
 | GPU/high-throughput serving | Provider adapters and bounded local runtime | Model-serving capacity or GPU operation |
 | Fine-tuning/training | RAG, skills, prompts, evaluations, reviewed revision candidates | Any model-weight training or promotion pipeline |
 | Public/cloud/Kubernetes deployment | Hardened loopback Compose; historical K8s/Helm artifacts | A working public or cloud deployment |
@@ -26,7 +26,7 @@ For every gap, distinguish architecture artifacts from exercised capability. Sta
 
 ### Why it is out of scope
 
-The capstone needs an inspectable delegation boundary, not a swarm. Archon deliberately limits active delegation to one evidence-only child with signed scope, bounded resources, no tools, and durable lineage. Multi-node coordination would introduce network partitions, duplicate delivery, version skew, peer identity, and distributed cancellation without improving the capstone's central policy-and-evidence demonstration.
+The capstone needs an inspectable delegation boundary, not a swarm. Archon has one evidence-only verifier and a separate feature-flagged local Team pilot: one fixed researcher plus one server-templated dynamic analyst, depth one, read-only tools, signed scope, bounded resources, and durable lineage. Multi-node coordination would introduce network partitions, duplicate delivery, version skew, peer identity, and distributed cancellation without improving the capstone's central policy-and-evidence demonstration.
 
 ### Architecture required
 
@@ -43,7 +43,7 @@ A status review would require multi-host tests with real network boundaries; inj
 
 ### Why omission strengthens the capstone
 
-It keeps authority narrow and failures reproducible. The learner can inspect every parent/child edge and prove the child cannot expand its scope instead of presenting a broad swarm whose correctness and security are unevidenced.
+It keeps authority narrow and failures reproducible. The learner can inspect every parent/child edge and prove that neither verifier nor Team children can expand their scope instead of presenting a broad swarm whose correctness and security are unevidenced.
 
 ## 2. GPU and high-throughput model serving
 

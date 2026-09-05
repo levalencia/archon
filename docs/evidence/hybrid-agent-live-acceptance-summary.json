@@ -1,0 +1,164 @@
+{
+  "schema": "archon.hybrid-agent-live-acceptance-summary",
+  "version": 1,
+  "evidence_date": "2026-09-05",
+  "provider": "foundry",
+  "model_revision": "claude-opus-4-6",
+  "claim_scope": "Sanitized operator-authorized local live-provider comparison. Prompts, full responses, credentials, user identifiers, and raw tool outputs are not retained in this artifact.",
+  "configuration": {
+    "modes": ["single", "team"],
+    "team_children": 2,
+    "team_depth": 1,
+    "team_execution": "sequential",
+    "parent_team_tools": "none_synthesis_only",
+    "child_tools": "read_only_projected_subset",
+    "child_max_iterations": 4,
+    "child_max_tool_calls": 6,
+    "child_max_tokens": 64000,
+    "child_max_tool_result_chars": 3000,
+    "child_deadline_seconds": 120,
+    "team_deadline_seconds": 240
+  },
+  "rubric": {
+    "dimensions": [
+      "instruction_following",
+      "groundedness_and_source_quality",
+      "coverage",
+      "unsupported_claim_discipline",
+      "usefulness"
+    ],
+    "scale_per_dimension": "0-2",
+    "maximum_score": 10,
+    "review": "Independent model review with representative URL validation; response contents treated as untrusted data."
+  },
+  "cases": [
+    {
+      "id": "prompt-injection-controls",
+      "single": {
+        "run_id": "9ca3b615-5d37-4a42-8f51-7d39dde2ddb9",
+        "status": "completed",
+        "degraded": false,
+        "latency_seconds": 70.517,
+        "tokens": 59405,
+        "cost_usd": 0.337705,
+        "quality_score": 10
+      },
+      "team": {
+        "run_id": "69878273-7b76-4854-9d03-8f8e4adde6eb",
+        "status": "completed",
+        "degraded": false,
+        "latency_seconds": 162.716,
+        "parent_tokens": 7370,
+        "child_tokens": 34729,
+        "total_tokens": 42099,
+        "cost_usd": 0.317995,
+        "quality_score": 5
+      },
+      "quality_result": "single_won",
+      "review_notes": [
+        "Single cited four reachable authoritative sources.",
+        "Team emitted four inert tool-call-shaped JSON blocks as answer text.",
+        "Two of Team's four cited URLs returned 404 during review."
+      ]
+    },
+    {
+      "id": "durable-orchestration",
+      "single": {
+        "run_id": "3e9074bb-cb08-4fde-9eaf-fa9dfeebae31",
+        "status": "completed",
+        "degraded": false,
+        "latency_seconds": 63.763,
+        "tokens": 37871,
+        "cost_usd": 0.224235,
+        "quality_score": 9
+      },
+      "team": {
+        "run_id": "2ffc411e-6b1e-47c3-9f74-a9b877fd3202",
+        "status": "completed",
+        "degraded": false,
+        "latency_seconds": 138.296,
+        "parent_tokens": 7279,
+        "child_tokens": 12321,
+        "total_tokens": 19600,
+        "cost_usd": 0.19906,
+        "quality_score": 9
+      },
+      "quality_result": "tie",
+      "review_notes": [
+        "Single provided denser sourcing.",
+        "Team was more precise about Temporal activity delivery, Celery acknowledgment semantics, and PostgreSQL crash recovery.",
+        "Both contained minor unsupported or insufficiently cited claims."
+      ]
+    },
+    {
+      "id": "single-vs-team-evaluation",
+      "single": {
+        "run_id": "d7ea5db6-c5a6-4331-8dfa-82c211491ee9",
+        "status": "completed",
+        "degraded": false,
+        "latency_seconds": 79.54,
+        "tokens": 22157,
+        "cost_usd": 0.152805,
+        "quality_score": 8
+      },
+      "team": {
+        "run_id": "21eccb39-7d92-4f59-a003-9e7a438127c0",
+        "status": "completed",
+        "degraded": false,
+        "latency_seconds": 159.179,
+        "parent_tokens": 7110,
+        "child_tokens": 21050,
+        "total_tokens": 28160,
+        "cost_usd": 0.23988,
+        "quality_score": 6
+      },
+      "quality_result": "single_won",
+      "review_notes": [
+        "Single supplied the more operationally complete rollout protocol.",
+        "Both answers contained weak, unverifiable, or likely fabricated citations.",
+        "Team added useful statistical ideas but did not overcome its citation-quality deficit."
+      ]
+    }
+  ],
+  "aggregate": {
+    "single_quality_total": 27,
+    "single_quality_mean": 9.0,
+    "team_quality_total": 20,
+    "team_quality_mean": 6.667,
+    "team_quality_wins": 0,
+    "ties": 1,
+    "single_quality_wins": 2,
+    "all_six_runs_completed_without_degradation": true,
+    "all_six_parent_stop_reasons": "completed",
+    "all_six_child_stop_reasons": "completed",
+    "model_charge_scope_runs": 12,
+    "reconciled_model_charges": 27,
+    "total_live_comparison_cost_usd": 1.47168
+  },
+  "durable_evidence": {
+    "parent_runs": 3,
+    "child_runs": 6,
+    "parent_child_linkage": "pass",
+    "conversation_id_propagation": "pass",
+    "correlation_id_propagation": "pass",
+    "routing_events": 3,
+    "delegation_requested_events": 6,
+    "delegation_completed_events": 6,
+    "parent_terminal_events": 3,
+    "charges_reconciled": true
+  },
+  "tuning_evidence": [
+    "The initial 45-second child and 75-second aggregate deadlines caused live child timeouts.",
+    "Increasing time alone exposed tool-call and token-budget exhaustion.",
+    "The final configuration bounds tool-result text, signs that bound into the delegation envelope, and keeps Team parent synthesis tool-free.",
+    "Aborted tuning runs are diagnostic evidence, not acceptance passes."
+  ],
+  "overall_status": "functional_pass_quality_not_improved",
+  "limitations": [
+    "Three paired cases are diagnostic acceptance evidence, not a statistically powered benchmark.",
+    "Team was slower in all three cases and did not beat Single on reviewed quality.",
+    "The local backend container did not expose the source repository as a child workspace, so repository-grounded prompts were excluded from the final paired comparison.",
+    "The Agents inspector reload path remains deterministically tested; this evidence packet does not claim an authenticated browser reload using one of the ephemeral live-evaluation identities.",
+    "No public deployment, multi-instance behavior, production SLO, parallel fan-out, or parent-wide atomic budget reservation is demonstrated."
+  ]
+}

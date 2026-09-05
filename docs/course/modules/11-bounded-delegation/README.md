@@ -1,4 +1,4 @@
-# Module 11 — Bounded verifier delegation
+# Module 11 — Bounded delegation and hybrid orchestration
 
 > **Documentation status:** Draft
 > **Estimated time:** 90 minutes
@@ -6,11 +6,11 @@
 
 ## Why this module exists
 
-A second model can add cost and authority without adding trust. This module shows the narrower useful design Archon actually implements: one evidence-only, no-tools verifier child with finite budgets and durable lineage. You will produce a parent-child evidence graph and explain why it is neither a swarm nor generic self-reflection.
+A second model can add cost and authority without adding trust. This module starts with Archon's narrow evidence-only verifier and then extends the same signed, bounded lineage model into the feature-flagged hybrid orchestration pilot. You will produce a parent-child evidence graph and explain why neither design is an unbounded swarm nor generic self-reflection.
 
 ## Beginner explanation
 
-Archon delegates only evidence review, not open-ended work. The child sees a sealed claim/evidence packet and has no tools. Code deterministically validates that boundary and output schema; the verdict inside it is model-generated and can still be wrong.
+Archon has two distinct bounded delegation paths. The verifier sees a sealed claim/evidence packet and has no tools. The hybrid pilot can run a fixed researcher and a server-templated dynamic analyst with read-only capability subsets. Both paths use finite budgets, signed one-use scope, durable lineage, and fail-closed validation; model output can still be wrong.
 
 ## Prerequisites and vocabulary
 
@@ -36,10 +36,71 @@ After this module, the learner can:
 2. trace one child from grounded workflow through ledger events;
 3. explain malformed-output, timeout, and escalation behavior;
 4. measure benefit without claiming semantic truth or a swarm;
+5. distinguish a purpose-built verifier from fixed and dynamic general-purpose child profiles;
 
 ## Problem and mental model
 
 Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility.
+
+## Two delegation patterns, one safety model
+
+```mermaid
+flowchart TD
+  Parent[Parent run] --> Choice{Delegation pattern}
+  Choice --> Verifier[Evidence verifier]
+  Choice --> Team[Hybrid Team pilot]
+
+  Verifier --> VScope[Exact claims + evidence
+no tools]
+  Team --> Fixed[Fixed researcher
+read-only tools]
+  Team --> Dynamic[Dynamic analyst template
+read-only tools]
+
+  VScope --> Controls[Signed envelope
+finite budget
+depth one
+durable lineage]
+  Fixed --> Controls
+  Dynamic --> Controls
+```
+
+| Dimension | Evidence verifier | Hybrid pilot |
+|---|---|---|
+| Trigger | Grounded-answer verification | Auto router or explicit Team |
+| Children | One purpose-built verifier | One fixed researcher plus one dynamic-template analyst |
+| Tools | None | Explicit read-only subset |
+| Output use | Conservative claim filtering | Untrusted supporting context for parent synthesis |
+| UI | Grounding/evidence views | Execution-mode control and Agents inspector |
+| Current evidence | Deterministic and live-provider verifier acceptance | Deterministic mock-provider and browser-contract acceptance only |
+
+“Dynamic” describes request-specific task selection inside a server-owned template. It does not permit a model-authored system prompt, arbitrary capabilities, recursive delegation, terminal access, writes, memory mutation, or background jobs.
+
+### Hybrid request sequence
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant R as Auto/Single/Team router
+  participant P as Parent runtime
+  participant E as Envelope service
+  participant C as Child runtimes
+  participant L as Run Ledger
+
+  U->>R: request + execution mode
+  R->>L: orchestration_routed
+  alt resolved Single
+    R->>P: existing canonical request
+  else resolved Team
+    R->>E: issue and consume bounded child envelopes
+    E-->>C: verified task scope
+    C->>L: child runs + safe lifecycle metadata
+    C-->>P: untrusted findings
+  end
+  P-->>U: final answer + inspectable metadata
+```
+
+The hybrid pilot is sequential in phase one. Parallel fan-out, aggregate parent-wide monetary reservation, and live-provider quality comparison remain explicit follow-up work. The Agents view reconstructs routing and child summaries from durable Run Ledger data after reload.
 
 The connection to the course spine is explicit: **Policy → Run → Approval → Tool → Evidence → Evaluation**. Inputs are authenticated/scoped data; outputs are typed results plus inspectable evidence; mutable authority never comes from model prose.
 
@@ -148,6 +209,10 @@ Only source-defined statuses/events are evidence. A transient UI state must not 
 | 3 | [`backend/app/services/grounded_rag.py:GroundedDocumentWorkflow._verify_with_child`](../../../../backend/app/services/grounded_rag.py) | Live parent integration and conservative result use. | `implemented` within stated boundary |
 | 4 | [`backend/app/services/run_ledger.py:RunRepository.ensure_child_run`](../../../../backend/app/services/run_ledger.py) | Durable owner/project parent-child edge. | `implemented` within stated boundary |
 | 5 | [`backend/app/delegation/measurement.py:measure_verifier_benefit`](../../../../backend/app/delegation/measurement.py) | Deterministic baseline-versus-child measurement. | `implemented` within stated boundary |
+| 6 | [`backend/app/orchestration/routing.py:resolve_execution_mode`](../../../../backend/app/orchestration/routing.py) | Versioned deterministic Auto/Single/Team decision. | `implemented`; quality optimality unproven |
+| 7 | [`backend/app/orchestration/runtime.py:RuntimeChildRunner`](../../../../backend/app/orchestration/runtime.py) | Signed bounded task execution through the canonical runtime. | `implemented` behind feature flag |
+| 8 | [`backend/app/orchestration/tools.py:build_read_only_registry`](../../../../backend/app/orchestration/tools.py) | Creates a capability subset and excludes effectful tools. | `implemented`; read-only pilot only |
+| 9 | [`frontend/src/lib/components/AgentOrchestrationPanel.svelte`](../../../../frontend/src/lib/components/AgentOrchestrationPanel.svelte) | Shows routing and child metadata without hidden reasoning. | `implemented`; live-run SSE view |
 
 ### Tests to inspect
 
@@ -157,6 +222,9 @@ Only source-defined statuses/events are evidence. A transient UI state must not 
 | [`backend/tests/unit/test_evidence_verifier.py`](../../../../backend/tests/unit/test_evidence_verifier.py) | budgets, retries, malformed output and durable lifecycle. | Does not prove public deployment, external-provider parity, or production scale. |
 | [`backend/tests/integration/test_verifier_benefit.py`](../../../../backend/tests/integration/test_verifier_benefit.py) | bounded fixture measurement on integrated path. | Does not prove public deployment, external-provider parity, or production scale. |
 | [`backend/tests/integration/test_run_parent_migration.py`](../../../../backend/tests/integration/test_run_parent_migration.py) | parent_run_id persistence and schema migration. | Does not prove public deployment, external-provider parity, or production scale. |
+| [`backend/tests/unit/test_hybrid_orchestration.py`](../../../../backend/tests/unit/test_hybrid_orchestration.py) | routing, fixed/dynamic plan, read-only projection, safe events and conservative degradation. | Does not prove live-provider quality or parallel execution. |
+| [`backend/tests/unit/test_chat.py`](../../../../backend/tests/unit/test_chat.py) | real sync/SSE route wiring, canonical child runtimes, durable lineage and events with the deterministic provider. | Does not prove external-provider behavior. |
+| [`frontend/tests/workbench.spec.ts`](../../../../frontend/tests/workbench.spec.ts) | selected execution mode reaches SSE and Agents UI renders fixed/dynamic status. | Mocked SSE is UI-contract evidence, not backend deployment evidence. |
 
 ## Try it: bounded exercise
 
