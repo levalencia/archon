@@ -1,0 +1,155 @@
+{
+  "schema": "archon.hybrid-orchestration-benchmark-rubric",
+  "version": 1,
+  "created_at": "2026-09-05",
+  "primary_quality_rubric": {
+    "blind_to_mode": true,
+    "dimensions": [
+      {
+        "id": "instruction_following",
+        "range": [0, 2],
+        "anchors": {
+          "0": "Misses a central requested deliverable or violates an explicit constraint.",
+          "1": "Meets the core request but misses at least one material format, scope, or tool constraint.",
+          "2": "Meets every material instruction and output constraint."
+        }
+      },
+      {
+        "id": "groundedness_source_quality",
+        "range": [0, 2],
+        "anchors": {
+          "0": "Contains material factual errors, fabricated support, or unusable citations.",
+          "1": "Mostly correct but contains weak sourcing, a minor factual error, or an unverifiable material claim.",
+          "2": "Claims are correct and supported by supplied evidence or authoritative reachable sources when required."
+        }
+      },
+      {
+        "id": "coverage_completeness",
+        "range": [0, 2],
+        "anchors": {
+          "0": "Omits more than half of required traits or a central dimension.",
+          "1": "Covers most required traits but omits at least one material element.",
+          "2": "Covers every material expected trait without padding."
+        }
+      },
+      {
+        "id": "unsupported_claim_discipline",
+        "range": [0, 2],
+        "anchors": {
+          "0": "Presents fabricated, contradictory, or materially unsupported claims as facts.",
+          "1": "Contains a minor unsupported assertion or fails to label an assumption.",
+          "2": "Separates facts, assumptions, calculations, and recommendations; no material unsupported claim."
+        }
+      },
+      {
+        "id": "actionable_usefulness",
+        "range": [0, 2],
+        "anchors": {
+          "0": "Not usable for the stated purpose.",
+          "1": "Partially useful but vague, poorly prioritized, or difficult to apply.",
+          "2": "Clear, appropriately detailed, and directly usable for the stated purpose."
+        }
+      }
+    ],
+    "maximum": 10
+  },
+  "expected_trait_scoring": {
+    "method": "normalized_equal_weight",
+    "formula": "traits_satisfied / expected_traits_count",
+    "minimum_manual_calibration_cases": 20,
+    "judge_agreement_gate": 0.6,
+    "agreement_metric": "cohen_kappa_on_dimension_pass_fail"
+  },
+  "operational_metrics": [
+    "http_status",
+    "resolved_mode",
+    "degraded",
+    "parent_and_child_stop_reasons",
+    "latency_seconds",
+    "input_output_total_tokens",
+    "tool_calls",
+    "reconciled_cost_usd",
+    "child_count",
+    "citation_reachability",
+    "tool_call_shaped_text_in_final_answer"
+  ],
+  "calibration_gate": {
+    "cases": 20,
+    "maximum_invalid_pairs": 2,
+    "repeated_systemic_failure_stop_count": 2,
+    "maximum_calibration_cost_usd": 15,
+    "requirements_to_continue": [
+      "Both modes receive identical prompt text.",
+      "Provider and model revision match across every accepted pair.",
+      "Every accepted Team result has exactly two completed children.",
+      "No repeated systemic timeout, tool-budget, token-budget, or routing failure.",
+      "Blind scoring procedure is reproducible and expected-trait normalization is applied.",
+      "At least a representative sample of citation-required responses has URL validation."
+    ]
+  },
+  "global_stop_conditions": {
+    "authorized_cost_cap_usd": 60,
+    "single_run_reserve_usd": 2,
+    "team_run_reserve_usd": 5,
+    "stop_before_run_when_reserve_would_exceed_cap": true,
+    "maximum_invalid_pair_rate": 0.1,
+    "no_automatic_reruns": true
+  },
+  "analysis": {
+    "paired_primary_comparison": "team_quality_score_minus_single_quality_score",
+    "statistical_tests": [
+      "paired bootstrap 95% confidence interval for mean quality delta",
+      "Wilcoxon signed-rank sensitivity analysis for non-zero paired deltas",
+      "sign test on wins, ties, and losses"
+    ],
+    "stratify_by": [
+      "category",
+      "difficulty",
+      "tools_profile",
+      "parallelizable_subtasks"
+    ],
+    "report_effect_sizes_not_only_p_values": true,
+    "small_cell_warning": "Ten cases per category are directional and exploratory, not definitive."
+  },
+  "routing_decision_rules": {
+    "team_positive_category": {
+      "minimum_mean_quality_delta": 0.5,
+      "minimum_win_rate_excluding_ties": 0.6,
+      "maximum_mean_latency_ratio": 4,
+      "must_not_increase_material_unsupported_claims": true
+    },
+    "single_positive_category": {
+      "maximum_mean_quality_delta": 0,
+      "or_team_cost_latency_without_quality_gain": true
+    },
+    "inconclusive_category": "All other outcomes; retain Single default and expand the category before routing changes.",
+    "auto_offline_policy": {
+      "features": [
+        "category",
+        "difficulty",
+        "tools_profile",
+        "parallelizable_subtasks",
+        "prompt_token_estimate",
+        "citation_required"
+      ],
+      "tie_breaker": "lower reconciled cost, then lower latency",
+      "success": {
+        "routing_accuracy_minimum": 0.75,
+        "mean_quality_regret_maximum": 0.03,
+        "must_cost_less_than_always_team": true
+      }
+    }
+  },
+  "specialist_decision_rules": {
+    "investigate_when": "At least three manually confirmed cases in one category have normalized trait score below 0.5 in both Single and current Team.",
+    "prototype_only_after_cluster_review": true,
+    "accept_specialist_when": [
+      "Mean normalized trait improvement is at least 0.10 over current Team on the failing-case holdout.",
+      "No increase in material unsupported claims or security failures.",
+      "Quality gain justifies measured latency and cost.",
+      "The specialist uses a versioned server-owned profile and bounded capability set."
+    ],
+    "reject_specialist_when": "Marginal normalized trait improvement is below 0.05 or latency exceeds twice current Team while quality gain is below 0.10."
+  },
+  "claim_boundary": "This benchmark is designed to discover routing and specialist hypotheses. One 100-case run does not establish universal model or production superiority."
+}
