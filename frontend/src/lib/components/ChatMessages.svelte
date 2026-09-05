@@ -67,7 +67,7 @@
                 {#each msg.sources as src, i}<div class="flex min-h-11 items-center gap-2 border-b border-[var(--border)] px-3 text-xs last:border-0"><span class="font-mono font-bold text-[var(--accent)]">S{i + 1}</span>{#if src.url}<a href={src.url} target="_blank" rel="noopener" class="min-w-0 flex-1 truncate text-[var(--text)]">{src.title || src.url}</a><ExternalLink size={13}/>{:else}<span class="min-w-0 flex-1 truncate">{src.title}</span>{/if}{#if src.score != null}<span class="font-mono text-[var(--muted)]">{(src.score * 100).toFixed(0)}%</span>{/if}</div>{/each}
               </section>
             {/if}
-            {#if msg.artifacts?.length}<div class="artifact-chips mt-3 flex flex-wrap gap-2">{#each msg.artifacts as art}<button class="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--accent)] bg-[rgba(85,214,190,.08)] px-3 py-1.5 text-xs text-[var(--accent)] transition-colors hover:bg-[rgba(85,214,190,.18)]" onclick={onOpenArtifact}><FileOutput size={14}/> {art.title} · Open preview</button>{/each}</div>{/if}
+            {#if msg.artifacts?.length}<div class="artifact-chips mt-3 flex flex-wrap gap-2">{#each msg.artifacts as art}<button class="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--accent)] bg-[var(--accent-glow)] px-3 py-1.5 text-xs text-[var(--accent)] transition-colors hover:shadow-[0_0_18px_var(--archon-orange-glow)]" onclick={onOpenArtifact}><FileOutput size={14}/> {art.title} · Open preview</button>{/each}</div>{/if}
           {:else}<p class="user-copy">{msg.content}</p>{/if}
         </div>
       </article>

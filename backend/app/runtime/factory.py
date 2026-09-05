@@ -60,6 +60,7 @@ def budget_model_provider(
     user_id: str,
     project_id: str,
     run_id: str,
+    run_limit_usd: Any | None = None,
 ) -> ModelProvider:
     """Wrap one run's provider with durable monetary enforcement when enabled."""
 
@@ -75,7 +76,9 @@ def budget_model_provider(
         provider,
         MonetaryBudgetRepository(session_factory),
         BudgetRunContext(user_id, project_id, run_id),
-        run_limit_nusd=usd_limit_to_nusd(settings.agent_run_budget_usd),
+        run_limit_nusd=usd_limit_to_nusd(
+            settings.agent_run_budget_usd if run_limit_usd is None else run_limit_usd
+        ),
         project_limit_nusd=usd_limit_to_nusd(settings.agent_project_budget_usd),
         max_input_tokens=max_input_tokens,
         pricing_candidates=_pricing_candidates(settings),
@@ -100,26 +103,19 @@ class RunContext:
         return cls(user_id, conversation_id, str(uuid.uuid4()), correlation_id, project_id)
 
 
-def create_chat_runtime(
+def create_chat_event_sink(
     *,
     context: RunContext,
-    provider: ModelProvider,
-    tools: SecureToolRegistry,
     settings: Any,
     repository: Any,
     exporter: Any | None,
     redactor: PersistenceRedactor,
     log_buffer: OwnerLogBuffer,
     downstream: EventSink | None = None,
-    authorizer: ToolAuthorizer | None = None,
-    result_recorder: Callable[[str], Awaitable[None]] | None = None,
-) -> AgentRuntime:
-    """Build the single supported live runtime configuration.
+) -> EventSink:
+    """Create the canonical observable and durable event sink for one run."""
 
-    Provider wrappers (for example JSON mode) are deliberately applied by the caller before
-    entering this factory. Sync omits an authorizer, causing ASK policy decisions to fail closed.
-    """
-    sink = CompositeEventSink(
+    return CompositeEventSink(
         conversation_id=context.conversation_id,
         user_id=context.user_id,
         project_id=context.project_id,
@@ -133,14 +129,53 @@ def create_chat_runtime(
         exporter=exporter,
         downstream=downstream,
     )
-    provider = budget_model_provider(
-        provider,
+
+
+def create_chat_runtime(
+    *,
+    context: RunContext,
+    provider: ModelProvider,
+    tools: SecureToolRegistry,
+    settings: Any,
+    repository: Any,
+    exporter: Any | None,
+    redactor: PersistenceRedactor,
+    log_buffer: OwnerLogBuffer,
+    downstream: EventSink | None = None,
+    event_sink: EventSink | None = None,
+    provider_is_budgeted: bool = False,
+    run_limit_usd: Any | None = None,
+    runtime_budget: RuntimeBudget | None = None,
+    reflection_policy: ReflectionPolicy | None = None,
+    authorizer: ToolAuthorizer | None = None,
+    result_recorder: Callable[[str], Awaitable[None]] | None = None,
+) -> AgentRuntime:
+    """Build the single supported live runtime configuration.
+
+    Provider wrappers (for example JSON mode) are deliberately applied by the caller before
+    entering this factory. Sync omits an authorizer, causing ASK policy decisions to fail closed.
+    """
+    if event_sink is not None and downstream is not None:
+        raise ValueError("event_sink and downstream are mutually exclusive")
+    sink = event_sink or create_chat_event_sink(
+        context=context,
         settings=settings,
         repository=repository,
-        user_id=context.user_id,
-        project_id=context.project_id,
-        run_id=context.run_id,
+        exporter=exporter,
+        redactor=redactor,
+        log_buffer=log_buffer,
+        downstream=downstream,
     )
+    if not provider_is_budgeted:
+        provider = budget_model_provider(
+            provider,
+            settings=settings,
+            repository=repository,
+            user_id=context.user_id,
+            project_id=context.project_id,
+            run_id=context.run_id,
+            run_limit_usd=run_limit_usd,
+        )
 
     runtime_tools: Any = tools
     if settings.durable_effect_ledger_enabled:
@@ -158,7 +193,8 @@ def create_chat_runtime(
         provider,
         runtime_tools,
         events=sink,
-        budget=RuntimeBudget(
+        budget=runtime_budget
+        or RuntimeBudget(
             max_iterations=settings.agent_max_iterations,
             max_tool_calls=settings.agent_max_tool_calls,
             max_tokens=settings.agent_token_budget,
@@ -171,7 +207,8 @@ def create_chat_runtime(
         authorizer=authorizer,
         approval_timeout_seconds=settings.approval_timeout_seconds,
         result_recorder=result_recorder,
-        reflection_policy=ReflectionPolicy(
+        reflection_policy=reflection_policy
+        or ReflectionPolicy(
             enabled=settings.reflection_enabled,
             rubric_id=settings.reflection_rubric_id,
             rubric_version=settings.reflection_rubric_version,

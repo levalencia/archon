@@ -123,7 +123,7 @@
         {#each profiles as profile}<option value={profile.id}>{profile.display_name}</option>{/each}
       </select>
     </label>
-    <button onclick={create} disabled={busy === 'create' || !name.trim() || !profileId} class="sm:col-span-2 min-h-11 inline-flex justify-center items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm disabled:opacity-50">
+    <button onclick={create} disabled={busy === 'create' || !name.trim() || !profileId} class="sm:col-span-2 min-h-11 inline-flex justify-center items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-[var(--bg-primary)] text-sm font-semibold disabled:opacity-50">
       <Plus size={14} /> {busy === 'create' ? 'Creating…' : 'Add integration'}
     </button>
   </div>

@@ -26,7 +26,14 @@ _NONCE = re.compile(r"^[A-Za-z0-9_-]{8,255}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SIGNATURE = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _BUDGET_KEYS = frozenset(
-    {"input_tokens", "output_tokens", "retries", "timeout_seconds", "cost_nusd"}
+    {
+        "input_tokens",
+        "output_tokens",
+        "retries",
+        "timeout_seconds",
+        "cost_nusd",
+        "max_tool_result_chars",
+    }
 )
 
 
@@ -82,7 +89,7 @@ class DelegationEnvelope:
             raise ValueError("invalid envelope version or timestamp")
         if self.signature and _SIGNATURE.fullmatch(self.signature) is None:
             raise ValueError("invalid envelope signature")
-        if not isinstance(self.budget, tuple) or not self.budget or len(self.budget) > 5:
+        if not isinstance(self.budget, tuple) or not self.budget or len(self.budget) > 6:
             raise ValueError("budget must be an immutable non-empty tuple")
         if tuple(sorted(self.budget)) != self.budget or len(dict(self.budget)) != len(self.budget):
             raise ValueError("budget must have sorted unique keys")
@@ -95,7 +102,7 @@ class DelegationEnvelope:
             elif (
                 type(value) is not int
                 or value < 0
-                or (key in {"input_tokens", "output_tokens"} and value < 1)
+                or (key in {"input_tokens", "output_tokens", "max_tool_result_chars"} and value < 1)
             ):
                 raise ValueError("invalid budget")
 

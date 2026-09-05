@@ -36,7 +36,7 @@
           </div>
           <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             {#each layer.components as component}
-              <button onclick={() => selectedId = component.id} aria-pressed={selectedId === component.id} class="min-h-28 rounded-xl border p-3 text-left transition {selectedId === component.id ? 'border-[var(--accent)] bg-[rgba(85,214,190,.1)]' : 'border-[var(--border)] bg-[var(--bg)] hover:border-[var(--accent)]'}">
+              <button onclick={() => selectedId = component.id} aria-pressed={selectedId === component.id} class="min-h-28 rounded-xl border p-3 text-left transition {selectedId === component.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'border-[var(--border)] bg-[var(--bg)] hover:border-[var(--accent)]'}">
                 <strong class="block text-sm">{component.title}</strong>
                 <span class="mt-2 block text-xs leading-5 text-[var(--muted)]">{component.responsibility}</span>
               </button>

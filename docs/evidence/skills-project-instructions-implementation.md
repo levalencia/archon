@@ -102,4 +102,4 @@ The observed controls are migration-level evidence on temporary PostgreSQL. Migr
 
 ## Evidence interpretation
 
-`Exists`, `Wired`, `Tested`, `Observed`, `UI`, `Live provider`, and `Deployed` remain independent. The 16-entry capability manifest retains its stable baseline; the 66-concept course catalog records `skills-project-instructions` as implemented on merged `main` with deployment explicitly false.
+`Exists`, `Wired`, `Tested`, `Observed`, `UI`, `Live provider`, and `Deployed` remain independent. The capability manifest retains its required baseline; the course catalog records `skills-project-instructions` as implemented on merged `main` with deployment explicitly false.

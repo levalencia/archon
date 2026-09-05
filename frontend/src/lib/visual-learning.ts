@@ -1,3 +1,5 @@
+import { ARCHON_THEME } from '$lib/archon-theme';
+
 export type ConceptStatus = 'implemented' | 'partial' | 'deferred';
 
 export interface LearningLink {
@@ -80,7 +82,7 @@ export interface ArchitectureRelation {
   label: string;
 }
 
-export interface NotebookRecipe {
+export interface LearningPackRecipe {
   id: string;
   title: string;
   purpose: string;
@@ -91,14 +93,14 @@ export interface NotebookRecipe {
 
 export interface VisualLearningStudio {
   schema: 'archon.visual-learning-studio';
-  version: 2;
+  version: 3;
   generated_from: string[];
   stats: {
     concepts: number;
     modules: number;
     stories: number;
     architecture_layers: number;
-    notebooks: number;
+    learning_packs: number;
     statuses: Record<ConceptStatus, number>;
   };
   roadmap: RoadmapPhase[];
@@ -109,34 +111,35 @@ export interface VisualLearningStudio {
     layers: ArchitectureLayer[];
     relations: ArchitectureRelation[];
   };
-  notebooklm: {
+  learning_library: {
     version: number;
+    language: 'en';
     source_priority: string[];
     promptbook_href: string;
     runbook_href: string;
-    notebooks: NotebookRecipe[];
+    packs: LearningPackRecipe[];
   };
 }
 
 export const STATUS_META: Record<ConceptStatus, { label: string; color: string }> = {
-  implemented: { label: 'Implemented', color: '#55d6be' },
+  implemented: { label: 'Implemented', color: ARCHON_THEME.green },
   partial: { label: 'Partial', color: '#f0bd62' },
   deferred: { label: 'Deferred', color: '#7f8b9b' },
 };
 
 export const RELATION_META: Record<string, { label: string; color: string }> = {
-  CALLS: { label: 'Calls', color: '#7fa7ff' },
-  ROUTES: { label: 'Routes', color: '#7fa7ff' },
-  AUTHORIZES: { label: 'Authorizes', color: '#55d6be' },
-  BUILDS_CONTEXT_FOR: { label: 'Builds context for', color: '#b793ff' },
-  PROPOSES: { label: 'Proposes', color: '#f0bd62' },
-  GATES: { label: 'Gates', color: '#ff6b72' },
-  PERSISTS_TO: { label: 'Persists to', color: '#55d6be' },
-  READS: { label: 'Reads', color: '#7fa7ff' },
-  EMITS: { label: 'Emits', color: '#b793ff' },
-  SUPPLIES_RUNS_TO: { label: 'Supplies runs to', color: '#f0bd62' },
-  CONSTRAINS: { label: 'Constrains', color: '#ff6b72' },
-  PROVES_READY: { label: 'Proves ready', color: '#55d6be' },
+  CALLS: { label: 'Calls', color: ARCHON_THEME.blue },
+  ROUTES: { label: 'Routes', color: ARCHON_THEME.blue },
+  AUTHORIZES: { label: 'Authorizes', color: ARCHON_THEME.green },
+  BUILDS_CONTEXT_FOR: { label: 'Builds context for', color: ARCHON_THEME.purple },
+  PROPOSES: { label: 'Proposes', color: ARCHON_THEME.orange },
+  GATES: { label: 'Gates', color: ARCHON_THEME.coral },
+  PERSISTS_TO: { label: 'Persists to', color: ARCHON_THEME.purple },
+  READS: { label: 'Reads', color: ARCHON_THEME.blue },
+  EMITS: { label: 'Emits', color: ARCHON_THEME.purple },
+  SUPPLIES_RUNS_TO: { label: 'Supplies runs to', color: ARCHON_THEME.orange },
+  CONSTRAINS: { label: 'Constrains', color: ARCHON_THEME.coral },
+  PROVES_READY: { label: 'Proves ready', color: ARCHON_THEME.green },
 };
 
 export async function loadVisualLearningStudio(
@@ -147,7 +150,7 @@ export async function loadVisualLearningStudio(
   const studio = (await response.json()) as VisualLearningStudio;
   if (
     studio.schema !== 'archon.visual-learning-studio'
-    || studio.version !== 2
+    || studio.version !== 3
     || studio.stats.concepts !== 66
     || studio.stats.modules !== 16
   ) {

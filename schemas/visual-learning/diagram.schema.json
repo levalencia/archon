@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "archon.learning.diagram"
+    },
+    "version": {
+      "const": 1
+    },
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "pack_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "const": "en"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "summary",
+          "details",
+          "teaching",
+          "sources"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "teaching": {
+            "$ref": "#/$defs/nodeTeaching"
+          },
+          "sources": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "target",
+          "label",
+          "explanation",
+          "teaching",
+          "sources"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "teaching": {
+            "$ref": "#/$defs/edgeTeaching"
+          },
+          "sources": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/teachingModule"
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonEmptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/nonEmptyString"}
+    },
+    "nodeTeaching": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["definition", "receives", "responsibility", "produces", "controls", "failure_behavior", "why_it_matters"],
+      "properties": {
+        "definition": {"$ref": "#/$defs/nonEmptyString"},
+        "receives": {"$ref": "#/$defs/nonEmptyStrings"},
+        "responsibility": {"$ref": "#/$defs/nonEmptyString"},
+        "produces": {"$ref": "#/$defs/nonEmptyStrings"},
+        "controls": {"$ref": "#/$defs/nonEmptyStrings"},
+        "failure_behavior": {"$ref": "#/$defs/nonEmptyString"},
+        "why_it_matters": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "edgeTeaching": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "transformation", "trust_boundary", "precondition", "failure_behavior", "why_it_matters"],
+      "properties": {
+        "payload": {"$ref": "#/$defs/nonEmptyString"},
+        "transformation": {"$ref": "#/$defs/nonEmptyString"},
+        "trust_boundary": {"$ref": "#/$defs/nonEmptyString"},
+        "precondition": {"$ref": "#/$defs/nonEmptyString"},
+        "failure_behavior": {"$ref": "#/$defs/nonEmptyString"},
+        "why_it_matters": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "teachingModule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "category", "summary", "details", "sources"],
+      "properties": {
+        "id": {"$ref": "#/$defs/nonEmptyString"},
+        "label": {"$ref": "#/$defs/nonEmptyString"},
+        "category": {"enum": ["principle", "architecture", "impact"]},
+        "summary": {"$ref": "#/$defs/nonEmptyString"},
+        "details": {"$ref": "#/$defs/nonEmptyString"},
+        "sources": {"$ref": "#/$defs/nonEmptyStrings"}
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "artifact_id",
+    "pack_id",
+    "title",
+    "language",
+    "source_commit",
+    "limitations",
+    "sources",
+    "description",
+    "nodes",
+    "edges"
+  ]
+}

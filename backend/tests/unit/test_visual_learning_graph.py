@@ -19,13 +19,13 @@ def test_studio_preserves_catalog_and_view_counts() -> None:
     studio = builder.build_studio()
 
     assert studio["schema"] == "archon.visual-learning-studio"
-    assert studio["version"] == 2
+    assert studio["version"] == 3
     assert studio["stats"] == {
         "concepts": 66,
         "modules": 16,
         "stories": 5,
         "architecture_layers": 5,
-        "notebooks": 5,
+        "learning_packs": 6,
         "statuses": {"deferred": 7, "implemented": 59, "partial": 0},
     }
 
@@ -141,15 +141,16 @@ def test_force_map_is_retired_and_legacy_route_redirects() -> None:
     assert "redirect(307, '/learn?view=stories')" in redirect
 
 
-def test_notebooklm_recipes_and_committed_manifest_are_current() -> None:
+def test_learning_artifact_packs_and_committed_manifest_are_current() -> None:
     studio = builder.build_studio()
 
-    assert {notebook["id"] for notebook in studio["notebooklm"]["notebooks"]} == {
+    assert {pack["id"] for pack in studio["learning_library"]["packs"]} == {
         "system-overview",
         "request-lifecycle",
         "memory-rag-evaluation",
         "reliability-operations",
         "interview-demo",
+        "hybrid-agent-orchestration",
     }
     expected_artifacts = {
         "audio",
@@ -161,10 +162,11 @@ def test_notebooklm_recipes_and_committed_manifest_are_current() -> None:
         "quiz",
         "report",
     }
-    for notebook in studio["notebooklm"]["notebooks"]:
-        assert notebook["source_count"] == len(notebook["sources"])
-        assert set(notebook["artifacts"]) == expected_artifacts
-        assert len(notebook["artifacts"]) == 8
-    assert sum(len(item["artifacts"]) for item in studio["notebooklm"]["notebooks"]) == 40
+    for pack in studio["learning_library"]["packs"]:
+        assert pack["language"] == "en"
+        assert pack["source_count"] == len(pack["sources"])
+        assert set(pack["artifacts"]) == expected_artifacts
+        assert len(pack["artifacts"]) == 8
+    assert sum(len(item["artifacts"]) for item in studio["learning_library"]["packs"]) == 48
     assert OUTPUT.is_file()
     assert json.loads(OUTPUT.read_text(encoding="utf-8")) == studio

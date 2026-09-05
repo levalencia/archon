@@ -2,12 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Iterator
+from typing import Any, cast
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.agents.mock_llm import MockLLM
 from app.config import Settings
 from app.main import create_app
+
+
+class SlowFirstMockLLM(MockLLM):
+    def __init__(self) -> None:
+        super().__init__()
+        self._slept = False
+
+    async def complete(self, *args, **kwargs):
+        if not self._slept:
+            self._slept = True
+            await asyncio.sleep(2)
+        return await super().complete(*args, **kwargs)
 
 
 def _bind_code_review(client: TestClient) -> None:
@@ -27,7 +43,7 @@ def _bind_code_review(client: TestClient) -> None:
 
 
 @pytest.fixture
-def client(tmp_path) -> TestClient:
+def client(tmp_path) -> Iterator[TestClient]:
     settings = Settings(
         llm_provider="mock",
         debug=True,
@@ -37,6 +53,26 @@ def client(tmp_path) -> TestClient:
     with TestClient(app) as c:
         token = c.post(
             "/api/auth/register", json={"username": "chat-user", "password": "secret1"}
+        ).json()["access_token"]
+        c.headers.update({"Authorization": f"Bearer {token}"})
+        yield c
+
+
+@pytest.fixture
+def hybrid_client(tmp_path) -> Iterator[TestClient]:
+    settings = Settings(
+        llm_provider="mock",
+        debug=True,
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'hybrid-chat.db'}",
+        verifier_enabled=False,
+        hybrid_orchestration_enabled=True,
+        delegation_signing_key="test-delegation-key-that-is-long-enough",
+    )
+    app = create_app(settings=settings)
+    with TestClient(app) as c:
+        token = c.post(
+            "/api/auth/register",
+            json={"username": "hybrid-user", "password": "secret1"},
         ).json()["access_token"]
         c.headers.update({"Authorization": f"Bearer {token}"})
         yield c
@@ -69,6 +105,61 @@ class TestChatEndpoint:
         assert "correlation_id" in data
         assert data["iterations"] >= 1
         assert data["run_id"]
+        assert data["requested_mode"] == "auto"
+        assert data["resolved_mode"] == "single"
+        assert data["agents_used"] == []
+
+    @pytest.mark.unit
+    def test_forced_team_uses_fixed_and_dynamic_children(self, hybrid_client: TestClient) -> None:
+        response = hybrid_client.post(
+            "/api/chat",
+            json={
+                "message": "Compare the architecture and verify the evidence",
+                "execution_mode": "team",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["requested_mode"] == "team"
+        assert data["resolved_mode"] == "team"
+        assert [child["kind"] for child in data["agents_used"]] == ["fixed", "dynamic"]
+        assert all(child["status"] == "completed" for child in data["agents_used"])
+        children = hybrid_client.get(f"/api/runs/{data['run_id']}/children")
+        assert children.status_code == 200
+        assert len(children.json()["items"]) == 2
+        assert all(item["parent_run_id"] == data["run_id"] for item in children.json()["items"])
+        events = hybrid_client.get(f"/api/runs/{data['run_id']}/events")
+        assert events.status_code == 200
+        kinds = [item["kind"] for item in events.json()["items"]]
+        assert kinds.count("orchestration_routed") == 1
+        assert kinds.count("delegation_requested") == 2
+        assert kinds.count("delegation_completed") == 2
+        wrapped_provider = cast(Any, hybrid_client.app).state.model_provider
+        provider = cast(MockLLM, getattr(wrapped_provider, "delegate", wrapped_provider))
+        assert len(provider.call_history) == 3
+        assert provider.call_history[-1]["tools"] == ()
+
+    @pytest.mark.unit
+    def test_team_timeout_cancels_the_child_run_and_degrades_parent(
+        self, hybrid_client: TestClient
+    ) -> None:
+        app = cast(Any, hybrid_client.app)
+        app.state.settings.hybrid_orchestration_total_deadline_seconds = 1.0
+        app.state.settings.hybrid_orchestration_child_deadline_seconds = 1.0
+        app.state.model_provider = SlowFirstMockLLM()
+
+        response = hybrid_client.post(
+            "/api/chat",
+            json={"message": "Compare and verify this architecture", "execution_mode": "team"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["orchestration_degraded"] is True
+        assert data["agents_used"][0]["status"] == "timed_out"
+        children = hybrid_client.get(f"/api/runs/{data['run_id']}/children").json()["items"]
+        assert children[0]["status"] == "cancelled"
 
     @pytest.mark.unit
     def test_durable_skill_selection_is_visible_in_run_provenance(self, client: TestClient) -> None:
@@ -145,6 +236,22 @@ class TestChatStreamEndpoint:
         )
         text = response.text
         assert "event: done" in text
+
+    @pytest.mark.unit
+    def test_team_stream_exposes_routing_and_child_status(self, hybrid_client: TestClient) -> None:
+        response = hybrid_client.post(
+            "/api/chat/stream",
+            json={
+                "message": "Research and compare the architecture",
+                "execution_mode": "team",
+            },
+        )
+
+        assert response.status_code == 200
+        assert "event: orchestration" in response.text
+        assert '"resolved_mode": "team"' in response.text
+        assert response.text.count("event: agent_status") == 4
+        assert '"children_used": 2' in response.text
 
     @pytest.mark.unit
     def test_stream_has_token_events(self, client: TestClient) -> None:

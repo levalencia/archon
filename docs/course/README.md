@@ -67,7 +67,7 @@ Tracks are navigation views, not alternate concept sources. Workshop exercises a
 | 08 | [Documents, embeddings, RAG, grounding, and faithfulness](modules/08-rag-grounding/README.md) | Cited grounded answer | **Draft** |
 | 09 | [Evaluation harness and regression](modules/09-evaluation-harness/README.md) | Recorded-run evaluation | **Draft** |
 | 10 | [Reliability and resilience](modules/10-resilience/README.md) | Failure drill | **Draft** |
-| 11 | [Bounded verifier delegation](modules/11-bounded-delegation/README.md) | Parent-child evidence graph | **Draft** |
+| 11 | [Bounded delegation and hybrid orchestration](modules/11-bounded-delegation/README.md) | Parent-child evidence graph and Team pilot | **Draft** |
 | 12 | [Governed MCP](modules/12-governed-mcp/README.md) | Discovered and approved tool call | **Draft** |
 | 13 | [Auth, UI, SSE, logs, metrics, and traces](modules/13-auth-ui-observability/README.md) | Observable request walkthrough | **Draft** |
 | 14 | [Docker, CI, migrations, and recovery](modules/14-local-operations/README.md) | Recovery report | **Draft** |

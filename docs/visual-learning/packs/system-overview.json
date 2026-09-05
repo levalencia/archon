@@ -1,0 +1,223 @@
+{
+  "pack_id": "system-overview",
+  "title": "Archon — System Overview",
+  "purpose": "Understand Archon's mission, architecture, evidence posture, and explicit boundaries.",
+  "language": "en",
+  "limitations": [
+    "This is derivative learning material, not canonical implementation evidence.",
+    "Archon is verified as a local seven-service system; no public or cloud deployment is claimed.",
+    "Counts and acceptance status must be rechecked against the source commit and canonical evidence documents."
+  ],
+  "concepts": [
+    {
+      "id": "workbench", "label": "Reliability Workbench", "kind": "frontend",
+      "summary": "Archon is a local control plane for governing and inspecting agent runs, not merely a chat screen.",
+      "teaching": {
+        "definition": "The Agent Reliability Workbench is the product boundary that joins an authenticated SvelteKit interface to a FastAPI control plane and an evidence-producing runtime.",
+        "receives": ["Authenticated user goals", "Project-scoped configuration", "Inspectable run and evaluation records"],
+        "responsibility": "Present one coherent surface for starting bounded runs, approving sensitive actions, inspecting evidence, and reviewing evaluations.",
+        "produces": ["Scoped API and SSE requests", "Human decisions", "Inspectable learning and runtime views"],
+        "controls": ["Owner-scoped access", "Visible distinction between answers and evidence"],
+        "failure_behavior": "If authentication or dependencies are unavailable, protected operations fail rather than silently becoming anonymous or mock success.",
+        "why_it_matters": "The UI is useful only because deterministic backend controls and durable evidence sit behind it; appearance alone is not reliability."
+      },
+      "boundary": "A local workbench does not establish public deployment, production traffic, or an SLO.",
+      "sources": ["README.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "narration": "Archon is a local Agent Reliability Workbench. Its interface starts and inspects runs, but reliability comes from the typed control plane, deterministic governance, and durable evidence behind the screen.",
+      "scenario": "A reviewer sees a polished chat interface and asks what makes Archon more than an LLM wrapper.",
+      "options": ["The visual design alone", "The governed runtime, evidence, and evaluation lifecycle", "A hidden agent framework", "A public production endpoint"],
+      "correct_index": 1,
+      "scenario_explanation": "The differentiator is the explicit control and evidence lifecycle, not presentation or an unclaimed deployment."
+    },
+    {
+      "id": "gateway", "label": "Loopback Gateway", "kind": "security",
+      "summary": "An unprivileged Nginx gateway is the only service that publishes a host port in the verified target.",
+      "teaching": {
+        "definition": "The gateway is the loopback entry boundary that routes browser traffic to the frontend or backend while keeping dependency services off host ports.",
+        "receives": ["Local HTTP requests", "Authentication headers", "Static and API route paths"],
+        "responsibility": "Route traffic to the correct internal service without exposing PostgreSQL, Redis, OTEL, backend, frontend, or sandbox ports directly.",
+        "produces": ["Frontend requests", "Backend API requests", "Gateway access outcomes"],
+        "controls": ["Loopback-only host exposure", "Single ingress path"],
+        "failure_behavior": "An unavailable upstream yields a gateway failure; it does not bypass the service boundary or expose internal ports.",
+        "why_it_matters": "One narrow entry point reduces accidental exposure and makes health and routing behavior easier to verify."
+      },
+      "boundary": "Loopback isolation is not Internet-edge hardening, TLS, WAF, or public ingress evidence.",
+      "sources": ["README.md", "docs/ARCHITECTURE-DIAGRAMS.md"],
+      "narration": "The verified target exposes one loopback gateway. The application and data services remain internal, which narrows accidental host exposure without pretending to be a hardened public edge.",
+      "scenario": "An operator proposes publishing PostgreSQL directly so local debugging is easier.",
+      "options": ["Publish it beside the gateway", "Keep it internal and use managed operational paths", "Replace PostgreSQL with browser storage", "Call direct exposure a readiness check"],
+      "correct_index": 1,
+      "scenario_explanation": "The verified architecture intentionally exposes only the loopback gateway."
+    },
+    {
+      "id": "frontend", "label": "SvelteKit Workbench", "kind": "frontend",
+      "summary": "The frontend provides authenticated chat, approvals, evidence inspection, settings, and learning views.",
+      "teaching": {
+        "definition": "The SvelteKit Workbench is the user-facing projection of runtime state and durable records.",
+        "receives": ["Catalog and API responses", "SSE progress events", "User navigation and approval decisions"],
+        "responsibility": "Render answer-first workflows while preserving access to policy decisions, tool activity, evidence, evaluations, and learning artifacts.",
+        "produces": ["Authenticated requests", "Approval decisions", "Accessible visual explanations"],
+        "controls": ["Client-side interaction state", "Visible provenance and limitations"],
+        "failure_behavior": "Expired authentication redirects to login; transient SSE loss must not be confused with deletion of durable run records.",
+        "why_it_matters": "A reliable system must make controls and evidence usable, not merely store them in backend tables."
+      },
+      "boundary": "SSE is a transient projection; the frontend is not the authoritative Run Ledger.",
+      "sources": ["README.md", "docs/course/README.md"],
+      "narration": "SvelteKit turns durable controls into usable workflows: chat, approvals, evidence, evaluation, and learning. Streaming progress is transient; durable records remain authoritative.",
+      "scenario": "The browser loses an SSE connection after a tool result was persisted.",
+      "options": ["Assume the run never happened", "Reload durable run evidence", "Rewrite the event as success", "Rerun the tool automatically"],
+      "correct_index": 1,
+      "scenario_explanation": "Transient streaming and durable persistence are separate boundaries."
+    },
+    {
+      "id": "backend", "label": "FastAPI Control Plane", "kind": "backend",
+      "summary": "FastAPI authenticates requests, wires scoped dependencies, and exposes runtime and evidence APIs.",
+      "teaching": {
+        "definition": "The FastAPI service is the application control plane that validates identity and input before constructing request-scoped runtime dependencies.",
+        "receives": ["Authenticated REST and SSE requests", "Project and conversation scope", "Validated request payloads"],
+        "responsibility": "Bind persistence, provider, policy, approval, tools, events, and observability into the correct route path.",
+        "produces": ["Typed runtime invocations", "Scoped persistence operations", "Sanitized API responses"],
+        "controls": ["Authentication and owner scope", "Shared sync and streaming preparation"],
+        "failure_behavior": "Invalid identity, scope, configuration, or dependencies stop the request with an explicit error rather than continuing with weaker controls.",
+        "why_it_matters": "Correct dependency wiring is where architecture becomes an exercised product path rather than disconnected classes."
+      },
+      "boundary": "Route existence is not proof that every optional capability is enabled or observed.",
+      "sources": ["README.md", "docs/course/modules/00-agent-anatomy/README.md"],
+      "narration": "FastAPI is the control-plane entry. It authenticates and scopes requests, then constructs the provider, policy, approval, tool, event, and persistence boundaries used by the runtime.",
+      "scenario": "A new SSE route constructs its own runtime without the shared policy-aware factory.",
+      "options": ["Accept the duplication", "Route it through the shared preparation and factory path", "Trust the model to enforce policy", "Hide the route from tests"],
+      "correct_index": 1,
+      "scenario_explanation": "Sync and SSE must share governed construction so behavior does not drift."
+    },
+    {
+      "id": "runtime", "label": "Typed AgentRuntime", "kind": "backend",
+      "summary": "A custom Protocol-based runtime owns bounded model/tool transitions and explicit stop reasons.",
+      "teaching": {
+        "definition": "AgentRuntime is a typed, provider-neutral interpreter around a probabilistic model, not an agent framework abstraction that owns hidden control flow.",
+        "receives": ["Bounded messages and tool schemas", "Injected provider and tool ports", "Runtime budgets and event sink"],
+        "responsibility": "Advance model and tool turns while enforcing iteration, token, tool-call, time, and monetary boundaries.",
+        "produces": ["Typed AgentResult", "Ordered runtime events", "Explicit terminal stop reason"],
+        "controls": ["Model output has no direct execution authority", "Every terminal path is represented explicitly"],
+        "failure_behavior": "Provider, budget, validation, policy, approval, or tool failures terminate or return governed feedback according to typed rules.",
+        "why_it_matters": "The runtime makes stopping, authority, and evidence reviewable instead of burying them inside model behavior."
+      },
+      "boundary": "Protocol-based portability does not prove identical behavior across every provider.",
+      "sources": ["README.md", "docs/course/modules/00-agent-anatomy/README.md"],
+      "narration": "AgentRuntime is the bounded interpreter around the model. It owns transitions and limits; the model supplies text or intent but cannot grant itself authority.",
+      "scenario": "The model asks for a twenty-first tool call after the configured maximum is reached.",
+      "options": ["Execute because the model requested it", "Stop with the configured tool-budget behavior", "Increase the limit silently", "Drop earlier ledger events"],
+      "correct_index": 1,
+      "scenario_explanation": "Deterministic runtime limits, not model preference, control execution."
+    },
+    {
+      "id": "governance", "label": "Policy and Approvals", "kind": "security",
+      "summary": "Deterministic policy returns ALLOW, ASK, or DENY; ASK requires an exact durable decision before execution.",
+      "teaching": {
+        "definition": "Governance is the deterministic authorization layer between model-proposed tool intent and an effect.",
+        "receives": ["Canonical tool identity", "Normalized arguments", "Risk, resource, owner, project, run, and call scope"],
+        "responsibility": "Evaluate policy and, when ASK is returned, bind a single-use decision to the exact proposed operation.",
+        "produces": ["ALLOW, ASK, or DENY", "Approval receipt or governed rejection", "Policy evidence"],
+        "controls": ["The model cannot authorize itself", "Changed arguments cannot reuse approval"],
+        "failure_behavior": "Unknown metadata, missing authorizer, expiry, mismatch, cancellation, and duplicate consumption fail closed.",
+        "why_it_matters": "Typed tools are still dangerous unless authority is decided outside the probabilistic planner."
+      },
+      "boundary": "Local policy tests do not constitute an external security audit.",
+      "sources": ["README.md", "docs/ARCHITECTURE-DIAGRAMS.md"],
+      "narration": "Policy decides ALLOW, ASK, or DENY. ASK pauses before execution and binds approval to the exact user, run, call, tool, and arguments. The model cannot approve itself.",
+      "scenario": "A call is approved, then one argument changes before dispatch.",
+      "options": ["Reuse the old approval", "Reject the mismatched binding", "Ask the model whether it is safe", "Execute and update the ledger later"],
+      "correct_index": 1,
+      "scenario_explanation": "Approval applies only to the immutable operation that was reviewed."
+    },
+    {
+      "id": "execution", "label": "Governed Execution", "kind": "security",
+      "summary": "Authorized native, MCP, or sandbox tools execute through bounded registries rather than directly from model output.",
+      "teaching": {
+        "definition": "Governed execution is the effect boundary where validated and authorized operations reach a registered handler, MCP adapter, or isolated sandbox.",
+        "receives": ["Exact authorized tool call", "Validated schema arguments", "Timeout and resource limits"],
+        "responsibility": "Execute only the approved operation and normalize success, error, timeout, and cancellation outcomes.",
+        "produces": ["Bounded tool result", "Typed runtime event", "Effect or idempotency evidence where applicable"],
+        "controls": ["No direct model-to-effect path", "Sandbox has no host fallback"],
+        "failure_behavior": "Unavailable, timed-out, denied, malformed, or mismatched operations remain explicit failures and do not become successful evidence.",
+        "why_it_matters": "This boundary turns a proposal into a controlled effect without broadening its authority."
+      },
+      "boundary": "Container isolation is local and not VM-grade hostile multi-tenant certification.",
+      "sources": ["README.md", "docs/ARCHITECTURE-DIAGRAMS.md"],
+      "narration": "Only validated and authorized calls reach native tools, governed MCP, or the networkless sandbox. Failures remain typed outcomes; isolation is strong local evidence, not a universal security certificate.",
+      "scenario": "The sandbox service is unavailable for a code execution request.",
+      "options": ["Run the code on the host", "Fail because there is no host fallback", "Ask the model to simulate success", "Record a successful result with no output"],
+      "correct_index": 1,
+      "scenario_explanation": "The verified design explicitly forbids host fallback."
+    },
+    {
+      "id": "ledger", "label": "Run Ledger", "kind": "database",
+      "summary": "Ordered owner-scoped events preserve a reconstructable control-flow history within documented redaction limits.",
+      "teaching": {
+        "definition": "The Run Ledger is an append-oriented domain record of run status and safe runtime events; it is not free-form logs or model memory.",
+        "receives": ["Run identity and scope", "Policy, approval, model, tool, usage, and stop events", "Redacted allowlisted metadata"],
+        "responsibility": "Persist ordered evidence for inspection, stored-only replay, fork lineage, comparison, and later evaluation.",
+        "produces": ["Contiguous event chronology", "Terminal run metadata", "Inspectable provenance"],
+        "controls": ["Owner/project visibility", "Failed events are not rewritten as success"],
+        "failure_behavior": "Persistence failures are surfaced; missing evidence remains missing rather than reconstructed from a convenient final answer.",
+        "why_it_matters": "Reliability analysis needs what actually happened, in order, not just what the assistant eventually said."
+      },
+      "boundary": "Replay reconstructs stored history and does not rerun models, tools, or arbitrary workspace state.",
+      "sources": ["README.md", "docs/ARCHITECTURE-DIAGRAMS.md"],
+      "narration": "The Run Ledger preserves ordered, scoped, redacted events and terminal state. It supports inspection and stored-only replay, but it is neither model memory nor executable resume.",
+      "scenario": "A demo reloads a completed conversation and calls the result a replay.",
+      "options": ["Replay the external effect", "Explain that stored-only replay reconstructs events", "Delete the original run", "Claim arbitrary workspace restoration"],
+      "correct_index": 1,
+      "scenario_explanation": "Archon's replay is historical reconstruction, not re-execution."
+    },
+    {
+      "id": "knowledge", "label": "RAG and Evaluation", "kind": "database",
+      "summary": "Grounded document workflows and recorded-run evaluations use durable evidence but answer different questions.",
+      "teaching": {
+        "definition": "Knowledge and evaluation services retrieve scoped evidence, filter unsupported claims, and measure persisted trajectories through separate contracts.",
+        "receives": ["Owner/project documents and JSON embeddings", "Atomic claims and citations", "Completed run IDs and versioned fixtures"],
+        "responsibility": "Keep retrieval, grounding, bounded verification, and post-run evaluation distinct and inspectable.",
+        "produces": ["Grounded answers or abstention", "Citation metadata", "Durable evaluation results"],
+        "controls": ["SQL-JSON cosine is named honestly", "Missing evidence is not PASS"],
+        "failure_behavior": "No evidence causes abstention; malformed or unsupported claims fail filtering; invalid evaluation identity fails validation.",
+        "why_it_matters": "A final answer can look plausible while retrieval, support, citation, or evaluation evidence is weak."
+      },
+      "boundary": "Deterministic fixtures and one live sentinel do not establish broad model or retrieval quality.",
+      "sources": ["README.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "narration": "Archon stores embeddings as SQL JSON and computes cosine in Python. Grounding filters claims; recorded-run evaluation measures completed trajectories later. Neither should be renamed pgvector or general model-quality proof.",
+      "scenario": "A report has citations but no claim-level support check.",
+      "options": ["Call it fully grounded", "Treat citation presence and correctness as separate", "Assume the source is true", "Convert similarity to confidence"],
+      "correct_index": 1,
+      "scenario_explanation": "A marker can exist without supporting the attached claim."
+    },
+    {
+      "id": "operations", "label": "Local Operations", "kind": "external",
+      "summary": "Seven retained services, readiness checks, CI, and recovery provide revision-scoped local operational evidence.",
+      "teaching": {
+        "definition": "Local operations is the reproducible target for building, migrating, checking dependencies, observing telemetry, and recovering Archon's durable state.",
+        "receives": ["Pinned images and source revision", "Protected generated configuration", "PostgreSQL, Redis, and OTEL dependencies"],
+        "responsibility": "Start and verify the seven-service stack, expose health versus readiness, and preserve or restore evidence safely.",
+        "produces": ["Local readiness observation", "CI and smoke results", "Checksummed backup and recovery evidence"],
+        "controls": ["Managed wrapper owns retained stack state", "Destructive cleanup is explicit"],
+        "failure_behavior": "Failed readiness, migration, checksum, or clean-target checks block acceptance rather than being reported as PASS.",
+        "why_it_matters": "Files and manifests are recipes; exercised readiness and recovery are the operational evidence."
+      },
+      "boundary": "One development-machine recovery observation is not an adopted production RTO or RPO objective.",
+      "sources": ["README.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/REMAINING-DEFERRED-GAPS.md"],
+      "narration": "The local target has seven services and one gateway port. Health, readiness, migrations, telemetry, backup, and restore are exercised separately. These are local observations, never public deployment claims.",
+      "scenario": "A Compose manifest exists, but no stack was started or probed.",
+      "options": ["Mark deployment observed", "Call it architecture/configuration evidence only", "Infer readiness from YAML", "Report a public endpoint"],
+      "correct_index": 1,
+      "scenario_explanation": "A manifest is not a deployment or readiness observation."
+    }
+  ],
+  "flows": [
+    {"id": "system-path", "title": "System Control Path", "description": "How a local user request crosses the product, governance, execution, and evidence boundaries.", "nodes": ["workbench", "gateway", "frontend", "backend", "runtime", "governance", "execution", "ledger"]},
+    {"id": "evidence-path", "title": "Evidence to Operations", "description": "How durable run evidence supports knowledge work and bounded local operational claims.", "nodes": ["runtime", "ledger", "knowledge", "operations"]}
+  ],
+  "mind_groups": [
+    {"label": "Product edge", "concepts": ["workbench", "gateway", "frontend"]},
+    {"label": "Control plane", "concepts": ["backend", "runtime", "governance"]},
+    {"label": "Effects and evidence", "concepts": ["execution", "ledger"]},
+    {"label": "Knowledge and operations", "concepts": ["knowledge", "operations"]}
+  ]
+}

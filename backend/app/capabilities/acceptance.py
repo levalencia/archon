@@ -27,6 +27,7 @@ REQUIRED_CAPABILITY_IDS = {
     "durable-background-jobs",
     "mandatory-compliance",
     "signed-agent-communication",
+    "hybrid-agent-orchestration-pilot",
     "isolated-sandbox-live-target",
     "live-embedding-provider",
 }

@@ -1,0 +1,492 @@
+{
+  "browser-to-ledger": {
+    "nodes": {
+      "browser": {
+        "summary": "The user-facing client that starts an authenticated request and renders streamed progress and the final answer.",
+        "teaching": {
+          "definition": "The Browser is Archon's user-facing client. It collects the user's message and project context, sends them to the application boundary, and renders the response and observable run state.",
+          "receives": ["User input", "Conversation and project selection", "Authenticated session state"],
+          "responsibility": "Construct an HTTP request for the selected operation and present returned events without making authorization or execution decisions.",
+          "produces": ["An authenticated API request", "Client-side interaction state"],
+          "controls": ["Input handling", "User-visible progress and error presentation"],
+          "failure_behavior": "Invalid input is rejected locally when possible; network and server failures remain visible rather than being presented as successful answers.",
+          "why_it_matters": "The browser begins the lifecycle, but it is not a trusted authority. Security and governance must still be enforced behind the gateway."
+        },
+        "sources": ["frontend/src/lib/components/learning/VisualLearningStudio.svelte", "docs/ARCHITECTURE-DIAGRAMS.md"]
+      },
+      "gateway": {
+        "summary": "The single exposed ingress that routes browser traffic to internal services while keeping application services off host ports.",
+        "teaching": {
+          "definition": "The Gateway is Archon's public application boundary in the local stack. It receives browser traffic and forwards each route to the correct internal service.",
+          "receives": ["HTTP method, path, headers, cookies or authorization header", "Request body"],
+          "responsibility": "Route frontend and API requests while preserving the single-ingress topology; it does not decide tool policy or agent behavior.",
+          "produces": ["A routed request to the frontend or backend", "An HTTP error when no upstream is available"],
+          "controls": ["Single host-facing port", "Separation between external traffic and internal service ports"],
+          "failure_behavior": "Routing or upstream failures return an explicit HTTP error such as 502; they do not prove the backend request executed.",
+          "why_it_matters": "A single ingress reduces the exposed attack surface and gives the request one clear boundary before authentication and application logic."
+        },
+        "sources": ["docker-compose.local.yml", "docs/ARCHITECTURE-DIAGRAMS.md"]
+      },
+      "authentication": {
+        "summary": "The identity boundary that validates the caller before protected conversation state, project data, or tools are exposed.",
+        "teaching": {
+          "definition": "Authentication establishes who is making the request. It validates the supplied credential and resolves the caller identity used by downstream ownership checks.",
+          "receives": ["Authentication credential", "Requested protected route", "Request correlation metadata"],
+          "responsibility": "Reject missing, invalid, expired, or revoked credentials and provide a verified user identity to protected application code.",
+          "produces": ["Authenticated user identity", "An unauthorized response when validation fails"],
+          "controls": ["Identity before agency", "Prevents anonymous access to user-scoped state and execution paths"],
+          "failure_behavior": "The request stops with an authentication error before conversation data or governed tools become available.",
+          "why_it_matters": "Every later ownership, budget, approval, and audit decision depends on a stable caller identity. Without this boundary, one user's request could be confused with another's authority."
+        },
+        "sources": ["backend/app/security/auth.py", "docs/course/modules/13-auth-ui-observability/README.md"]
+      },
+      "runtime": {
+        "summary": "The bounded interpreter that owns the request state machine, provider calls, tool loop, budgets, deadlines, and explicit stop reasons.",
+        "teaching": {
+          "definition": "The Runtime is the deterministic orchestration layer around the probabilistic model. It advances typed run states and decides when provider calls, tool proposals, policy checks, execution, and termination can occur.",
+          "receives": ["Authenticated request and project scope", "Resolved instructions and selected context", "Available capability schemas", "Configured iteration, tool-call, token, time, and monetary budgets"],
+          "responsibility": "Assemble bounded context, call the provider, parse its response, route tool intent through validation and policy, record events, and stop with an explicit reason when a limit or failure occurs.",
+          "produces": ["Provider requests", "Validated tool-intent candidates", "Runtime events and final content", "A typed stop reason"],
+          "controls": ["Iteration and tool-call ceilings", "Deadline and token limits", "Run and project monetary budgets", "Deterministic state transitions"],
+          "failure_behavior": "Provider errors, invalid output, exhausted budgets, denied effects, and timeouts terminate or branch through explicit states instead of silently continuing.",
+          "why_it_matters": "The model can propose the next action, but the runtime owns the lifecycle. This separation is what makes an agent bounded, observable, and testable rather than an unconstrained sequence of model calls."
+        },
+        "sources": ["backend/app/runtime/engine.py", "backend/app/runtime/models.py", "docs/course/modules/02-typed-runtime/README.md"]
+      },
+      "model": {
+        "summary": "The probabilistic provider that returns natural-language content or a structured proposal to call a tool.",
+        "teaching": {
+          "definition": "The Model is a probabilistic reasoning and generation component invoked by the runtime with an explicitly assembled context. It can produce answer text or structured tool intent.",
+          "receives": ["System and project instructions", "Bounded conversation history", "Relevant retrieved evidence", "Tool schemas the runtime chose to expose"],
+          "responsibility": "Generate a candidate response or propose a typed tool call based only on the supplied context.",
+          "produces": ["Text deltas or final text", "Structured tool name and arguments", "Provider usage and stop metadata"],
+          "controls": ["No direct execution authority", "No ability to bypass schema, policy, approval, or runtime budgets"],
+          "failure_behavior": "Malformed tool calls are rejected by validation; provider errors and length limits become explicit runtime outcomes.",
+          "why_it_matters": "Treating model output as a proposal prevents fluent text from being mistaken for authority. Deterministic components must validate and govern every effect."
+        },
+        "sources": ["backend/app/runtime/engine.py", "backend/app/agents/protocols.py", "docs/course/modules/03-react-loop/README.md"]
+      },
+      "policy": {
+        "summary": "The deterministic authorization boundary that returns ALLOW, ASK, or DENY for a validated proposed effect.",
+        "teaching": {
+          "definition": "Policy is the deterministic authorization boundary between model-generated intent and side-effecting execution. It evaluates normalized request facts rather than trusting the model's explanation of what it wants to do.",
+          "receives": ["Validated tool identity", "Normalized arguments and resources", "Caller and project scope", "Declared risk classes"],
+          "responsibility": "Match immutable policy rules and return a typed ALLOW, ASK, or DENY decision with the matched rule and reason.",
+          "produces": ["Policy action", "Matched-rule identity", "Auditable decision reason"],
+          "controls": ["ALLOW", "ASK", "DENY"],
+          "failure_behavior": "Unknown, malformed, unclassified, or unmatched side-effecting requests fail closed. ASK pauses for a durable approval; it never means execute first and ask later.",
+          "why_it_matters": "The model cannot authorize itself. Keeping authority in deterministic policy prevents persuasive or malformed model output from directly causing effects."
+        },
+        "sources": ["backend/app/security/policy.py", "backend/app/security/default_policy.py", "docs/course/modules/05-policy-and-approvals/README.md"]
+      },
+      "tool": {
+        "summary": "A registered capability executed only after schema validation and the required authorization path succeed.",
+        "teaching": {
+          "definition": "A Tool is a named, schema-described capability exposed through the secure registry. It may read data, call a network service, write state, or request isolated execution depending on its declared risks.",
+          "receives": ["Exact validated arguments", "Authorized caller and project scope", "Approval binding when policy required ASK", "Runtime deadline and cancellation context"],
+          "responsibility": "Perform only the registered operation within its declared contract and return a structured outcome to the runtime.",
+          "produces": ["Structured success output or explicit error", "Timing and execution metadata suitable for a result event"],
+          "controls": ["Registry allowlisting", "Schema-bounded arguments", "Policy and approval checks before effects", "Sandbox isolation for code execution"],
+          "failure_behavior": "An unavailable, denied, timed-out, or failed tool produces an explicit error outcome; it must not be rewritten as a successful effect.",
+          "why_it_matters": "Tools are where model intent can affect the world. Their narrow contracts and governed execution path turn an open-ended proposal into a bounded operation."
+        },
+        "sources": ["backend/app/tools/registry.py", "backend/app/runtime/effect_executor.py", "docs/course/modules/04-tools-and-schemas/README.md"]
+      },
+      "run-ledger": {
+        "summary": "The durable, append-oriented chronology used to reconstruct what the run did, decided, consumed, and why it stopped.",
+        "teaching": {
+          "definition": "The Run Ledger is Archon's durable, append-oriented record of run lifecycle events; it is not model memory and it is not hidden chain-of-thought. It stores safe control-flow evidence needed to inspect and reconstruct a run.",
+          "receives": ["Run-start and model-call events", "Policy and approval decisions", "Tool result events", "Usage, status, correlation, and stop metadata", "Safe effective-context provenance such as revision IDs and schema hashes"],
+          "responsibility": "Preserve ordered evidence of what the runtime observed without changing a failed event into a successful one or storing unrestricted hidden reasoning.",
+          "produces": ["Queryable run chronology", "Evidence records for debugging, exports, and evaluation", "Stable correlation between decisions and outcomes"],
+          "controls": ["Append-oriented history", "Safe persisted fields", "Owner and project scoping", "Explicit statuses and stop reasons"],
+          "failure_behavior": "If durable persistence fails, the run cannot claim durable evidence. Missing records must remain missing or degraded rather than being reconstructed from the assistant's final prose.",
+          "why_it_matters": "A final answer says what the assistant reported; the ledger shows what the system actually attempted, authorized, executed, and observed. That distinction enables trustworthy debugging and evaluation."
+        },
+        "sources": ["backend/app/services/run_ledger.py", "backend/app/runtime/run_models.py", "docs/course/modules/07-run-ledger/README.md"]
+      },
+      "evaluation": {
+        "summary": "A separate post-run judgment that compares recorded evidence with explicit quality criteria without rewriting execution history.",
+        "teaching": {
+          "definition": "Evaluation is a post-run assessment layer. It reads recorded outputs and evidence, applies explicit criteria such as task success or groundedness, and stores a judgment separate from the original execution.",
+          "receives": ["Selected run evidence", "Expected outcomes or evaluation rubric", "Evaluator configuration and provenance"],
+          "responsibility": "Score or classify the observed run, explain the judgment, and keep evaluation provenance distinct from runtime facts.",
+          "produces": ["Evaluation result and reason", "Metrics or regression evidence", "An explicit insufficient-evidence outcome when required inputs are absent"],
+          "controls": ["Does not mutate the Run Ledger", "Distinguishes deterministic, model-graded, local, and live-provider evidence"],
+          "failure_behavior": "A timeout, evaluator error, or missing trace is not PASS. The evaluation must remain failed or unproven and disclose the limitation.",
+          "why_it_matters": "Execution proves that something happened; evaluation asks whether it was good, grounded, safe, or correct. Combining the two would make failures easy to hide and regressions difficult to detect."
+        },
+        "sources": ["backend/app/eval/evaluators.py", "backend/app/eval/harness.py", "docs/course/modules/09-evaluation-harness/README.md"]
+      }
+    },
+    "edges": {
+      "browser-gateway": {
+        "teaching": {
+          "payload": "An authenticated HTTP request containing the selected route, request headers, and user-provided payload.",
+          "transformation": "The browser serializes local interaction state into the API contract.",
+          "trust_boundary": "The request leaves the user-facing client and enters Archon's gateway boundary.",
+          "precondition": "The client has a request to submit; server-side authorization is still required.",
+          "failure_behavior": "Network or routing failure returns an HTTP error and no backend execution should be inferred.",
+          "why_it_matters": "This separates an untrusted client request from the internal services responsible for identity, governance, and execution."
+        },
+        "sources": ["frontend/src/lib/auth.ts", "docs/ARCHITECTURE-DIAGRAMS.md"]
+      },
+      "gateway-authentication": {
+        "teaching": {
+          "payload": "The routed protected API request, including the credential and correlation metadata required by backend middleware.",
+          "transformation": "The gateway chooses the backend upstream but does not establish identity itself.",
+          "trust_boundary": "Traffic moves from transport routing into the authentication boundary.",
+          "precondition": "The route is recognized and the backend upstream is reachable.",
+          "failure_behavior": "Unknown routes, unavailable upstreams, or missing credentials stop before protected application logic.",
+          "why_it_matters": "Routing and authentication are separate responsibilities: finding a service does not grant permission to use it."
+        },
+        "sources": ["docker-compose.local.yml", "backend/app/security/auth.py"]
+      },
+      "authentication-runtime": {
+        "teaching": {
+          "payload": "A verified caller identity plus the protected request and correlation context.",
+          "transformation": "Credential material has been validated and converted into an application identity suitable for ownership checks.",
+          "trust_boundary": "The request crosses from identity verification into agent orchestration.",
+          "precondition": "Authentication succeeded; project and conversation ownership must still be enforced downstream.",
+          "failure_behavior": "Invalid or expired identity returns unauthorized and the runtime is not invoked.",
+          "why_it_matters": "Budgets, approvals, memory, ledger records, and project scope must all be attributable to the correct caller."
+        },
+        "sources": ["backend/app/security/auth.py", "backend/app/routes/chat.py"]
+      },
+      "runtime-model": {
+        "teaching": {
+          "payload": "A bounded provider request containing resolved instructions, selected skills, scoped conversation history, relevant retrieved evidence, exposed tool schemas, and budget-aware generation settings.",
+          "transformation": "The runtime resolves precedence, records provenance, filters capabilities, and fits selected material within context and budget limits before calling the provider.",
+          "trust_boundary": "Deterministically assembled application state crosses into a probabilistic external or local model provider.",
+          "precondition": "Caller and project scope are valid, mandatory context fits, and the run still has time, token, iteration, and monetary budget.",
+          "failure_behavior": "Missing mandatory context, context overflow, provider failure, or exhausted budget produces an explicit stop/error event rather than an invented model answer.",
+          "why_it_matters": "The model cannot remember Archon state magically. This handoff makes the exact inputs and constraints of each provider call inspectable."
+        },
+        "sources": ["backend/app/runtime/context.py", "backend/app/instructions/resolver.py", "backend/app/runtime/engine.py"]
+      },
+      "model-policy": {
+        "teaching": {
+          "payload": "A proposed tool name and structured arguments emitted by the model; this is intent, not an executed effect or permission grant.",
+          "transformation": "Provider output is parsed and checked against the registered tool schema before policy sees normalized request facts.",
+          "trust_boundary": "Probabilistic model output crosses into deterministic validation and authorization.",
+          "precondition": "The proposed tool exists and its arguments satisfy the declared schema; syntactic validity still does not imply authorization.",
+          "failure_behavior": "Unknown tools or malformed arguments produce a governed error and never reach execution.",
+          "why_it_matters": "Separating proposal from authority ensures fluent model output cannot bypass the registry, policy rules, or approval requirements."
+        },
+        "sources": ["backend/app/tools/registry.py", "backend/app/security/policy.py", "docs/course/modules/04-tools-and-schemas/README.md"]
+      },
+      "policy-tool": {
+        "teaching": {
+          "payload": "The exact normalized operation authorized by an ALLOW decision or by a valid durable approval that satisfies an earlier ASK decision.",
+          "transformation": "Policy has classified the effect, and any required approval has been bound to the caller, tool, normalized arguments, execution identity, scope, and expiry.",
+          "trust_boundary": "The request crosses from authorization into effect execution—the point where proposed intent may change state or contact external systems.",
+          "precondition": "Authorization is current and matches the exact operation; execution must not broaden arguments or resources after approval.",
+          "failure_behavior": "DENY, missing approval, expired approval, argument substitution, or scope mismatch prevents the tool from running and records the refusal.",
+          "why_it_matters": "Exact binding closes the gap between what a human or rule authorized and what the executor actually performs."
+        },
+        "sources": ["backend/app/runtime/effect_executor.py", "backend/app/security/approvals.py", "docs/course/modules/05-policy-and-approvals/README.md"]
+      },
+      "tool-run-ledger": {
+        "teaching": {
+          "payload": "A typed result event containing success or error status, normalized output or error information, timing, run/tool correlation, and safe execution metadata; it is not automatically a successful result.",
+          "transformation": "Raw executor behavior is converted into a structured runtime event instead of being preserved only as unstructured assistant text.",
+          "trust_boundary": "The outcome crosses from effect execution into durable run history.",
+          "precondition": "The governed executor reached an outcome, including an explicit timeout, denial, cancellation, or failure.",
+          "failure_behavior": "Failed or partial execution is recorded with its real status. Persistence failure means durable evidence is unavailable and must not be claimed.",
+          "why_it_matters": "Debugging and evaluation need to know what actually executed and returned, including failures, rather than inferring success from the final answer."
+        },
+        "sources": ["backend/app/runtime/events.py", "backend/app/runtime/run_models.py", "backend/app/services/run_ledger.py"]
+      },
+      "run-ledger-evaluation": {
+        "teaching": {
+          "payload": "An ordered, provenance-bearing subset of run records relevant to the evaluation: outputs, decisions, result statuses, stop reason, usage, and supporting evidence references.",
+          "transformation": "The durable chronology is selected into an evaluation input while retaining ordering, origin, status, and known limitations.",
+          "trust_boundary": "Recorded execution facts cross into a separate judgment process.",
+          "precondition": "Required records exist and are readable for the correct owner, project, and run; the evaluator must know when evidence is incomplete.",
+          "failure_behavior": "Missing, contradictory, timed-out, or insufficient evidence produces a failed or unproven evaluation—not a fabricated PASS.",
+          "why_it_matters": "Run evidence supports a reproducible judgment, but it does not automatically prove task quality, live-provider behavior, or public deployment."
+        },
+        "sources": ["backend/app/services/run_ledger.py", "backend/app/eval/harness.py", "docs/IMPLEMENTATION-EVIDENCE.md"]
+      }
+    }
+  },
+  "policy-gate": {
+    "nodes": {
+      "model-intent": {
+        "summary": "A model-generated proposal naming a tool and structured arguments; it has no execution authority.",
+        "teaching": {
+          "definition": "Model intent is the provider's structured proposal for a tool call, not a command that the system is obliged to execute.",
+          "receives": ["Prompt context", "Visible tool schemas"],
+          "responsibility": "Express the requested capability and arguments in the provider's tool-call format.",
+          "produces": ["Candidate tool name", "Candidate structured arguments"],
+          "controls": ["No direct side-effect authority"],
+          "failure_behavior": "Malformed, unknown, or incomplete intent is rejected before policy or execution.",
+          "why_it_matters": "Treating intent as untrusted input prevents the probabilistic model from becoming its own authorization system."
+        },
+        "sources": ["backend/app/runtime/engine.py", "docs/course/modules/04-tools-and-schemas/README.md"]
+      },
+      "schema-validation": {
+        "summary": "The structural gate that checks the proposed tool and arguments against the registered contract.",
+        "teaching": {
+          "definition": "Schema validation verifies that a proposed tool exists and that its argument object matches the capability's declared shape and constraints.",
+          "receives": ["Model-proposed tool name", "Raw structured arguments", "Registered tool schema"],
+          "responsibility": "Reject malformed or unknown requests and normalize valid arguments before authorization.",
+          "produces": ["Validated, normalized tool request", "Structured validation error"],
+          "controls": ["Tool allowlisting", "Argument type and shape constraints"],
+          "failure_behavior": "Invalid requests never reach policy as executable candidates.",
+          "why_it_matters": "Policy can only make a meaningful authorization decision when the proposed effect has a known, deterministic shape."
+        },
+        "sources": ["backend/app/tools/registry.py", "docs/course/modules/04-tools-and-schemas/README.md"]
+      },
+      "policy": {
+        "summary": "The deterministic decision point that returns ALLOW, ASK, or DENY for the normalized request.",
+        "teaching": {
+          "definition": "Policy evaluates the validated operation against immutable rules, caller scope, resources, and declared risks.",
+          "receives": ["Normalized tool request", "Caller/project identity", "Risk and resource classification"],
+          "responsibility": "Choose ALLOW, ASK, or DENY and record the matched rule and reason.",
+          "produces": ["Typed policy decision", "Auditable decision metadata"],
+          "controls": ["ALLOW", "ASK", "DENY"],
+          "failure_behavior": "Unknown or unmatched side effects fail closed; ASK pauses before execution.",
+          "why_it_matters": "The model cannot authorize itself; deterministic policy separates reasoning from authority."
+        },
+        "sources": ["backend/app/security/policy.py", "backend/app/security/default_policy.py"]
+      },
+      "approval": {
+        "summary": "A durable human-authorization record bound to the exact effect, owner, scope, and expiry.",
+        "teaching": {
+          "definition": "Approval is a persisted authorization receipt created when policy returns ASK and an authorized user accepts the exact proposed effect.",
+          "receives": ["Pending effect identity", "Owner and project", "Normalized arguments hash", "Expiry and execution binding"],
+          "responsibility": "Prove that the exact pending action—not a later modified action—was authorized by the correct owner.",
+          "produces": ["Consumable bound approval", "Approval audit record"],
+          "controls": ["Owner binding", "Argument binding", "Expiry", "Single-use or execution binding where applicable"],
+          "failure_behavior": "Missing, expired, mismatched, or already-consumed approval blocks execution.",
+          "why_it_matters": "Human review has value only if the executed operation is identical to the operation the human approved."
+        },
+        "sources": ["backend/app/security/approvals.py", "backend/app/security/live_approvals.py", "docs/course/modules/05-policy-and-approvals/README.md"]
+      },
+      "executor": {
+        "summary": "The governed component that performs the exact authorized tool operation within runtime limits.",
+        "teaching": {
+          "definition": "The Executor is the only stage in this decision path permitted to invoke the tool after validation, policy, and any required approval succeed.",
+          "receives": ["Validated arguments", "ALLOW decision or bound approval", "Deadline and cancellation context"],
+          "responsibility": "Execute the exact authorized operation and convert the outcome into a structured result.",
+          "produces": ["Success or error result", "Execution metadata"],
+          "controls": ["No argument broadening", "Timeout/cancellation", "Sandbox boundary for code execution"],
+          "failure_behavior": "Tool exceptions, timeout, cancellation, or unavailable execution are returned as explicit errors.",
+          "why_it_matters": "Centralizing effect execution makes it possible to prove that every side effect passed the same governance path."
+        },
+        "sources": ["backend/app/runtime/effect_executor.py", "backend/app/tools/registry.py"]
+      },
+      "denied-result": {
+        "summary": "An explicit, inspectable refusal outcome produced when policy returns DENY.",
+        "teaching": {
+          "definition": "A denied result records that the proposed operation was not authorized and therefore was not executed.",
+          "receives": ["DENY decision", "Matched rule and reason", "Run and request correlation"],
+          "responsibility": "Return a safe refusal to the runtime and preserve the decision as evidence.",
+          "produces": ["Structured denied outcome", "Audit/ledger event"],
+          "controls": ["Fail-closed behavior", "No side effect after denial"],
+          "failure_behavior": "If denial cannot be persisted, execution still remains blocked; lack of an audit record must not turn DENY into ALLOW.",
+          "why_it_matters": "A denied operation is a valid governed outcome, not an infrastructure error and not permission to retry outside policy."
+        },
+        "sources": ["backend/app/security/policy.py", "backend/app/runtime/engine.py"]
+      }
+    },
+    "edges": {
+      "model-intent-schema-validation": {
+        "teaching": {
+          "payload": "The model-proposed tool name and raw structured arguments.",
+          "transformation": "No effect has occurred; validation now checks registry membership and argument shape.",
+          "trust_boundary": "Probabilistic provider output enters deterministic parsing and validation.",
+          "precondition": "The provider emitted a tool-call candidate.",
+          "failure_behavior": "Malformed or unknown requests return a validation error and stop before policy.",
+          "why_it_matters": "Authorization rules require a known, normalized operation rather than free-form model text."
+        },
+        "sources": ["backend/app/runtime/engine.py", "backend/app/tools/registry.py"]
+      },
+      "schema-validation-policy": {
+        "teaching": {
+          "payload": "A normalized tool request whose name and arguments satisfy the registered schema.",
+          "transformation": "Syntactic validity has been established; authorization has not.",
+          "trust_boundary": "The request moves from structural validation to risk and authority evaluation.",
+          "precondition": "Tool and arguments are valid and risk metadata is available.",
+          "failure_behavior": "If classification is missing or policy cannot match safely, the request fails closed.",
+          "why_it_matters": "A valid request can still be dangerous, so schema validity and permission must remain separate decisions."
+        },
+        "sources": ["backend/app/tools/registry.py", "backend/app/security/policy.py"]
+      },
+      "policy-executor": {
+        "teaching": {
+          "payload": "An ALLOW decision plus the exact normalized request and decision provenance.",
+          "transformation": "Policy has established that the operation may execute without a separate human approval under the matched rule.",
+          "trust_boundary": "Authorization crosses into effect execution.",
+          "precondition": "The request remains byte-for-byte or canonically equivalent to what policy evaluated.",
+          "failure_behavior": "Any mutation or execution precondition failure blocks the effect and records an error.",
+          "why_it_matters": "ALLOW is evidence of authorization, not evidence that execution succeeded."
+        },
+        "sources": ["backend/app/security/policy.py", "backend/app/runtime/effect_executor.py"]
+      },
+      "policy-approval": {
+        "teaching": {
+          "payload": "An ASK decision and a pending-effect record containing the exact operation, owner, scope, risks, and expiry.",
+          "transformation": "Policy has determined that deterministic rules alone are insufficient and human authorization is required before execution.",
+          "trust_boundary": "The run pauses at the human-approval boundary.",
+          "precondition": "The pending effect is persistable and attributable to the authenticated owner.",
+          "failure_behavior": "No response, rejection, expiry, or persistence failure leaves the effect unexecuted.",
+          "why_it_matters": "ASK creates an explicit checkpoint for consequential actions instead of relying on the model to judge its own risk."
+        },
+        "sources": ["backend/app/security/approvals.py", "docs/course/modules/05-policy-and-approvals/README.md"]
+      },
+      "approval-executor": {
+        "teaching": {
+          "payload": "A durable approval bound to the same owner, tool, normalized arguments, scope, execution identity, and expiry as the pending effect.",
+          "transformation": "Human authorization has been validated against the exact effect that is about to execute.",
+          "trust_boundary": "A reviewed pending action becomes eligible for execution.",
+          "precondition": "Approval is valid, current, owned by the caller, and matches the effect exactly.",
+          "failure_behavior": "Mismatch, expiry, replay, or missing approval blocks execution.",
+          "why_it_matters": "Binding prevents an approved harmless request from being substituted with a different or broader operation."
+        },
+        "sources": ["backend/app/security/live_approvals.py", "backend/app/runtime/effect_executor.py"]
+      },
+      "policy-denied-result": {
+        "teaching": {
+          "payload": "A DENY decision with its matched rule, reason, request identity, and correlation metadata.",
+          "transformation": "Policy has classified the request as unauthorized; no executor input is produced.",
+          "trust_boundary": "The decision returns to runtime/audit handling instead of crossing into effects.",
+          "precondition": "A deterministic deny rule matched or the fail-closed default applied.",
+          "failure_behavior": "The effect remains blocked even if recording or response delivery later fails.",
+          "why_it_matters": "DENY must be an inspectable terminal governance outcome rather than an ambiguous tool error."
+        },
+        "sources": ["backend/app/security/policy.py", "backend/app/security/default_policy.py"]
+      }
+    }
+  },
+  "evidence-levels": {
+    "nodes": {
+      "source-exists": {
+        "summary": "Implementation exists in reviewed source, but existence alone does not prove behavior.",
+        "teaching": {
+          "definition": "Source-level evidence shows that a capability has concrete implementation rather than only a roadmap entry, manifest, or design description.",
+          "receives": ["Source files", "Configuration and wiring", "Repository documentation"],
+          "responsibility": "Establish that the capability exists and identify the exact implementation boundary.",
+          "produces": ["Reviewable implementation references"],
+          "controls": ["Rejects feature claims based only on plans or manifests"],
+          "failure_behavior": "Missing wiring or dead code leaves the capability unproven even when related files exist.",
+          "why_it_matters": "A real capability starts with code that is connected to the product, but stronger behavioral claims require stronger evidence."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md"]
+      },
+      "deterministic-tests": {
+        "summary": "Repeatable tests exercise the claimed behavior and important failure paths.",
+        "teaching": {
+          "definition": "Deterministic test evidence shows that specified behavior repeats under controlled inputs and assertions.",
+          "receives": ["Implementation under test", "Fixtures and explicit expectations"],
+          "responsibility": "Catch regressions and prove bounded contracts without relying on provider variability.",
+          "produces": ["Repeatable pass/fail results", "Coverage of success and failure paths"],
+          "controls": ["Mocks must be labeled as mocks", "Timeout is not PASS"],
+          "failure_behavior": "A failing, skipped, or timed-out test does not support the claim.",
+          "why_it_matters": "Tests prove repeatable behavior in a controlled environment, not that the deployed stack or live provider behaves identically."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md"]
+      },
+      "local-runtime": {
+        "summary": "The real local multi-service stack is running, ready, and observed through its public gateway.",
+        "teaching": {
+          "definition": "Local-runtime evidence exercises the integrated Archon services, storage, routing, and browser experience on the retained local stack.",
+          "receives": ["Built service images", "Real PostgreSQL and Redis", "Configured local runtime"],
+          "responsibility": "Prove that components are wired and operational together rather than only in isolated tests.",
+          "produces": ["Health/readiness results", "HTTP and browser observations", "Runtime logs and persisted state"],
+          "controls": ["Canonical local-stack status", "Gateway-only host exposure"],
+          "failure_behavior": "A healthy container without HTTP readiness, or a manifest without running services, is insufficient.",
+          "why_it_matters": "Integration defects often appear only when real services, routing, persistence, and browser behavior interact."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "scripts/local-stack.sh"]
+      },
+      "live-provider": {
+        "summary": "A real configured model provider completed the scenario without a mock fallback.",
+        "teaching": {
+          "definition": "Live-provider evidence observes Archon interacting with the configured external model service under real provider behavior and usage accounting.",
+          "receives": ["A realistic prompt", "Live credentials/configuration", "Runtime budgets and tools"],
+          "responsibility": "Demonstrate behavior that mocks cannot prove, including provider formatting, limits, latency, and tool-call choices.",
+          "produces": ["Provider-backed run evidence", "Usage and stop metadata"],
+          "controls": ["No mock fallback may be reported as live evidence", "Budget and provider identity must be observable"],
+          "failure_behavior": "Provider error, timeout, fallback, or incomplete run remains failed or partial evidence.",
+          "why_it_matters": "Deterministic tests prove contracts; only a real provider run exposes integration behavior at the probabilistic boundary."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md"]
+      },
+      "public-deployment": {
+        "summary": "A publicly reachable deployment is independently verified; Archon does not currently claim this level.",
+        "teaching": {
+          "definition": "Public-deployment evidence requires an externally reachable environment with verified deployment, readiness, security, and operational ownership.",
+          "receives": ["Deployed application and infrastructure", "Public endpoint and deployment evidence"],
+          "responsibility": "Prove that the system operates beyond the local machine in the claimed hosted environment.",
+          "produces": ["Externally reproducible deployment evidence"],
+          "controls": ["A manifest is not deployment", "Local readiness is not public reachability"],
+          "failure_behavior": "Absent or inaccessible deployment evidence leaves the claim explicitly unproven.",
+          "why_it_matters": "Public operation introduces networking, identity, secrets, observability, scaling, and recovery conditions that local evidence cannot establish."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/implementation/CAPABILITY-ACCEPTANCE.yaml"]
+      }
+    },
+    "edges": {
+      "source-exists-deterministic-tests": {
+        "teaching": {
+          "payload": "A concrete implementation and its claimed behavior become inputs to repeatable tests.",
+          "transformation": "Static existence is challenged with executable assertions.",
+          "trust_boundary": "Evidence moves from code inspection to controlled behavioral verification.",
+          "precondition": "The implementation is wired and testable.",
+          "failure_behavior": "Missing, skipped, failing, or superficial tests prevent promotion.",
+          "why_it_matters": "Code can exist while being unreachable or wrong; tests narrow that uncertainty."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md"]
+      },
+      "deterministic-tests-local-runtime": {
+        "teaching": {
+          "payload": "Tested components and configuration are assembled into the retained local service topology.",
+          "transformation": "Isolated contracts are exercised through real routing, persistence, and browser/API boundaries.",
+          "trust_boundary": "Evidence moves from controlled tests to an integrated local environment.",
+          "precondition": "Services build, start, and expose health/readiness through the canonical gateway.",
+          "failure_behavior": "A container manifest or partial startup without readiness does not count as local-runtime PASS.",
+          "why_it_matters": "Integration evidence catches wiring failures that deterministic unit tests cannot observe."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "scripts/local-stack.sh"]
+      },
+      "local-runtime-live-provider": {
+        "teaching": {
+          "payload": "The integrated local stack executes a realistic scenario against the configured real model provider.",
+          "transformation": "Mocked or deterministic provider behavior is replaced by an observed probabilistic provider interaction.",
+          "trust_boundary": "The run crosses from local application control into an external provider boundary.",
+          "precondition": "Provider identity, credentials, budget, and no-fallback behavior are configured and observable.",
+          "failure_behavior": "Timeout, provider failure, mock fallback, or missing usage evidence does not establish live-provider acceptance.",
+          "why_it_matters": "Only this level tests the provider-specific behavior that mocks intentionally remove."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md"]
+      },
+      "live-provider-public-deployment": {
+        "teaching": {
+          "payload": "A provider-backed application build is deployed to an externally reachable, operated environment.",
+          "transformation": "Local evidence is supplemented by infrastructure, networking, security, and operational proof.",
+          "trust_boundary": "The capability leaves the developer-controlled local stack and enters a public deployment boundary.",
+          "precondition": "A real deployment exists and can be independently reached and verified.",
+          "failure_behavior": "A deployment manifest, screenshot, or local container does not establish this level.",
+          "why_it_matters": "Live-provider success on a laptop does not automatically prove public availability, resilience, or operational security."
+        },
+        "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/implementation/CAPABILITY-ACCEPTANCE.yaml"]
+      }
+    },
+    "modules": [
+      {"id":"evidence-before-confidence","label":"Evidence before confidence","category":"principle","summary":"Start with observation, then size the claim.","details":"A capability claim must follow the strongest evidence actually collected. Source code supports an implementation claim; deterministic tests support repeatability under controlled inputs; local observation supports integrated local behavior. None of those alone proves public production operation.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"bound-the-environment","label":"Bound the environment","category":"principle","summary":"Always name where and how the behavior was observed.","details":"The same feature may have different evidence states in a unit test, retained local stack, live-provider run, and public deployment. Naming the environment prevents a true local result from being presented as a broader production guarantee.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"expose-limitations","label":"Expose limitations","category":"principle","summary":"State the missing proof next to the evidence you have.","details":"A trustworthy artifact says what remains untested, mocked, unavailable, or out of scope. Limitations are part of the result, not a footnote added after a confident claim.","sources":["docs/implementation/CAPABILITY-ACCEPTANCE.yaml"]},
+      {"id":"capability-claim","label":"Capability claim","category":"architecture","summary":"The exact statement being evaluated.","details":"A useful claim names the behavior, environment, dependencies, and boundary. “Archon supports governed tools locally” is testable; “Archon is production ready” is too broad unless deployment and operational evidence also exist.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"code-proof","label":"Code","category":"architecture","summary":"Implementation and wiring exist.","details":"Code evidence identifies concrete implementation, configuration, and call paths. It proves more than a roadmap or manifest, but dead code, incomplete wiring, and unexercised branches remain possible.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"test-proof","label":"Tests","category":"architecture","summary":"Controlled behavior repeats under assertions.","details":"Deterministic tests verify specified success and failure behavior with repeatable inputs. A mock isolates contracts but cannot be presented as evidence that a live provider or public deployment worked.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"observation-proof","label":"Observation","category":"architecture","summary":"The integrated runtime was actually exercised.","details":"Observation records what happened in the real retained environment: service readiness, HTTP behavior, browser interaction, ledger records, and provider identity where relevant. A timeout, partial startup, or screenshot without underlying readiness is not PASS.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"qualified-verdict","label":"Qualified verdict","category":"architecture","summary":"The claim is limited to the strongest proven boundary.","details":"The verdict states both what passed and where it passed. It must preserve caveats such as local-only deployment, mocked dependencies, incomplete provider coverage, or missing public evidence.","sources":["docs/implementation/CAPABILITY-ACCEPTANCE.yaml"]},
+      {"id":"credibility","label":"Credibility","category":"impact","summary":"Claims remain believable under scrutiny.","details":"Reviewers can trace each statement to code, tests, observation, and explicit limitations instead of trusting presentation polish.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"debuggability","label":"Debuggability","category":"impact","summary":"Failures point to a specific evidence boundary.","details":"Separating source, tests, runtime, provider, and deployment evidence makes it possible to identify whether a failure belongs to implementation, wiring, external inference, or operations.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"safer-iteration","label":"Safer iteration","category":"impact","summary":"New code does not silently inherit old confidence.","details":"Each change must re-earn the evidence level it affects. A new provider path or deployment target cannot borrow acceptance from a different tested configuration.","sources":["docs/implementation/CAPABILITY-ACCEPTANCE.yaml"]},
+      {"id":"interview-clarity","label":"Interview clarity","category":"impact","summary":"Architecture claims can be explained precisely.","details":"The evidence ladder turns vague confidence into an interview-ready answer: what exists, what was tested, what was observed live, and what remains unproven.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]}
+    ]
+  }
+}

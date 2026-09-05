@@ -59,6 +59,10 @@ export async function listRuns(options: { conversationId?: string; projectId?: s
   return Array.isArray(result.items) ? result.items : [];
 }
 export const getRun = (id: string) => json<Run>(`/api/runs/${encodeURIComponent(id)}`);
+export async function listRunChildren(id: string): Promise<Run[]> {
+  const result = await json<{ items?: Run[] }>(`/api/runs/${encodeURIComponent(id)}/children`);
+  return Array.isArray(result.items) ? result.items : [];
+}
 export const getRunContext = (id: string) =>
   json<ContextManifest>(`/api/runs/${encodeURIComponent(id)}/context`);
 export async function getRunEffectiveContext(id: string): Promise<EffectiveContextManifest> {

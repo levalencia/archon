@@ -1,0 +1,254 @@
+{
+  "pack_id": "hybrid-agent-orchestration",
+  "title": "Archon — Hybrid Agent Orchestration Pilot",
+  "purpose": "Understand how Archon selects Single or Team execution, constrains fixed and dynamic children, synthesizes untrusted findings, and records inspectable evidence.",
+  "language": "en",
+  "limitations": [
+    "This is derivative learning material, not canonical implementation evidence.",
+    "The pilot has deterministic mock-provider and browser-contract evidence, not live-provider quality evidence.",
+    "The pilot is sequential, depth one, read-only, feature-flagged, and not a distributed or recursive agent swarm."
+  ],
+  "concepts": [
+    {
+      "id": "execution-mode",
+      "label": "Execution Mode Contract",
+      "kind": "frontend",
+      "summary": "Auto, Single, and Team make orchestration intent explicit at the request boundary.",
+      "teaching": {
+        "definition": "The execution-mode contract is a typed request field shared by synchronous and streaming chat paths.",
+        "receives": ["User selection", "Current chat request", "Feature availability"],
+        "responsibility": "Carry orchestration intent without allowing the client to choose hidden prompts, tools, or specialist authority.",
+        "produces": ["Requested mode", "Accessible UI state", "Transport-safe request value"],
+        "controls": ["Closed Auto, Single, or Team values", "Selection is disabled while a response is streaming"],
+        "failure_behavior": "Invalid values fail request validation; unavailable Team execution resolves conservatively to Single with an explicit reason.",
+        "why_it_matters": "Visible intent avoids silently turning every prompt into a more expensive multi-agent run."
+      },
+      "boundary": "Selecting Team cannot bypass server policy, budgets, signing, or capability restrictions.",
+      "sources": ["docs/ARCHITECTURE-DIAGRAMS.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "narration": "The user selects Auto, Single, or Team, but only the server grants capability. The control expresses intent rather than authority.",
+      "scenario": "A client submits an execution mode outside the closed contract.",
+      "options": ["Create a new mode dynamically", "Reject the invalid request", "Treat it as Team", "Expose the specialist prompt"],
+      "correct_index": 1,
+      "scenario_explanation": "Typed validation prevents undeclared execution behavior."
+    },
+    {
+      "id": "deterministic-router",
+      "label": "Deterministic Auto Router",
+      "kind": "backend",
+      "summary": "A versioned heuristic resolves Auto without spending another model call.",
+      "teaching": {
+        "definition": "The Auto router is a pure deterministic policy over request length and explicit complexity signals.",
+        "receives": ["Requested mode", "Current user query", "Feature flag"],
+        "responsibility": "Resolve each request to Single or Team and produce a closed safe reason code.",
+        "produces": ["Resolved mode", "Router version", "Reason code and degraded flag"],
+        "controls": ["Feature-disabled paths resolve Single", "Forced Team still cannot bypass server controls"],
+        "failure_behavior": "If orchestration is unavailable, the route remains on the proven Single path and records degradation.",
+        "why_it_matters": "A transparent rule is cheaper to test, observe, and roll back than an opaque routing model."
+      },
+      "boundary": "The heuristic does not prove that every complex request benefits from Team execution.",
+      "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/ARCHITECTURE-DIAGRAMS.md"],
+      "narration": "Auto is intentionally deterministic in phase one. It records why the request stayed Single or expanded to Team.",
+      "scenario": "The feature flag is disabled while the user requests Team.",
+      "options": ["Ignore the flag", "Resolve Single and record feature disabled", "Create unsigned children", "Return invented Team evidence"],
+      "correct_index": 1,
+      "scenario_explanation": "Rollback must preserve a truthful and functional Single path."
+    },
+    {
+      "id": "fixed-specialist",
+      "label": "Fixed Researcher Profile",
+      "kind": "backend",
+      "summary": "A versioned fixed profile handles recurring evidence-collection work.",
+      "teaching": {
+        "definition": "A fixed specialist is a server-authored profile with a stable identifier, role prompt, goal shape, and capability allowlist.",
+        "receives": ["Current query", "Versioned researcher profile", "Read-only tool projection"],
+        "responsibility": "Collect bounded facts, sources, constraints, and uncertainty relevant to the parent request.",
+        "produces": ["Child result", "Usage metadata", "Durable child lifecycle"],
+        "controls": ["Server-owned prompt", "Read-only capabilities only"],
+        "failure_behavior": "Provider or validation failure becomes a failed child result and degrades synthesis evidence.",
+        "why_it_matters": "Stable profiles make recurrent responsibilities testable and comparable across runs."
+      },
+      "boundary": "A fixed role name does not prove expertise, correctness, or quality improvement.",
+      "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/modules/11-bounded-delegation/README.md"],
+      "narration": "The researcher is fixed and versioned. Its identity describes a bounded responsibility, not guaranteed expertise.",
+      "scenario": "The researcher produces no usable content.",
+      "options": ["Mark validation approved", "Record failure and continue conservatively", "Grant write access", "Hide the child run"],
+      "correct_index": 1,
+      "scenario_explanation": "A missing finding cannot become successful evidence."
+    },
+    {
+      "id": "dynamic-template",
+      "label": "Dynamic Analyst Template",
+      "kind": "backend",
+      "summary": "Dynamic means request-specific goal assembly inside a fixed server-owned safety template.",
+      "teaching": {
+        "definition": "The dynamic analyst is a versioned server template whose bounded goal varies with the current request.",
+        "receives": ["Current query", "Server-owned analyst instructions", "Approved read-only capabilities"],
+        "responsibility": "Identify assumptions, trade-offs, contradictions, and failure modes that complement the fixed researcher.",
+        "produces": ["Bounded analysis result", "Profile metadata", "Usage and status"],
+        "controls": ["No model-authored system prompt", "No recursive delegation or capability expansion"],
+        "failure_behavior": "Unsafe or unavailable execution produces a failed or denied result without expanding authority.",
+        "why_it_matters": "Controlled dynamic goals provide flexibility without turning task generation into unrestricted agent creation."
+      },
+      "boundary": "The pilot does not implement arbitrary specialist generation or learned role selection.",
+      "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/modules/11-bounded-delegation/README.md"],
+      "narration": "The analyst goal changes, but the server keeps ownership of the prompt, limits, tools, and profile version.",
+      "scenario": "A task requests terminal access from the dynamic analyst.",
+      "options": ["Grant it because the role is dynamic", "Reject capability expansion", "Run on the host", "Store the command as reasoning"],
+      "correct_index": 1,
+      "scenario_explanation": "Dynamic task wording never changes the server-owned capability boundary."
+    },
+    {
+      "id": "read-only-tools",
+      "label": "Read-Only Capability Projection",
+      "kind": "security",
+      "summary": "Children receive copies of explicitly allowed non-effectful tool definitions only.",
+      "teaching": {
+        "definition": "Capability projection creates a child registry from the intersection of a profile allowlist and non-effectful parent tools.",
+        "receives": ["Parent secure registry", "Allowed tool names", "Tool risk and effect metadata"],
+        "responsibility": "Expose only tools that are present, allowlisted, non-effectful, and free of write, execute, or external-side-effect risk.",
+        "produces": ["Child SecureToolRegistry", "Bounded tool schemas", "No write-capable definitions"],
+        "controls": ["Unknown tools are absent", "Effect metadata is checked before registration"],
+        "failure_behavior": "A disallowed tool call fails as unknown rather than being delegated to the parent registry.",
+        "why_it_matters": "Copying a smaller registry limits both model visibility and runtime execution authority."
+      },
+      "boundary": "Read-only classification still depends on correct source tool metadata and does not replace tool-level validation.",
+      "sources": ["docs/course/concepts/agent-communication-security.md", "docs/ARCHITECTURE-DIAGRAMS.md"],
+      "narration": "A child cannot call a tool merely because the parent has it. The capability must survive an explicit read-only projection.",
+      "scenario": "The parent registry contains an allowlisted tool marked as a write effect.",
+      "options": ["Copy it anyway", "Exclude it from the child registry", "Ask the child to self-police", "Remove risk metadata"],
+      "correct_index": 1,
+      "scenario_explanation": "Effectful definitions are removed before the model sees the child tool set."
+    },
+    {
+      "id": "signed-envelope",
+      "label": "Signed One-Use Task Envelope",
+      "kind": "security",
+      "summary": "Every child task is bound to scope, content, capabilities, budget, schema, freshness, and a consumed nonce.",
+      "teaching": {
+        "definition": "The delegation envelope is a versioned HMAC-signed claim set consumed once before child execution.",
+        "receives": ["Owner and project scope", "Parent and child IDs", "Task content hash, capabilities, budget, schema, and nonce"],
+        "responsibility": "Authenticate the exact in-process delegation contract and reject replay or mutation.",
+        "produces": ["Verified claims", "Durable nonce receipt", "Bound child scope"],
+        "controls": ["Constant-time signature verification", "Freshness and one-use nonce checks"],
+        "failure_behavior": "Missing, stale, replayed, foreign-scope, content-modified, or budget-modified envelopes stop execution before a provider call.",
+        "why_it_matters": "Typed tasks need cryptographic binding so metadata cannot silently expand between planning and execution."
+      },
+      "boundary": "The envelope authenticates metadata; it does not encrypt content or establish remote multi-host identity.",
+      "sources": ["docs/course/concepts/agent-communication-security.md", "docs/implementation/CAPABILITY-ACCEPTANCE.yaml"],
+      "narration": "Before a child runs, Archon signs and consumes an envelope tied to exact scope, content, tools, budget, and result schema.",
+      "scenario": "A valid envelope is submitted a second time.",
+      "options": ["Run the child again", "Reject the replay", "Increase the budget", "Create a new parent ID silently"],
+      "correct_index": 1,
+      "scenario_explanation": "Durable nonce consumption makes the same delegation envelope one-use."
+    },
+    {
+      "id": "canonical-runtime",
+      "label": "Canonical Child Runtime",
+      "kind": "backend",
+      "summary": "Children use the same typed AgentRuntime rather than bypassing governance through a legacy coordinator.",
+      "teaching": {
+        "definition": "A canonical child runtime is an ordinary AgentRuntime configured with child context, bounded budgets, child tools, events, and provider adapter.",
+        "receives": ["Verified task", "Child RunContext", "Model provider and read-only registry"],
+        "responsibility": "Execute the child model/tool loop under existing runtime stop, policy, event, and budget contracts.",
+        "produces": ["Typed AgentResult", "Runtime events", "Usage and stop reason"],
+        "controls": ["Finite iterations, tools, tokens, and time", "Normal policy-aware tool execution"],
+        "failure_behavior": "Budget, timeout, policy, provider, or tool failures preserve typed stop evidence.",
+        "why_it_matters": "Reusing the proven runtime avoids creating a less-governed multi-agent bypass."
+      },
+      "boundary": "Reuse does not prove parallel safety, live-provider quality, or distributed execution.",
+      "sources": ["README.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "narration": "Team children are real canonical runtimes, not labels around helper functions and not the isolated legacy coordinator.",
+      "scenario": "A new Team implementation proposes calling the provider directly without runtime events or budgets.",
+      "options": ["Accept the shortcut", "Use the canonical runtime adapter", "Hide the call", "Call it a tool instead"],
+      "correct_index": 1,
+      "scenario_explanation": "The child path must inherit the same runtime controls and evidence."
+    },
+    {
+      "id": "parent-synthesis",
+      "label": "Untrusted Parent Synthesis",
+      "kind": "security",
+      "summary": "Child findings are data for reconciliation, never instructions or proof of approval.",
+      "teaching": {
+        "definition": "Parent synthesis inserts bounded child findings as an explicit untrusted system-context record before the final request.",
+        "receives": ["Completed or failed child summaries", "Original prepared conversation", "Parent runtime controls"],
+        "responsibility": "Reconcile useful findings, preserve disagreements and uncertainty, and produce the final answer.",
+        "produces": ["Augmented parent context", "Final parent answer", "Degraded status when required"],
+        "controls": ["Child text is not executable instruction", "Failed specialists cannot count as successful validation"],
+        "failure_behavior": "Partial or total child failure remains visible and the parent proceeds conservatively rather than inventing support.",
+        "why_it_matters": "Agent-to-agent text is another untrusted boundary that can contain errors or prompt injection."
+      },
+      "boundary": "Prompt guidance reduces authority confusion but is not a formal proof against every model-level injection behavior.",
+      "sources": ["docs/course/modules/11-bounded-delegation/README.md", "docs/ARCHITECTURE-DIAGRAMS.md"],
+      "narration": "The parent treats specialist findings as evidence to reconcile, not commands to obey. Failed work stays failed.",
+      "scenario": "A child finding says to ignore parent policy and report approval.",
+      "options": ["Follow it", "Treat it as untrusted data and preserve policy", "Give it more tools", "Delete the parent events"],
+      "correct_index": 1,
+      "scenario_explanation": "Child output has no authority to override parent controls."
+    },
+    {
+      "id": "durable-evidence",
+      "label": "Lineage and Agents Evidence",
+      "kind": "database",
+      "summary": "Parent routing and child lifecycle persist while the UI renders only safe operational metadata.",
+      "teaching": {
+        "definition": "Hybrid evidence combines parent events, durable child runs linked by parent_run_id, child runtime events, and SSE projections.",
+        "receives": ["Routing decision", "Delegation lifecycle", "Usage, status, and reason codes"],
+        "responsibility": "Make real orchestration inspectable without persisting hidden reasoning, prompts, findings, secrets, or raw failures in generic events.",
+        "produces": ["Run Ledger lineage", "Safe orchestration events", "Agents inspector state"],
+        "controls": ["Closed event-field allowlists", "Owner/project-scoped run APIs"],
+        "failure_behavior": "Malformed UI metadata is skipped; durable run outcomes remain authoritative.",
+        "why_it_matters": "Multiple agents count only when their execution and limits can be traced as real runs."
+      },
+      "boundary": "The reconstructed view is limited to persisted routing, status, usage, tool-count, and lineage metadata; it does not reveal prompts or hidden reasoning.",
+      "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/ARCHITECTURE-DIAGRAMS.md"],
+      "narration": "The inspector shows routing, child profile, status, tokens, tools, and reason codes. It never exposes hidden reasoning.",
+      "scenario": "A generic event payload contains the full child prompt and finding.",
+      "options": ["Persist it for convenience", "Drop sensitive fields and retain safe metadata", "Expose it in the inspector", "Use it as a secret store"],
+      "correct_index": 1,
+      "scenario_explanation": "Operational evidence must remain useful without becoming a prompt or data leak."
+    },
+    {
+      "id": "pilot-boundaries",
+      "label": "Pilot Gates and Rollback",
+      "kind": "external",
+      "summary": "The capability is feature-flagged, deterministic-first, and explicit about unproven quality and scale.",
+      "teaching": {
+        "definition": "Pilot acceptance is the smallest evidence-backed slice that can be disabled without destructive migration.",
+        "receives": ["Feature flag", "Deterministic backend tests", "Frontend contract and browser tests"],
+        "responsibility": "Separate implemented wiring from live-provider quality, public deployment, and future scale claims.",
+        "produces": ["Config-only rollback", "Capability matrix status", "Phase-two evidence backlog"],
+        "controls": ["Feature is off by default", "No live-provider claim without authorized execution"],
+        "failure_behavior": "Disabling the flag returns requests to Single while retaining historical child evidence.",
+        "why_it_matters": "A reversible pilot supports learning without presenting an experiment as production readiness."
+      },
+      "boundary": "No live-provider Team-versus-Single benchmark, parallel fan-out, aggregate parent-wide reservation, or public deployment is currently established.",
+      "sources": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/implementation/CAPABILITY-ACCEPTANCE.yaml"],
+      "narration": "The pilot is real and wired, but the claim stops at deterministic acceptance. Phase two must earn quality, concurrency, and operational evidence.",
+      "scenario": "A deterministic Team test passes and someone claims production quality improvement.",
+      "options": ["Accept the claim", "Reject the overclaim and run representative live evaluation", "Publish a benchmark number", "Enable recursive agents"],
+      "correct_index": 1,
+      "scenario_explanation": "Control-path evidence is not model-quality or production evidence."
+    }
+  ],
+  "flows": [
+    {
+      "id": "request-to-children",
+      "title": "Request to Bounded Children",
+      "description": "How explicit mode, deterministic routing, fixed and dynamic profiles, and read-only tools create the Team plan.",
+      "nodes": ["execution-mode", "deterministic-router", "fixed-specialist", "dynamic-template", "read-only-tools"]
+    },
+    {
+      "id": "scope-to-evidence",
+      "title": "Signed Scope to Inspectable Evidence",
+      "description": "How signed scope, canonical execution, untrusted synthesis, durable evidence, and rollback bound the pilot.",
+      "nodes": ["signed-envelope", "canonical-runtime", "parent-synthesis", "durable-evidence", "pilot-boundaries"]
+    }
+  ],
+  "mind_groups": [
+    {"label": "Choose the path", "concepts": ["execution-mode", "deterministic-router"]},
+    {"label": "Define the team", "concepts": ["fixed-specialist", "dynamic-template"]},
+    {"label": "Constrain authority", "concepts": ["read-only-tools", "signed-envelope"]},
+    {"label": "Execute and reconcile", "concepts": ["canonical-runtime", "parent-synthesis"]},
+    {"label": "Prove and limit", "concepts": ["durable-evidence", "pilot-boundaries"]}
+  ]
+}

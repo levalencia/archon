@@ -15,9 +15,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "docs/course/concept-catalog.yaml"
 CURATION = ROOT / "docs/visual-learning/studio-curation.yaml"
-NOTEBOOKS = ROOT / "docs/visual-learning/notebooklm-sources.yaml"
-PROMPTBOOK = ROOT / "docs/visual-learning/notebooklm-promptbook.md"
-RUNBOOK = ROOT / "docs/visual-learning/notebooklm-runbook.md"
+LEARNING_ARTIFACTS = ROOT / "docs/visual-learning/learning-artifacts.yaml"
+PROMPTBOOK = ROOT / "docs/visual-learning/hermes-generation-promptbook.md"
+RUNBOOK = ROOT / "docs/visual-learning/hermes-generation-runbook.md"
 DEFAULT_OUTPUT = ROOT / "frontend/static/learning/archon-studio.json"
 ALLOWED_STATUSES = {"implemented", "partial", "deferred"}
 GITHUB_BASE = "https://github.com/levalencia/archon/blob/main/"
@@ -246,24 +246,26 @@ def _validate_architecture(
     return architecture
 
 
-def _load_notebooks() -> dict[str, Any]:
-    config = yaml.safe_load(NOTEBOOKS.read_text(encoding="utf-8"))
+def _load_learning_library() -> dict[str, Any]:
+    config = yaml.safe_load(LEARNING_ARTIFACTS.read_text(encoding="utf-8"))
     ids: set[str] = set()
     priority = config.get("source_priority", [])
-    for notebook in config.get("notebooks", []):
-        if notebook["id"] in ids:
-            raise ValueError(f"duplicate NotebookLM notebook: {notebook['id']}")
-        ids.add(notebook["id"])
-        notebook["sources"] = list(
-            dict.fromkeys(priority + notebook.get("sources", []))
+    for pack in config.get("packs", []):
+        if pack["id"] in ids:
+            raise ValueError(f"duplicate learning pack: {pack['id']}")
+        ids.add(pack["id"])
+        if pack.get("language") != "en":
+            raise ValueError(f"learning pack {pack['id']} must use English")
+        pack["sources"] = list(
+            dict.fromkeys(priority + pack.get("sources", []))
         )
-        for path in notebook["sources"]:
-            _validated_file(path, notebook["id"])
-        notebook["source_count"] = len(notebook["sources"])
+        for path in pack["sources"]:
+            _validated_file(path, pack["id"])
+        pack["source_count"] = len(pack["sources"])
     for path in config.get("source_priority", []):
         _validated_file(path, "source_priority")
-    _validated_file(str(PROMPTBOOK.relative_to(ROOT)), "NotebookLM promptbook")
-    _validated_file(str(RUNBOOK.relative_to(ROOT)), "NotebookLM runbook")
+    _validated_file(str(PROMPTBOOK.relative_to(ROOT)), "Hermes generation promptbook")
+    _validated_file(str(RUNBOOK.relative_to(ROOT)), "Hermes generation runbook")
     config["promptbook_href"] = GITHUB_BASE + PROMPTBOOK.relative_to(ROOT).as_posix()
     config["runbook_href"] = GITHUB_BASE + RUNBOOK.relative_to(ROOT).as_posix()
     return config
@@ -288,26 +290,26 @@ def build_studio() -> dict[str, Any]:
     architecture = _validate_architecture(
         curation.get("architecture", {}), known_concepts
     )
-    notebooks = _load_notebooks()
+    learning_library = _load_learning_library()
 
     return {
         "schema": "archon.visual-learning-studio",
-        "version": 2,
+        "version": 3,
         "generated_from": [
             "docs/course/concept-catalog.yaml",
             "docs/course/concepts/*.md",
             "docs/course/modules/*/README.md",
             "docs/visual-learning/studio-curation.yaml",
-            "docs/visual-learning/notebooklm-sources.yaml",
-            "docs/visual-learning/notebooklm-promptbook.md",
-            "docs/visual-learning/notebooklm-runbook.md",
+            "docs/visual-learning/learning-artifacts.yaml",
+            "docs/visual-learning/hermes-generation-promptbook.md",
+            "docs/visual-learning/hermes-generation-runbook.md",
         ],
         "stats": {
             "concepts": len(concepts),
             "modules": len(modules),
             "stories": len(stories),
             "architecture_layers": len(architecture.get("layers", [])),
-            "notebooks": len(notebooks.get("notebooks", [])),
+            "learning_packs": len(learning_library.get("packs", [])),
             "statuses": status_counts,
         },
         "roadmap": roadmap,
@@ -315,7 +317,7 @@ def build_studio() -> dict[str, Any]:
         "concepts": concepts,
         "stories": stories,
         "architecture": architecture,
-        "notebooklm": notebooks,
+        "learning_library": learning_library,
     }
 
 

@@ -1,21 +1,21 @@
 {
   "schema": "archon.visual-learning-studio",
-  "version": 2,
+  "version": 3,
   "generated_from": [
     "docs/course/concept-catalog.yaml",
     "docs/course/concepts/*.md",
     "docs/course/modules/*/README.md",
     "docs/visual-learning/studio-curation.yaml",
-    "docs/visual-learning/notebooklm-sources.yaml",
-    "docs/visual-learning/notebooklm-promptbook.md",
-    "docs/visual-learning/notebooklm-runbook.md"
+    "docs/visual-learning/learning-artifacts.yaml",
+    "docs/visual-learning/hermes-generation-promptbook.md",
+    "docs/visual-learning/hermes-generation-runbook.md"
   ],
   "stats": {
     "concepts": 66,
     "modules": 16,
     "stories": 5,
     "architecture_layers": 5,
-    "notebooks": 5,
+    "learning_packs": 6,
     "statuses": {
       "deferred": 7,
       "implemented": 59,
@@ -245,9 +245,9 @@
     },
     {
       "id": "11-bounded-delegation",
-      "title": "Module 11 — Bounded verifier delegation",
-      "summary": "Archon delegates only evidence review, not open-ended work. The child sees a sealed claim/evidence packet and has no tools. Code deterministically validates that boundary and output schema; the verdict inside it is model-generated and can still be wrong.",
-      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable…",
+      "title": "Module 11 — Bounded delegation and hybrid orchestration",
+      "summary": "Archon has two distinct bounded delegation paths. The verifier sees a sealed claim/evidence packet and has no tools. The hybrid pilot can run a fixed researcher and a server-templated dynamic analyst with read-only capability subsets. Both paths use finite budgets, signed one-use scope, durable lineage, and fail-closed validation; model output can still be wrong.",
+      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility.",
       "href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/11-bounded-delegation/README.md",
       "concept_ids": [
         "bounded-delegation",
@@ -1925,12 +1925,12 @@
       "title": "Bounded delegation",
       "status": "implemented",
       "module_id": "11-bounded-delegation",
-      "module_title": "Module 11 — Bounded verifier delegation",
+      "module_title": "Module 11 — Bounded delegation and hybrid orchestration",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/11-bounded-delegation/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/bounded-delegation.md",
       "content_source": "concept",
-      "summary": "Archon delegates only evidence review, not open-ended work. The child sees a sealed claim/evidence packet and has no tools. Code deterministically validates that boundary and output schema; the verdict inside it is model-generated and can still be wrong.",
-      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable…",
+      "summary": "Archon has two distinct bounded delegation paths. The verifier sees a sealed claim/evidence packet and has no tools. The hybrid pilot can run a fixed researcher and a server-templated dynamic analyst with read-only capability subsets. Both paths use finite budgets, signed one-use scope, durable lineage, and fail-closed validation; model output can still be wrong.",
+      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility.",
       "limitations": "One evidence-only no-tools child; no dynamic swarm or generic reflection.",
       "sources": [
         {
@@ -1974,12 +1974,12 @@
       "title": "Evidence-only verifier child",
       "status": "implemented",
       "module_id": "11-bounded-delegation",
-      "module_title": "Module 11 — Bounded verifier delegation",
+      "module_title": "Module 11 — Bounded delegation and hybrid orchestration",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/11-bounded-delegation/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/verifier-child.md",
       "content_source": "concept",
-      "summary": "Archon delegates only evidence review, not open-ended work. The child sees a sealed claim/evidence packet and has no tools. Code deterministically validates that boundary and output schema; the verdict inside it is model-generated and can still be wrong.",
-      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable…",
+      "summary": "Archon has two distinct bounded delegation paths. The verifier sees a sealed claim/evidence packet and has no tools. The hybrid pilot can run a fixed researcher and a server-templated dynamic analyst with read-only capability subsets. Both paths use finite budgets, signed one-use scope, durable lineage, and fail-closed validation; model output can still be wrong.",
+      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility.",
       "limitations": "Final external providers were not verified; deterministic/local evidence does not establish reviewer truth.",
       "sources": [
         {
@@ -2023,12 +2023,12 @@
       "title": "Parent-child run lineage",
       "status": "implemented",
       "module_id": "11-bounded-delegation",
-      "module_title": "Module 11 — Bounded verifier delegation",
+      "module_title": "Module 11 — Bounded delegation and hybrid orchestration",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/11-bounded-delegation/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/parent-child-lineage.md",
       "content_source": "concept",
-      "summary": "Archon delegates only evidence review, not open-ended work. The child sees a sealed claim/evidence packet and has no tools. Code deterministically validates that boundary and output schema; the verdict inside it is model-generated and can still be wrong.",
-      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable…",
+      "summary": "Archon has two distinct bounded delegation paths. The verifier sees a sealed claim/evidence packet and has no tools. The hybrid pilot can run a fixed researcher and a server-templated dynamic analyst with read-only capability subsets. Both paths use finite budgets, signed one-use scope, durable lineage, and fail-closed validation; model output can still be wrong.",
+      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility.",
       "limitations": "A persisted lineage edge supports inspection but does not prove causal quality improvement.",
       "sources": [
         {
@@ -3379,12 +3379,12 @@
       "title": "Agent communication security",
       "status": "implemented",
       "module_id": "11-bounded-delegation",
-      "module_title": "Module 11 — Bounded verifier delegation",
+      "module_title": "Module 11 — Bounded delegation and hybrid orchestration",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/11-bounded-delegation/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/agent-communication-security.md",
       "content_source": "concept",
       "summary": "When a parent agent delegates work, the child must know exactly what was authorized. A signed envelope proves integrity and scope: changing the owner, project, run IDs, claims, evidence, budget, timestamp, nonce, schema, or key version invalidates the signature. HMAC authenticates data under a shared secret. It does not encrypt the content and is not a remote PKI.",
-      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable…",
+      "mental_model": "Use a sealed review packet. The parent supplies exact claims and evidence IDs; the child cannot fetch more evidence or use tools. The model output is untrusted until strict parsing proves every claim appears exactly once and every cited evidence ID was delegated. The invariant is bounded authority, not model infallibility.",
       "limitations": "The active verifier requires a parent-issued HMAC envelope bound to actual bounded claim/evidence content, owner/project/run scope, budget, freshness, nonce, schema and key version, with durable replay receipts. This authenticates local in-process delegation metadata; it does not encrypt content or establish a remote multi-host PKI.",
       "sources": [
         {
@@ -3507,7 +3507,7 @@
       "title": "Distributed agent networks",
       "status": "deferred",
       "module_id": "11-bounded-delegation",
-      "module_title": "Module 11 — Bounded verifier delegation",
+      "module_title": "Module 11 — Bounded delegation and hybrid orchestration",
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/11-bounded-delegation/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/distributed-agent-networks.md",
       "content_source": "concept",
@@ -4455,8 +4455,9 @@
       }
     ]
   },
-  "notebooklm": {
+  "learning_library": {
     "version": 1,
+    "language": "en",
     "source_priority": [
       "docs/IMPLEMENTATION-EVIDENCE.md",
       "docs/evidence/skills-project-instructions-implementation.md",
@@ -4465,11 +4466,12 @@
       "docs/ARCHITECTURE-DIAGRAMS.md",
       "docs/course/README.md"
     ],
-    "notebooks": [
+    "packs": [
       {
         "id": "system-overview",
         "title": "Archon — System Overview",
         "purpose": "Understand Archon's mission, architecture, evidence posture, and explicit boundaries.",
+        "language": "en",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
           "docs/evidence/skills-project-instructions-implementation.md",
@@ -4498,6 +4500,7 @@
         "id": "request-lifecycle",
         "title": "Archon — Request Lifecycle and Governed Tools",
         "purpose": "Follow one request through runtime, model, policy, approval, execution, and evidence.",
+        "language": "en",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
           "docs/evidence/skills-project-instructions-implementation.md",
@@ -4535,6 +4538,7 @@
         "id": "memory-rag-evaluation",
         "title": "Archon — Memory, RAG, and Evaluation",
         "purpose": "Distinguish transient context, durable memory, retrieval, grounding, citations, and evaluation.",
+        "language": "en",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
           "docs/evidence/skills-project-instructions-implementation.md",
@@ -4572,6 +4576,7 @@
         "id": "reliability-operations",
         "title": "Archon — Reliability, Security, and Operations",
         "purpose": "Understand failure containment, delegation, MCP, observability, and local operations.",
+        "language": "en",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
           "docs/evidence/skills-project-instructions-implementation.md",
@@ -4604,6 +4609,7 @@
         "id": "interview-demo",
         "title": "Archon — Interview and Demo Preparation",
         "purpose": "Practice concise, credible explanations without overstating implementation evidence.",
+        "language": "en",
         "sources": [
           "docs/IMPLEMENTATION-EVIDENCE.md",
           "docs/evidence/skills-project-instructions-implementation.md",
@@ -4628,9 +4634,37 @@
           "report"
         ],
         "source_count": 11
+      },
+      {
+        "id": "hybrid-agent-orchestration",
+        "title": "Archon — Hybrid Agent Orchestration Pilot",
+        "purpose": "Understand how Auto, Single, and Team route bounded fixed and dynamic children through the canonical runtime without creating an unbounded swarm.",
+        "language": "en",
+        "sources": [
+          "docs/IMPLEMENTATION-EVIDENCE.md",
+          "docs/evidence/skills-project-instructions-implementation.md",
+          "docs/implementation/CAPABILITY-ACCEPTANCE.yaml",
+          "docs/REMAINING-DEFERRED-GAPS.md",
+          "docs/ARCHITECTURE-DIAGRAMS.md",
+          "docs/course/README.md",
+          "docs/course/modules/11-bounded-delegation/README.md",
+          "docs/course/concepts/agent-communication-security.md",
+          "README.md"
+        ],
+        "artifacts": [
+          "audio",
+          "video",
+          "slide-deck",
+          "infographic",
+          "mind-map",
+          "flashcards",
+          "quiz",
+          "report"
+        ],
+        "source_count": 9
       }
     ],
-    "promptbook_href": "https://github.com/levalencia/archon/blob/main/docs/visual-learning/notebooklm-promptbook.md",
-    "runbook_href": "https://github.com/levalencia/archon/blob/main/docs/visual-learning/notebooklm-runbook.md"
+    "promptbook_href": "https://github.com/levalencia/archon/blob/main/docs/visual-learning/hermes-generation-promptbook.md",
+    "runbook_href": "https://github.com/levalencia/archon/blob/main/docs/visual-learning/hermes-generation-runbook.md"
   }
 }

@@ -10,12 +10,14 @@ export function authHeaders(headers: HeadersInit = {}): Headers {
   return result;
 }
 
-export function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  return fetch(input, {
+export async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const response = await fetch(input, {
     ...init,
     credentials: 'same-origin',
     headers: authHeaders(init.headers),
   });
+  if (response.status === 401) logout();
+  return response;
 }
 
 export function isAuthenticated(): boolean {

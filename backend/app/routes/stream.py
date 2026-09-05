@@ -21,6 +21,8 @@ from starlette.responses import StreamingResponse
 
 from app.observability.cost_tracker import CostTracker
 from app.observability.logging import get_correlation_id
+from app.orchestration.models import ExecutionMode
+from app.orchestration.runtime import prepare_hybrid_messages
 from app.routes.chat import (
     get_conversation_repository,
     get_model_provider,
@@ -29,7 +31,7 @@ from app.routes.chat import (
     tenant_workspace,
 )
 from app.runtime import AgentEvent, AgentEventKind, EventSink
-from app.runtime.factory import RunContext, create_chat_runtime
+from app.runtime.factory import RunContext, create_chat_event_sink, create_chat_runtime
 from app.runtime.images import ImageValidationError
 from app.runtime.support import (
     JsonModeProvider,
@@ -40,6 +42,7 @@ from app.security.dependencies import enforce_rate_limit
 from app.security.live_approvals import ApprovalBroker
 from app.services.artifacts import Artifact, detect_artifact_in_response
 from app.services.monetary_budget import MonetaryBudgetRepository
+from app.tools.registry import SecureToolRegistry
 from app.tools.skill_discovery import GovernedSkillDiscoveryTools
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -53,6 +56,7 @@ class StreamRequest(BaseModel):
     )
     image: str = Field(default="", max_length=7_000_000)
     target_path: str | None = Field(default=None, max_length=1000)
+    execution_mode: ExecutionMode = ExecutionMode.AUTO
 
 
 class ApprovalBody(BaseModel):
@@ -287,13 +291,25 @@ async def chat_stream_real(
             default_model=settings.llm_model,
             downstream=QueueEventSink(queue),
         )
+        event_sink = create_chat_event_sink(
+            context=run_context,
+            settings=settings,
+            repository=memory,
+            exporter=request.app.state.otel_exporter,
+            redactor=request.app.state.persistence_redactor,
+            log_buffer=request.app.state.log_buffer,
+            downstream=cost_sink,
+        )
 
         provider = app_provider
         if json_mode:
             provider = JsonModeProvider(provider)
 
-        runtime = create_chat_runtime(
-            context=run_context,
+        orchestration = await prepare_hybrid_messages(
+            query=user_message,
+            requested_mode=body.execution_mode,
+            messages=messages,
+            parent_context=run_context,
             provider=provider,
             tools=tools,
             settings=settings,
@@ -301,7 +317,26 @@ async def chat_stream_real(
             exporter=request.app.state.otel_exporter,
             redactor=request.app.state.persistence_redactor,
             log_buffer=request.app.state.log_buffer,
-            downstream=cost_sink,
+            envelopes=getattr(request.app.state, "delegation_envelopes", None),
+            event_sink=event_sink,
+        )
+        messages = list(orchestration.messages)
+        parent_tools = (
+            SecureToolRegistry()
+            if orchestration.decision.resolved_mode is ExecutionMode.TEAM
+            else tools
+        )
+
+        runtime = create_chat_runtime(
+            context=run_context,
+            provider=provider,
+            tools=parent_tools,
+            settings=settings,
+            repository=memory,
+            exporter=request.app.state.otel_exporter,
+            redactor=request.app.state.persistence_redactor,
+            log_buffer=request.app.state.log_buffer,
+            event_sink=event_sink,
             authorizer=approval_broker.authorizer(run_context),
             result_recorder=lambda answer: memory.store(
                 conv_id, "assistant", answer, user["user_id"]
@@ -315,7 +350,14 @@ async def chat_stream_real(
                 except TimeoutError:
                     yield ": heartbeat\n\n"
                     continue
-                if event.kind is AgentEventKind.ITERATION_STARTED:
+                if event.kind is AgentEventKind.ORCHESTRATION_ROUTED:
+                    yield _sse("orchestration", dict(event.data))
+                elif event.kind in {
+                    AgentEventKind.DELEGATION_REQUESTED,
+                    AgentEventKind.DELEGATION_COMPLETED,
+                }:
+                    yield _sse("agent_status", dict(event.data))
+                elif event.kind is AgentEventKind.ITERATION_STARTED:
                     yield _sse("thinking", f"Iteration {event.iteration}: calling LLM...")
                 elif event.kind is AgentEventKind.MODEL_PROGRESS:
                     yield _sse("thinking", event.data["text"])
@@ -403,10 +445,18 @@ async def chat_stream_real(
             "artifacts": artifacts,
             "elapsed_ms": round(elapsed_ms, 2),
             "conversation_id": conv_id,
+            "run_id": run_context.run_id,
             "stop_reason": result.stop_reason.value,
             "tokens_used": result.usage.total_tokens,
             "cost_usd": cost_info["cost_usd"],
             "error": result.error,
+            "requested_mode": orchestration.decision.requested_mode.value,
+            "resolved_mode": orchestration.decision.resolved_mode.value,
+            "orchestration_degraded": orchestration.degraded,
+            "children_used": len(orchestration.children),
+            "child_tokens_used": sum(child.usage.total_tokens for child in orchestration.children),
+            "total_tokens_with_children": result.usage.total_tokens
+            + sum(child.usage.total_tokens for child in orchestration.children),
         }
         done_payload.update(budget_payload)
         for field in (

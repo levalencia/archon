@@ -1,6 +1,6 @@
 # Archon Architecture Diagrams
 
-These diagrams describe the current evidence-backed system. Historical diagrams that implied pgvector, Azure Blob, Jaeger, dynamic swarms, or host-process sandboxing were removed because those paths were not the verified product.
+These diagrams describe the current evidence-backed system. Historical diagrams that implied pgvector, Azure Blob, Jaeger, unbounded dynamic swarms, or host-process sandboxing were removed because those paths were not the verified product.
 
 Skills + Project Instructions and core-table reconciliation are merged to `main`
 at `1f71f0e`. No public deployment is claimed.
@@ -124,7 +124,31 @@ flowchart LR
 
 The child receives selected claims/evidence only, has no tools, and cannot approve a claim when output is malformed, timed out, failed, or over budget.
 
-## 5. Governed MCP
+## 5. Hybrid orchestration pilot
+
+```mermaid
+flowchart LR
+    UI[Auto / Single / Team] --> Router{Deterministic router}
+    Router -->|Single| Parent[Canonical AgentRuntime]
+    Router -->|Team| Plan[Bounded two-child plan]
+    Plan --> Fixed[Fixed researcher]
+    Plan --> Dynamic[Dynamic analyst template]
+    Fixed --> C1[Canonical child runtime]
+    Dynamic --> C2[Canonical child runtime]
+    C1 --> Findings[Untrusted findings]
+    C2 --> Findings
+    Findings --> Parent
+    Parent --> Answer[Final answer]
+
+    Router --> Ledger[(Run Ledger)]
+    C1 --> Ledger
+    C2 --> Ledger
+    Ledger --> Agents[Agents inspector]
+```
+
+Team is a feature-flagged pilot: depth one, maximum two children by default, signed one-use task envelopes, read-only capability subsets, finite child budgets, and safe metadata-only lifecycle events. Auto uses a versioned rule-based heuristic; it does not claim semantic routing optimality. Child output is untrusted input to parent synthesis, not authority. See [Hybrid Agent Orchestration Pilot](architecture/hybrid-agent-orchestration.md).
+
+## 6. Governed MCP
 
 ```mermaid
 flowchart LR
@@ -140,7 +164,7 @@ flowchart LR
 
 Commands, arguments, environment variables, and secrets are not user-controlled server records. Profile changes invalidate stale inventory; tool schema and enabled state are rechecked immediately before execution.
 
-## 6. Skills, instructions, and exact context provenance
+## 7. Skills, instructions, and exact context provenance
 
 ```mermaid
 flowchart LR
@@ -162,7 +186,7 @@ bounded metadata; execution still requires the normal policy/approval path.
 The Run Ledger stores exact revision IDs, ordering, reasons, capability IDs and
 schema hashes—not raw instruction/skill bodies or hidden reasoning.
 
-## 7. Verified local deployment
+## 8. Verified local deployment
 
 ```mermaid
 flowchart TB
@@ -187,7 +211,7 @@ internal only]
 
 The backend defaults to `linux/amd64` in this target because the ARM image reproduced a native `cryptography` SIGILL on the verified Mac. All referenced images are pinned by digest. Only the gateway publishes a loopback port.
 
-## 8. Backup and clean restore
+## 9. Backup and clean restore
 
 ```mermaid
 sequenceDiagram
@@ -208,7 +232,7 @@ sequenceDiagram
     V->>V: record RTO/RPO and cleanup
 ```
 
-## 9. Trust boundaries
+## 10. Trust boundaries
 
 ```mermaid
 flowchart TD

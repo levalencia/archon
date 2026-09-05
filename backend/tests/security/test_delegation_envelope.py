@@ -37,6 +37,7 @@ def issue(service, *, now=1000):
             "output_tokens": 5,
             "retries": 0,
             "timeout_seconds": 1.0,
+            "max_tool_result_chars": 3_000,
         },
         now=now,
         nonce="unique-nonce",
@@ -90,6 +91,7 @@ def test_keyring_and_budget_validation_fail_closed(tmp_path) -> None:
     budgets: tuple[dict[str, int | float], ...] = (
         {"tokens": 1},
         {"input_tokens": -1},
+        {"max_tool_result_chars": 0},
         {"input_tokens": 1, "timeout_seconds": float("inf")},
     )
     for budget in budgets:
