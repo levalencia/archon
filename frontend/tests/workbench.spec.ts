@@ -392,16 +392,19 @@ test('mobile persisted-run inspector bottom sheet is usable', async ({ page }) =
   await expect(inspector).toHaveAttribute('data-open', 'false');
 });
 
-test('run API 401 and 404 failures are visible', async ({ page }) => {
+test('run API 401 clears authentication and redirects to login', async ({ page }) => {
   await page.route('**/api/runs?**', route => route.fulfill({ status: 401, body: '' }));
   await page.goto('/chat/persisted-conversation');
-  await expect(page.getByRole('alert')).toContainText('Sign in required');
+  await expect(page).toHaveURL('/login');
+  await expect(page.getByRole('heading', { name: 'Archon' })).toBeVisible();
+});
 
+test('run API 404 failure is visible', async ({ page }) => {
   await page.unroute('**/api/runs?**');
   await page.route('**/api/runs?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ items: [persistedRuns[0]] }) }));
   await page.route('**/api/runs/run-new', route => route.fulfill({ status: 404, body: '' }));
   await page.route('**/api/runs/run-new/events?**', route => route.fulfill({ status: 404, body: '' }));
-  await page.getByRole('button', { name: 'Reload' }).click();
+  await page.goto('/chat/persisted-conversation');
   await expect(page.getByRole('alert')).toContainText('Run not found');
 });
 
