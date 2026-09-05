@@ -35,10 +35,13 @@ def test_rejects_nonempty_unowned_output(tmp_path: Path) -> None:
         builder.build_packs(output, require_clean=False)
 
 
-def test_rejects_traversal_and_untracked_sources() -> None:
+def test_rejects_traversal_and_untracked_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValueError, match="unsafe"):
         builder._safe_source("../outside.md")
+
+    def reject_untracked(*_args: str) -> str:
+        raise builder.subprocess.CalledProcessError(1, "git ls-files")
+
+    monkeypatch.setattr(builder, "_git", reject_untracked)
     with pytest.raises(ValueError, match="untracked"):
-        builder._safe_source(
-            ".hermes/plans/2026-09-04_140930-hermes-native-visual-learning-studio.md"
-        )
+        builder._safe_source("README.md")
