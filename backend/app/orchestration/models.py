@@ -35,7 +35,7 @@ class OrchestrationDecision:
     requested_mode: ExecutionMode
     resolved_mode: ExecutionMode
     reason_code: str
-    router_version: str = "hybrid-router-v1"
+    router_version: str = "hybrid-router-v2"
     degraded: bool = False
 
     def __post_init__(self) -> None:

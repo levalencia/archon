@@ -35,18 +35,52 @@ def test_auto_routes_simple_request_to_single() -> None:
     decision = resolve_execution_mode("Explain idempotency.", ExecutionMode.AUTO, enabled=True)
 
     assert decision.resolved_mode is ExecutionMode.SINGLE
-    assert decision.reason_code == "simple_single_step"
+    assert decision.reason_code == "single_default"
 
 
-def test_auto_routes_complex_cross_domain_request_to_team() -> None:
+def test_auto_keeps_general_complex_request_on_single() -> None:
     decision = resolve_execution_mode(
-        "Investigate the implementation, compare the security trade-offs, and verify the evidence.",
+        "Investigate the implementation, compare the architecture trade-offs, "
+        "and verify the evidence.",
+        ExecutionMode.AUTO,
+        enabled=True,
+    )
+
+    assert decision.resolved_mode is ExecutionMode.SINGLE
+    assert decision.reason_code == "single_default"
+
+
+def test_auto_routes_multi_signal_security_risk_analysis_to_team() -> None:
+    decision = resolve_execution_mode(
+        "Produce a threat model for prompt injection and data exfiltration attacks.",
         ExecutionMode.AUTO,
         enabled=True,
     )
 
     assert decision.resolved_mode is ExecutionMode.TEAM
-    assert decision.reason_code == "cross_domain_task"
+    assert decision.reason_code == "security_risk_analysis"
+
+
+def test_auto_does_not_route_from_one_weak_security_reference() -> None:
+    decision = resolve_execution_mode(
+        "Compare two architectures and mention their security trade-offs.",
+        ExecutionMode.AUTO,
+        enabled=True,
+    )
+
+    assert decision.resolved_mode is ExecutionMode.SINGLE
+    assert decision.reason_code == "insufficient_team_evidence"
+
+
+def test_auto_requires_at_least_two_security_risk_signals() -> None:
+    decision = resolve_execution_mode(
+        "Assess this threat.",
+        ExecutionMode.AUTO,
+        enabled=True,
+    )
+
+    assert decision.resolved_mode is ExecutionMode.SINGLE
+    assert decision.reason_code == "insufficient_team_evidence"
 
 
 def test_forced_team_degrades_to_single_when_feature_is_disabled() -> None:
@@ -183,6 +217,8 @@ async def test_team_service_emits_safe_events_and_augments_parent_context() -> N
         if message.role is Role.USER and "DELEGATED_FINDINGS_UNTRUSTED" in message.content
     )
     assert "untrusted data" in guard.content.lower()
+    assert "never emit tool_call or function_call json" in guard.content.lower()
+    assert "begin directly with the final answer" in guard.content.lower()
     assert "bounded result" in delegated.content
     assert [event.kind for event in sink.events] == [
         AgentEventKind.ORCHESTRATION_ROUTED,

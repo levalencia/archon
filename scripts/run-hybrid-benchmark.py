@@ -178,6 +178,10 @@ def result_cost(base_url: str, token: str, body: dict[str, Any]) -> tuple[Decima
         )
     return parent_cost + child_cost, {
         "parent_cost_usd": str(parent_cost),
+        "parent_status": parent.get("status"),
+        "parent_stop_reason": parent.get("stop_reason"),
+        "provider": parent.get("provider"),
+        "model": parent.get("model"),
         "children": children,
         "project_spent_usd": parent_budget.get("project_spent_usd"),
     }
@@ -255,6 +259,12 @@ def cumulative_cost(payload: dict[str, Any]) -> Decimal:
 def functional_failure(item: dict[str, Any]) -> str | None:
     if item["http_status"] != 200:
         return f"http_{item['http_status']}"
+    if item.get("parent_status") not in {None, "completed"}:
+        return "parent_not_completed"
+    if item.get("parent_stop_reason") not in {None, "completed"}:
+        return "parent_stop_reason"
+    if item.get("execution_degraded"):
+        return "execution_degraded"
     if item.get("resolved_mode") != item["mode"]:
         return "routing_mismatch"
     if item.get("degraded"):
@@ -366,6 +376,7 @@ def run(args: argparse.Namespace) -> int:
                     "requested_mode": body.get("requested_mode"),
                     "resolved_mode": body.get("resolved_mode"),
                     "degraded": body.get("orchestration_degraded"),
+                    "execution_degraded": body.get("execution_degraded"),
                     "tokens_used": body.get("tokens_used"),
                     "child_tokens_used": body.get("child_tokens_used"),
                     "total_tokens_with_children": body.get("total_tokens_with_children"),

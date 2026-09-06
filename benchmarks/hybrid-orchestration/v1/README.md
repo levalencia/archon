@@ -1,6 +1,6 @@
 # Single vs Team Benchmark v1
 
-Status: versioned evaluation candidate. Live execution requires explicit provider-spend authorization.
+Status: versioned and executed locally against Foundry `claude-opus-4-6` on 2026-09-06.
 
 This benchmark measures when Archon's bounded two-child Team mode provides enough answer-quality benefit to justify its additional latency, cost, and failure surface. It does not assume that Team is better.
 
@@ -39,6 +39,7 @@ Every category has four easy, three medium, and three hard cases. Cases 001 and 
 - `cases.json`: immutable prompts, expected traits, categories, difficulty, tool profile, parallelism annotation, and calibration membership.
 - `rubric.json`: blind quality rubric, expected-trait normalization, operational metrics, stop conditions, routing thresholds, and specialist gates.
 - `scripts/run-hybrid-benchmark.py`: resumable external-output live harness.
+- `scripts/analyze-hybrid-benchmark.py`: deterministic blinding, score ingestion, paired statistics, and offline Auto replay.
 
 Raw responses are deliberately excluded from Git. The harness writes them outside the repository and never persists generated credentials.
 
@@ -95,6 +96,31 @@ python3 scripts/run-hybrid-benchmark.py \
 
 The second command resumes from the same checkpoint and skips completed case/mode pairs.
 
+## Observed result
+
+The completed run produced 200 HTTP-200 responses across 100 Single/Team pairs. Durable
+reconciliation found 400 parent/child run rows, 542 reconciled model charges, USD 22.461065000
+reconciled spend, and two indeterminate charges whose full USD 0.817118750 reservations keep the
+worst-case accounted amount at USD 23.278183750. Five pairs were excluded from answer-quality
+comparison: two Single tool-contract violations, two degraded Team runs, and one Single parent that
+returned HTTP 200 but ended durably as `failed/provider_error`.
+
+Across 95 valid pairs, blind scoring produced Single 9.6000/10 and Team 9.5895/10. The paired Team
+minus Single delta was -0.0105 with bootstrap 95% CI [-0.2526, 0.2211], 12 Team wins, 72 ties, 11
+Single wins, and two-sided sign-test p=1.0. Across all 100 executed pairs, including invalid runs
+that still consumed resources, Team used 24.64% more tokens, cost 78.18% more, and was 3.5687
+times slower on average. The correct broad conclusion is
+`functional_pass_quality_not_improved`.
+
+Security threat modeling was the only category to meet the preregistered Team-positive directional
+gate: +0.6667 mean quality, 3 wins / 5 ties / 1 loss, 2.5478x latency, and fewer unsupported claims.
+Ten-category cells remain small, so this supports a bounded routing rule rather than a universal
+superiority claim. No failure cluster met the threshold for adding a specialist.
+
+The sanitized evidence packet is
+`docs/evidence/single-vs-team-benchmark-v1-summary.json`. Raw responses, blind keys, and grader
+artifacts remain outside Git under `/tmp`.
+
 ## Scoring and analysis
 
 Each answer receives 0–2 on:
@@ -124,6 +150,12 @@ Auto can be evaluated offline without another 100 provider calls. For every case
 - the per-case quality oracle.
 
 Routing changes require at least 75% routing accuracy, mean quality regret no greater than 0.03, and lower cost than always Team.
+
+The original `hybrid-router-v1` routed all 95 valid benchmark cases to Team and achieved 12.63%
+routing accuracy. The benchmark-derived `hybrid-router-v2` keeps Single as the default and selects
+Team only when at least two independent security-risk signals are present. Offline replay routed 9
+cases to Team and 86 to Single, achieved 83.16% routing accuracy and 0.0189 normalized quality
+regret, and reduced replay cost by 42.65% and mean latency by 58.16% relative to v1.
 
 ## Specialist policy
 

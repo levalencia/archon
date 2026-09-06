@@ -18,6 +18,11 @@ SPEC = importlib.util.spec_from_file_location("run_hybrid_benchmark", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 harness = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(harness)
+ANALYSIS_SCRIPT = ROOT / "scripts/analyze-hybrid-benchmark.py"
+ANALYSIS_SPEC = importlib.util.spec_from_file_location("analyze_hybrid_benchmark", ANALYSIS_SCRIPT)
+assert ANALYSIS_SPEC is not None and ANALYSIS_SPEC.loader is not None
+analysis = importlib.util.module_from_spec(ANALYSIS_SPEC)
+ANALYSIS_SPEC.loader.exec_module(analysis)
 
 
 def test_dataset_has_exact_stratified_shape_and_unique_ids() -> None:
@@ -120,3 +125,47 @@ def test_functional_gate_rejects_tools_outside_case_contract() -> None:
     }
 
     assert harness.functional_failure(item) == "tool_contract_violation"
+
+
+def test_functional_gate_rejects_noncompleted_durable_parent() -> None:
+    item = {
+        "http_status": 200,
+        "parent_status": "failed",
+        "parent_stop_reason": "provider_error",
+        "resolved_mode": "single",
+        "mode": "single",
+        "degraded": False,
+        "allowed_tools": [],
+        "actual_tool_calls": [],
+    }
+
+    assert harness.functional_failure(item) == "parent_not_completed"
+
+
+def test_blinding_and_statistical_helpers_are_deterministic() -> None:
+    first = analysis.blinded_label(20260905, "fact-001")
+    second = analysis.blinded_label(20260905, "fact-001")
+
+    assert first == second
+    assert set(first) == {"A", "B"}
+    assert set(first.values()) == {"single", "team"}
+    assert analysis.bootstrap_ci([1.0, -1.0, 0.0], 42, iterations=100) == analysis.bootstrap_ci(
+        [1.0, -1.0, 0.0], 42, iterations=100
+    )
+    assert analysis.sign_test_p_value(0, 0) == 1.0
+
+
+def test_auto_replay_matches_current_router_contract() -> None:
+    assert analysis.auto_mode("What is NaCl?") == "single"
+    assert (
+        analysis.auto_mode(
+            "Research and compare multiple architecture alternatives with evidence and sources."
+        )
+        == "single"
+    )
+    assert (
+        analysis.auto_mode(
+            "Produce a threat model for prompt injection and data exfiltration attacks."
+        )
+        == "team"
+    )

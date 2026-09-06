@@ -2,29 +2,22 @@
 
 from __future__ import annotations
 
-import re
-
 from app.orchestration.models import ExecutionMode, OrchestrationDecision
 
-_TEAM_SIGNALS = (
-    "analy",
-    "architect",
-    "audit",
-    "compare",
-    "compar",
-    "evaluate",
-    "evalua",
-    "evidence",
-    "investig",
-    "research",
-    "review",
-    "revis",
-    "security",
-    "sources",
-    "trade-off",
-    "tradeoff",
-    "verify",
-    "verific",
+_SECURITY_RISK_SIGNALS = (
+    "attack",
+    "blast radius",
+    "defense-in-depth",
+    "exfiltration",
+    "hipaa",
+    "incident",
+    "isolation",
+    "lateral movement",
+    "prompt injection",
+    "stride",
+    "supply-chain",
+    "threat",
+    "vulnerab",
 )
 
 
@@ -58,8 +51,12 @@ def resolve_execution_mode(
         return OrchestrationDecision(mode, ExecutionMode.TEAM, "user_forced_team")
 
     normalized = " ".join(query.casefold().split())
-    words = re.findall(r"[\w-]+", normalized)
-    signal_count = sum(1 for signal in _TEAM_SIGNALS if signal in normalized)
-    if len(words) >= 28 or signal_count >= 2:
-        return OrchestrationDecision(mode, ExecutionMode.TEAM, "cross_domain_task")
-    return OrchestrationDecision(mode, ExecutionMode.SINGLE, "simple_single_step")
+    risk_signal_count = sum(1 for signal in _SECURITY_RISK_SIGNALS if signal in normalized)
+    if risk_signal_count >= 2:
+        return OrchestrationDecision(mode, ExecutionMode.TEAM, "security_risk_analysis")
+    reason = (
+        "insufficient_team_evidence"
+        if risk_signal_count == 1 or "security" in normalized
+        else "single_default"
+    )
+    return OrchestrationDecision(mode, ExecutionMode.SINGLE, reason)
