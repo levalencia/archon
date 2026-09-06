@@ -1,0 +1,185 @@
+{
+  "schema": "archon.single-vs-team-benchmark-summary",
+  "version": 1,
+  "observed_at": "2026-09-06",
+  "evidence_level": "local_live_provider",
+  "benchmark": {
+    "dataset": "benchmarks/hybrid-orchestration/v1/cases.json",
+    "dataset_sha256": "c7cb8342a2f94ba65e40795b7c09e3f24348311af5b746c79bc5d66ea52bd1da",
+    "dataset_commit": "642ac55",
+    "merge_commit": "75667bd47c9d293c23d5daaeb9154bc6c73f5fbc",
+    "cases": 100,
+    "requested_modes": ["single", "team"],
+    "provider_runs": 200,
+    "calibration_pairs": 20,
+    "remaining_pairs": 80
+  },
+  "runtime": {
+    "provider": "foundry",
+    "model": "claude-opus-4-6",
+    "provider_model_run_rows": 400,
+    "team_topology": {
+      "delegated_children": 2,
+      "parent_synthesizer": 1,
+      "execution": "sequential_depth_one"
+    }
+  },
+  "execution": {
+    "http_200_runs": 200,
+    "complete_pairs": 100,
+    "quality_valid_pairs": 95,
+    "invalid_pairs": [
+      {
+        "case_id": "debug-005",
+        "mode": "single",
+        "reason": "tool_contract_violation"
+      },
+      {
+        "case_id": "debug-008",
+        "mode": "single",
+        "reason": "tool_contract_violation"
+      },
+      {
+        "case_id": "research-007",
+        "mode": "single",
+        "reason": "durable parent status failed/provider_error despite HTTP 200"
+      },
+      {
+        "case_id": "research-010",
+        "mode": "team",
+        "reason": "degraded: researcher iteration_budget_exhausted"
+      },
+      {
+        "case_id": "sec-007",
+        "mode": "team",
+        "reason": "degraded: researcher orchestration deadline exhausted and cancelled"
+      }
+    ],
+    "durable_run_status": {
+      "completed": 398,
+      "failed": 1,
+      "cancelled": 1,
+      "running": 0
+    }
+  },
+  "accounting": {
+    "single_reconciled_cost_usd": "8.074425000",
+    "team_reconciled_cost_usd": "14.386640000",
+    "total_reconciled_cost_usd": "22.461065000",
+    "authorized_ceiling_usd": "60.000000000",
+    "reconciled_model_charges": 542,
+    "reconciled_input_tokens": 2099638,
+    "reconciled_output_tokens": 478515,
+    "indeterminate_charges": 2,
+    "indeterminate_reserved_usd": "0.817118750",
+    "worst_case_accounted_usd": "23.278183750",
+    "reservations_note": "Two provider outcomes remained indeterminate in the durable ledger. The worst-case figure adds their full reservations rather than treating them as free."
+  },
+  "quality": {
+    "scoring": "blind paired 0-10 rubric; calibration double-scored, remainder single-scored after agreement gate",
+    "calibration_preference_kappa": 0.7178,
+    "single_mean": 9.6,
+    "team_mean": 9.5895,
+    "team_minus_single_mean": -0.0105,
+    "paired_bootstrap_95_ci": [-0.2526, 0.2211],
+    "team_wins": 12,
+    "ties": 72,
+    "single_wins": 11,
+    "two_sided_sign_test_p": 1.0,
+    "conclusion": "functional_pass_quality_not_improved"
+  },
+  "operations": {
+    "scope": "all_100_executed_pairs_including_invalid_runs",
+    "single_total_tokens": 1147165,
+    "team_total_tokens": 1429822,
+    "team_token_increase_percent": 24.64,
+    "team_cost_increase_percent": 78.18,
+    "team_to_single_mean_latency_ratio": 3.5687,
+    "single_mean_latency_seconds": 32.933,
+    "team_mean_latency_seconds": 95.041
+  },
+  "quality_hygiene": {
+    "single_material_unsupported_claims": 17,
+    "team_material_unsupported_claims": 7,
+    "single_mean_expected_trait_rate": 0.9779,
+    "team_mean_expected_trait_rate": 0.9669,
+    "detected_final_answer_artifacts": {
+      "total_pattern_matches": 19,
+      "single": 9,
+      "team": 10,
+      "serialized_tool_call": 7,
+      "internal_preamble": 8,
+      "delegation_artifact": 3,
+      "visible_self_correction": 1
+    },
+    "calibration_citation_audit": {
+      "responses_audited": 40,
+      "dead_or_unverifiable_urls": 2,
+      "malformed_citations": 2,
+      "internal_reasoning_leakage_instances": 2
+    }
+  },
+  "category_results": {
+    "architecture_comparison": {"valid_pairs": 10, "mean_delta": 0.3, "team_wins": 3, "ties": 6, "single_wins": 1, "latency_ratio": 3.0774},
+    "code_reasoning": {"valid_pairs": 10, "mean_delta": 0.0, "team_wins": 0, "ties": 10, "single_wins": 0, "latency_ratio": 3.9857},
+    "debugging_incident_analysis": {"valid_pairs": 8, "mean_delta": -0.25, "team_wins": 0, "ties": 7, "single_wins": 1, "latency_ratio": 3.5752},
+    "direct_factual": {"valid_pairs": 10, "mean_delta": -0.3, "team_wins": 0, "ties": 8, "single_wins": 2, "latency_ratio": 4.5579},
+    "evaluation_experimental_design": {"valid_pairs": 10, "mean_delta": 0.0, "team_wins": 0, "ties": 10, "single_wins": 0, "latency_ratio": 2.9701},
+    "multi_source_research": {"valid_pairs": 8, "mean_delta": -0.75, "team_wins": 2, "ties": 3, "single_wins": 3, "latency_ratio": 2.272},
+    "product_system_planning": {"valid_pairs": 10, "mean_delta": 0.2, "team_wins": 2, "ties": 7, "single_wins": 1, "latency_ratio": 2.8079},
+    "quantitative_data_reasoning": {"valid_pairs": 10, "mean_delta": 0.4, "team_wins": 2, "ties": 8, "single_wins": 0, "latency_ratio": 3.9771},
+    "security_threat_modeling": {"valid_pairs": 9, "mean_delta": 0.6667, "team_wins": 3, "ties": 5, "single_wins": 1, "latency_ratio": 2.5478},
+    "summarization": {"valid_pairs": 10, "mean_delta": -0.5, "team_wins": 0, "ties": 8, "single_wins": 2, "latency_ratio": 5.5556}
+  },
+  "routing": {
+    "v1_observed_offline": {
+      "team_routes": 95,
+      "single_routes": 0,
+      "routing_accuracy": 0.1263,
+      "normalized_quality_regret": 0.0263,
+      "cost_usd": 13.28565,
+      "mean_latency_seconds": 92.1241
+    },
+    "v2_candidate_offline": {
+      "rule": "Team only when at least two independent security-risk signals are present; otherwise Single",
+      "team_routes": 9,
+      "single_routes": 86,
+      "routing_accuracy": 0.8316,
+      "normalized_quality_regret": 0.0189,
+      "cost_usd": 7.619815,
+      "mean_latency_seconds": 38.5451,
+      "cost_savings_vs_v1_usd": 5.665835,
+      "cost_savings_vs_v1_percent": 42.65,
+      "latency_reduction_vs_v1_percent": 58.16,
+      "acceptance": "passes preregistered offline Auto thresholds"
+    }
+  },
+  "decisions": {
+    "single_default": true,
+    "team_accepted_scope": "explicit multi-signal security risk analysis; directional category evidence, not universal superiority",
+    "additional_specialists": "not justified: only qdr-008 was below 0.5 normalized trait coverage in both modes; threshold requires at least three confirmed cases in one category",
+    "budget_changes": "not justified: two Team failures are isolated and blind budget increases would raise cost without demonstrated broad quality benefit",
+    "implemented_changes": [
+      "hybrid-router-v2 removes prompt length as an automatic Team trigger",
+      "hybrid-router-v2 requires at least two independent security-risk signals",
+      "parent synthesis guard explicitly forbids simulated tool calls and internal-planning narration",
+      "benchmark harness now validates durable parent status and records provider/model"
+    ]
+  },
+  "external_artifacts": {
+    "raw_results_path": "/tmp/archon-hybrid-benchmark-v1-results.json",
+    "raw_results_sha256": "3cbbbe5df60fc8c133f556bb794f02b072c496fa26a639b6764f41597044e35e",
+    "grades_path": "/tmp/archon-full-grader-final-canonical.json",
+    "grades_sha256": "df8939f302b63ab9c5f9e8a89fe89a1f9eab6a54ffcd38f89d4d6df1f22bf801",
+    "analysis_path": "/tmp/archon-hybrid-benchmark-v1-full-analysis.json",
+    "analysis_sha256_before_documentation_copy": "8e2d1ec663ea9c160e8bea30463227838fa1bf39b0c54ee0fbec98dc7a58fca2"
+  },
+  "limitations": [
+    "The 95 valid pairs use one final blind grader; reliability was established on the 20-pair calibration subset with two graders.",
+    "Ten cases per category are directional and do not establish universal category-level superiority.",
+    "The benchmark used one local Foundry deployment and one model revision.",
+    "Two indeterminate model charges have no provider token usage and are conservatively represented by their full reservations.",
+    "The benchmark does not establish public deployment, production SLOs, parallel fan-out, or recursive delegation.",
+    "Router-v2 and the stronger synthesis guard have deterministic tests; live post-change acceptance remains separate evidence."
+  ]
+}

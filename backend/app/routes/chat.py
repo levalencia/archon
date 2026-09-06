@@ -424,6 +424,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+    stop_reason: str
     run_id: str
     conversation_id: str
     correlation_id: str
@@ -437,6 +438,7 @@ class ChatResponse(BaseModel):
     requested_mode: ExecutionMode
     resolved_mode: ExecutionMode
     orchestration_degraded: bool = False
+    execution_degraded: bool = False
     agents_used: list[dict[str, Any]] = []
     child_tokens_used: int = 0
     total_tokens_with_children: int = 0
@@ -728,6 +730,7 @@ async def chat(
 
     return ChatResponse(
         response=result.content,
+        stop_reason=result.stop_reason.value,
         run_id=run_context.run_id,
         conversation_id=conv_id,
         correlation_id=cid,
@@ -741,6 +744,7 @@ async def chat(
         requested_mode=orchestration.decision.requested_mode,
         resolved_mode=orchestration.decision.resolved_mode,
         orchestration_degraded=orchestration.degraded,
+        execution_degraded=result.stop_reason.value != "completed",
         agents_used=[
             {
                 "child_run_id": child.child_run_id,

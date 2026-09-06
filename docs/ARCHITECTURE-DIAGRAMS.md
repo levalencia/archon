@@ -146,7 +146,7 @@ flowchart LR
     Ledger --> Agents[Agents inspector]
 ```
 
-Team is a feature-flagged pilot: depth one, maximum two children by default, signed one-use task envelopes, read-only capability subsets, finite child budgets, and safe metadata-only lifecycle events. Auto uses a versioned rule-based heuristic; it does not claim semantic routing optimality. Child output is untrusted input to parent synthesis, not authority. See [Hybrid Agent Orchestration Pilot](architecture/hybrid-agent-orchestration.md).
+Team is a feature-flagged pilot: depth one, maximum two children by default, signed one-use task envelopes, read-only capability subsets, finite child budgets, and safe metadata-only lifecycle events. `hybrid-router-v2` is deterministic and keeps Single as default; Auto selects Team only after at least two independent security-risk signals. The rule passed offline replay thresholds on the versioned 100-case benchmark but does not claim semantic routing optimality. Child output is untrusted input to parent synthesis, not authority. See [Hybrid Agent Orchestration Pilot](architecture/hybrid-agent-orchestration.md).
 
 ## 6. Governed MCP
 

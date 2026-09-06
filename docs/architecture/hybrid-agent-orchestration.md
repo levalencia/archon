@@ -2,7 +2,7 @@
 
 Status: implemented behind `hybrid_orchestration_enabled`; deterministic and bounded local live-provider acceptance complete.
 
-This document describes the first bounded hybrid orchestration pilot. Local Foundry evidence proves execution, lineage, accounting and conservative degradation behavior. The paired quality sample did **not** show a Team advantage and is not proof of production quality or public deployment.
+This document describes the first bounded hybrid orchestration pilot. Local Foundry evidence proves execution, lineage, accounting and conservative degradation behavior. A versioned 100-case paired benchmark found no overall Team quality advantage; security threat modeling was the only category to meet the preregistered directional Team-positive gate. This is not proof of production quality or public deployment.
 
 ## Purpose
 
@@ -57,12 +57,12 @@ flowchart TD
     E -->|Yes| M{Requested mode}
     M -->|Single| S2[Single: user_forced_single]
     M -->|Team| T1[Team: user_forced_team]
-    M -->|Auto| H{Complexity heuristic}
-    H -->|Short and no team signals| S3[Single: simple_request]
-    H -->|Long or multiple team signals| T2[Team: cross_domain_task]
+    M -->|Auto| H{At least two independent security-risk signals?}
+    H -->|No| S3[Single: simple or insufficient Team evidence]
+    H -->|Yes| T2[Team: security_risk_analysis]
 ```
 
-The pilot router is rule-based and versioned as `hybrid-router-v1`. It does not spend an additional model call and does not claim semantic optimality. This is intentional: routing is testable, cheap, and easy to roll back.
+The router remains deterministic and does not spend an additional model call. Benchmark replay showed that `hybrid-router-v1` treated prompt length as sufficient evidence and routed all 95 valid benchmark cases to Team. `hybrid-router-v2` removes that trigger, keeps Single as the default, and requires at least two independent security-risk signals before choosing Team. Offline replay routed 9 cases to Team and 86 to Single, reached 83.16% routing accuracy with 0.0189 normalized quality regret, and reduced replay cost and mean latency relative to v1. These are benchmark-specific local results, not semantic-routing guarantees.
 
 ## Bounded plan
 
@@ -127,8 +127,9 @@ Controls in the first pilot:
 6. Per-child runtime budgets override parent defaults, including a signed maximum tool-result size, and one aggregate orchestration deadline bounds the sequential team phase.
 7. Cancellation propagates through the awaited child task; cancelled child runs receive an explicit terminal event before control returns.
 8. Child output is inserted as **untrusted delegated findings** at user-data authority, while a trusted system guard tells the parent not to follow instructions in that text or treat failed children as validation.
-9. Generic persisted events allowlist metadata only. They do not contain child prompts, findings, user text, secrets, or chain-of-thought.
-10. A child failure degrades the team result; it never becomes an approval or successful verification.
+9. The parent guard states that synthesis has no tools, forbids simulated `tool_call` / `function_call` JSON and internal-planning narration, and requires the answer to begin directly with user-facing synthesis.
+10. Generic persisted events allowlist metadata only. They do not contain child prompts, findings, user text, secrets, or chain-of-thought.
+11. A child failure degrades the team result; it never becomes an approval or successful verification.
 
 ## Runtime and evidence lifecycle
 
@@ -218,6 +219,18 @@ Local Foundry acceptance additionally established:
 
 The sanitized evidence packet is `docs/evidence/hybrid-agent-live-acceptance-summary.json`.
 
+The broader versioned benchmark additionally established:
+
+- 100 paired Single/Team cases produced 200 HTTP-200 responses and 400 durable parent/child run rows on Foundry `claude-opus-4-6`;
+- durable accounting reconciled 542 model charges for USD 22.461065000, with two indeterminate charges conservatively bounded by USD 0.817118750 of reservations;
+- 95 pairs were valid for quality comparison; five were excluded for two Single tool-contract violations, two degraded Team runs, and one durable Single `provider_error` hidden by HTTP 200;
+- blind scoring produced Single 9.6000/10 and Team 9.5895/10, a Team-minus-Single delta of -0.0105 with bootstrap 95% CI [-0.2526, 0.2211], 12 Team wins, 72 ties and 11 Single wins;
+- across all 100 executed pairs, including invalid runs, Team used 24.64% more tokens, cost 78.18% more, and was 3.5687 times slower on average;
+- no category produced the three-case joint failure cluster required to justify another specialist profile;
+- security threat modeling alone met the preregistered directional Team-positive rule, while direct factual, summarization, code reasoning and evaluation-design evidence favored retaining Single as the default.
+
+The benchmark artifacts are `benchmarks/hybrid-orchestration/v1/`; the sanitized result is `docs/evidence/single-vs-team-benchmark-v1-summary.json`. Raw responses and blind grader artifacts remain external to Git.
+
 Primary tests:
 
 - `backend/tests/unit/test_hybrid_orchestration.py`
@@ -240,8 +253,9 @@ Enabling it also requires the existing delegation signing-key configuration. Rol
 
 This pilot does **not** prove:
 
-- that Team improves answer quality; the first three-case paired sample found no Team wins;
-- that Auto routing is semantically optimal;
+- that Team improves answer quality overall; the 100-case benchmark found statistical parity with materially higher cost and latency;
+- that security-category directionality generalizes beyond this dataset, provider, model revision or local deployment;
+- that `hybrid-router-v2` is semantically optimal; it is a conservative benchmark-derived rule with deterministic tests and offline replay evidence;
 - parallel fan-out, recursive delegation, dynamic tool grants, or distributed agents;
 - one atomic parent-wide reservation covering parent and all child calls;
 - live-provider cancellation propagation while a child provider call is in flight;

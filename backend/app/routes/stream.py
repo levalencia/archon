@@ -453,6 +453,7 @@ async def chat_stream_real(
             "requested_mode": orchestration.decision.requested_mode.value,
             "resolved_mode": orchestration.decision.resolved_mode.value,
             "orchestration_degraded": orchestration.degraded,
+            "execution_degraded": result.stop_reason.value != "completed",
             "children_used": len(orchestration.children),
             "child_tokens_used": sum(child.usage.total_tokens for child in orchestration.children),
             "total_tokens_with_children": result.usage.total_tokens

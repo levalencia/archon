@@ -107,6 +107,9 @@ class TestChatEndpoint:
         assert data["run_id"]
         assert data["requested_mode"] == "auto"
         assert data["resolved_mode"] == "single"
+        assert data["stop_reason"] == "completed"
+        assert data["orchestration_degraded"] is False
+        assert data["execution_degraded"] is False
         assert data["agents_used"] == []
 
     @pytest.mark.unit
@@ -123,6 +126,8 @@ class TestChatEndpoint:
         data = response.json()
         assert data["requested_mode"] == "team"
         assert data["resolved_mode"] == "team"
+        assert data["stop_reason"] == "completed"
+        assert data["execution_degraded"] is False
         assert [child["kind"] for child in data["agents_used"]] == ["fixed", "dynamic"]
         assert all(child["status"] == "completed" for child in data["agents_used"])
         children = hybrid_client.get(f"/api/runs/{data['run_id']}/children")
@@ -236,6 +241,8 @@ class TestChatStreamEndpoint:
         )
         text = response.text
         assert "event: done" in text
+        assert '"stop_reason": "completed"' in text
+        assert '"execution_degraded": false' in text
 
     @pytest.mark.unit
     def test_team_stream_exposes_routing_and_child_status(self, hybrid_client: TestClient) -> None:
