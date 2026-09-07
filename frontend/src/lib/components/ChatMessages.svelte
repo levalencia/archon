@@ -28,6 +28,11 @@
   function fmtMs(ms: number): string { return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`; }
   function elapsed(msg: Message): string { return msg.elapsed_ms != null ? fmtMs(msg.elapsed_ms) : msg.startedAt ? fmtMs(Math.round(now - msg.startedAt)) : '—'; }
   function isStreaming(msg: Message, index: number) { return loading && index === messages.length - 1 && msg.role === 'assistant'; }
+  function completedChildren(msg: Message) { return (msg.child_agents || []).filter((child) => child.status !== 'running'); }
+  function toolCount(msg: Message): number { return (msg.tool_calls?.length || 0) + completedChildren(msg).reduce((sum, child) => sum + (child.tool_count || 0), 0); }
+  function iterationCount(msg: Message): number { return (msg.iterations || 0) + completedChildren(msg).reduce((sum, child) => sum + (child.iterations || 0), 0); }
+  function label(value: string | undefined): string { return (value || 'unknown').replaceAll('_', ' '); }
+  function failedChild(status: string): boolean { return ['failed', 'timed_out', 'cancelled', 'denied'].includes(status); }
   function grounded(msg: Message) {
     const scores = msg.evalScores || [];
     if (!scores.length) return 'Not evaluated';
@@ -46,12 +51,29 @@
           {#if msg.role === 'assistant'}
             {@const streaming = isStreaming(msg, index)}
             {@const failed = msg.status === 'failed'}
-            <div class="mb-3 flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[var(--border)] bg-[rgba(16,21,29,.75)] px-3 py-2 text-[11px] text-[var(--muted)]" aria-label="Execution summary">
+            <div class="mb-3 flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[var(--border)] bg-[rgba(16,21,29,.75)] px-3 py-2 text-[11px] text-[var(--muted)]" aria-label="Execution summary" role="region">
               {#if streaming}<LoaderCircle class="animate-spin text-[var(--accent)]" size={14}/><strong class="text-[var(--accent)]">Streaming</strong>
               {:else if failed}<XCircle class="text-[var(--danger)]" size={14}/><strong class="text-[var(--danger)]">Failed</strong>
               {:else}<CheckCircle2 class="text-[var(--accent)]" size={14}/><strong class="text-[var(--text)]">Completed</strong>{/if}
-              <span>· {msg.tool_calls?.length || 0} tools</span><span>· {msg.iterations || (streaming ? '…' : 0)} iterations</span><span>· {elapsed(msg)}</span><span class="rounded bg-[var(--raised)] px-1.5 py-0.5 text-[var(--secondary)]">{grounded(msg)}</span>
+              <span>· {toolCount(msg)} tools</span><span>· {iterationCount(msg) || (streaming ? '…' : 0)} iterations</span><span>· {elapsed(msg)}</span><span class="rounded bg-[var(--raised)] px-1.5 py-0.5 text-[var(--secondary)]">{grounded(msg)}</span>
             </div>
+            {#if msg.orchestration?.resolved_mode === 'team' && msg.child_agents?.length}
+              <section class="mb-3 rounded-xl border border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] bg-[linear-gradient(135deg,rgba(255,122,26,.10),rgba(16,21,29,.82))] p-3" aria-label="Team execution">
+                <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex items-center gap-2"><span class="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">Team</span><strong class="text-xs text-[var(--text)]">{label(msg.orchestration.requested_mode)} → {label(msg.orchestration.resolved_mode)}</strong></div>
+                  <span class="text-[10px] uppercase tracking-wider text-[var(--muted)]">Safe lifecycle · no private reasoning</span>
+                </div>
+                <ol class="m-0 grid list-none gap-2 p-0 sm:grid-cols-2" aria-label="Inline delegated agents">
+                  {#each msg.child_agents as child}
+                    <li class="relative rounded-lg border border-[var(--border)] bg-[rgba(10,14,20,.72)] p-2.5 before:absolute before:-left-px before:top-2 before:h-[calc(100%-1rem)] before:w-0.5 before:bg-[var(--accent)]">
+                      <div class="flex items-start justify-between gap-2 pl-2"><div><strong class="block text-xs text-[var(--text)]">{child.profile_id}</strong><span class="text-[10px] capitalize text-[var(--muted)]">{label(child.specialist_kind)} specialist</span></div><span class={`rounded bg-[var(--raised)] px-1.5 py-0.5 text-[10px] font-bold capitalize ${failedChild(child.status) ? 'text-[var(--danger)]' : 'text-[var(--accent)]'}`}>{label(child.status)}</span></div>
+                      <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-2 font-mono text-[10px] text-[var(--muted)]"><span>{child.iterations ?? 0} iterations</span><span>{child.tool_count ?? 0} tools</span><span>{child.total_tokens ?? 0} tokens</span></div>
+                      {#if child.reason_code}<p class="mb-0 mt-1 pl-2 text-[10px] capitalize text-[var(--muted)]">{label(child.reason_code)}</p>{/if}
+                    </li>
+                  {/each}
+                </ol>
+              </section>
+            {/if}
             {#if msg.thinking_steps?.length || msg.tool_calls?.length || msg.skills_used?.length}
               <details class="reasoning" open={streaming && !msg.content}>
                 <summary><span class="flex items-center gap-2"><ChevronRight size={14}/> Reasoning and actions</span><span>{(msg.thinking_steps?.length || 0) + (msg.tool_calls?.length || 0)} events</span></summary>

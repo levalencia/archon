@@ -36,6 +36,7 @@ load_state_metadata() {
   ARCHON_RUNTIME_MODE=${ARCHON_RUNTIME_MODE:-mock}
   ARCHON_LLM_PROVIDER_NAME=${ARCHON_LLM_PROVIDER_NAME:-mock}
   ARCHON_LLM_MODEL_NAME=${ARCHON_LLM_MODEL_NAME:-mock-model}
+  ARCHON_OTEL_COLLECTOR_CONFIG_FILE=${ARCHON_OTEL_COLLECTOR_CONFIG_FILE:-}
   case "$ARCHON_COMPOSE_PROJECT" in
     archon-local-*) ;;
     *)
@@ -129,7 +130,11 @@ stop_loaded_stack() {
     printf 'Failed to stop the managed stack; preserving env and state for retry.\n' >&2
     return 1
   fi
-  rm -f "$ARCHON_COMPOSE_ENV_FILE" "$STATE_FILE"
+  rm -f "$ARCHON_COMPOSE_ENV_FILE"
+  if [[ -n "$ARCHON_OTEL_COLLECTOR_CONFIG_FILE" ]]; then
+    rm -f "$ARCHON_OTEL_COLLECTOR_CONFIG_FILE"
+  fi
+  rm -f "$STATE_FILE"
 }
 
 acquire_start_lock() {

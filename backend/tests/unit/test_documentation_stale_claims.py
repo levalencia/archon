@@ -8,6 +8,7 @@ back to a stale claim and must be re-audited.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -167,6 +168,36 @@ def _read_course_docs() -> dict[str, str]:
     return {
         str(p.relative_to(ROOT)): p.read_text(encoding="utf-8") for p in COURSE_DOCS if p.exists()
     }
+
+
+@pytest.mark.unit
+def test_current_observability_learning_docs_match_collector_fanout() -> None:
+    current_docs = [
+        ROOT / "docs" / "ARCHITECTURE-DIAGRAMS.md",
+        ROOT / "docs" / "INTERVIEW-ANSWER-BANK.md",
+        ROOT / "docs" / "course" / "concepts" / "tracing-opentelemetry.md",
+        ROOT / "docs" / "course" / "modules" / "13-auth-ui-observability" / "README.md",
+        ROOT / "docs" / "course" / "course-concept-coverage.md",
+    ]
+    stale_phrases = (
+        "A local collector observed agent.run",
+        "OTEL SDK exported agent.run to the local collector",
+        "Jaeger remains the default",
+        "The local collector uses a debug exporter",
+    )
+    for path in current_docs:
+        content = path.read_text(encoding="utf-8")
+        for phrase in stale_phrases:
+            assert phrase not in content, f"{path.relative_to(ROOT)} contains stale OTEL claim"
+
+    studio = json.loads(
+        (ROOT / "frontend" / "static" / "learning" / "archon-studio.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    tracing = next(item for item in studio["concepts"] if item["id"] == "tracing-opentelemetry")
+    assert "live agent trace was observed in local Jaeger" in tracing["limitations"]
+    assert "newest Logfire Summary/Messages" in tracing["limitations"]
 
 
 @pytest.mark.unit

@@ -1,9 +1,9 @@
 # Archon Architecture Diagrams
 
-These diagrams describe the current evidence-backed system. Historical diagrams that implied pgvector, Azure Blob, Jaeger, unbounded dynamic swarms, or host-process sandboxing were removed because those paths were not the verified product.
+These diagrams describe the current evidence-backed system. Historical diagrams that implied pgvector, Azure Blob, unbounded dynamic swarms, or host-process sandboxing were removed because those paths were not the verified product. Jaeger now exists as an optional loopback-only local trace destination behind the OpenTelemetry Collector.
 
-Skills + Project Instructions and core-table reconciliation are merged to `main`
-at `1f71f0e`. No public deployment is claimed.
+Capabilities and observations are revision-scoped in `IMPLEMENTATION-EVIDENCE.md` and
+`implementation/CAPABILITY-ACCEPTANCE.yaml`. No public deployment is claimed.
 
 ## 1. Agent Reliability Workbench
 
@@ -207,9 +207,12 @@ internal only]
 
     Postgres --> Volume[(Named volume)]
     Collector --> Debug[Local debug exporter]
+    Collector --> Jaeger[Optional Jaeger\nloopback UI]
+    Collector --> Logfire[Optional Logfire\nregional OTLP HTTP]
+    Collector -.-> Other[Azure Monitor / Tempo / generic OTLP\nconfiguration-validated]
 ```
 
-The backend defaults to `linux/amd64` in this target because the ARM image reproduced a native `cryptography` SIGILL on the verified Mac. All referenced images are pinned by digest. Only the gateway publishes a loopback port.
+The backend defaults to `linux/amd64` in this target because the ARM image reproduced a native `cryptography` SIGILL on the verified Mac. All referenced images are pinned by digest. The gateway publishes the application on loopback; when selected, Jaeger publishes its UI separately on loopback. PostgreSQL, Redis, backend, frontend, sandbox and Collector remain internal-only.
 
 ## 9. Backup and clean restore
 

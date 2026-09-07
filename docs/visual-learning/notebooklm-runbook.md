@@ -1,6 +1,6 @@
 # NotebookLM Runbook for Archon
 
-NotebookLM is the generation lane for Visual Learning Studio media. It does not become Archon's source of truth.
+> **Deprecated migration reference:** NotebookLM is no longer the active generation lane. Use [`hermes-generation-runbook.md`](hermes-generation-runbook.md). The steps below are preserved only to explain the previous workflow and must not be used to claim current artifact freshness.
 
 ## Prerequisites
 

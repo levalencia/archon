@@ -604,6 +604,8 @@ async def chat(
         exporter=request.app.state.otel_exporter,
         redactor=request.app.state.persistence_redactor,
         log_buffer=request.app.state.log_buffer,
+        tools=tools,
+        input_content=body.message,
     )
     orchestration = await prepare_hybrid_messages(
         query=body.message,

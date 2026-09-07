@@ -23,6 +23,8 @@ def _provider_env(tmp_path: Path, **overrides: str) -> Path:
         "ARCHON_LLM_MODEL": "claude-opus-4-6",
         "ARCHON_LLM_API_KEY": "test-provider-key",
         "ARCHON_LLM_BASE_URL": "https://foundry.example.test/anthropic",
+        "LOGFIRE_TOKEN": "test-logfire-token",
+        "LOGFIRE_BASE_URL": "https://logfire-eu.pydantic.dev",
         "UNRELATED_SECRET": "must-not-be-imported",
     }
     values.update(overrides)
@@ -47,6 +49,8 @@ def test_default_values_are_mock_and_contain_valid_generated_secrets() -> None:
     assert values["ARCHON_DURABLE_EFFECT_LEDGER_ENABLED"] == "true"
     assert values["ARCHON_AGENT_DEADLINE_SECONDS"] == "300"
     assert values["ARCHON_VERIFIER_ENABLED"] == "false"
+    assert values["ARCHON_OTEL_DESTINATIONS"] == "debug"
+    assert values["ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT"] == "false"
     assert 18_000 <= int(values["ARCHON_LOCAL_PORT"]) < 38_000
 
 
@@ -58,9 +62,28 @@ def test_live_values_import_only_allowlisted_foundry_configuration(tmp_path: Pat
     assert values["ARCHON_LLM_MODEL"] == "claude-opus-4-6"
     assert values["ARCHON_LLM_API_KEY"] == "test-provider-key"
     assert values["ARCHON_LLM_BASE_URL"].startswith("https://")
+    assert values["LOGFIRE_TOKEN"] == "test-logfire-token"
+    assert values["LOGFIRE_BASE_URL"] == "https://logfire-eu.pydantic.dev"
+    assert values["ARCHON_OTEL_DESTINATIONS"] == "logfire"
     assert values["ARCHON_VERIFIER_ENABLED"] == "true"
     assert values["ARCHON_VERIFIER_MODEL"] == "claude-opus-4-6"
     assert "UNRELATED_SECRET" not in values
+
+
+def test_live_values_select_jaeger_and_logfire_and_enable_message_content(
+    tmp_path: Path,
+) -> None:
+    values = generator.generate_values(
+        _provider_env(
+            tmp_path,
+            ARCHON_OTEL_DESTINATIONS="jaeger,logfire",
+            ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT="true",
+        )
+    )
+
+    assert values["ARCHON_OTEL_DESTINATIONS"] == "jaeger,logfire"
+    assert values["ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT"] == "true"
+    assert values["COMPOSE_PROFILES"] == "jaeger"
 
 
 def test_live_values_import_complete_embedding_group(tmp_path: Path) -> None:

@@ -2,7 +2,7 @@
 
 > **Documentation status:** Draft
 > **Concept status:** `implemented`
-> **Status boundary:** The OTLP SDK exports runtime spans when configured, and one local collector observation included `agent.run`; hosted storage, production sampling, retention, alerts, and SLOs are unverified.
+> **Status boundary:** Archon emits one OTLP stream to the local Collector. One live agent trace was observed in Jaeger and an earlier run was accepted in Logfire Agents/Tools; the newest Logfire Summary/Messages rendering, production sampling, retention, alerts, and SLOs remain unverified.
 > **Used by:** [Module 13](../modules/13-auth-ui-observability/README.md)
 
 ## Beginner explanation
@@ -12,9 +12,9 @@ Each timed step is a span.
 A parent run span can contain model and tool spans so an operator can see where time was spent and where an error occurred.
 Tracing differs from metrics, which aggregate many events into numbers.
 It also differs from logs, which record discrete events.
-A trace should carry useful safe attributes, not prompts, tool arguments, credentials, raw provider output, or hidden reasoning.
-Archon maps typed runtime events to spans and can export them over OTLP when configured.
-The only direct collector evidence is local; there is no verified hosted trace backend.
+A trace should carry useful safe attributes, not credentials, tool payloads, retrieved documents, or hidden reasoning.
+Archon maps typed runtime events to `invoke_agent`, `chat`, and `execute_tool` spans, emits once over OTLP, and lets the Collector fan out to selected destinations.
+Conversation text remains off by default. The explicit opt-in exports only redacted, bounded user and assistant text for Summary/Messages.
 
 ## Vocabulary
 
@@ -44,7 +44,10 @@ flowchart LR
     I --> X[OTLPExporter.export_span]
     X --> SDK[OpenTelemetry SDK BatchSpanProcessor]
     SDK -->|OTLP gRPC| C[local collector]
-    C --> L[local collector log observation]
+    C --> D[debug]
+    C --> J[Jaeger]
+    C --> L[Logfire]
+    C -.-> A[Azure Monitor / Tempo / generic OTLP]
 ```
 
 [`CompositeEventSink`](../../../backend/app/observability/runtime_events.py) owns runtime span lifecycle.
@@ -62,15 +65,15 @@ sequenceDiagram
     participant X as OTLPExporter
     participant C as Local collector
     R->>S: RUN_STARTED
-    S->>S: start agent.run
+    S->>S: start invoke_agent Archon
     R->>S: ITERATION_STARTED
-    S->>S: start gen_ai.chat
+    S->>S: start chat {model}
     R->>S: MODEL_RESPONSE with safe usage
-    S->>S: finish gen_ai.chat
+    S->>S: finish chat {model}
     R->>S: TOOL_CALL_REQUESTED / COMPLETED
-    S->>S: start / finish tool.name span
+    S->>S: start / finish execute_tool {name}
     R->>S: RUN_STOPPED
-    S->>S: finish agent.run with stop metadata
+    S->>S: finish invoke_agent with stop metadata
     S->>X: export each completed span
     X->>C: OTLP gRPC via SDK batch processor
 ```
@@ -79,10 +82,10 @@ sequenceDiagram
 `_finish` computes `duration_ms`, marks an error when supplied, appends the internal span, and attempts export.
 Exporter exceptions are caught and logged as `runtime_span_export_failed` using safe exception metadata.
 Business execution therefore continues even when telemetry delivery fails.
-`RUN_STARTED` creates `agent.run` with `gen_ai.request.model`.
-`ITERATION_STARTED` creates `gen_ai.chat` with model and iteration.
+`RUN_STARTED` creates `invoke_agent Archon` with agent, conversation and model attributes.
+`ITERATION_STARTED` creates `chat {model}` with model, tool definitions and iteration.
 `MODEL_RESPONSE` adds finish reason and typed input/output/total token usage before completing the model span.
-Tool request/completion events use `tool.<name>`, `tool.name`, call ID, and success status.
+Tool request/completion events use `execute_tool {name}`, tool identity, call ID, and success status.
 `RUN_STOPPED` closes unfinished tool/model spans as errors and finishes the run with stop reason, iteration count, tool-call count, and usage.
 
 ## Exporter startup and readiness
@@ -99,14 +102,13 @@ stateDiagram-v2
     Active --> Shutdown: lifespan exits
 ```
 
-`OTLPExporter._setup_otel` creates a `Resource` with `service.name`, a `TracerProvider`, an OTLP gRPC exporter, and `BatchSpanProcessor`.
-The exporter currently uses `insecure=True`, appropriate only for the trusted local network boundary.
+`OTLPExporter._setup_otel` creates an app-owned `TracerProvider`, service resource, OTLP gRPC exporter and `BatchSpanProcessor`.
+The backend's only destination is the Collector on the trusted Compose network. Authentication, retry, batching and destination fan-out belong to the Collector.
 `is_active` means a real provider and tracer were constructed.
 It does not prove the endpoint accepted, stored, indexed, or retained a span.
 `force_flush` returns false when no provider exists and delegates to the provider when active.
 Readiness reports telemetry disabled when no exporter is configured, up when active, and down when configured but inactive.
-The local smoke goes further by observing `agent.run` in local collector output.
-No claim beyond that local collector observation is supported.
+The local acceptance observed one agent trace in Jaeger while the same Collector pipeline included Logfire. Azure Monitor, Tempo and generic OTLP remain configuration-validated rather than live-observed.
 
 ## Data and privacy boundaries
 
@@ -115,7 +117,7 @@ Model spans contain model name and token counts.
 Tool spans contain tool name, call ID, success, and duration.
 Run spans contain stop reason and bounded counts.
 Before span selection, event data passes through the persistence redactor and `sanitize` in `CompositeEventSink.emit`.
-Do not add prompts, completions, arguments, command text, retrieved document text, authorization headers, or raw exceptions to spans.
+Content capture defaults off. With `ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT=true`, only the current user text and final assistant text are redacted, bounded and added using OTel message attributes. System prompts, chain-of-thought, arguments, tool results, command text, retrieved document text, authorization headers and raw exceptions remain prohibited.
 Trace backends often have broader access and longer retention than local memory.
 Attribute allowlists and limits are therefore security controls, not merely cost optimizations.
 
@@ -125,7 +127,7 @@ Attribute allowlists and limits are therefore security controls, not merely cost
 |---|---|---|
 | [`runtime_events.py:CompositeEventSink._start/_finish`](../../../backend/app/observability/runtime_events.py) | timing, status, safe export failure | hosted delivery |
 | [`runtime_events.py:CompositeEventSink.emit`](../../../backend/app/observability/runtime_events.py) | typed run/model/tool mapping | every application operation traced |
-| [`otel_exporter.py:OTLPExporter._setup_otel`](../../../backend/app/observability/otel_exporter.py) | real SDK, resource, batch processor, gRPC exporter | endpoint health/retention |
+| [`otel_exporter.py:OTLPExporter._setup_otel`](../../../backend/app/observability/otel_exporter.py) | app-owned provider and one OTLP stream to Collector | destination storage/retention |
 | [`otel_exporter.py:OTLPExporter.export_span`](../../../backend/app/observability/otel_exporter.py) | bridge completed internal span into SDK span | original parent context propagation |
 | [`test_otel_exporter_receives_spans_when_wired`](../../../backend/tests/unit/test_otel_tracing_wire.py) | configured run span reaches exporter double | real network |
 | [`test_otel_exporter_receives_tool_spans`](../../../backend/tests/unit/test_otel_tracing_wire.py) | tool span export | collector storage |
@@ -184,7 +186,7 @@ uv run pytest -q \
 ## Observability and evidence path
 
 ```text
-typed runtime event → redacted selected attributes → internal completed span → OTLP SDK batch → local collector observation
+typed runtime event → redacted selected attributes → app-owned OTel provider → local Collector → selected destinations
 ```
 
 Logs share correlation and run identifiers with spans.
@@ -192,14 +194,14 @@ Metrics aggregate the same event lifecycle without high-cardinality identifiers.
 Durable run evidence preserves semantic event history independently of trace delivery.
 This separation allows telemetry loss to be visible without pretending telemetry is the business record.
 For any collector observation, record revision, endpoint topology, command, service name, span name, flush/shutdown behavior, and environment.
-The current evidence establishes only that one local collector path observed `agent.run`.
+The current evidence includes a live Jaeger trace and earlier visual Logfire Agents/Tools acceptance. Rendering of the newest opt-in Summary/Messages payload in Logfire remains pending visual acceptance.
 
 ## Alternatives and trade-offs
 
 | Alternative | Benefit | Cost or risk |
 |---|---|---|
 | logs only | simple operational stack | weak timing hierarchy |
-| direct vendor SDK | rich vendor features | lock-in and inconsistent instrumentation |
+| direct vendor SDK | rich vendor features | credentials, lifecycle and fan-out become app concerns |
 | auto-instrumentation | broad quick coverage | noisy attributes and unclear semantics |
 | synchronous export | simple delivery timing | adds request latency and failure coupling |
 | tail sampling | retain interesting traces | collector complexity and buffering |
@@ -213,8 +215,8 @@ This makes the semantic boundary reviewable but currently limits full distribute
 |---|---|---|
 | instrumentation | run/model/tool lifecycle and errors | every HTTP/service boundary |
 | exporter | real SDK and OTLP gRPC construction | secure remote transport and auth |
-| observation | `agent.run` in one local collector path | hosted backend ingestion/retention/query |
-| privacy | selected redacted attributes and tests | formal telemetry data audit |
+| observation | one live agent trace in Jaeger; earlier Logfire Agents/Tools | latest Logfire Summary/Messages UI and production retention |
+| privacy | default-off content plus redaction/bounds tests | formal telemetry data audit |
 | operations | configured readiness and safe failure log | sampling, alerts, capacity, SLOs |
 
 The concept is `implemented` for the typed runtime and local collector boundary only.
@@ -223,7 +225,7 @@ The concept is `implemented` for the typed runtime and local collector boundary 
 
 ### 30-second answer
 
-> Archon maps typed runtime events into `agent.run`, `gen_ai.chat`, and tool spans with selected redacted attributes. `OTLPExporter` uses the real OpenTelemetry SDK and batch processor when an endpoint is configured; failures are logged safely without failing business work, and readiness distinguishes disabled from configured-inactive telemetry. Tests cover wiring and error spans, and one local collector observed `agent.run`. Hosted storage, TLS/auth, sampling, retention, alerts, and SLOs remain unverified.
+> Archon owns a standard OpenTelemetry provider and maps typed runtime events into `invoke_agent`, `chat`, and `execute_tool` spans. The app emits one OTLP stream to a local Collector, which owns credentials, retry and allowlisted fan-out to Jaeger, Logfire or another selected backend. Content is off by default; the opt-in exports only redacted, bounded user/assistant text. A live Jaeger trace and earlier Logfire Agents/Tools view are observed, while production retention, sampling, alerts and SLOs remain unverified.
 
 ## Self-check
 

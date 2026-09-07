@@ -27,6 +27,19 @@ EMBEDDING_PROVIDER_KEYS = frozenset(
         "ARCHON_EMBEDDING_API_VERSION",
     }
 )
+TELEMETRY_PROVIDER_KEYS = frozenset(
+    {
+        "ARCHON_OTEL_DESTINATIONS",
+        "ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT",
+        "LOGFIRE_TOKEN",
+        "LOGFIRE_BASE_URL",
+        "APPLICATIONINSIGHTS_CONNECTION_STRING",
+        "TEMPO_OTLP_ENDPOINT",
+        "TEMPO_OTLP_INSECURE",
+        "ARCHON_OTEL_GENERIC_ENDPOINT",
+        "ARCHON_OTEL_GENERIC_INSECURE",
+    }
+)
 ALLOWED_PROVIDER_KEYS = (
     frozenset(
         {
@@ -35,9 +48,12 @@ ALLOWED_PROVIDER_KEYS = (
             "ARCHON_LLM_API_KEY",
             "ARCHON_LLM_BASE_URL",
             "ARCHON_PROMPT_CACHING_ENABLED",
+            "LOGFIRE_TOKEN",
+            "LOGFIRE_BASE_URL",
         }
     )
     | EMBEDDING_PROVIDER_KEYS
+    | TELEMETRY_PROVIDER_KEYS
 )
 REQUIRED_PROVIDER_KEYS = frozenset(
     {
@@ -48,6 +64,9 @@ REQUIRED_PROVIDER_KEYS = frozenset(
     }
 )
 MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+OTEL_DESTINATIONS = frozenset(
+    {"debug", "jaeger", "logfire", "azure-monitor", "tempo", "otlp"}
+)
 
 
 def _unquote(value: str) -> str:
@@ -150,6 +169,37 @@ def read_provider_env(path: Path) -> dict[str, str]:
         ):
             raise ValueError("invalid embedding API version")
         values.setdefault("ARCHON_EMBEDDING_API_KEY", values["ARCHON_LLM_API_KEY"])
+
+    raw_destinations = values.get("ARCHON_OTEL_DESTINATIONS")
+    if raw_destinations is None:
+        raw_destinations = "logfire" if values.get("LOGFIRE_TOKEN") else "debug"
+        values["ARCHON_OTEL_DESTINATIONS"] = raw_destinations
+    destinations = tuple(
+        part.strip().lower() for part in raw_destinations.split(",") if part.strip()
+    )
+    if not destinations or len(set(destinations)) != len(destinations):
+        raise ValueError("invalid OTel destination selection")
+    if unknown := sorted(set(destinations) - OTEL_DESTINATIONS):
+        raise ValueError("unsupported OTel destination: " + ", ".join(unknown))
+    required_by_destination = {
+        "logfire": ("LOGFIRE_TOKEN", "LOGFIRE_BASE_URL"),
+        "azure-monitor": ("APPLICATIONINSIGHTS_CONNECTION_STRING",),
+        "tempo": ("TEMPO_OTLP_ENDPOINT",),
+        "otlp": ("ARCHON_OTEL_GENERIC_ENDPOINT",),
+    }
+    for destination in destinations:
+        missing_destination_keys = [
+            key for key in required_by_destination.get(destination, ()) if not values.get(key)
+        ]
+        if missing_destination_keys:
+            raise ValueError(
+                f"OTel destination {destination!r} is missing required keys: "
+                + ", ".join(missing_destination_keys)
+            )
+    capture = values.get("ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT", "false").lower()
+    if capture not in {"true", "false"}:
+        raise ValueError("ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT must be true or false")
+    values["ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT"] = capture
     return values
 
 
@@ -168,7 +218,12 @@ def generate_values(provider_env: Path | None = None) -> dict[str, str]:
         "ARCHON_DURABLE_EFFECT_LEDGER_ENABLED": "true",
         "ARCHON_AGENT_DEADLINE_SECONDS": "300",
         "ARCHON_VERIFIER_ENABLED": "false",
-        "ARCHON_LOCAL_PORT": os.environ.get("ARCHON_LOCAL_PORT") or str(18_000 + secrets.randbelow(20_000)),
+        "ARCHON_OTEL_DESTINATIONS": "debug",
+        "ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT": "false",
+        "COMPOSE_PROFILES": "",
+        "ARCHON_JAEGER_PORT": os.environ.get("ARCHON_JAEGER_PORT") or "16686",
+        "ARCHON_LOCAL_PORT": os.environ.get("ARCHON_LOCAL_PORT")
+        or str(18_000 + secrets.randbelow(20_000)),
         "ARCHON_RUNTIME_MODE": "mock",
         "ARCHON_LLM_PROVIDER": "mock",
         "ARCHON_LLM_MODEL": "mock-model",
@@ -178,6 +233,8 @@ def generate_values(provider_env: Path | None = None) -> dict[str, str]:
         values["ARCHON_RUNTIME_MODE"] = "live-foundry"
         values["ARCHON_VERIFIER_ENABLED"] = "true"
         values["ARCHON_VERIFIER_MODEL"] = values["ARCHON_LLM_MODEL"]
+    if "jaeger" in values["ARCHON_OTEL_DESTINATIONS"].split(","):
+        values["COMPOSE_PROFILES"] = "jaeger"
     return values
 
 

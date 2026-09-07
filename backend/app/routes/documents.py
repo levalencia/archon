@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Any, cast
 
 import structlog
@@ -160,15 +161,32 @@ async def query_documents(
             run_id=run_id,
         ),
     )
-    try:
-        result = await workflow.run(
-            body.question,
-            document_id=body.document_id,
-            document_ids=owned_ids,
-            owner_id=user["user_id"],
-            project_id=body.project_id,
-            correlation_id=get_correlation_id(),
+    exporter = request.app.state.otel_exporter
+    span_context = (
+        exporter.start_span(
+            "rag.query",
+            {
+                "rag.top_k": body.top_k,
+                "rag.document_scoped": body.document_id is not None,
+                "rag.owned_document_count": len(owned_ids),
+            },
         )
+        if exporter is not None
+        else nullcontext(None)
+    )
+    try:
+        with span_context as span:
+            result = await workflow.run(
+                body.question,
+                document_id=body.document_id,
+                document_ids=owned_ids,
+                owner_id=user["user_id"],
+                project_id=body.project_id,
+                correlation_id=get_correlation_id(),
+            )
+            if span is not None:
+                span.set_attribute("rag.chunks_retrieved", result.chunks_retrieved)
+                span.set_attribute("rag.success", True)
     except GroundedDeadlineExceededError as exc:
         raise HTTPException(status_code=504, detail="Grounded answer deadline exceeded") from exc
     except GroundedProviderError as exc:

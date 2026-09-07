@@ -128,6 +128,7 @@ class Settings(BaseSettings):
     # Observability
     otel_endpoint: str = ""
     otel_service_name: str = "archon"
+    otel_capture_message_content: bool = False
 
     # Security
     secret_key: str = "dev-secret-change-in-production"

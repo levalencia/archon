@@ -23,6 +23,7 @@ export interface ChildAgentStatus {
   output_tokens?: number;
   total_tokens?: number;
   tool_count?: number;
+  iterations?: number;
 }
 export interface Artifact { id: string; title: string; type: string; language?: string; content?: string; content_length: number; version?: number }
 export interface Message {

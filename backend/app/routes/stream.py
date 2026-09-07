@@ -298,6 +298,8 @@ async def chat_stream_real(
             exporter=request.app.state.otel_exporter,
             redactor=request.app.state.persistence_redactor,
             log_buffer=request.app.state.log_buffer,
+            tools=tools,
+            input_content=user_message,
             downstream=cost_sink,
         )
 

@@ -58,7 +58,11 @@ backend/.venv/bin/python scripts/build-visual-learning.py
 backend/.venv/bin/python scripts/build-visual-learning.py --check
 backend/.venv/bin/pytest -q \
   backend/tests/unit/test_visual_learning_graph.py \
-  backend/tests/unit/test_notebooklm_source_packs.py
+  backend/tests/unit/test_learning_source_packs.py \
+  backend/tests/unit/test_learning_pilot.py \
+  backend/tests/unit/test_learning_packs.py \
+  backend/tests/unit/test_learning_media.py \
+  backend/tests/unit/test_learning_media_routes.py
 cd frontend
 npm run check
 npx vitest run
@@ -103,7 +107,7 @@ Learning-pack definitions:
 
 All six recipes retain the same planned artifact families, but only artifacts present in the validated published catalog appear as available. The deterministic builders generate structured teaching artifacts and media scripts; audio/video count as published only after their real files pass the runbook checks.
 
-Use [`hermes-generation-promptbook.md`](hermes-generation-promptbook.md) for generation contracts. Follow [`hermes-generation-runbook.md`](hermes-generation-runbook.md) for generation, media validation, publication, and local-runtime verification. NotebookLM files remain temporarily as migration references only.
+Use [`hermes-generation-promptbook.md`](hermes-generation-promptbook.md) for generation contracts. Follow [`hermes-generation-runbook.md`](hermes-generation-runbook.md) for generation, media validation, publication, and local-runtime verification. NotebookLM files are deprecated migration references only; they are not the active generation lane.
 
 ## Honesty boundaries
 
