@@ -69,6 +69,7 @@ ApprovalHook = Callable[[str, str, dict[str, Any]], Coroutine[Any, Any, bool]]
 
 class StopReason(StrEnum):
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
     ITERATION_BUDGET_EXHAUSTED = "iteration_budget_exhausted"
     TOOL_BUDGET_EXHAUSTED = "tool_budget_exhausted"
     TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
@@ -267,6 +268,17 @@ class AgentRuntime:
                 deadline=state.deadline,
                 clock=self._clock,
             )
+        except asyncio.CancelledError:
+            await self._stop(
+                StopReason.CANCELLED,
+                "",
+                state.iterations,
+                [dict(item) for item in state.calls],
+                state.usage or TokenUsage(),
+                "run_cancelled",
+                record_result=False,
+            )
+            raise
         except DeadlineExceededError:
             return await self._deadline_result(state)
         finally:
@@ -308,6 +320,9 @@ class AgentRuntime:
                         missing_capabilities, content, iterations, calls, usage
                     )
                 iterations += 1
+                state = _RUNTIME_DEADLINE_STATE.get()
+                if state is not None:
+                    state.iterations = iterations
                 await self._emit(AgentEventKind.ITERATION_STARTED, iterations)
                 context_allowance = (
                     self._budget.max_context_tokens - self._budget.context_output_reserve_tokens
@@ -413,6 +428,8 @@ class AgentRuntime:
                 actual_model = raw_actual_model if isinstance(raw_actual_model, str) else None
                 has_tool_calls = bool(tool_calls) or snapshot_error is not None
                 usage += response_usage
+                if state is not None:
+                    state.usage = usage
                 response_event_data = {}
                 if provider_stop_reason is not None:
                     response_event_data["provider_stop_reason"] = provider_stop_reason
@@ -1910,6 +1927,8 @@ class AgentRuntime:
         usage: TokenUsage,
         error: str | None = None,
         structured_output: object | None = None,
+        *,
+        record_result: bool = True,
     ) -> AgentResult:
         # The terminal event finalizes completed_at, so persist the compliant final answer first.
         if self._compliance is not None:
@@ -1937,7 +1956,7 @@ class AgentRuntime:
                 state.usage = usage
 
         async def persist_terminal() -> None:
-            if self._result_recorder is not None:
+            if record_result and self._result_recorder is not None:
                 await self._result_recorder(content)
             await self._emit(
                 AgentEventKind.RUN_STOPPED,
