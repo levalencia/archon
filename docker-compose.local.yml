@@ -56,6 +56,7 @@ services:
       ARCHON_RATE_LIMIT_BACKEND: redis
       ARCHON_OTEL_ENDPOINT: http://otel-collector:4317
       ARCHON_OTEL_SERVICE_NAME: archon-local
+      ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT: ${ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT:-false}
       ARCHON_LEARNING_MEDIA_ENABLED: ${ARCHON_LEARNING_MEDIA_ENABLED:-false}
       ARCHON_LEARNING_MEDIA_LIBRARY_ROOT: /var/lib/archon-learning
       OTEL_BSP_SCHEDULE_DELAY: "200"
@@ -174,8 +175,25 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.118.0@sha256:3f6274fe609da4f9964fbc2ef36b83d08d47964fbb11629251393590d3924072
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
+      APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
     volumes:
-      - ./deploy/otel-collector.local.yml:/etc/otelcol-contrib/config.yaml:ro
+      - ${ARCHON_OTEL_COLLECTOR_CONFIG_FILE:-./deploy/otel-collector.local.yml}:/etc/otelcol-contrib/config.yaml:ro
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  jaeger:
+    profiles: ["jaeger"]
+    image: jaegertracing/all-in-one:1.64.0@sha256:7e9591218e7ddd51e568ef892e3ea190ae420ecf97c4d718910a3f57e076c216
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${ARCHON_JAEGER_PORT:-16686}:16686"
     restart: unless-stopped
     read_only: true
     tmpfs:

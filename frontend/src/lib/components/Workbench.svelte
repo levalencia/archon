@@ -21,6 +21,7 @@
   } from '$lib/types';
   import { authenticatedFetch } from '$lib/auth';
   import { readProjectScope } from '$lib/project-scope';
+  import { getRun, getRunEvents, listRunChildren, listRuns, rootRunId } from '$lib/runs';
 
   // ── Props ──────────────────────────────────────────────────────────
   let { initialId = '' }: { initialId?: string } = $props();
@@ -85,6 +86,57 @@
       content: htmlContent,
       content_length: htmlContent.length,
     }];
+  }
+
+  async function hydrateLatestTeamEvidence(conversationId: string, loaded: Message[]): Promise<Message[]> {
+    try {
+      const runs = await listRuns({ conversationId, limit: 50 });
+      if (!runs.length) return loaded;
+      const selectedId = rootRunId(runs[0]);
+      const selected = runs.find((run) => run.run_id === selectedId) || await getRun(selectedId);
+      const [childRuns, events] = await Promise.all([
+        listRunChildren(selectedId),
+        getRunEvents(selectedId),
+      ]);
+      const routed = events.find((event) => event.kind === 'orchestration_routed')?.payload;
+      if (routed?.resolved_mode !== 'team') return loaded;
+
+      const byChild = new Map<string, ChildAgentStatus>();
+      for (const event of events.filter((item) => item.kind.startsWith('delegation_'))) {
+        const child = event.payload as unknown as ChildAgentStatus;
+        if (child.child_id) byChild.set(child.child_id, { ...byChild.get(child.child_id), ...child });
+      }
+      for (const run of childRuns) {
+        const prior = byChild.get(run.run_id);
+        byChild.set(run.run_id, {
+          child_id: run.run_id,
+          parent_run_id: run.parent_run_id || selectedId,
+          profile_id: prior?.profile_id || 'bounded-child',
+          specialist_kind: prior?.specialist_kind || 'dynamic',
+          status: (prior?.status || run.status) as ChildAgentStatus['status'],
+          reason_code: prior?.reason_code || run.stop_reason,
+          input_tokens: prior?.input_tokens ?? run.input_tokens,
+          output_tokens: prior?.output_tokens ?? run.output_tokens,
+          total_tokens: prior?.total_tokens ?? run.total_tokens,
+          iterations: prior?.iterations ?? run.iterations,
+          tool_count: prior?.tool_count,
+        });
+      }
+
+      const assistantIndex = loaded.findLastIndex((message) => message.role === 'assistant');
+      if (assistantIndex < 0) return loaded;
+      return loaded.map((message, index) => index === assistantIndex ? {
+        ...message,
+        run_id: selectedId,
+        status: selected.status === 'failed' ? 'failed' : 'completed',
+        iterations: selected.iterations,
+        elapsed_ms: selected.latency_ms ?? undefined,
+        orchestration: routed as unknown as Message['orchestration'],
+        child_agents: [...byChild.values()],
+      } : message);
+    } catch {
+      return loaded;
+    }
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────
@@ -169,13 +221,14 @@
       const r = await authenticatedFetch(`/api/chat/history/${id}`);
       if (!r.ok) throw new Error(`Could not load conversation (${r.status})`);
       const d = await r.json();
-      messages = (d.messages || []).map((m: any, i: number) => ({
+      const loaded: Message[] = (d.messages || []).map((m: any, i: number) => ({
         id: i,
         role: m.role,
         content: m.content,
         timestamp: '',
         artifacts: m.role === 'assistant' ? detectArtifacts(m.content, i) : undefined,
       }));
+      messages = await hydrateLatestTeamEvidence(id, loaded);
       artifacts = messages.flatMap((message) => message.artifacts || []);
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not load conversation';

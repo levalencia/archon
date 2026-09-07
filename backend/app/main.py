@@ -368,10 +368,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if settings.verifier_enabled
         else None
     )
-    exporter = None
-    if settings.otel_endpoint:
-        exporter = OTLPExporter(settings.otel_service_name, settings.otel_endpoint)
-    app.state.otel_exporter = exporter
+    exporter = app.state.otel_exporter
     job_worker_task = asyncio.create_task(job_worker.run_forever())
     app.state.job_worker = job_worker
     app.state.job_worker_task = job_worker_task
@@ -578,6 +575,12 @@ def create_app(
                 status_code=503, content={"status": "degraded", "dependencies": dependencies}
             )
         return {"status": "ready", "dependencies": dependencies}
+
+    exporter = None
+    if settings.otel_endpoint:
+        exporter = OTLPExporter(settings.otel_service_name, settings.otel_endpoint)
+        exporter.instrument_fastapi(app)
+    app.state.otel_exporter = exporter
 
     return app
 

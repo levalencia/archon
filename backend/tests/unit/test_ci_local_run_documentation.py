@@ -25,9 +25,12 @@ def test_ci_guide_matches_workflow_inventory() -> None:
 
 def test_ci_guide_matches_compose_and_run_commands() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
-    services = set(yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"])
+    service_config = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]
+    services = set(service_config)
+    base_services = {name for name, config in service_config.items() if "profiles" not in config}
+    profile_services = services - base_services
 
-    assert services == {
+    assert base_services == {
         "gateway",
         "backend",
         "sandbox-runner",
@@ -36,7 +39,9 @@ def test_ci_guide_matches_compose_and_run_commands() -> None:
         "redis",
         "otel-collector",
     }
-    assert "Verified Compose services | 7" in guide
+    assert profile_services == {"jaeger"}
+    assert "Verified base Compose services | 7" in guide
+    assert "Optional profile services | 1 (`jaeger`)" in guide
     for service in services:
         assert f"`{service}`" in guide
 

@@ -14,7 +14,7 @@ import pytest
 ROOT = Path(__file__).parents[3]
 
 
-def _compose_config() -> dict:
+def _compose_config(**overrides: str) -> dict:
     if shutil.which("docker") is None:
         pytest.skip("docker CLI is unavailable")
     env = os.environ | {
@@ -24,6 +24,7 @@ def _compose_config() -> dict:
         "ARCHON_EFFECT_IDENTITY_SECRET": "test-only-effect-identity-secret-that-is-long-enough",
         "ARCHON_DELEGATION_SIGNING_KEY": "test-only-delegation-signing-key-that-is-long-enough",
     }
+    env.update(overrides)
     result = subprocess.run(
         [
             "docker",
@@ -60,6 +61,15 @@ def test_only_loopback_gateway_is_published() -> None:
     assert "ports" not in services["frontend"]
     assert "ports" not in services["sandbox-runner"]
     assert services["gateway"]["ports"][0]["host_ip"] == "127.0.0.1"
+
+
+def test_jaeger_profile_is_loopback_only_and_destination_credentials_stay_out_of_backend() -> None:
+    services = _compose_config(COMPOSE_PROFILES="jaeger")["services"]
+    assert services["jaeger"]["ports"][0]["host_ip"] == "127.0.0.1"
+    assert services["jaeger"]["ports"][0]["target"] == 16686
+    assert "LOGFIRE_TOKEN" not in services["backend"]["environment"]
+    assert "APPLICATIONINSIGHTS_CONNECTION_STRING" not in services["backend"]["environment"]
+    assert "LOGFIRE_TOKEN" in services["otel-collector"]["environment"]
 
 
 def test_compose_requires_secrets_and_uses_safe_local_dependencies() -> None:
@@ -138,7 +148,7 @@ def test_images_run_nonroot_and_backend_migrates() -> None:
     assert backend.count("@sha256:") >= 3
     assert "alembic upgrade head" in entrypoint
     smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
-    assert '[[ "$migration" == "20260828_14" ]]' in smoke
+    assert '[[ "$migration" == "20260902_22" ]]' in smoke
     assert "app.acceptance.control_plane" in smoke
     assert 'durable_monetary_budget"] == "enabled"' in smoke
     assert 'durable_effect_ledger"] == "enabled"' in smoke
@@ -152,6 +162,11 @@ def test_real_otel_dependencies_and_span_assertion_are_part_of_the_target() -> N
     smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
     assert "opentelemetry-sdk==" in dependencies
     assert "opentelemetry-exporter-otlp-proto-grpc==" in dependencies
+    assert "opentelemetry-instrumentation-fastapi==" in dependencies
+    assert '"logfire' not in dependencies
+    assert "generate-otel-collector-config.py" in smoke
+    assert "ARCHON_OTEL_COLLECTOR_CONFIG_FILE" in smoke
+    assert "api/traces?service=archon-local" in smoke
     assert "otel_before=" in smoke
     assert "otel_after=" in smoke
     assert '"\\tTraces\\t" in line and "resource spans" in line' in smoke
@@ -196,6 +211,9 @@ def test_local_stack_wrapper_preserves_exact_generated_runtime_context() -> None
     assert '-p "$ARCHON_COMPOSE_PROJECT"' in wrapper
     assert 'chmod 600 "$STATE_FILE"' in wrapper
     assert 'chmod 600 "$ARCHON_COMPOSE_ENV_FILE"' in wrapper
+    assert 'rm -f "$ARCHON_OTEL_COLLECTOR_CONFIG_FILE"' in wrapper
+    assert 'chmod 600 "$COLLECTOR_CONFIG"' in smoke
+    assert "ARCHON_OTEL_COLLECTOR_CONFIG_FILE" in smoke
     assert 'LOCK_FILE="$STATE_DIR/start.lock"' in wrapper
     assert "ARCHON_START_LOCK_HELD:-0" in wrapper
     assert 'exec lockf -t 0 "$LOCK_FILE"' in wrapper

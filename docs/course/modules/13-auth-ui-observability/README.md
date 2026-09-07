@@ -239,16 +239,16 @@ Never expose credentials, raw provider exceptions, tool payloads, personal data,
 |---|---|---|
 | Deployment | Local/test paths and artifacts. | Public ingress, multi-host operation, SLO/on-call; public deployment is deferred. |
 | Data and scale | Bounded fixtures and local persistent data. | Capacity, retention, sustained load and multi-replica behavior. |
-| Providers | Deterministic/mock/local dependencies as explicitly linked. | Final external providers were not verified. |
+| Providers | Live Jaeger trace plus earlier Logfire Agents/Tools acceptance. | New Logfire Summary/Messages visual acceptance and other destinations remain unverified. |
 | Security/operations | Tested ownership, validation, policy and redaction controls. | Independent audit, rotation, production alerting and incident drills. |
 
-Auth and ownership are enforced on tested product paths. OTEL SDK exported agent.run to the local collector. Metrics are process-local, the owner log stream is in-memory, and there is no hosted trace store, production alerting, external IdP, multi-replica aggregation, or public deployment.
+Auth and ownership are enforced on tested product paths. The backend emits one OTLP stream to the Collector, which fan-outs to selected destinations. A live `invoke_agent Archon` trace with `chat` and `execute_tool calculator` spans was observed in Jaeger; earlier Logfire Agents/Tools rendering was visually accepted. Metrics are process-local, the owner log stream is in-memory, and there is no production alerting, external IdP, multi-replica aggregation, or public deployment.
 
 ## Interview answer
 
 ### 30-second answer
 
-> An Archon request authenticates to a current durable user, scopes every repository and MCP lookup by owner/project, and sends side effects through policy/approval. The SSE route projects typed runtime events and cancels runtime plus approvals on disconnect. The same events create redacted structured logs, process-local Prometheus metrics, durable ledger records and OTLP spans linked by run/correlation IDs. A local collector was observed; hosted production telemetry is not claimed.
+> An Archon request authenticates to a current durable user, scopes every repository and MCP lookup by owner/project, and sends side effects through policy/approval. The SSE route projects typed runtime events and cancels runtime plus approvals on disconnect. The same events create redacted structured logs, process-local Prometheus metrics, durable ledger records and OTLP spans linked by run/correlation IDs. The backend emits once to a Collector that owns destination fan-out; Jaeger and Logfire have live evidence, but production telemetry is not claimed.
 
 ### Deeper follow-ups
 
@@ -273,7 +273,7 @@ Auth and ownership are enforced on tested product paths. OTEL SDK exported agent
 2. SSE delivery is transient and client-specific; the ledger is durable, ordered run evidence.
 3. The runtime task is cancelled and pending approvals for that run are cancelled in finally.
 4. Logs carry redacted event fields, metrics aggregate counts/latency, traces connect timed spans.
-5. The configured real SDK/exporter emitted agent.run to a local collector; no hosted backend/SLO.
+5. A live `invoke_agent`/`chat`/`execute_tool` trace reached Jaeger through Collector fan-out; earlier Logfire Agents/Tools was accepted, but production SLOs are unverified.
 6. Provider/tool messages can contain secrets or PII; safe type/reason/hash metadata preserves utility with less exposure.
 
 </details>

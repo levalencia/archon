@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.observability.log_buffer import OwnerLogBuffer
 from app.observability.runtime_events import CompositeEventSink
 from app.observability.tracing import Span, Tracer
-from app.runtime import AgentEvent, AgentEventKind, TokenUsage
+from app.runtime import AgentEvent, AgentEventKind, TokenUsage, ToolDefinition
 from app.security.persistence_redactor import PersistenceRedactor
 
 
@@ -40,11 +42,23 @@ async def test_otel_exporter_receives_spans_when_wired():
     sink = CompositeEventSink(
         conversation_id="conv-otel-1",
         model="test-model",
+        provider="foundry",
         redactor=PersistenceRedactor(),
         log_buffer=OwnerLogBuffer(),
         tracer=tracer,
         exporter=exporter,
         clock=clock,
+        tool_definitions=(
+            ToolDefinition(
+                name="calculator",
+                description="Evaluate a bounded arithmetic expression",
+                input_schema={
+                    "type": "object",
+                    "properties": {"expression": {"type": "string"}},
+                    "required": ["expression"],
+                },
+            ),
+        ),
     )
 
     # Full agent lifecycle: run_started -> iteration -> model_response -> run_stopped
@@ -70,10 +84,40 @@ async def test_otel_exporter_receives_spans_when_wired():
         )
     )
 
-    # Exporter should have received: gen_ai.chat + agent.run
+    # Exporter should receive a model span and an OTel GenAI agent invocation.
     exported_names = [s.name for s in exporter.exported]
-    assert "gen_ai.chat" in exported_names
-    assert "agent.run" in exported_names
+    assert "chat test-model" in exported_names
+    assert "invoke_agent Archon" in exported_names
+    agent_span = next(s for s in exporter.exported if s.name == "invoke_agent Archon")
+    assert agent_span.attributes["gen_ai.operation.name"] == "invoke_agent"
+    assert agent_span.attributes["gen_ai.agent.name"] == "Archon"
+    assert agent_span.attributes["gen_ai.agent.call.id"] == sink.run_id
+    assert agent_span.attributes["gen_ai.conversation.id"] == "conv-otel-1"
+    assert agent_span.attributes["gen_ai.request.model"] == "test-model"
+    assert agent_span.attributes["archon.provider"] == "foundry"
+    assert json.loads(agent_span.attributes["gen_ai.tool.definitions"]) == [
+        {
+            "type": "function",
+            "name": "calculator",
+            "description": "Evaluate a bounded arithmetic expression",
+            "parameters": {
+                "type": "object",
+                "properties": {"expression": {"type": "string"}},
+                "required": ["expression"],
+            },
+        }
+    ]
+    assert json.loads(agent_span.attributes["logfire.json_schema"])["properties"][
+        "gen_ai.tool.definitions"
+    ] == {"type": "array"}
+    assert "gen_ai.input.messages" not in agent_span.attributes
+    assert "gen_ai.output.messages" not in agent_span.attributes
+    assert "gen_ai.system_instructions" not in agent_span.attributes
+    model_span = next(s for s in exporter.exported if s.name == "chat test-model")
+    assert (
+        model_span.attributes["gen_ai.tool.definitions"]
+        == agent_span.attributes["gen_ai.tool.definitions"]
+    )
     assert len(exporter.exported) >= 2
 
 
@@ -123,11 +167,19 @@ async def test_otel_exporter_receives_tool_spans():
     )
 
     exported_names = [s.name for s in exporter.exported]
-    assert "tool.web_search" in exported_names
-    # Verify tool attributes
-    tool_span = next(s for s in exporter.exported if s.name == "tool.web_search")
-    assert tool_span.attributes["tool.name"] == "web_search"
+    assert "execute_tool web_search" in exported_names
+    tool_span = next(s for s in exporter.exported if s.name == "execute_tool web_search")
+    assert tool_span.attributes["gen_ai.operation.name"] == "execute_tool"
+    assert tool_span.attributes["gen_ai.tool.name"] == "web_search"
+    assert tool_span.attributes["gen_ai.tool.type"] == "function"
+    assert tool_span.attributes["gen_ai.tool.call.id"] == "call-42"
+    assert tool_span.attributes["gen_ai.agent.name"] == "Archon"
+    assert tool_span.attributes["gen_ai.agent.call.id"] == sink.run_id
+    assert tool_span.attributes["gen_ai.conversation.id"] == "conv-otel-2"
+    assert tool_span.attributes["logfire.msg"] == "running tool: web_search"
     assert tool_span.attributes["tool.success"] is True
+    assert "gen_ai.tool.call.arguments" not in tool_span.attributes
+    assert "gen_ai.tool.call.result" not in tool_span.attributes
 
 
 @pytest.mark.unit
@@ -160,4 +212,4 @@ async def test_no_exporter_means_no_export():
 
     # Tracer still collects spans even without exporter
     assert len(tracer.spans) >= 1
-    assert any(s.name == "agent.run" for s in tracer.spans)
+    assert any(s.name == "invoke_agent Archon" for s in tracer.spans)

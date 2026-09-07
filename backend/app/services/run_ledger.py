@@ -123,6 +123,7 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
             "total_tokens",
             "profile_id",
             "specialist_kind",
+            "iterations",
             "tool_count",
         }
     ),

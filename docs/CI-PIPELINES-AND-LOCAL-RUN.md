@@ -27,7 +27,8 @@ Archon currently has:
 | Active GitHub workflows | 1 |
 | Jobs in the CI workflow | 3 |
 | Deployment/CD workflows | 0 |
-| Verified Compose services | 7 |
+| Verified base Compose services | 7 |
+| Optional profile services | 1 (`jaeger`) |
 
 ## GitHub Actions workflow
 
@@ -215,7 +216,7 @@ uv run python scripts/portfolio_benchmark.py \
 
 This executes 12 scenarios for 120 total scenario iterations.
 
-### Managed seven-service application
+### Managed base seven-service application with optional destinations
 
 Use the managed wrapper for normal local operation:
 
@@ -227,7 +228,7 @@ Use the managed wrapper for normal local operation:
 
 1. creates a mode-`0600` temporary env file;
 2. generates valid ephemeral database, JWT, and encryption material;
-3. builds and starts the seven services;
+3. builds and starts the seven base services plus any explicitly selected profile services;
 4. waits for health/readiness;
 5. checks auth, migrations, metrics, OTEL, and sandbox behavior;
 6. atomically stores only non-secret runtime metadata (project, env-file path, Compose file, and URL) in a mode-`0600` state file;
@@ -284,7 +285,7 @@ Stop the exact managed stack and remove volumes, protected env, and state:
 ./scripts/local-stack.sh stop
 ```
 
-### One-shot seven-service acceptance
+### One-shot base-stack acceptance
 
 ```bash
 ./scripts/local-deploy-smoke.sh
@@ -325,7 +326,7 @@ The verified file is:
 docker-compose.local.yml
 ```
 
-Only `gateway` publishes a host port, and it binds to `127.0.0.1`.
+`gateway` publishes the application port on `127.0.0.1`. When the optional `jaeger` profile is selected, Jaeger also publishes its UI on `127.0.0.1`; no service binds publicly.
 
 ```mermaid
 flowchart TB
@@ -337,6 +338,7 @@ flowchart TB
     Backend --> Redis[(redis)]
     Backend --> OTEL[otel-collector]
     Backend -->|private Unix socket| Sandbox[sandbox-runner]
+    OTEL -. optional trace export .-> Jaeger[jaeger profile]
 
     Postgres --> PGVolume[(postgres-data)]
     Redis --> RedisVolume[(redis-data)]
@@ -425,12 +427,20 @@ flowchart TB
 - digest-pinned OpenTelemetry Collector Contrib;
 - internal OTLP receivers on `4317` (gRPC) and `4318` (HTTP);
 - health extension on internal port `13133`, but no Compose healthcheck;
-- mounts `deploy/otel-collector.local.yml` read-only;
-- local debug trace exporter;
+- mounts the protected generated Collector config read-only;
+- allowlisted fan-out to selected destinations such as debug, Jaeger, or Logfire;
 - read-only root filesystem;
 - temporary `/tmp`;
 - `no-new-privileges`;
 - no persistent volume or public endpoint.
+
+### `jaeger` (optional profile)
+
+- digest-pinned Jaeger all-in-one image;
+- starts only when the `jaeger` profile is selected;
+- receives traces from the Collector over the internal network;
+- publishes the trace UI only on `127.0.0.1:${ARCHON_JAEGER_PORT:-16686}`;
+- is local inspection evidence, not production retention, alerting, or deployment.
 
 ## Persistent volumes
 

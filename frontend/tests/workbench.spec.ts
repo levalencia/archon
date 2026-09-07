@@ -140,11 +140,15 @@ test('team mode renders fixed and dynamic child evidence', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Message' }).fill('Compare the architecture');
   await page.getByRole('button', { name: 'Send' }).click();
   expect((await requestPromise).postDataJSON().execution_mode).toBe('team');
+  const inlineTeam = page.getByRole('region', { name: 'Team execution' });
+  await expect(inlineTeam).toContainText('team → team');
+  await expect(inlineTeam).toContainText('researcher-v1');
+  await expect(inlineTeam).toContainText('dynamic-analyst-v1');
   await page.getByRole('tab', { name: 'Agents' }).click();
-  await expect(page.getByText('auto → team')).toHaveCount(0);
-  await expect(page.getByText('team → team')).toBeVisible();
-  await expect(page.getByText('researcher-v1')).toBeVisible();
-  await expect(page.getByText('dynamic-analyst-v1')).toBeVisible();
+  const agentEvidence = page.getByRole('region', { name: 'Agent orchestration evidence' });
+  await expect(agentEvidence).toContainText('team → team');
+  await expect(agentEvidence).toContainText('researcher-v1');
+  await expect(agentEvidence).toContainText('dynamic-analyst-v1');
 });
 
 test('persisted Team evidence resolves the latest parent when a child run is newer', async ({ page }) => {
@@ -161,6 +165,14 @@ test('persisted Team evidence resolves the latest parent when a child run is new
     run_id: 'child-newer', parent_run_id: 'parent-team',
     started_at: '2026-09-07T05:18:19Z', answer_summary: null,
   };
+  await page.unroute('**/api/chat/history/*');
+  await page.route('**/api/chat/history/persisted-team', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ messages: [
+      { role: 'user', content: 'Compare the architecture' },
+      { role: 'assistant', content: 'Team answer' },
+    ] }),
+  }));
   await page.unroute('**/api/runs?**');
   await page.route('**/api/runs?**', route => route.fulfill({
     contentType: 'application/json', body: JSON.stringify({ items: [child, parent] }),
@@ -184,7 +196,7 @@ test('persisted Team evidence resolves the latest parent when a child run is new
       } },
       { sequence: 2, event_at: '', kind: 'delegation_completed', iteration: 0, payload: {
         child_id: 'child-newer', parent_run_id: 'parent-team', profile_id: 'researcher-v1',
-        specialist_kind: 'fixed', status: 'completed', total_tokens: 42, tool_count: 3,
+        specialist_kind: 'fixed', status: 'completed', total_tokens: 42, iterations: 2, tool_count: 3,
       } },
     ] }),
   }));
@@ -196,14 +208,20 @@ test('persisted Team evidence resolves the latest parent when a child run is new
   }));
 
   await page.goto('/chat/persisted-team');
+  const inlineTeam = page.getByRole('region', { name: 'Team execution' });
+  await expect(inlineTeam).toBeVisible();
+  await expect(inlineTeam).toContainText('researcher-v1');
+  await expect(inlineTeam).toContainText('2 iterations');
+  await expect(inlineTeam).toContainText('3 tools');
   await expect(page.getByRole('region', { name: 'Persisted run summary' })).toContainText('Team answer');
   const agentsTab = page.getByRole('tab', { name: 'Agents' });
   await expect(agentsTab).toBeVisible();
   await agentsTab.click();
   await expect(agentsTab).toHaveAttribute('aria-selected', 'true');
 
-  await expect(page.getByText('team → team')).toBeVisible();
-  await expect(page.getByText('researcher-v1')).toBeVisible();
+  const agentEvidence = page.getByRole('region', { name: 'Agent orchestration evidence' });
+  await expect(agentEvidence).toContainText('team → team');
+  await expect(agentEvidence).toContainText('researcher-v1');
 });
 
 test('mobile uses navigation drawer and inspector bottom sheet', async ({ page }) => {

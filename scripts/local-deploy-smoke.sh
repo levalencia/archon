@@ -5,8 +5,10 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 COMPOSE_FILE="$ROOT/docker-compose.local.yml"
 PROJECT="archon-local-$PPID-$RANDOM"
 ENV_FILE=$(mktemp "${TMPDIR:-/tmp}/archon-local.XXXXXX")
+COLLECTOR_CONFIG=$(mktemp "${TMPDIR:-/tmp}/archon-otel-collector.XXXXXX")
 STATE_FILE=${ARCHON_RUNTIME_STATE_FILE:-}
 chmod 600 "$ENV_FILE"
+chmod 600 "$COLLECTOR_CONFIG"
 
 cleanup() {
   status=$?
@@ -18,6 +20,7 @@ cleanup() {
       {
         printf 'ARCHON_COMPOSE_PROJECT=%q\n' "$PROJECT"
         printf 'ARCHON_COMPOSE_ENV_FILE=%q\n' "$ENV_FILE"
+        printf 'ARCHON_OTEL_COLLECTOR_CONFIG_FILE=%q\n' "$COLLECTOR_CONFIG"
         printf 'ARCHON_COMPOSE_FILE=%q\n' "$COMPOSE_FILE"
         printf 'ARCHON_BASE_URL=%q\n' "$BASE_URL"
         printf 'ARCHON_RUNTIME_MODE=%q\n' "$ARCHON_RUNTIME_MODE"
@@ -40,6 +43,7 @@ cleanup() {
   else
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$PROJECT" down --volumes --remove-orphans >/dev/null 2>&1 || true
     rm -f "$ENV_FILE"
+    rm -f "$COLLECTOR_CONFIG"
     if [[ -n "$STATE_FILE" ]]; then
       rm -f "$STATE_FILE"
     fi
@@ -58,6 +62,9 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+python3 "$ROOT/scripts/generate-otel-collector-config.py" "$COLLECTOR_CONFIG"
+printf 'ARCHON_OTEL_COLLECTOR_CONFIG_FILE=%s\n' "$COLLECTOR_CONFIG" >>"$ENV_FILE"
+export ARCHON_OTEL_COLLECTOR_CONFIG_FILE="$COLLECTOR_CONFIG"
 if [[ -z "${ARCHON_SANDBOX_PLATFORM:-}" ]]; then
   daemon_arch="$(docker info --format '{{.Architecture}}')"
   case "$daemon_arch" in
@@ -111,7 +118,7 @@ else:
     assert deps["evidence_verifier"] == "disabled"
 assert deps["runtime_controls"]["durable_monetary_budget"] == "enabled"
 assert deps["runtime_controls"]["durable_effect_ledger"] == "enabled"
-assert deps["runtime_controls"]["agent_deadline_seconds"] == 90.0
+assert deps["runtime_controls"]["agent_deadline_seconds"] == 300.0
 assert deps["runtime_controls"]["rag_deadline_seconds"] == 60.0
 assert deps["telemetry"] == {"backend": "otlp-grpc", "status": "up"}
 '
@@ -175,7 +182,7 @@ unset ACCESS_TOKEN AUTH_HEADER_NAME
 
 curl --fail --silent --show-error "$BASE_URL/metrics" | python3 -c 'import sys; assert sys.stdin.read().strip()'
 migration=$("${compose[@]}" exec -T postgres psql -U archon -d archon -Atqc 'select version_num from alembic_version')
-[[ "$migration" == "20260828_14" ]]
+[[ "$migration" == "20260902_22" ]]
 "${compose[@]}" exec -T backend python -m app.acceptance.control_plane
 "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://otel-collector:13133/', timeout=3)"
 
@@ -192,6 +199,21 @@ print(sum(1 for line in sys.stdin if "\tTraces\t" in line and "resource spans" i
   sleep 1
 done
 [[ "$otel_observed" == "1" ]]
+
+if [[ ",$ARCHON_OTEL_DESTINATIONS," == *",jaeger,"* ]]; then
+  jaeger_observed=0
+  for _ in {1..30}; do
+    if curl --fail --silent --show-error \
+      "http://127.0.0.1:$ARCHON_JAEGER_PORT/api/traces?service=archon-local&limit=20" \
+      | python3 -c 'import json,sys; assert len(json.load(sys.stdin).get("data", [])) >= 1' \
+      >/dev/null 2>&1; then
+      jaeger_observed=1
+      break
+    fi
+    sleep 1
+  done
+  [[ "$jaeger_observed" == "1" ]]
+fi
 
 printf 'Local deployment smoke test passed: gateway, DB, Redis, configured embeddings, durable controls, PostgreSQL contention, auth, metrics, migration 14, and a newly exported OTEL trace batch.\n'
 printf 'RUNTIME_MODE=%s\nLLM_PROVIDER=%s\nLLM_MODEL=%s\n' "$ARCHON_RUNTIME_MODE" "$ARCHON_LLM_PROVIDER" "$ARCHON_LLM_MODEL"

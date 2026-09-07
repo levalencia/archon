@@ -43,7 +43,7 @@ sequenceDiagram
 
 [`CompositeEventSink.emit`](../../../backend/app/observability/runtime_events.py) makes an independently redacted copy before operational or persistent use. It:
 
-- starts/finishes `agent.run`, `gen_ai.chat`, and `tool.*` spans;
+- starts/finishes `invoke_agent Archon`, `chat {model}`, and `execute_tool {name}` spans;
 - increments process-local counters/latency samples;
 - writes a structured `runtime_event` and owner-scoped buffer entry;
 - appends a sanitized Run Ledger event;
@@ -59,7 +59,7 @@ sequenceDiagram
 | Run Ledger | What durable ordered control events belong to this owner/run? | Not semantic truth or WORM audit. |
 | Structured log | What happened operationally around a correlation ID? | Redaction is not complete privacy certification. |
 | Metric | How many/how slow/how often? | Process-local and bounded labels; no durable aggregation. |
-| Trace | Where did request time/failure occur? | Local OTLP observation; no hosted backend/SLO. |
+| Trace | Where did request time/failure occur? | Jaeger and Logfire are locally wired; no public deployment/SLO. |
 | Evaluation | Did defined checks score persisted output? | Heuristic/fixture scope must be stated. |
 
 ## Execute
@@ -77,7 +77,7 @@ uv run pytest -q \
 
 ## Observed boundary
 
-The local container target observed an exported `agent.run` span at its OTEL collector and exposed metrics. That does not establish hosted retention, alerting, multi-replica aggregation, production sampling, or public deployment. The final external providers were not verified.
+The local target observed one live agent trace in Jaeger while the same Collector pipeline exported to Logfire. Earlier Logfire Agents/Tools rendering was visually accepted; the latest Summary/Messages rendering still requires visual acceptance. This does not establish production retention, alerting, multi-replica aggregation, sampling, SLOs, or public deployment.
 
 ## Interview answer
 

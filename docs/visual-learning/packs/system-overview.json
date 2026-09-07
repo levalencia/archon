@@ -5,7 +5,7 @@
   "language": "en",
   "limitations": [
     "This is derivative learning material, not canonical implementation evidence.",
-    "Archon is verified as a local seven-service system; no public or cloud deployment is claimed.",
+    "Archon is verified as a local base seven-service system with an optional eighth Jaeger service; no public or cloud deployment is claimed.",
     "Counts and acceptance status must be rechecked against the source commit and canonical evidence documents."
   ],
   "concepts": [
@@ -195,7 +195,7 @@
       "teaching": {
         "definition": "Local operations is the reproducible target for building, migrating, checking dependencies, observing telemetry, and recovering Archon's durable state.",
         "receives": ["Pinned images and source revision", "Protected generated configuration", "PostgreSQL, Redis, and OTEL dependencies"],
-        "responsibility": "Start and verify the seven-service stack, expose health versus readiness, and preserve or restore evidence safely.",
+        "responsibility": "Start and verify the base seven-service stack plus optional Jaeger profile, expose health versus readiness, and preserve or restore evidence safely.",
         "produces": ["Local readiness observation", "CI and smoke results", "Checksummed backup and recovery evidence"],
         "controls": ["Managed wrapper owns retained stack state", "Destructive cleanup is explicit"],
         "failure_behavior": "Failed readiness, migration, checksum, or clean-target checks block acceptance rather than being reported as PASS.",

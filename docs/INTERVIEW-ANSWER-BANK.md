@@ -60,7 +60,7 @@ The native ARM image repeatedly exited 132 while importing `cryptography` before
 
 ## 14. How did you prove OpenTelemetry works?
 
-I added the actual SDK and OTLP gRPC exporter as production dependencies, exposed active exporter state, failed readiness when configured telemetry is inactive, and flushed on shutdown. The local smoke creates a real agent run and waits for the exact `agent.run` span and service name in collector output. A running collector alone is not counted as proof.
+Archon owns a standard OpenTelemetry provider and emits one OTLP stream to the local Collector. The Collector owns batching, retries, credentials and allowlisted fan-out. I validated every generated destination config against Collector 0.118, then observed one real `invoke_agent Archon` trace with `chat` and `execute_tool calculator` spans in Jaeger while Logfire was selected in the same pipeline. Earlier Logfire Agents/Tools rendering was visually accepted; the newest Summary/Messages rendering still needs visual acceptance. A running collector or error-free export alone is not counted as destination proof.
 
 ## 15. Describe the DR design.
 
@@ -105,5 +105,5 @@ No public deployment, no indexed vector service, no production SLO/load evidence
 
 - **Situation:** Compose included an OTEL collector and readiness said telemetry was configured.
 - **Task:** Prove traces actually left the backend.
-- **Action:** Found SDK/export dependencies missing and readiness based on object presence. Added pinned dependencies, active-state readiness, shutdown flush, and a smoke that creates a run and verifies `agent.run` in collector output.
-- **Result:** Observability changed from configuration evidence to runtime evidence, while remaining explicitly local-only.
+- **Action:** Added pinned OTel dependencies, active-state readiness and shutdown flush, then moved destination credentials and fan-out into an allowlisted Collector configuration. The acceptance run was queried by exact trace ID in Jaeger.
+- **Result:** Observability progressed from configuration evidence to a live five-span Jaeger trace and earlier Logfire Agents/Tools evidence, while remaining explicitly local-only and honest about the pending newest Logfire UI check.

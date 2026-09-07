@@ -111,6 +111,8 @@ def create_chat_event_sink(
     exporter: Any | None,
     redactor: PersistenceRedactor,
     log_buffer: OwnerLogBuffer,
+    tools: SecureToolRegistry | None = None,
+    input_content: str = "",
     downstream: EventSink | None = None,
 ) -> EventSink:
     """Create the canonical observable and durable event sink for one run."""
@@ -127,6 +129,9 @@ def create_chat_event_sink(
         log_buffer=log_buffer,
         repository=repository,
         exporter=exporter,
+        tool_definitions=tools.definitions() if tools is not None else (),
+        input_content=input_content,
+        capture_message_content=bool(getattr(settings, "otel_capture_message_content", False)),
         downstream=downstream,
     )
 
@@ -164,6 +169,7 @@ def create_chat_runtime(
         exporter=exporter,
         redactor=redactor,
         log_buffer=log_buffer,
+        tools=tools,
         downstream=downstream,
     )
     if not provider_is_budgeted:

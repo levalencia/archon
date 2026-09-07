@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from typing import Any, cast
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -82,6 +85,34 @@ class TestDocumentQuery:
         assert "answer" in data
         assert data["chunks_retrieved"] >= 1
         assert len(data["sources"]) >= 1
+
+    @pytest.mark.unit
+    def test_query_emits_safe_rag_span(self, client: TestClient) -> None:
+        captured: list[tuple[str, dict[str, Any]]] = []
+
+        class Exporter:
+            @contextmanager
+            def start_span(self, name: str, attributes: dict[str, Any]):
+                class RecordedSpan:
+                    def set_attribute(self, key: str, value: Any) -> None:
+                        attributes[key] = value
+
+                captured.append((name, attributes))
+                yield RecordedSpan()
+
+        cast(Any, client.app).state.otel_exporter = Exporter()
+        client.post("/api/documents/upload", json=SAMPLE_DOC)
+        response = client.post(
+            "/api/documents/query",
+            json={"question": "What is Python used for?", "top_k": 3},
+        )
+
+        assert response.status_code == 200
+        assert captured[0][0] == "rag.query"
+        assert captured[0][1]["rag.top_k"] == 3
+        assert captured[0][1]["rag.chunks_retrieved"] >= 1
+        assert "question" not in captured[0][1]
+        assert "content" not in captured[0][1]
 
     @pytest.mark.unit
     def test_query_empty_store(self, client: TestClient) -> None:

@@ -158,6 +158,7 @@ class RuntimeChildRunner:
             exporter=self._exporter,
             redactor=self._redactor,
             log_buffer=self._log_buffer,
+            tools=child_tools,
         )
         runtime = create_chat_runtime(
             context=child_context,

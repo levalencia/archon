@@ -143,6 +143,7 @@ class HybridOrchestrationService:
                         "input_tokens": result.usage.input_tokens,
                         "output_tokens": result.usage.output_tokens,
                         "total_tokens": result.usage.total_tokens,
+                        "iterations": result.iterations,
                         "tool_count": len(result.tool_calls),
                     },
                     result.usage,

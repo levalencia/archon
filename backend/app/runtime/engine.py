@@ -1956,6 +1956,9 @@ class AgentRuntime:
                 state.usage = usage
 
         async def persist_terminal() -> None:
+            capture_response = getattr(self._events, "capture_assistant_response", None)
+            if callable(capture_response):
+                capture_response(content)
             if record_result and self._result_recorder is not None:
                 await self._result_recorder(content)
             await self._emit(

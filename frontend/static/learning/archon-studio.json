@@ -2424,9 +2424,9 @@
       "module_href": "https://github.com/levalencia/archon/blob/main/docs/course/modules/13-auth-ui-observability/README.md",
       "detail_href": "https://github.com/levalencia/archon/blob/main/docs/course/concepts/tracing-opentelemetry.md",
       "content_source": "concept",
-      "summary": "A trace follows one unit of work through timed steps. Each timed step is a span. A parent run span can contain model and tool spans so an operator can see where time was spent and where an error occurred. Tracing differs from metrics, which aggregate many events into numbers. It also differs from logs, which record discrete events. A trace should carry useful safe attributes, not prompts, tool arguments, credentials, raw provider output, or hidden reasoning. Archon maps typed runtime events to spans and can…",
+      "summary": "A trace follows one unit of work through timed steps. Each timed step is a span. A parent run span can contain model and tool spans so an operator can see where time was spent and where an error occurred. Tracing differs from metrics, which aggregate many events into numbers. It also differs from logs, which record discrete events. A trace should carry useful safe attributes, not credentials, tool payloads, retrieved documents, or hidden reasoning. Archon maps typed runtime events to invoke agent , chat , and…",
       "mental_model": "Identity is the root label, owner/project is the data fence, policy is the action gate, and observability is the instrument panel. SSE is only a projection of typed events; the Run Ledger remains durable evidence. Logs describe, metrics aggregate, and traces time the path—none alone proves semantic correctness. The connection to the course spine is explicit: Policy → Run → Approval → Tool → Evidence → Evaluation . Inputs are authenticated/scoped data; outputs are typed results plus inspectable evidence; mutable…",
-      "limitations": "A local collector observed agent.run; no hosted backend, production sampling, retention, or SLO.",
+      "limitations": "A live agent trace was observed in local Jaeger and an earlier run in Logfire Agents/Tools; newest Logfire Summary/Messages rendering and production sampling, retention, alerts, and SLOs remain unverified.",
       "sources": [
         {
           "path": "backend/app/observability/runtime_events.py",
@@ -2444,6 +2444,16 @@
           "path": "backend/tests/unit/test_otel_tracing_wire.py",
           "label": "test_otel_tracing_wire.py",
           "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_otel_tracing_wire.py"
+        },
+        {
+          "path": "backend/tests/unit/test_otel_telemetry.py",
+          "label": "test_otel_telemetry.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_otel_telemetry.py"
+        },
+        {
+          "path": "backend/tests/unit/test_otel_collector_config_generator.py",
+          "label": "test_otel_collector_config_generator.py",
+          "href": "https://github.com/levalencia/archon/blob/main/backend/tests/unit/test_otel_collector_config_generator.py"
         },
         {
           "path": "backend/tests/unit/test_tracing.py",

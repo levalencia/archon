@@ -599,10 +599,12 @@
     - backend/app/observability/otel_exporter.py
   tests:
     - backend/tests/unit/test_otel_tracing_wire.py
+    - backend/tests/unit/test_otel_telemetry.py
+    - backend/tests/unit/test_otel_collector_config_generator.py
     - backend/tests/unit/test_tracing.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "A local collector observed agent.run; no hosted backend, production sampling, retention, or SLO."
+  limitations: "A live agent trace was observed in local Jaeger and an earlier run in Logfire Agents/Tools; newest Logfire Summary/Messages rendering and production sampling, retention, alerts, and SLOs remain unverified."
 
 - id: liveness-readiness
   title: "Liveness and readiness"

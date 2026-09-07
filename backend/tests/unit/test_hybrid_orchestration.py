@@ -227,7 +227,13 @@ async def test_team_service_emits_safe_events_and_augments_parent_context() -> N
         AgentEventKind.DELEGATION_REQUESTED,
         AgentEventKind.DELEGATION_COMPLETED,
     ]
+    completed = [
+        event for event in sink.events if event.kind is AgentEventKind.DELEGATION_COMPLETED
+    ]
+    assert all(event.data["iterations"] == 1 for event in completed)
     assert all("content" not in event.data for event in sink.events)
+    assert all("goal" not in event.data for event in sink.events)
+    assert all("system_prompt" not in event.data for event in sink.events)
 
 
 @pytest.mark.asyncio

@@ -49,6 +49,7 @@
           input_tokens: prior?.input_tokens ?? run.input_tokens,
           output_tokens: prior?.output_tokens ?? run.output_tokens,
           total_tokens: prior?.total_tokens ?? run.total_tokens,
+          iterations: prior?.iterations ?? run.iterations,
           tool_count: prior?.tool_count,
         });
       }
@@ -103,6 +104,7 @@
                 <dl>
                   <div><dt>Tokens</dt><dd>{child.total_tokens ?? '—'}</dd></div>
                   <div><dt>Tools</dt><dd>{child.tool_count ?? '—'}</dd></div>
+                  <div><dt>Iterations</dt><dd>{child.iterations ?? '—'}</dd></div>
                 </dl>
                 {#if child.reason_code}<small>{label(child.reason_code)}</small>{/if}
               </article>

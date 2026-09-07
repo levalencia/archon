@@ -252,6 +252,24 @@ For an operator-authorized Foundry demo, stop the current mode and start live:
 
 Live mode imports only an allowlist of `ARCHON_LLM_*` settings from the mode-`0600` `backend/.env` into the generated protected Compose env; it never passes `backend/.env` directly to Compose. The startup smoke performs one real chat request and therefore incurs provider usage. Switching modes always requires an explicit `stop`.
 
+### Vendor-neutral OpenTelemetry destinations
+
+Archon emits one OTLP/gRPC stream to its local OpenTelemetry Collector. Select one or more downstream trace destinations in the protected mode-`0600` `backend/.env`:
+
+```dotenv
+ARCHON_OTEL_DESTINATIONS=debug,jaeger,logfire
+LOGFIRE_TOKEN=<write-token>
+LOGFIRE_BASE_URL=https://logfire-eu.pydantic.dev
+```
+
+Allowed destinations are `debug`, `jaeger`, `logfire`, `azure-monitor`, `tempo`, and generic `otlp`. The managed startup generates a mode-`0600`, allowlisted Collector configuration and fails before Compose mutation when a selected destination is unknown or missing required configuration. Destination credentials are passed only to the Collector, never to the backend. Switching destinations requires an explicit managed stop/start because the protected runtime context is immutable.
+
+The optional Jaeger profile publishes its UI only on loopback at `http://127.0.0.1:16686`. Logfire uses the selected regional API base URL. Azure Monitor, Tempo, and generic OTLP support are configuration capabilities until separately verified against live destinations; configuration is not ingestion evidence.
+
+By default Archon exports no prompts, model responses, system instructions, tool arguments/results, or retrieved document content. For a deliberate local UI evaluation, `ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT=true` adds only redacted and bounded user/assistant text to the root span so Logfire can render Summary and Messages. System prompts, chain-of-thought, RAG content and tool payloads remain excluded.
+
+After an authorized live run, verify the same trace at every selected destination. In Logfire, Agents should list `Archon`, Tools should show the real registered tool and call, and—only when content capture is enabled—Summary/Messages should show the redacted user and assistant text. In Jaeger, query `service=archon-local` and verify `invoke_agent Archon`, `chat {model}`, and `execute_tool *` share one trace.
+
 Do **not** invoke `docker compose` with `backend/.env`, a nonexistent root `.env`, or dummy secrets. Those files/values do not satisfy the deployment contract. Use `local-stack.sh` so every status/log/stop command reuses the exact generated context.
 
 Stop the managed stack and remove its volumes, protected env file, and state:

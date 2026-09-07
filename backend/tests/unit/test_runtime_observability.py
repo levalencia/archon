@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -35,6 +36,66 @@ class Repository:
 
     async def append_runtime_event(self, **event) -> None:
         self.events.append(event)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_message_content_is_opt_in_redacted_and_logfire_renderable() -> None:
+    disabled_tracer = Tracer()
+    disabled = CompositeEventSink(
+        conversation_id="conversation-private",
+        run_id="run-private",
+        model="model",
+        redactor=PersistenceRedactor(),
+        log_buffer=OwnerLogBuffer(),
+        tracer=disabled_tracer,
+        input_content="private user input",
+        capture_message_content=False,
+    )
+    await disabled.emit(AgentEvent(AgentEventKind.RUN_STARTED, 0))
+    disabled.capture_assistant_response("private assistant output")
+    await disabled.emit(AgentEvent(AgentEventKind.RUN_STOPPED, 1))
+    private_root = next(
+        span for span in disabled_tracer.spans if span.name == "invoke_agent Archon"
+    )
+    assert "gen_ai.input.messages" not in private_root.attributes
+    assert "gen_ai.output.messages" not in private_root.attributes
+    assert "pydantic_ai.all_messages" not in private_root.attributes
+    assert "final_result" not in private_root.attributes
+
+    enabled_tracer = Tracer()
+    enabled = CompositeEventSink(
+        conversation_id="conversation-visible",
+        run_id="run-visible",
+        model="model",
+        redactor=PersistenceRedactor(),
+        log_buffer=OwnerLogBuffer(),
+        tracer=enabled_tracer,
+        input_content="Show this user input from alice@example.com",
+        capture_message_content=True,
+    )
+    await enabled.emit(AgentEvent(AgentEventKind.RUN_STARTED, 0))
+    enabled.capture_assistant_response("Show this assistant output for alice@example.com")
+    await enabled.emit(AgentEvent(AgentEventKind.RUN_STOPPED, 1))
+    visible_root = next(span for span in enabled_tracer.spans if span.name == "invoke_agent Archon")
+
+    assert json.loads(visible_root.attributes["gen_ai.input.messages"]) == [
+        {
+            "role": "user",
+            "parts": [{"type": "text", "content": "Show this user input from [EMAIL]"}],
+        }
+    ]
+    assert json.loads(visible_root.attributes["gen_ai.output.messages"]) == [
+        {
+            "role": "assistant",
+            "parts": [{"type": "text", "content": "Show this assistant output for [EMAIL]"}],
+        }
+    ]
+    assert visible_root.attributes["final_result"] == "Show this assistant output for [EMAIL]"
+    assert "alice@example.com" not in str(visible_root.attributes)
+    assert len(json.loads(visible_root.attributes["pydantic_ai.all_messages"])) == 2
+    schema = json.loads(visible_root.attributes["logfire.json_schema"])
+    assert schema["properties"]["pydantic_ai.all_messages"] == {"type": "array"}
 
 
 @pytest.fixture(autouse=True)
@@ -107,7 +168,11 @@ async def test_exact_event_to_metric_span_and_correlation_mapping() -> None:
     assert snapshot["stop_reasons"] == {"completed": 1}
     assert snapshot["by_model"]["model-1"] == {"calls": 1, "tokens": 8, "latency": 200.0}
     assert snapshot["by_tool"]["search"] == {"calls": 1, "errors": 0, "latency": 200.0}
-    assert [span.name for span in tracer.spans] == ["gen_ai.chat", "tool.search", "agent.run"]
+    assert [span.name for span in tracer.spans] == [
+        "chat model-1",
+        "execute_tool search",
+        "invoke_agent Archon",
+    ]
     for span in tracer.spans:
         assert span.attributes["archon.run.id"] == "run-1"
         assert span.attributes["archon.conversation.id"] == "conversation-1"
@@ -250,7 +315,7 @@ async def test_reported_cache_usage_is_safe_persisted_and_traced_but_absence_is_
         "cache_write_input_tokens": 0,
     }
     assert "cache_read_input_tokens" not in stopped["data"]
-    model_span = next(span for span in tracer.spans if span.name == "gen_ai.chat")
+    model_span = next(span for span in tracer.spans if span.name == "chat claude-sonnet-4-20250514")
     assert model_span.attributes["gen_ai.usage.cache_read_input_tokens"] == 7
     assert model_span.attributes["gen_ai.usage.cache_write_input_tokens"] == 0
 

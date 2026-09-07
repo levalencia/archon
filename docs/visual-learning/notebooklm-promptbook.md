@@ -1,6 +1,6 @@
-# Archon NotebookLM Promptbook
+# Archon NotebookLM Promptbook — Deprecated
 
-These prompts turn curated, public Archon documentation into learning artifacts. NotebookLM output is derivative study material, not canonical evidence.
+> **Deprecated migration reference:** use [`hermes-generation-promptbook.md`](hermes-generation-promptbook.md) for all new learning artifacts. The prompts below document the superseded NotebookLM workflow only.
 
 ## Source priority and non-negotiable boundaries
 
