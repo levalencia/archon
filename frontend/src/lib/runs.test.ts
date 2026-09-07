@@ -11,6 +11,7 @@ import {
   listRunExports,
   listRuns,
   listShareGrants,
+  rootRunId,
   revokeShareGrant,
 } from './runs';
 
@@ -18,6 +19,14 @@ const fetchMock = vi.mocked(authenticatedFetch);
 beforeEach(() => fetchMock.mockReset());
 
 describe('persisted run client', () => {
+  it('resolves child runs to their root parent for conversation replay', () => {
+    const root = { run_id: 'parent-1', parent_run_id: null };
+    const child = { run_id: 'child-1', parent_run_id: 'parent-1' };
+
+    expect(rootRunId(root as Parameters<typeof rootRunId>[0])).toBe('parent-1');
+    expect(rootRunId(child as Parameters<typeof rootRunId>[0])).toBe('parent-1');
+  });
+
   it('encodes filters and normalizes events into sequence order', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200 }));
     await listRuns({ conversationId: 'conversation/a', projectId: 'p', offset: 2 });

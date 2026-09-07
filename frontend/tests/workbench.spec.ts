@@ -147,6 +147,65 @@ test('team mode renders fixed and dynamic child evidence', async ({ page }) => {
   await expect(page.getByText('dynamic-analyst-v1')).toBeVisible();
 });
 
+test('persisted Team evidence resolves the latest parent when a child run is newer', async ({ page }) => {
+  const parent = {
+    run_id: 'parent-team', conversation_id: 'persisted-team', project_id: 'project',
+    provider: 'provider-a', model: 'model-a', status: 'completed',
+    started_at: '2026-09-07T05:17:27Z', completed_at: '2026-09-07T05:19:00Z',
+    answer_summary: 'Team answer', input_tokens: 100, output_tokens: 50, total_tokens: 150,
+    cost_usd: 0.01, latency_ms: 93000, iterations: 1, stop_reason: 'completed',
+    parent_run_id: null, fork_source_sequence: null,
+  };
+  const child = {
+    ...parent,
+    run_id: 'child-newer', parent_run_id: 'parent-team',
+    started_at: '2026-09-07T05:18:19Z', answer_summary: null,
+  };
+  await page.unroute('**/api/runs?**');
+  await page.route('**/api/runs?**', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ items: [child, parent] }),
+  }));
+  await page.route('**/api/runs/child-newer/children', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ items: [] }),
+  }));
+  await page.route('**/api/runs/child-newer/events?**', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ items: [] }),
+  }));
+  await page.route('**/api/runs/parent-team/children', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ items: [child] }),
+  }));
+  await page.route('**/api/runs/parent-team', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify(parent),
+  }));
+  await page.route('**/api/runs/parent-team/events?**', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ items: [
+      { sequence: 1, event_at: '', kind: 'orchestration_routed', iteration: 0, payload: {
+        requested_mode: 'team', resolved_mode: 'team', reason_code: 'user_forced_team',
+      } },
+      { sequence: 2, event_at: '', kind: 'delegation_completed', iteration: 0, payload: {
+        child_id: 'child-newer', parent_run_id: 'parent-team', profile_id: 'researcher-v1',
+        specialist_kind: 'fixed', status: 'completed', total_tokens: 42, tool_count: 3,
+      } },
+    ] }),
+  }));
+  await page.route('**/api/runs/parent-team/exports', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ items: [] }),
+  }));
+  await page.route('**/api/runs/parent-team/effective-context', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ run_id: 'parent-team' }),
+  }));
+
+  await page.goto('/chat/persisted-team');
+  await expect(page.getByRole('region', { name: 'Persisted run summary' })).toContainText('Team answer');
+  const agentsTab = page.getByRole('tab', { name: 'Agents' });
+  await expect(agentsTab).toBeVisible();
+  await agentsTab.click();
+  await expect(agentsTab).toHaveAttribute('aria-selected', 'true');
+
+  await expect(page.getByText('team → team')).toBeVisible();
+  await expect(page.getByText('researcher-v1')).toBeVisible();
+});
+
 test('mobile uses navigation drawer and inspector bottom sheet', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto('/');
   const open = page.getByRole('button', { name: 'Open conversations' }); await expect(open).toBeEnabled(); await open.click(); const drawer = page.locator('aside.sidebar'); await expect(drawer).toHaveAttribute('data-open', 'true'); await expect(drawer).toHaveClass(/open/); await expect.poll(async () => (await drawer.boundingBox())?.x ?? -999).toBeGreaterThanOrEqual(0);
