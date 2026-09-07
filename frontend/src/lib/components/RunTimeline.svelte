@@ -1,5 +1,5 @@
 <script lang="ts">
- import { compareRuns, getRun, getRunEvents, listRuns, type ComparedRun, type Run, type RunEvent } from '$lib/runs';
+ import { compareRuns, getRun, getRunEvents, listRuns, rootRunId, type ComparedRun, type Run, type RunEvent } from '$lib/runs';
  import RunSummary from './RunSummary.svelte';
  import RunExportPanel from './RunExportPanel.svelte';
  import EffectiveContext from './EffectiveContext.svelte';
@@ -7,7 +7,7 @@
  let runs: Run[] = $state([]); let selected: Run | null = $state(null); let events: RunEvent[] = $state([]);
  let compareId = $state(''); let comparison: {a: ComparedRun;b: ComparedRun}|null = $state(null); let loading=$state(false); let error=$state('');
  async function select(id: string) { loading=true; error=''; try { [selected, events] = await Promise.all([getRun(id), getRunEvents(id)]); comparison=null; } catch(e){error=e instanceof Error?e.message:'Run unavailable'} finally{loading=false} }
- async function refresh() { if(!conversationId){runs=[];selected=null;return} loading=true; try { runs=await listRuns({conversationId}); if(runs[0]) await select(runs[0].run_id); else selected=null; } catch(e){error=e instanceof Error?e.message:'Runs unavailable'} finally{loading=false} }
+ async function refresh() { if(!conversationId){runs=[];selected=null;return} loading=true; try { const listedRuns=await listRuns({conversationId}); const latestRootId=listedRuns[0]?rootRunId(listedRuns[0]):''; runs=listedRuns.filter(run=>!run.parent_run_id); if(latestRootId&&!runs.some(run=>run.run_id===latestRootId)) runs=[await getRun(latestRootId),...runs]; if(latestRootId) await select(latestRootId); else selected=null; } catch(e){error=e instanceof Error?e.message:'Runs unavailable'} finally{loading=false} }
  async function compare(){if(!selected||!compareId)return;try{comparison=await compareRuns(selected.run_id,compareId)}catch(e){error=e instanceof Error?e.message:'Comparison failed'}}
  $effect(()=>{conversationId; void refresh()});
 </script>

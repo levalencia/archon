@@ -9,6 +9,7 @@ export type Run = {
   trajectory?: { tools: Record<string, unknown>[]; approvals: Record<string, unknown>[]; policy: Record<string, unknown>[]; evidence: unknown[]; workspace_restoration: string };
 };
 export type RunEvent = { sequence: number; event_at: string; kind: string; iteration: number; payload: Record<string, unknown> };
+export const rootRunId = (run: Run): string => run.parent_run_id || run.run_id;
 export type ContextManifest = {
   snapshot_id: string; schema_version: number; run_id: string; conversation_id: string; project_id: string;
   selected_message_ids: number[]; summarized_message_ids: number[]; memory_ids: string[]; skill_ids: string[];

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Artifact, ContextStats, InspectorTab, LogEntry, RunStats, Message } from '$lib/types';
-  import { listRuns } from '$lib/runs';
+  import { listRuns, rootRunId } from '$lib/runs';
   import EffectiveContext from '$lib/components/EffectiveContext.svelte';
   import RunTimeline from '$lib/components/RunTimeline.svelte';
   import AgentOrchestrationPanel from '$lib/components/AgentOrchestrationPanel.svelte';
@@ -26,7 +26,7 @@
         contextManifestError = 'No persisted run context yet.';
         return;
       }
-      effectiveRunId = runs[0].run_id;
+      effectiveRunId = rootRunId(runs[0]);
     } catch (cause) {
       if (request === contextRequest) {
         contextManifestError = cause instanceof Error ? cause.message : 'Context provenance unavailable';
