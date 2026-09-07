@@ -73,6 +73,52 @@ async def test_typed_tool_round_trip_and_events() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cancellation_persists_terminal_event_without_recording_empty_answer() -> None:
+    class BlockingProvider:
+        capabilities = ProviderCapabilities(native_tools=True)
+
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+
+        async def complete(
+            self,
+            messages,
+            tools=(),
+            *,
+            max_tokens=4096,
+            response_contract=None,
+            response_format=None,
+        ):
+            del messages, tools, max_tokens, response_contract, response_format
+            self.started.set()
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    provider = BlockingProvider()
+    sink = RecordingEventSink()
+    recorded: list[str] = []
+
+    async def record(answer: str) -> None:
+        recorded.append(answer)
+
+    task = asyncio.create_task(
+        AgentRuntime(provider, registry(), events=sink, result_recorder=record).run(
+            [Message(Role.USER, "cancel me")]
+        )
+    )
+    await provider.started.wait()
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert sink.events[-1].kind is AgentEventKind.RUN_STOPPED
+    assert sink.events[-1].iteration == 1
+    assert sink.events[-1].data == {"reason": "cancelled", "error": "run_cancelled"}
+    assert recorded == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("budget", "response", "reason", "calls"),
     [

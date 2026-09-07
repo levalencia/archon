@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -12,10 +13,12 @@ from app.observability.logging import redact_event
 from app.observability.metrics import get_metrics_snapshot, reset_metrics
 from app.observability.runtime_events import CompositeEventSink
 from app.observability.tracing import Tracer
-from app.runtime import AgentEvent, AgentEventKind, TokenUsage
+from app.runtime import AgentEvent, AgentEventKind, AgentRuntime, Message, Role, TokenUsage
+from app.runtime.capabilities import ProviderCapabilities
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore, RunRow, RuntimeEventRow
+from app.tools.registry import SecureToolRegistry
 
 
 class Clock:
@@ -147,6 +150,69 @@ async def test_error_timeout_event_marks_metrics_and_spans() -> None:
     assert get_metrics_snapshot()["totals"]["agent_errors"] == 1
     assert tracer.spans[-1].status == "error"
     assert tracer.spans[-1].attributes["error.message"] == "TimeoutError: deadline"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cancelled_runtime_is_terminal_in_durable_ledger(tmp_path) -> None:
+    class BlockingProvider:
+        capabilities = ProviderCapabilities(native_tools=True)
+
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+
+        async def complete(
+            self,
+            messages,
+            tools=(),
+            *,
+            max_tokens=4096,
+            response_contract=None,
+            response_format=None,
+        ):
+            del messages, tools, max_tokens, response_contract, response_format
+            self.started.set()
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    repository = ConversationRepository(
+        f"sqlite+aiosqlite:///{tmp_path}/cancelled-run.db", PersistenceRedactor()
+    )
+    await repository.initialize()
+    try:
+        await repository.create("conversation-cancel", "Cancellation", "alice")
+        provider = BlockingProvider()
+        sink = CompositeEventSink(
+            conversation_id="conversation-cancel",
+            user_id="alice",
+            run_id="run-cancel",
+            correlation_id="correlation-cancel",
+            model="model",
+            redactor=PersistenceRedactor(),
+            log_buffer=OwnerLogBuffer(),
+            repository=repository,
+        )
+        task = asyncio.create_task(
+            AgentRuntime(provider, SecureToolRegistry(), events=sink).run(
+                [Message(Role.USER, "cancel me")]
+            )
+        )
+        await provider.started.wait()
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        run = await repository.runs.get("alice", "run-cancel")
+        assert run is not None
+        assert run.status == "cancelled"
+        assert run.stop_reason == "cancelled"
+        assert run.iterations == 1
+        events = await repository.runs.events("alice", "run-cancel")
+        assert events is not None
+        assert events.items[-1].kind == AgentEventKind.RUN_STOPPED.value
+    finally:
+        await repository.close()
 
 
 @pytest.mark.unit
