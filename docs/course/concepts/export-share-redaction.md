@@ -103,4 +103,4 @@ A good answer names the contract in the beginner explanation, follows the sequen
 - **Module:** [Module 07-run-ledger](../modules/07-run-ledger/README.md)
 - **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
 - **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)
+- **Historical context only:** [Feature and Course Audit v2](../../history/FEATURE-AND-COURSE-AUDIT-V2.md)

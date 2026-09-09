@@ -39,7 +39,7 @@ Important current limitations include:
 - mobile and operational-state UX have known trustworthiness gaps;
 - no cloud/Kubernetes deployment has been verified.
 
-For per-capability evidence, use [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md). For findings and remediation detail, use the [GPT-5.6 Re-Audit](docs/ARCHON-GPT56-REAUDIT-2026-08-25.md) and [Feature and Course Concept Audit v2](docs/FEATURE-AND-COURSE-AUDIT-V2.md).
+For per-capability evidence, use [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md). For findings and remediation detail, use the [GPT-5.6 Re-Audit](docs/history/ARCHON-GPT56-REAUDIT-2026-08-25.md) and [Feature and Course Concept Audit v2](docs/history/FEATURE-AND-COURSE-AUDIT-V2.md).
 
 ## Archived session record
 

@@ -100,6 +100,7 @@ docs/
 ├── adr/                       ← architecture decision records
 ├── course/                    ← structured learning material
 ├── evidence/                  ← evidence artifacts (JSON, etc.)
+├── history/                   ← superseded plans, audits, and research
 ├── operations/                ← operational runbooks
 ├── plans/                     ← dated plan documents
 └── visual-learning/           ← learning media and studio
@@ -117,3 +118,5 @@ docs/
 - Do not commit generated artifacts (audio, video, images) to the docs tree.
 - Do not reference test counts or coverage numbers outside the canonical
   evidence file — they change with every CI run.
+- Move superseded plans, audits, and research into `docs/history/`; preserve
+  current evidence and operational paths.

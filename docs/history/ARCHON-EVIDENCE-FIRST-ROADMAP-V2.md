@@ -2,7 +2,7 @@
 
 > **Audience:** Maintainers and Hermes subagents executing implementation slices.
 > **Purpose:** Records the roadmap that defined five deep capabilities and their acceptance gates.
-> **Status:** Historical planning document. Current status lives in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md) and CAPABILITY-ACCEPTANCE.yaml.
+> **Status:** Historical planning document. Current status lives in [../IMPLEMENTATION-EVIDENCE.md](../IMPLEMENTATION-EVIDENCE.md) and CAPABILITY-ACCEPTANCE.yaml.
 
 > **For Hermes:** Use subagent-driven-development to execute this plan task-by-task. Every slice requires spec review, code review, and a green acceptance gate before integration.
 
@@ -139,7 +139,7 @@ Additional rules:
 3. Push only after approval.
 4. Watch GitHub Actions.
 5. Fix remote-only failures.
-6. Record green run URL in `IMPLEMENTATION-EVIDENCE.md`.
+6. Record green run URL in `../IMPLEMENTATION-EVIDENCE.md`.
 
 **Sprint done:** clean local tree, full local gate green, remote CI green, documentation consistent.
 

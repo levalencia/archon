@@ -69,15 +69,8 @@ Superseded or archived documents kept for traceability.
 
 | Doc | Purpose |
 |-----|---------|
-| [Implementation Status (superseded)](IMPLEMENTATION-STATUS.md) | Pre-audit status snapshot — replaced by Implementation Evidence |
-| [PLAN.md](PLAN.md) | Original project plan |
-| [Evidence-First Roadmap V2](ARCHON-EVIDENCE-FIRST-ROADMAP-V2.md) | Historical implementation sequence and acceptance design |
-| [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md) | Historical architecture and maturity audit |
-| [Feature & Course Audit V2](FEATURE-AND-COURSE-AUDIT-V2.md) | Earlier audit that preceded the current evidence matrix |
-| [God Mode Additions](GOD-MODE-ADDITIONS.md) | Historical architecture research notes |
-| [Pocock Skills Additions](POCOCK-SKILLS-ADDITIONS.md) | Historical engineering-practice research notes |
+| [Historical index](history/README.md) | Superseded plans, audits, research notes, and launch strategy |
 | [Competitive Analysis](COMPETITIVE-ANALYSIS.md) | Framework comparison notes |
-| [Launch Playbook](LAUNCH-PLAYBOOK.md) | Aspirational launch research; not deployment evidence |
 
 </details>
 

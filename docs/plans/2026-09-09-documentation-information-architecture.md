@@ -15,7 +15,7 @@ Make the repository understandable to a new reader without forcing them through 
 3. **Human evidence guide:** `docs/EVIDENCE.md`, explaining what the evidence means without duplicating mutable results.
 4. **Technical evidence:** `docs/IMPLEMENTATION-EVIDENCE.md` and `docs/implementation/CAPABILITY-ACCEPTANCE.yaml` remain canonical.
 5. **Specialized guides:** architecture, operations, course, visual learning, and reference material.
-6. **Historical material:** retained at stable paths, but labeled so it cannot be mistaken for current status.
+6. **Historical material:** moved under `docs/history/` and labeled so it cannot be mistaken for current status.
 
 ## Humanization rules
 
@@ -33,14 +33,14 @@ Make the repository understandable to a new reader without forcing them through 
 - Added a reader-intent documentation index.
 - Added a human evidence guide.
 - Added documentation writing and lifecycle conventions.
-- Classified the largest evidence, planning, research, audit, and launch documents.
-- Preserved stable paths so existing evidence and course links continue to work.
+- Moved superseded plans, research, audits, and launch strategy under `docs/history/`.
+- Updated internal links while preserving current evidence and operational paths.
 
 ## Deliberate limits
 
 This pass does not rewrite every course module, technical reference, or historical document. Those files serve specialized readers and should be improved when their content next changes.
 
-Physical relocation into `docs/history/` is deferred. Moving heavily referenced files now would create link churn without improving the primary reading path.
+The detailed technical evidence ledger remains at its established path because it is an active canonical source rather than historical material.
 
 ## Acceptance criteria
 

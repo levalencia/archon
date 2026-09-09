@@ -4,7 +4,7 @@
 > **Scope:** Luis-authored concept/status synthesis; no paid lesson prose is reproduced.
 > **Status vocabulary:** `implemented` means meaningful behavior is wired, tested, and evidenced within its stated boundary; `partial` names an incomplete boundary; `not-implemented` means no meaningful implementation; `deferred` means deliberately out of scope without a delivery promise.
 
-This map supersedes implementation conclusions in the historical [Feature and Course Audit v2](../FEATURE-AND-COURSE-AUDIT-V2.md), which audited `27952f4`. It does not rewrite that historical record. At this revision, notable corrections include immutable owner/project skill and instruction revisions, deterministic context precedence and provenance, governed official-SDK MCP stdio plus deployment-profiled Streamable HTTP, Docker-only fail-closed execution, PII redaction before supported persistence, locally observed OTEL export, and a real local backup/restore drill. Migrations `20260901_15`–`20260901_21` support the Skills/Instructions/MCP candidate. None implies public production deployment.
+This map supersedes implementation conclusions in the historical [Feature and Course Audit v2](../history/FEATURE-AND-COURSE-AUDIT-V2.md), which audited `27952f4`. It does not rewrite that historical record. At this revision, notable corrections include immutable owner/project skill and instruction revisions, deterministic context precedence and provenance, governed official-SDK MCP stdio plus deployment-profiled Streamable HTTP, Docker-only fail-closed execution, PII redaction before supported persistence, locally observed OTEL export, and a real local backup/restore drill. Migrations `20260901_15`–`20260901_21` support the Skills/Instructions/MCP candidate. None implies public production deployment.
 
 ## Day-by-day map
 
@@ -57,5 +57,5 @@ A stub, manifest, unit-tested helper, or adjacent capability is not promoted to 
 1. Read the canonical concept page for definitions and its exact status boundary.
 2. Follow source and test links on that page.
 3. Check [Implementation Evidence](../IMPLEMENTATION-EVIDENCE.md) for revision/environment observations.
-4. Treat [Feature and Course Audit v2](../FEATURE-AND-COURSE-AUDIT-V2.md) only as historical context.
+4. Treat [Feature and Course Audit v2](../history/FEATURE-AND-COURSE-AUDIT-V2.md) only as historical context.
 5. Record new runtime observations with revision, environment, command, redacted output, and limitations.
