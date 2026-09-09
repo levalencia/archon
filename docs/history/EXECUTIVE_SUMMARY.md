@@ -1,6 +1,6 @@
 # Archon — Executive Summary
 
-> **Current status:** The [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md) supersedes the completion claims previously published in this file and is the source for current audit results.
+> **Current status:** The [canonical implementation evidence matrix](../IMPLEMENTATION-EVIDENCE.md) supersedes the completion claims previously published in this file and is the source for current audit results.
 
 ## What is Archon?
 
@@ -19,7 +19,7 @@ It is not currently a production platform, secure execution sandbox, complete MC
 
 ## Audit status
 
-The audit found useful automated and local runtime evidence, but it did not establish green quality and release gates or a verified deployment. Exact results and repository state are maintained only in the [canonical implementation evidence matrix](docs/IMPLEMENTATION-EVIDENCE.md).
+The audit found useful automated and local runtime evidence, but it did not establish green quality and release gates or a verified deployment. Exact results and repository state are maintained only in the [canonical implementation evidence matrix](../IMPLEMENTATION-EVIDENCE.md).
 
 ## Honest implementation summary
 
@@ -39,7 +39,7 @@ Important current limitations include:
 - mobile and operational-state UX have known trustworthiness gaps;
 - no cloud/Kubernetes deployment has been verified.
 
-For per-capability evidence, use [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md). For findings and remediation detail, use the [GPT-5.6 Re-Audit](docs/history/ARCHON-GPT56-REAUDIT-2026-08-25.md) and [Feature and Course Concept Audit v2](docs/history/FEATURE-AND-COURSE-AUDIT-V2.md).
+For per-capability evidence, use [Implementation Evidence](../IMPLEMENTATION-EVIDENCE.md). For findings and remediation detail, use the [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md) and [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md).
 
 ## Archived session record
 

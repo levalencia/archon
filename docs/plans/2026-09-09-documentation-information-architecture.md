@@ -33,7 +33,7 @@ Make the repository understandable to a new reader without forcing them through 
 - Added a reader-intent documentation index.
 - Added a human evidence guide.
 - Added documentation writing and lifecycle conventions.
-- Moved superseded plans, research, audits, and launch strategy under `docs/history/`.
+- Moved superseded plans, summaries, matrices, research, audits, and launch strategy under `docs/history/`.
 - Updated internal links while preserving current evidence and operational paths.
 
 ## Deliberate limits

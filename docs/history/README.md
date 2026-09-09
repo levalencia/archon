@@ -14,6 +14,8 @@ Use the [Documentation Index](../README.md) for current guides. Use the [Capabil
 
 ## Historical audits
 
+- [Executive Summary](EXECUTIVE_SUMMARY.md)
+- [Archived Feature Matrix](FEATURE_MATRIX.md)
 - [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md)
 - [Feature and Course Audit V2](FEATURE-AND-COURSE-AUDIT-V2.md)
 
