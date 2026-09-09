@@ -1,5 +1,9 @@
 # Archon GPT-5.6 Re-Audit
 
+> **Audience:** Maintainers and interviewers evaluating honest project maturity.
+> **Purpose:** Independent re-audit of Archon at revision `27952f4` — verifies test gates, identifies placeholder/mock features, and recommends honest positioning.
+> **Status:** Historical snapshot — findings informed the Evidence-First Roadmap v2. Current gate results live in CI and IMPLEMENTATION-EVIDENCE.md.
+
 **Date:** 2026-08-25  
 **Audited revision:** `27952f4` on local `main`  
 **Remote state during audit:** local `main` was 54 commits ahead of `origin/main`  

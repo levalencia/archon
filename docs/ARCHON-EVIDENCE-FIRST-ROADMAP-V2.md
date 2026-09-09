@@ -1,5 +1,9 @@
 # Archon Evidence-First Feature Roadmap v2
 
+> **Audience:** Maintainers and Hermes subagents executing implementation slices.
+> **Purpose:** Records the roadmap that defined five deep capabilities and their acceptance gates.
+> **Status:** Historical planning document. Current status lives in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md) and CAPABILITY-ACCEPTANCE.yaml.
+
 > **For Hermes:** Use subagent-driven-development to execute this plan task-by-task. Every slice requires spec review, code review, and a green acceptance gate before integration.
 
 **Goal:** Turn Archon's broad course/competitor feature coverage into five deep, credible, end-to-end Agent Reliability Workbench capabilities that demonstrate employability.

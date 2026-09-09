@@ -1,5 +1,9 @@
 # GOD-MODE-ADDITIONS.md — Enrichments for WEBAPP-PLAN.md
 
+> **Audience:** Contributors exploring architecture patterns considered during planning.
+> **Purpose:** Research notes — concrete improvement ideas drawn from the agent-god-mode skill vault, applied to the original plan.
+> **Status:** Historical research input. Current capability status lives in the acceptance manifest and implementation evidence.
+
 **Source:** 8 skills from `agent-god-mode` vault (2404 skills)
 **Purpose:** Concrete improvements to the Archon webapp plan based on battle-tested patterns
 **Created:** 2026-08-21

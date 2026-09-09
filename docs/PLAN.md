@@ -1,10 +1,14 @@
 # WEBAPP-PLAN.md — Production AI Agent Webapp
 
+> **Audience:** Contributors and interviewers wanting to understand original design intent.
+> **Purpose:** Original scope and architecture plan for Archon. The 142 checklist items record design goals, not completion claims.
+> **Status:** Historical planning document — current implementation truth lives in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md).
+
 ## For Startup Interviews ($150K+ AI Agent Engineer Roles)
 
 **Author:** Luis Valencia Munoz
 **Created:** 2026-08-21
-**Status:** Active; capability status is tracked in [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md)
+**Original status:** Active at authoring time; current capability status is tracked in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md)
 **Repo:** `github.com/levalencia/production-ai-agents`
 
 ---

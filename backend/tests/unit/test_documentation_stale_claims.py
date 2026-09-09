@@ -1,14 +1,9 @@
-"""Regression checks against stale current-state claims in documentation.
-
-These tests ensure that canonical documentation does not contain outdated
-references that were superseded by the PR #10 and PR #11 merges.  They are
-deliberately restrictive: a false positive means the documentation drifted
-back to a stale claim and must be re-audited.
-"""
+"""Regression checks for current, boundary-honest documentation."""
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -75,7 +70,6 @@ class TestMigrationHeadReference:
     """Ensure current-state docs reference migration 22, not 21 as head."""
 
     CURRENT_STATE_DOCS = [
-        ROOT / "README.md",
         ROOT / "docs" / "IMPLEMENTATION-EVIDENCE.md",
         ROOT / "docs" / "REMAINING-DEFERRED-GAPS.md",
     ]
@@ -91,20 +85,30 @@ class TestMigrationHeadReference:
 
 
 @pytest.mark.unit
-class TestCIRunReference:
-    """Ensure current evidence references the correct CI run."""
+class TestEvidenceAuthority:
+    """Keep mutable CI and capability status in their authoritative systems."""
 
-    def test_current_ci_run_referenced(self) -> None:
+    def test_current_ci_authority_is_explicit(self) -> None:
         evidence = (ROOT / "docs" / "IMPLEMENTATION-EVIDENCE.md").read_text(encoding="utf-8")
-        assert "33858051794" in evidence, (
-            "IMPLEMENTATION-EVIDENCE.md does not reference current CI run 33858051794"
-        )
+        assert "GitHub Actions is authoritative" in evidence
 
-    def test_current_main_sha_referenced(self) -> None:
+    def test_capability_manifest_authority_is_explicit(self) -> None:
         evidence = (ROOT / "docs" / "IMPLEMENTATION-EVIDENCE.md").read_text(encoding="utf-8")
-        assert "1f71f0e" in evidence, (
-            "IMPLEMENTATION-EVIDENCE.md does not reference current main SHA 1f71f0e"
-        )
+        assert "docs/implementation/CAPABILITY-ACCEPTANCE.yaml" in evidence
+
+
+@pytest.mark.unit
+class TestHumanEntryPoints:
+    """Human entry points should not become revision-specific audit logs."""
+
+    ENTRY_POINTS = [ROOT / "README.md", ROOT / "docs" / "EVIDENCE.md"]
+
+    @pytest.mark.parametrize("path", ENTRY_POINTS)
+    def test_avoids_git_and_ci_identifiers(self, path: Path) -> None:
+        content = path.read_text(encoding="utf-8")
+        assert not re.search(r"\b[0-9a-f]{7,40}\b", content)
+        assert not re.search(r"\bPR\s+#\d+\b", content)
+        assert not re.search(r"\bCI run\s+`?\d+", content, re.IGNORECASE)
 
 
 @pytest.mark.unit
