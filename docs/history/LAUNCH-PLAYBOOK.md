@@ -1,5 +1,9 @@
 # Archon Launch Playbook: 0 → 10K Stars
 
+> **Audience:** Project leads planning an open-source launch.
+> **Purpose:** Research compilation — launch tactics distilled from successful OSS projects (CrewAI, Ollama, LangChain, etc.).
+> **Status:** Aspirational reference — no public launch has occurred. Treat as a playbook to revisit when Archon reaches launch readiness.
+
 > Compiled August 2026 from analysis of CrewAI (25K⭐), Ollama (130K⭐), Open Interpreter (58K⭐), LangChain (100K⭐), AutoGen (38K⭐), Dify (144K⭐), and PydanticAI launches.
 
 ---

@@ -1,9 +1,12 @@
-# Interview preparation
+# Career preparation
 
-> **Track status:** draft; validate against the current branch before an interview
+> **Track status:** draft; validate against the current branch before using it for career preparation
 > **Rule:** every claim needs a source symbol, behavior test, evidence scope, and limitation
 
-This page is a speaking route. Definitions remain canonical in the [concept pages](../concept-map.md); exact implementation anchors live in [code bookmarks](../reference/code-bookmarks.md).
+This page helps learners practice explaining Archon's architecture, trade-offs,
+evidence, and limitations in technical interviews. Definitions remain canonical
+in the [concept pages](../concept-map.md); exact implementation anchors live in
+[code bookmarks](../reference/code-bookmarks.md).
 
 ## The answer spine
 

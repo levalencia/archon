@@ -1,5 +1,9 @@
 # Archon Feature and Course Concept Audit v2
 
+> **Audience:** Maintainers and auditors assessing feature coverage against competitors and course curriculum.
+> **Purpose:** Capability audit at revision `27952f4` — compares Archon feature-by-feature with Hermes Agent, Codex, Claude Code, OpenCode, and AIAMastery.
+> **Status:** Historical snapshot — superseded by CAPABILITY-ACCEPTANCE.yaml and the generated Studio manifest for current status. Labels below describe only the audited revision.
+
 **Date:** 2026-08-25  
 **Audited revision:** `27952f4`  
 **Purpose:** compare Archon feature-by-feature with Hermes Agent, OpenAI Codex, Claude Code, OpenCode, and the AIAMastery curriculum. This is a capability audit, not a production-readiness audit.

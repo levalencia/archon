@@ -1,17 +1,19 @@
 # Archon Implementation Evidence
 
-**Canonical mutable status source**
+> **Audience:** Maintainers and auditors reviewing technical proof.
+> **Purpose:** Detailed evidence ledger for implementation, wiring, tests, direct observation, UI, and deployment. Start with the [Evidence Guide](EVIDENCE.md) for a human-readable overview.
+> **Status:** Active technical ledger. Per-capability status remains authoritative in the acceptance manifest.
 
-## Baseline
+**Canonical technical evidence source**
 
-- **Current main:** `1f71f0e1ada7da4989ef7e313581b7476f82c804` (PR #11 merge). Skills + Project Instructions and core-table reconciliation are merged.
-- **CI acceptance:** GitHub Actions run `33858051794` passed at the exact main SHA: backend **1,579 passed / 6 skipped / 87.15% coverage**, Svelte **0 errors / 0 warnings**, **15 Vitest files**, **35 Playwright**.
-- **Migration head:** `20260902_22` (core-table reconciliation).
-- **Runtime hardening:** `Settings.agent_max_tool_calls` now drives the sync/SSE prompt context and `RuntimeBudget`; over-budget native calls receive synthetic unexecuted-tool results before bounded final synthesis. Monetary admission quotes the current serialized request plus bounded headroom against the most expensive eligible input class. These paths have deterministic coverage, but no live run exceeding eight approved tool calls is claimed.
-- **Capability status source:** `docs/implementation/CAPABILITY-ACCEPTANCE.yaml`; this prose must not override its per-dimension limits.
-- **Deployment status:** production-like **local** target observed; no non-local/public deployment. Every `Deployed` value remains **No**.
+## Current baseline
 
-This document separates code presence, wiring, tests, direct observation, UI, and deployment. Local tests, mocks, Docker smokes, and manifests are not public-production evidence.
+- **Capability status:** `docs/implementation/CAPABILITY-ACCEPTANCE.yaml` is authoritative for per-dimension status.
+- **CI:** GitHub Actions is authoritative for the current branch and exact revision results.
+- **Runtime:** tool, token, time, and monetary limits are enforced by deterministic code paths.
+- **Deployment:** the verified target is local only. No public or cloud deployment is claimed.
+
+This ledger separates code presence, wiring, tests, direct observation, UI, and deployment. Historical acceptance records remain below for traceability; they do not override the current capability manifest.
 
 ### Historical candidate baseline (superseded)
 

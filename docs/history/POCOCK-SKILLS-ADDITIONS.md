@@ -1,5 +1,9 @@
 # POCOCK-SKILLS-ADDITIONS.md — Matt Pocock's Engineering Skills Applied to Archon
 
+> **Audience:** Contributors exploring engineering discipline patterns considered during planning.
+> **Purpose:** Research notes — improvement ideas from Matt Pocock's engineering skills repo, mapped to the original Archon plan.
+> **Status:** Historical research input. Current capability status lives in the acceptance manifest and implementation evidence.
+
 **Source:** 10 skills from `github.com/mattpocock/skills` (engineering + productivity)
 **Purpose:** Concrete improvements to Archon webapp plan using battle-tested engineering disciplines
 **Created:** 2026-08-21

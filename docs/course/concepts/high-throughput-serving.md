@@ -102,4 +102,4 @@ A good answer names the contract in the beginner explanation, follows the sequen
 - **Course-day map:** [AIAMastery Days 1–30 coverage](../course-concept-coverage.md)
 - **Evidence:** [Implementation Evidence](../../IMPLEMENTATION-EVIDENCE.md)
 - **Deferred decision:** [Required architecture, evidence threshold, and capstone rationale](../../REMAINING-DEFERRED-GAPS.md#2-gpu-and-high-throughput-model-serving)
-- **Historical context only:** [Feature and Course Audit v2](../../FEATURE-AND-COURSE-AUDIT-V2.md)
+- **Historical context only:** [Feature and Course Audit v2](../../history/FEATURE-AND-COURSE-AUDIT-V2.md)

@@ -134,5 +134,5 @@ Apply this policy exactly to every module, concept, exercise, and interview answ
 - [Concept and module dependency map](concept-map.md)
 - [Current implementation evidence](../IMPLEMENTATION-EVIDENCE.md)
 - [Current architecture diagrams](../ARCHITECTURE-DIAGRAMS.md)
-- [Historical feature/course audit](../FEATURE-AND-COURSE-AUDIT-V2.md) — useful context, not current status
+- [Historical feature/course audit](../history/FEATURE-AND-COURSE-AUDIT-V2.md) — useful context, not current status
 - [Capstone documentation implementation plan](../plans/2026-08-27-capstone-course-documentation.md)
