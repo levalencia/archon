@@ -8,6 +8,10 @@
 
 Make the repository understandable to a new reader without forcing them through audit logs, historical plans, or machine-oriented evidence.
 
+The primary reader is a self-directed developer learning how to build an advanced
+agentic AI system and preparing for high-skill engineering roles. Recruiters and
+interviewers are not documentation personas.
+
 ## Information architecture
 
 1. **Root README:** short project landing page, architecture overview, quick start, limits, and routes into deeper documentation.
@@ -46,6 +50,7 @@ The detailed technical evidence ledger remains at its established path because i
 
 - [x] Root README is no longer an implementation inventory or audit log.
 - [x] Root README contains no commit IDs, PR numbers, CI run IDs, or mutable test totals.
+- [x] Root README routes learners by goal rather than recruiters or interviewers by role.
 - [x] `docs/README.md` routes readers by intent.
 - [x] `docs/EVIDENCE.md` explains evidence without becoming a competing status source.
 - [x] Canonical evidence paths remain unchanged.

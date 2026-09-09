@@ -1,36 +1,17 @@
 # Archon Documentation
 
-Find the shortest route to the question you are trying to answer. Archon is a
-local Agent Reliability Workbench; current status lives in the
+Use this page as the learning map for Archon. The material moves from agent
+fundamentals to implementation, operations, evidence, and advanced-role
+preparation. Current status lives in the
 [capability manifest](implementation/CAPABILITY-ACCEPTANCE.yaml) and its
 [technical evidence ledger](IMPLEMENTATION-EVIDENCE.md).
 
 ---
 
-## Understand
-
-Start here to learn what Archon is and how it works.
-
-| Doc | Purpose |
-|-----|---------|
-| [Architecture Diagrams](ARCHITECTURE-DIAGRAMS.md) | Visual system overview — control plane, data flow, deployment topology |
-| [Interview Answer Bank](INTERVIEW-ANSWER-BANK.md) | Concise, evidence-backed explanations of every major design decision |
-| [Remaining Deferred Gaps](REMAINING-DEFERRED-GAPS.md) | What Archon deliberately does *not* claim, and why |
-
-## Run
-
-Get the system running locally and operate it day-to-day.
-
-| Doc | Purpose |
-|-----|---------|
-| [CI, Pipelines & Local Run](CI-PIPELINES-AND-LOCAL-RUN.md) | GitHub Actions workflow, Docker Compose services, `make` targets |
-| [DR Runbook](DR-RUNBOOK.md) | Backup, restore, health checks, measured RTO/RPO |
-| [Demo Script](DEMO-SCRIPT.md) | 3–5 minute walkthrough for live or recorded demos |
-| [Postmortem — Local Deployment](POSTMORTEM-LOCAL-DEPLOYMENT.md) | Lessons from the local deployment smoke |
-
 ## Learn
 
-Structured course material for onboarding, interview prep, or deep study.
+Start with the course and use visual material to build a mental model before
+tracing implementation details.
 
 | Doc | Purpose |
 |-----|---------|
@@ -39,9 +20,39 @@ Structured course material for onboarding, interview prep, or deep study.
 | [Concept Map](course/concept-map.md) | Dependency graph across all concepts |
 | [Visual Learning Studio](visual-learning/README.md) | Interactive decks, audio, video, and study tools |
 
-## Evidence
+## Understand the architecture
 
-Proof of what works, how it was tested, and what the boundaries are.
+Connect concepts to the real system.
+
+| Doc | Purpose |
+|-----|---------|
+| [Architecture Diagrams](ARCHITECTURE-DIAGRAMS.md) | Visual system overview — control plane, data flow, and deployment topology |
+| [Code Bookmarks](course/reference/code-bookmarks.md) | Exact source symbols behind the concepts |
+| [Remaining Deferred Gaps](REMAINING-DEFERRED-GAPS.md) | What Archon deliberately does *not* implement or claim |
+
+## Build and run
+
+Exercise the same operational boundaries used by the project.
+
+| Doc | Purpose |
+|-----|---------|
+| [CI, Pipelines & Local Run](CI-PIPELINES-AND-LOCAL-RUN.md) | Tests, Docker Compose services, and local commands |
+| [DR Runbook](DR-RUNBOOK.md) | Backup, restore, health checks, and recovery practice |
+| [Postmortem — Local Deployment](POSTMORTEM-LOCAL-DEPLOYMENT.md) | Lessons from the local deployment smoke |
+
+## Prepare for advanced roles
+
+Practice explaining what you built without exaggerating its evidence.
+
+| Doc | Purpose |
+|-----|---------|
+| [Career Preparation Route](course/tracks/interview-preparation.md) | Short and deep ways to explain the architecture and trade-offs |
+| [Architecture Answer Bank](INTERVIEW-ANSWER-BANK.md) | Evidence-backed answers to common system-design questions |
+| [Practice Walkthrough](DEMO-SCRIPT.md) | A repeatable way to present and explain the running system |
+
+## Verify your understanding
+
+Check whether your explanation matches what the repository actually proves.
 
 | Doc | Purpose |
 |-----|---------|

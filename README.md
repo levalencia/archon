@@ -2,9 +2,9 @@
 
 # Archon
 
-### Agent Reliability Workbench
+### Learn to build reliable AI agents
 
-A local-only system for building, governing, inspecting, and evaluating AI agent runs.
+A hands-on capstone for learning how to build, govern, inspect, and evaluate advanced AI agents.
 
 [Architecture](docs/ARCHITECTURE-DIAGRAMS.md) · [Evidence](docs/EVIDENCE.md) · [Documentation](docs/README.md) · [Course](docs/course/README.md) · [Visual Learning](docs/visual-learning/README.md)
 
@@ -14,8 +14,8 @@ A local-only system for building, governing, inspecting, and evaluating AI agent
 
 ## What Archon is
 
-Archon is a working agent control plane — not a chat wrapper around an LLM.
-It demonstrates one auditable lifecycle:
+Archon is a working agent control plane that you can run, study, and extend — not
+a toy chat wrapper around an LLM. It teaches one auditable lifecycle:
 
 ```
 Policy → Run → Approval → Tool → Evidence → Evaluation
@@ -26,7 +26,9 @@ sensitive operations for human approval, executes authorized tools, and records
 ordered evidence. Runs can be inspected, replayed, forked, compared, grounded
 against documents, and evaluated later.
 
-**Archon is a local portfolio project. It is not a public production service.**
+The goal is practical mastery: understand the architecture, trace it into real
+code, exercise its failure modes, and prepare for advanced agentic AI engineering
+roles. Archon is a local learning project, not a public production service.
 
 ## Architecture
 
@@ -98,7 +100,7 @@ make media-install
 ARCHON_LOCAL_PORT=80 ./scripts/local-stack.sh start
 ```
 
-For a live-provider demo:
+To study real-provider behavior:
 
 ```bash
 ./scripts/local-stack.sh stop
@@ -118,15 +120,16 @@ Stop and clean up:
 > secrets. Use `local-stack.sh` so every command reuses the exact generated
 > context.
 
-## Documentation
+## Choose your learning path
 
-| Audience | Entry point |
+| Goal | Start here |
 |---|---|
-| Recruiter / engineering manager | Read this page, then the [Evidence Guide](docs/EVIDENCE.md) |
-| Interviewer / candidate | [Interview route](docs/course/tracks/interview-preparation.md) |
-| Engineer reviewing the system | [Architecture Diagrams](docs/ARCHITECTURE-DIAGRAMS.md) and [Code Bookmarks](docs/course/reference/code-bookmarks.md) |
-| Learner | [Visual Learning Studio](docs/visual-learning/README.md) → [Course](docs/course/README.md) |
-| Demo presenter | [Demo Script](docs/DEMO-SCRIPT.md) |
+| Learn agent foundations in order | [Course syllabus](docs/course/syllabus.md) → [course modules](docs/course/README.md#modules) |
+| See the system before reading code | [Visual Learning Studio](docs/visual-learning/README.md) |
+| Connect architecture to implementation | [Architecture Diagrams](docs/ARCHITECTURE-DIAGRAMS.md) → [Code Bookmarks](docs/course/reference/code-bookmarks.md) |
+| Practice reliability and local operations | [CI, Pipelines, and Local Run](docs/CI-PIPELINES-AND-LOCAL-RUN.md) |
+| Prepare for advanced agentic AI roles | [Career preparation route](docs/course/tracks/interview-preparation.md) |
+| Verify what is real and what remains limited | [Evidence Guide](docs/EVIDENCE.md) |
 
 ## Evidence and limitations
 

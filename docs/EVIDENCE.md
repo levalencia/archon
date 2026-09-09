@@ -1,6 +1,6 @@
 # Archon Evidence Guide
 
-> **Audience:** Reviewers who want to understand what Archon proves without reading the full audit ledger.
+> **Audience:** Learners who want to distinguish working capabilities from examples, tests, and unverified claims.
 > **Purpose:** Explain the evidence model and route readers to the supporting records.
 > **Status:** Active summary. Exact capability status remains in the canonical sources linked below.
 

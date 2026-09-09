@@ -110,6 +110,16 @@ class TestHumanEntryPoints:
         assert not re.search(r"\bPR\s+#\d+\b", content)
         assert not re.search(r"\bCI run\s+`?\d+", content, re.IGNORECASE)
 
+    def test_readme_is_learner_first(self) -> None:
+        content = (ROOT / "README.md").read_text(encoding="utf-8").lower()
+        for evaluator_persona in (
+            "recruiter / engineering manager",
+            "interviewer / candidate",
+            "demo presenter",
+        ):
+            assert evaluator_persona not in content
+        assert "advanced agentic ai" in content
+
 
 @pytest.mark.unit
 class TestNoProhibitedClaims:

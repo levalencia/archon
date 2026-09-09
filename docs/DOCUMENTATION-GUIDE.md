@@ -6,16 +6,17 @@
 
 ## Audience
 
-Archon docs serve three audiences:
+Archon docs serve one primary audience: self-directed developers learning how
+to build a full-featured agentic AI system. Within that audience, the docs support
+three learning needs:
 
-1. **Reviewers** — quick understanding of what exists, how it
-   was proven, and where the boundaries are.
-2. **Operators and learners** — task-focused runbooks and structured explanations.
-3. **Contributors** — onboarding, architecture context, writing
-   conventions.
+1. **Learn the concepts** — mental models, modules, diagrams, and exercises.
+2. **Build and operate the system** — code references, runbooks, and failure drills.
+3. **Prepare for advanced roles** — practice explaining architecture, evidence,
+   trade-offs, and limitations in professional settings.
 
-Write for the first audience that applies. Prefer short sentences and concrete
-evidence over marketing language.
+Recruiters and interviewers are not documentation personas. Write directly to
+the learner using short sentences, concrete examples, and verifiable evidence.
 
 ## Status conventions
 
