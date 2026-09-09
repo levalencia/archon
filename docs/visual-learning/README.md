@@ -109,6 +109,62 @@ All six recipes retain the same planned artifact families, but only artifacts pr
 
 Use [`hermes-generation-promptbook.md`](hermes-generation-promptbook.md) for generation contracts. Follow [`hermes-generation-runbook.md`](hermes-generation-runbook.md) for generation, media validation, publication, and local-runtime verification. NotebookLM files are deprecated migration references only; they are not the active generation lane.
 
+## Base vs. Rich behavior
+
+The Visual Learning Studio operates in two modes:
+
+| Mode | Media available | How to get it |
+|------|----------------|---------------|
+| **Base** (default after clone) | Roadmap, Stories, Architecture, and Evidence from the tracked Studio manifest. Present, Listen, and Study report that published media is unavailable. | Nothing extra needed. |
+| **Rich** (after media install) | Everything above **plus** MP3 audio, MP4 video, high-fidelity SVG diagrams, and HTML presentation decks. | Install the checksummed media package (see below). |
+
+### Install rich media (online)
+
+```bash
+make media-install
+# or directly:
+python3 scripts/learning-media-release.py install \
+  --target ../archon-learning-media \
+  --manifest docs/visual-learning/release-manifest.json
+```
+
+This downloads the archive from the GitHub Release URL in `docs/visual-learning/release-manifest.json`, verifies its SHA-256 checksum and byte size, and atomically installs it.
+
+Install it before the first managed-stack start. `local-stack.sh start` detects a
+valid sibling library and enables the rich media routes automatically. The base
+application remains available when the library is absent.
+
+### Install rich media (offline / local archive)
+
+```bash
+python3 scripts/learning-media-release.py install \
+  --target ../archon-learning-media \
+  --archive /path/to/archon-learning-media.tar.gz \
+  --manifest docs/visual-learning/release-manifest.json
+```
+
+### Package rich media (maintainer only)
+
+```bash
+make media-package MEDIA_LIBRARY=/path/to/archon-learning-media
+# or directly:
+python3 scripts/learning-media-release.py package \
+  --library /path/to/archon-learning-media \
+  --output dist/archon-learning-media.tar.gz \
+  --manifest-output docs/visual-learning/release-manifest.json
+```
+
+The packager validates catalog schema, source commit, all artifact SHA-256 checksums, rejects symlinks/non-regular files, and produces a byte-deterministic tar.gz archive. The release manifest must be committed and the archive uploaded as a GitHub Release asset.
+
+### Security properties
+
+- HTTPS-only downloads
+- Pre-extraction SHA-256 + size verification
+- Tar member validation: rejects absolute paths, `..` traversal, symlinks, hard links, device nodes, unexpected top-level entries, excessive member counts
+- Post-extraction artifact checksum verification against catalog
+- Atomic directory replacement with rollback
+- Refuses to overwrite non-empty directories without `.archon-learning-library` marker
+
 ## Honesty boundaries
 
 - A visual component or green evidence cell does not upgrade capability status.

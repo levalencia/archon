@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import stat
 from pathlib import Path
@@ -51,7 +52,42 @@ def test_default_values_are_mock_and_contain_valid_generated_secrets() -> None:
     assert values["ARCHON_VERIFIER_ENABLED"] == "false"
     assert values["ARCHON_OTEL_DESTINATIONS"] == "debug"
     assert values["ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT"] == "false"
+    assert values["ARCHON_LEARNING_MEDIA_ENABLED"] == "false"
     assert 18_000 <= int(values["ARCHON_LOCAL_PORT"]) < 38_000
+
+
+def test_valid_external_learning_library_is_enabled(tmp_path: Path) -> None:
+    library = tmp_path / "archon-learning-media"
+    (library / "published").mkdir(parents=True)
+    (library / ".archon-learning-library").write_text(
+        "archon.learning-library/v1\n", encoding="utf-8"
+    )
+    (library / "catalog.json").write_text(
+        json.dumps(
+            {
+                "schema": "archon.learning-library",
+                "version": 1,
+                "source_commit": "a" * 40,
+                "packs": [{"id": "example"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    values = generator.generate_values(learning_media_root=library)
+
+    assert values["ARCHON_LEARNING_MEDIA_ENABLED"] == "true"
+    assert values["ARCHON_LEARNING_MEDIA_HOST_DIR"] == str(library.resolve())
+
+
+def test_invalid_external_learning_library_fails_closed(tmp_path: Path) -> None:
+    library = tmp_path / "archon-learning-media"
+    library.mkdir()
+    (library / ".archon-learning-library").write_text("wrong\n", encoding="utf-8")
+    (library / "catalog.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="learning-media"):
+        generator.generate_values(learning_media_root=library)
 
 
 def test_live_values_import_only_allowlisted_foundry_configuration(tmp_path: Path) -> None:

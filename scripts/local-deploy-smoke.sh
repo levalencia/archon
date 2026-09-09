@@ -52,7 +52,10 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-generate_env=(python3 "$ROOT/scripts/generate-local-env.py" "$ENV_FILE")
+generate_env=(
+  python3 "$ROOT/scripts/generate-local-env.py" "$ENV_FILE"
+  --learning-media-root "$ROOT/../archon-learning-media"
+)
 if [[ -n "${ARCHON_PROVIDER_ENV_FILE:-}" ]]; then
   generate_env+=(--provider-env "$ARCHON_PROVIDER_ENV_FILE")
 fi
