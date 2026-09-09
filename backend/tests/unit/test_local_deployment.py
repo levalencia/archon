@@ -185,6 +185,7 @@ def test_local_stack_wrapper_preserves_exact_generated_runtime_context() -> None
     assert "ARCHON_BASE_URL" in smoke
     assert "ARCHON_RUNTIME_MODE" in smoke
     assert "generate-local-env.py" in smoke
+    assert "--learning-media-root" in smoke
     assert "ARCHON_PROVIDER_ENV_FILE" in smoke
     assert '"ARCHON_LLM_PROVIDER"' in generator
     assert '"ARCHON_LLM_MODEL"' in generator

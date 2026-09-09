@@ -28,29 +28,15 @@ Archon is a serious local portfolio system. It is not a public production servic
 
 ## Verified status
 
-Skills + Project Instructions and core-table reconciliation are merged to `main`
-at `1f71f0e`. PR #10 (tool-budget exhaustion synthesis, `041ff75`) and PR #11
-(legacy core-table reconciliation, `1f71f0e`) are the most recent merges.
-GitHub Actions CI run `33858051794` passed at the exact merge SHA.
-The configured tool-call limit now reaches both the model prompt and runtime
-enforcement, and over-budget native calls are closed before bounded final
-synthesis. This wiring is deterministic-test evidence; a live run exceeding
-eight approved tool calls has not yet been accepted.
+Archon is verified as a local, production-like system. It is not publicly deployed.
 
-| Evidence | Recorded result |
-|---|---|
-| Deployment target | Existing production-like local Docker Compose on macOS; not publicly deployed |
-| Local services | 7 retained baseline containers; only the loopback gateway publishes a host port |
-| Main-branch CI backend | **1,579 passed, 6 skipped, 87.15% coverage** |
-| Main-branch CI frontend | Svelte **0 errors / 0 warnings**, **15 Vitest files**, **35 Playwright** |
-| Capability manifest | **16 stable acceptance entries**; Skills + Project Instructions is tracked in the 66-concept course catalog |
-| Concept totals | **59 implemented / 7 deferred / 0 partial** |
-| Portfolio benchmark | Historical local result: **12 scenarios, 120/120 iterations passed**, zero external cost |
-| Disaster recovery | Historical local result: **0 selected-record differences**, observed **restore-to-ready 24.787 seconds** |
-| Live provider evidence | Foundry `claude-opus-4-6`: one selected skill, one instruction revision, nine capability refs (historical candidate observation) |
-| Public/cloud deployment | **No. Deliberately deferred.** |
+- CI covers backend, frontend, browser, security, and deployment checks.
+- Docker Compose exposes only the loopback gateway to the host.
+- Deterministic tests cover runtime limits, policy, approvals, persistence, and evaluation.
+- Live-provider acceptance is bounded evidence, not production-operation proof.
 
-The canonical details and limits live in [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md).
+Current results and limitations live in [Implementation Evidence](docs/IMPLEMENTATION-EVIDENCE.md).
+Capability status lives in [Capability Acceptance](docs/implementation/CAPABILITY-ACCEPTANCE.yaml).
 
 ## Start here
 
@@ -237,6 +223,19 @@ Use the managed wrapper for day-to-day startup and operations:
 ./scripts/local-stack.sh url
 ./scripts/local-stack.sh logs otel-collector
 ```
+
+The base application runs without large generated media. To install the exact
+checksummed Visual Learning audio, video, decks, diagrams, and study artifacts
+published for this revision, run:
+
+```bash
+make media-install
+```
+
+This downloads the pinned GitHub Release asset into the external sibling
+directory `../archon-learning-media`; generated binaries do not inflate Git
+history. See [Visual Learning Studio](docs/visual-learning/README.md) for the
+base-versus-rich contract and offline installation path.
 
 `start` generates valid ephemeral PostgreSQL, JWT, and encryption material; builds and verifies all seven services; atomically retains the exact Compose project/env context in a mode-`0600` state file; and prints the loopback application URL. A kernel advisory lock (`lockf` on macOS, `flock` on Linux) rejects concurrent starts and is released automatically on exit, signal, or crash. If managed state exists but health is failing or the protected env is missing, `start` preserves containers, volumes, env pointers, and state for explicit diagnosis instead of destroying data or creating a second stack. When the protected env is missing, `status` and `logs` fall back to exact Compose project labels, and explicit `stop` can remove only resources carrying that project label.
 

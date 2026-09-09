@@ -91,3 +91,40 @@ Use the canonical local-stack script. Do not expose another host port. Verify st
 - Human review: learning quality acceptance.
 - Local browser verification: locally available feature.
 - None of these establish public deployment.
+
+## 7. Distribute rich media
+
+After all packs pass the technical gates, package the review-ready library for
+GitHub Release distribution. Distribution does not change artifact status to
+`published` or replace Luis's learning-quality review.
+
+```bash
+python3 scripts/learning-media-release.py package \
+  --library ../archon-learning-media \
+  --output dist/archon-learning-media.tar.gz \
+  --manifest-output docs/visual-learning/release-manifest.json
+```
+
+This creates a deterministic, checksummed archive. Commit the updated manifest
+and upload the archive as a GitHub Release asset tagged
+`learning-media-{commit_short12}`.
+
+Recipients install with:
+
+```bash
+python3 scripts/learning-media-release.py install \
+  --target ../archon-learning-media \
+  --manifest docs/visual-learning/release-manifest.json
+# or offline:
+python3 scripts/learning-media-release.py install \
+  --target ../archon-learning-media \
+  --archive dist/archon-learning-media.tar.gz \
+  --manifest docs/visual-learning/release-manifest.json
+```
+
+Install before the first managed-stack start. Environment generation validates
+the sibling ownership marker and catalog shape, enables learning media when the
+library is present, and leaves it disabled when the library is absent. Backend
+startup performs the complete artifact checksum validation.
+
+See `docs/visual-learning/README.md` § "Base vs. Rich behavior" for details.

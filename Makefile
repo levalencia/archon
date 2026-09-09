@@ -2,7 +2,7 @@ PYTHON := python3.11
 UV := uv
 DOCKER := docker compose -f infra/docker/docker-compose.yml
 
-.PHONY: setup test lint type-check dev docker-up docker-down clean
+.PHONY: setup test lint type-check dev docker-up docker-down clean media-package media-install-local media-install test-media
 
 ## Setup: create venv and install deps with uv
 setup:
@@ -56,6 +56,38 @@ docker-down:
 ## Docker Compose logs
 docker-logs:
 	$(DOCKER) logs -f
+
+## Package rich learning media into a deterministic archive
+## Requires: MEDIA_LIBRARY=/path/to/archon-learning-media
+MEDIA_LIBRARY ?= ../archon-learning-media
+MEDIA_TARGET ?= ../archon-learning-media
+media-package:
+	$(PYTHON) scripts/learning-media-release.py package \
+		--library $(MEDIA_LIBRARY) \
+		--output dist/archon-learning-media.tar.gz \
+		--manifest-output docs/visual-learning/release-manifest.json
+
+## Install rich learning media from local archive (offline)
+## Requires: ARCHIVE=/path/to/archive.tar.gz
+media-install-local:
+ifndef ARCHIVE
+	$(error ARCHIVE is required for offline install, e.g. make media-install-local ARCHIVE=dist/archon-learning-media.tar.gz)
+endif
+	$(PYTHON) scripts/learning-media-release.py install \
+		--target $(MEDIA_TARGET) \
+		--archive $(ARCHIVE) \
+		--manifest docs/visual-learning/release-manifest.json
+
+## Install rich learning media from release manifest (online)
+## Requires the release asset to exist on GitHub first.
+media-install:
+	$(PYTHON) scripts/learning-media-release.py install \
+		--target $(MEDIA_TARGET) \
+		--manifest docs/visual-learning/release-manifest.json
+
+## Run learning media release tests
+test-media:
+	cd backend && $(UV) run pytest tests/unit/test_learning_media_release.py -v
 
 ## Clean
 clean:

@@ -36,6 +36,9 @@ Thumbs.db
 node_modules/
 .svelte-kit/
 
+# Distribution archives (built by learning-media-release.py)
+dist/
+
 # Docker
 docker-compose.override.yml
 

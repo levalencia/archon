@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
 import re
 import secrets
@@ -67,6 +68,7 @@ MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 OTEL_DESTINATIONS = frozenset(
     {"debug", "jaeger", "logfire", "azure-monitor", "tempo", "otlp"}
 )
+LEARNING_MEDIA_MARKER = "archon.learning-library/v1\n"
 
 
 def _unquote(value: str) -> str:
@@ -203,7 +205,50 @@ def read_provider_env(path: Path) -> dict[str, str]:
     return values
 
 
-def generate_values(provider_env: Path | None = None) -> dict[str, str]:
+def validate_learning_media_root(path: Path | None) -> Path | None:
+    """Return a valid media root, or ``None`` when no library is installed."""
+    if path is None:
+        return None
+    candidate = path.expanduser()
+    if not candidate.exists():
+        return None
+    if candidate.is_symlink() or not candidate.is_dir():
+        raise ValueError("learning-media root must be a real directory")
+    if not any(candidate.iterdir()):
+        return None
+
+    marker = candidate / ".archon-learning-library"
+    catalog = candidate / "catalog.json"
+    published = candidate / "published"
+    if (
+        not marker.is_file()
+        or marker.is_symlink()
+        or marker.read_text(encoding="utf-8") != LEARNING_MEDIA_MARKER
+        or not catalog.is_file()
+        or catalog.is_symlink()
+        or not published.is_dir()
+        or published.is_symlink()
+    ):
+        raise ValueError("learning-media library is incomplete or invalid")
+    try:
+        payload = json.loads(catalog.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("learning-media catalog is invalid") from exc
+    if (
+        payload.get("schema") != "archon.learning-library"
+        or payload.get("version") != 1
+        or not isinstance(payload.get("packs"), list)
+        or not payload["packs"]
+        or not re.fullmatch(r"[0-9a-f]{40}", str(payload.get("source_commit", "")))
+    ):
+        raise ValueError("learning-media catalog is invalid")
+    return candidate.resolve()
+
+
+def generate_values(
+    provider_env: Path | None = None,
+    learning_media_root: Path | None = None,
+) -> dict[str, str]:
     values = {
         "POSTGRES_PASSWORD": secrets.token_hex(32),
         "ARCHON_SECRET_KEY": secrets.token_urlsafe(48),
@@ -220,6 +265,7 @@ def generate_values(provider_env: Path | None = None) -> dict[str, str]:
         "ARCHON_VERIFIER_ENABLED": "false",
         "ARCHON_OTEL_DESTINATIONS": "debug",
         "ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT": "false",
+        "ARCHON_LEARNING_MEDIA_ENABLED": "false",
         "COMPOSE_PROFILES": "",
         "ARCHON_JAEGER_PORT": os.environ.get("ARCHON_JAEGER_PORT") or "16686",
         "ARCHON_LOCAL_PORT": os.environ.get("ARCHON_LOCAL_PORT")
@@ -233,6 +279,9 @@ def generate_values(provider_env: Path | None = None) -> dict[str, str]:
         values["ARCHON_RUNTIME_MODE"] = "live-foundry"
         values["ARCHON_VERIFIER_ENABLED"] = "true"
         values["ARCHON_VERIFIER_MODEL"] = values["ARCHON_LLM_MODEL"]
+    if media_root := validate_learning_media_root(learning_media_root):
+        values["ARCHON_LEARNING_MEDIA_ENABLED"] = "true"
+        values["ARCHON_LEARNING_MEDIA_HOST_DIR"] = str(media_root)
     if "jaeger" in values["ARCHON_OTEL_DESTINATIONS"].split(","):
         values["COMPOSE_PROFILES"] = "jaeger"
     return values
@@ -252,9 +301,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
     parser.add_argument("--provider-env", type=Path)
+    parser.add_argument("--learning-media-root", type=Path)
     args = parser.parse_args()
     try:
-        write_env(args.output, generate_values(args.provider_env))
+        write_env(
+            args.output,
+            generate_values(args.provider_env, args.learning_media_root),
+        )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
 

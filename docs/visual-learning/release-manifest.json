@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "release_tag": "learning-media-07b527103e28",
+  "source_commit": "07b527103e2863e09a71802463f5af91c37eb69e",
+  "asset_name": "archon-learning-media-07b527103e28.tar.gz",
+  "download_url": "https://github.com/levalencia/archon/releases/download/learning-media-07b527103e28/archon-learning-media-07b527103e28.tar.gz",
+  "byte_size": 59976174,
+  "archive_sha256": "345ee5097e7f6d17089aaa1eceab36c45e15e822668b7b80d037dc7485a7268a"
+}
