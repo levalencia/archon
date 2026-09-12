@@ -15,12 +15,18 @@ from app.learning_tutor.repository import (
 )
 from app.learning_tutor.sources import LearningSourceInput
 from app.learning_tutor.web_supplement import WebEvidence
-from app.learning_tutor.workflow import LearningTutorWorkflow, _needs_web_supplement, _web_query
+from app.learning_tutor.workflow import (
+    LearningTutorWorkflow,
+    _needs_web_supplement,
+    _rebind_miscited_claims,
+    _web_query,
+)
 from app.runtime.models import ModelResponse, TokenUsage
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.chunker import EmbeddingService
 from app.services.conversations import ConversationRepository
 from app.services.db_store import DatabaseStore
+from app.services.grounded_rag import Claim, DocumentEvidence
 
 
 class TutorProvider:
@@ -351,3 +357,37 @@ def test_general_definition_uses_web_but_code_question_stays_local() -> None:
     assert _needs_web_supplement("What's a shared service?", evidence) is True
     assert _needs_web_supplement("Explain app.state in Cogentrex", evidence) is False
     assert "application composition" in _web_query("What's a shared service?", _context())
+
+
+@pytest.mark.asyncio
+async def test_miscited_exact_claim_is_rebound_to_supporting_evidence() -> None:
+    definition = (
+        "Preflight means checking whether the system is allowed and able to start before "
+        "opening expensive resources."
+    )
+    evidence = (
+        DocumentEvidence(
+            id="E1",
+            document_id="video-1",
+            chunk_id="chunk-1",
+            content_hash="92a47dcbbffa0b18",
+            title="Lifecycle vocabulary",
+            score=0.9,
+            quote=definition,
+            verification_text=definition,
+        ),
+        DocumentEvidence(
+            id="E2",
+            document_id="code",
+            chunk_id="chunk-2",
+            content_hash="529f6ff78ca05860",
+            title="Unrelated code",
+            score=0.8,
+            quote="The application registers middleware.",
+            verification_text="The application registers middleware.",
+        ),
+    )
+
+    rebound = await _rebind_miscited_claims((Claim(definition, ("E2",)),), evidence)
+
+    assert rebound == (Claim(definition, ("E1",)),)
