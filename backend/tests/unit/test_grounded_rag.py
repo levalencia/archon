@@ -424,6 +424,14 @@ async def test_provider_failure_finalizes_failed_run(harness: Harness) -> None:
         ("Alpha uses Python 3", "Alpha uses Python 2", False),
         ("Alpha uses Python 3", "Alpha uses Python 3 for data analysis", True),
         ("Alpha uses Python and Rust", "Alpha uses Python", False),
+        (
+            "Preflight means checking whether the system is allowed and able to start before "
+            "opening expensive resources.",
+            "Preflight means checking whether the system is allowed and able to start before "
+            "opening expensive resources. Lifespan does not run the request loop itself.",
+            True,
+        ),
+        ("Alpha uses Python", "Alpha uses Python. Alpha does not use Python.", False),
     ],
 )
 async def test_claim_support_is_conservative_about_negation_numbers_and_partial_claims(
