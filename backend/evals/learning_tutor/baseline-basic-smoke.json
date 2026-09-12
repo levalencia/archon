@@ -1,0 +1,77 @@
+{
+  "schema": "cogentrex.learning-tutor-eval-summary",
+  "dataset_version": 1,
+  "scope": "six-case basic concept smoke",
+  "runtime": "local live Foundry deployment after PR 26",
+  "case_count": 6,
+  "grounded_count": 6,
+  "deterministic_pass_count": 3,
+  "definition_first_manual_pass_count": 5,
+  "latency_seconds": {
+    "average": 28.915,
+    "median": 29.139,
+    "minimum": 21.502,
+    "maximum": 34.547
+  },
+  "cases": [
+    {
+      "id": "BASIC-001",
+      "topic": "object-oriented programming",
+      "grounded": true,
+      "deterministic_pass": false,
+      "manual_definition_first": false,
+      "finding": "The answer jumped directly to Cogentrex Protocols and composition instead of first defining OOP; no web citation was selected although the case required one."
+    },
+    {
+      "id": "BASIC-004",
+      "topic": "dependency injection",
+      "grounded": true,
+      "deterministic_pass": false,
+      "manual_definition_first": true,
+      "finding": "The definition and Cogentrex application were useful, but no web citation was selected although the case required one."
+    },
+    {
+      "id": "BASIC-005",
+      "topic": "factory",
+      "grounded": true,
+      "deterministic_pass": true,
+      "manual_definition_first": true,
+      "finding": "Passed the deterministic checks and began with a direct definition."
+    },
+    {
+      "id": "BASIC-007",
+      "topic": "preflight",
+      "grounded": true,
+      "deterministic_pass": true,
+      "manual_definition_first": true,
+      "finding": "Passed after sentence-scoped polarity verification; cited the exact Video 1 transcript definition."
+    },
+    {
+      "id": "BASIC-008",
+      "topic": "observability",
+      "grounded": true,
+      "deterministic_pass": false,
+      "manual_definition_first": true,
+      "finding": "The answer explained logs, metrics, and traces, but no web citation was selected although the case required one."
+    },
+    {
+      "id": "BASIC-015",
+      "topic": "policy in Cogentrex",
+      "grounded": true,
+      "deterministic_pass": true,
+      "manual_definition_first": true,
+      "finding": "Passed with a direct Cogentrex-specific definition and local citations."
+    }
+  ],
+  "interpretation": {
+    "verified_strengths": [
+      "All six responses were grounded and cited at least one source.",
+      "Factory, preflight, observability, dependency injection, and policy began with useful definitions."
+    ],
+    "verified_gaps": [
+      "The OOP response did not begin with a general definition.",
+      "Cases requiring official web evidence did not receive web citations in this sample.",
+      "Six cases are diagnostic evidence, not a claim about the full 90-case benchmark."
+    ]
+  }
+}
