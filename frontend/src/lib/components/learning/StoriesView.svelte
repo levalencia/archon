@@ -1,12 +1,14 @@
 <script lang="ts">
   import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-svelte';
+  import type { LearningTutorContext } from '$lib/learning-tutor';
   import type { VisualLearningStudio } from '$lib/visual-learning';
 
-  let { studio }: { studio: VisualLearningStudio } = $props();
+  let { studio, onContextChange = () => {} }: { studio: VisualLearningStudio; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
   let storyId = $state('request-lifecycle');
   let stepIndex = $state(0);
   let story = $derived(studio.stories.find(item => item.id === storyId) ?? studio.stories[0]);
   let step = $derived(story?.steps[stepIndex]);
+  $effect(() => { if (story && step) onContextChange({ view: 'stories', story_id: story.id, step_index: stepIndex, concept_id: step.concept_ids[0] }, `${story.title} — ${step.title}`); });
 
   function chooseStory(id: string) {
     storyId = id;

@@ -1,11 +1,13 @@
 <script lang="ts">
   import { ChevronDown, ChevronRight, ExternalLink, Target } from 'lucide-svelte';
+  import type { LearningTutorContext } from '$lib/learning-tutor';
   import { STATUS_META, conceptsForModule, type VisualLearningStudio } from '$lib/visual-learning';
 
-  let { studio }: { studio: VisualLearningStudio } = $props();
+  let { studio, onContextChange = () => {} }: { studio: VisualLearningStudio; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
   let selectedModule = $state('00-agent-anatomy');
   let module = $derived(studio.modules.find(item => item.id === selectedModule));
   let concepts = $derived(conceptsForModule(studio, selectedModule));
+  $effect(() => { if (module) onContextChange({ view: 'roadmap', module_id: module.id }, module.title); });
 </script>
 
 <section aria-labelledby="roadmap-heading">

@@ -440,7 +440,7 @@ class GroundedDocumentWorkflow:
             parsed, usage, provider_calls = await self._complete_claims(
                 provider, question, evidence, deadline=deadline
             )
-            claims, citations, unsupported = await _verify_document_claims(parsed, evidence)
+            claims, citations, unsupported = await verify_document_claims(parsed, evidence)
             child_id: str | None = None
             child_status: str | None = None
             child_tokens = 0
@@ -936,7 +936,7 @@ def _parse_claims(raw: str) -> tuple[Claim, ...]:
     return tuple(claims)
 
 
-async def _verify_document_claims(
+async def verify_document_claims(
     claims: tuple[Claim, ...], evidence: tuple[DocumentEvidence, ...]
 ) -> tuple[tuple[Claim, ...], tuple[DocumentEvidence, ...], tuple[str, ...]]:
     # Recheck the immutable snapshot immediately before applying deliberately
@@ -961,6 +961,10 @@ async def _verify_document_claims(
         )
     )
     return tuple(supported), cited, tuple(unsupported)
+
+
+# Backward-compatible private alias for existing tests and internal callers.
+_verify_document_claims = verify_document_claims
 
 
 def _normalize_support_text(value: str) -> str:

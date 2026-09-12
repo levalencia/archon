@@ -42,6 +42,32 @@ The videos are not a parallel documentation system. Canonical explanations remai
 
 `review-ready` means the package is wired and technically validated but still awaits learner acceptance. Only accepted revisions should be promoted to `published`.
 
+## Contextual learning tutor
+
+Every Studio view exposes **Ask about this topic**. The browser submits only
+trusted identifiers such as the active concept, story step, artifact, or video
+timestamp. The backend resolves those identifiers against the tracked Studio
+manifest and reviewed media catalog before retrieval. Answers are assembled from
+verified atomic claims, include exact code excerpts when code evidence is
+available, and render only validated diagram data.
+
+The learning corpus is application-owned and separate from user document RAG.
+Synchronize it explicitly after migrations and before tutor acceptance:
+
+```bash
+cd backend
+uv run python scripts/sync_learning_knowledge.py \
+  --repository-root .. \
+  --media-root ../../cogentrex-learning-media \
+  --video code-first-video-01 \
+  --video code-first-video-02
+```
+
+The command refuses a dirty repository and mock embeddings by default. Use
+`--dry-run` to inspect the source inventory without database writes or provider
+calls. `--mock-embeddings --allow-mock` is an explicit deterministic local-only
+mode; it supports lexical/context testing but is not semantic-quality evidence.
+
 ## One-source pipeline
 
 ```mermaid

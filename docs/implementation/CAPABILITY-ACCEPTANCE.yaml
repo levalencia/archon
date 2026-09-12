@@ -170,6 +170,16 @@
       "tests": ["backend/tests/unit/test_embedding_hardening.py", "backend/tests/unit/test_embedding_config.py", "backend/tests/unit/test_provider_acceptance_scripts.py"],
       "evidence": ["docs/course/concepts/embeddings.md", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/evidence/live-rag-hardening.json"],
       "limitation": "Azure Foundry text-embedding-3-small passed live finite-vector and persisted ingest/query acceptance in the development deployment; broad semantic-quality benchmarking and public deployment are not claimed."
+    },
+    {
+      "id": "contextual-learning-tutor",
+      "owner_module": "docs/course/modules/08-rag-grounding/README.md",
+      "status": "implemented",
+      "dimensions": {"exists": "yes", "wired": "yes", "tested": "yes", "observed": "no", "ui": "yes", "live_provider": "no", "deployed": "no"},
+      "sources": ["backend/app/learning_tutor/context.py", "backend/app/learning_tutor/indexer.py", "backend/app/learning_tutor/repository.py", "backend/app/learning_tutor/workflow.py", "backend/app/routes/learning_tutor.py", "frontend/src/lib/components/learning/LearningTutorPanel.svelte", "frontend/src/lib/components/learning/TutorDiagram.svelte"],
+      "tests": ["backend/tests/unit/test_learning_tutor_context.py", "backend/tests/unit/test_learning_knowledge_repository.py", "backend/tests/unit/test_learning_tutor_workflow.py", "backend/tests/unit/test_learning_tutor_routes.py", "backend/tests/integration/test_learning_tutor_migration.py", "frontend/src/lib/components/learning/LearningTutorPanel.test.ts", "frontend/tests/visual-learning-artifacts.spec.ts"],
+      "evidence": ["docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/concepts/application-composition.md"],
+      "limitation": "The authenticated local tutor uses a curated application-owned corpus, bounded SQL-JSON retrieval, deterministic claim verification, exact code excerpts, and validated diagrams. Full-corpus indexing has been exercised with mock embeddings; live-provider answer quality, broad semantic retrieval quality, public deployment, and unbounded corpus scale are not claimed."
     }
   ]
 }

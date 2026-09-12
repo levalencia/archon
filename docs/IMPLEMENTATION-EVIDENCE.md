@@ -15,6 +15,24 @@
 
 This ledger separates code presence, wiring, tests, direct observation, UI, and deployment. Historical acceptance records remain below for traceability; they do not override the current capability manifest.
 
+## Contextual Visual Learning tutor
+
+The current repository head adds Alembic revision `20260912_23` and four
+application-owned tables for a curated learning corpus and owner-scoped tutor
+threads. The authenticated `/api/learning-tutor` path resolves browser context
+against the server-owned Visual Learning manifest, retrieves from the dedicated
+SQL-JSON corpus, requires evidence IDs for atomic claims, appends exact code
+excerpts, validates optional diagrams, and persists redacted turns and run-ledger
+events. The right-side tutor panel is wired into Roadmap, Stories, Architecture,
+Evidence, Present, Listen, and Study, including authored video timestamps.
+
+Deterministic unit, migration, route, workflow, Svelte, and browser tests are the
+implementation evidence. Corpus collection has also been exercised against the
+local reviewed media library for Videos 1 and 2. This does **not** claim live
+provider answer quality, a semantic retrieval benchmark, public deployment, or
+unbounded scale: retrieval remains the repository's bounded SQL-JSON cosine plus
+lexical/context ranking, not pgvector.
+
 ### Historical candidate baseline (superseded)
 
 The following records the pre-merge candidate status at `feature/skills-project-instructions-mcp` for historical traceability. Code evidence was anchored at `9eaf49e`; exact-head `verify.sh` PASS at `26e36737` with backend 1,537 passed / 4 skipped, Svelte 0/0, Vitest 53, Playwright 33. These numbers are superseded by the merged main CI results above.
@@ -35,8 +53,8 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 
 ## Skills + Project Instructions (merged to main)
 
-The merged main implements migrations `20260901_15` through `20260902_22`, 41
-ORM tables, ten owned bundled skills, immutable skill revisions and exact
+The repository implements migrations `20260901_15` through `20260912_23`, ten
+owned bundled skills, immutable skill revisions and exact
 owner/project/revision bindings, approved project-instruction snapshots,
 metadata-first capability discovery, and one request-context preparation path
 shared by sync and SSE. Effective-context persistence records exact instruction

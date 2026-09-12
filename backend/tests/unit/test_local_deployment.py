@@ -142,13 +142,14 @@ def test_images_run_nonroot_and_backend_migrates() -> None:
     frontend = (ROOT / "frontend/Dockerfile").read_text()
     assert "COPY backend/alembic " in backend
     assert "COPY backend/alembic.ini " in backend
+    assert "COPY frontend/static/learning/cogentrex-studio.json " in backend
     assert "USER cogentrex" in backend
     assert "uv:latest" not in backend
     assert "--frozen --no-dev" in backend
     assert backend.count("@sha256:") >= 3
     assert "alembic upgrade head" in entrypoint
     smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
-    assert '[[ "$migration" == "20260902_22" ]]' in smoke
+    assert '[[ "$migration" == "20260912_23" ]]' in smoke
     assert "app.acceptance.control_plane" in smoke
     assert 'durable_monetary_budget"] == "enabled"' in smoke
     assert 'durable_effect_ledger"] == "enabled"' in smoke

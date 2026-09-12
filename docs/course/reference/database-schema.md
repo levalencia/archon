@@ -1,12 +1,12 @@
 # Database schema map
 
-> **Selected-schema boundary:** manually maintained from SQLAlchemy rows in [`db_store.py`](../../../backend/app/services/db_store.py) and Alembic revisions through head `20260902_22` at Git revision `1f71f0e`. This is a non-exhaustive review aid, not executable DDL. ORM models, migrations, and the schema of a running database are three distinct evidence sources.
+> **Selected-schema boundary:** manually maintained from SQLAlchemy rows in [`db_store.py`](../../../backend/app/services/db_store.py) and Alembic revisions through head `20260912_23`. This is a non-exhaustive review aid, not executable DDL. ORM models, migrations, and the schema of a running database are three distinct evidence sources.
 
 ## Migration chain
 
-`20260826_01 approval_requests` → `02 memory_facts` → `03 run_ledger` → `04 run_checkpoints` → `05 durable_documents` → `06 durable_evaluations` → `07 run_parent_fk` → `08 mcp_inventory` → `09 effect_budget` → `10 context_snapshots` → `11 memory_key_fencing` → `12 run_exports_and_share_grants` → `13 durable_jobs_and_nonces` → `14 drift_and_candidates` → `15 skills_and_project_instructions` → `16 skill_discovery_context` → `17 capability_preferences` → `18 instruction_snapshots` → `19 mcp_transport_profiles` → `20 integrity_hardening` → `21 capability_provenance` → `22 core_table_reconciliation`
+`20260826_01 approval_requests` → `02 memory_facts` → `03 run_ledger` → `04 run_checkpoints` → `05 durable_documents` → `06 durable_evaluations` → `07 run_parent_fk` → `08 mcp_inventory` → `09 effect_budget` → `10 context_snapshots` → `11 memory_key_fencing` → `12 run_exports_and_share_grants` → `13 durable_jobs_and_nonces` → `14 drift_and_candidates` → `15 skills_and_project_instructions` → `16 skill_discovery_context` → `17 capability_preferences` → `18 instruction_snapshots` → `19 mcp_transport_profiles` → `20 integrity_hardening` → `21 capability_provenance` → `22 core_table_reconciliation` → `23 learning_tutor`
 
-See [`backend/alembic/versions`](../../../backend/alembic/versions/20260902_22_core_table_reconciliation.py). `DatabaseStore.initialize` calls `Base.metadata.create_all` only for SQLite test/development databases; PostgreSQL startup requires Alembic head.
+See [`backend/alembic/versions`](../../../backend/alembic/versions/20260912_23_learning_tutor.py). `DatabaseStore.initialize` calls `Base.metadata.create_all` only for SQLite test/development databases; PostgreSQL startup requires Alembic head.
 
 ### Forward-head core-table reconciliation (revision 22)
 
@@ -40,6 +40,10 @@ Migration `20260902_22` adopts or creates the six pre-Alembic core tables (`user
 | `eval_case_results` / `EvalCaseResultRow` | evaluation/source IDs, case key, pass/score/metrics/checks | Unique case per evaluation; no answers/event payloads. |
 | `mcp_servers` / `MCPServerRow` | owner/project/name/profile, stdio transport, enabled/health | Process details belong to deployment profiles, not this table. |
 | `mcp_tools` / `MCPToolRow` | server/name, bounded descriptive schema, risk hints, enabled/version | Discovery metadata only; no invocation arguments/results. |
+| `learning_sources` / `LearningSourceRow` | stable source key, kind, revision, content hash, trusted locator and context keys | Application-owned curated corpus only; no user-supplied path is accepted. |
+| `learning_chunks` / `LearningChunkRow` | source FK, bounded content/hash/metadata, `embedding_json` | SQL-JSON vectors and bounded in-process candidate ranking, **not pgvector**; source FK cascades. |
+| `learning_tutor_sessions` / `LearningTutorSessionRow` | owner/project/context identity, title and timestamps | Unique owner/project/context thread; every read remains owner scoped. |
+| `learning_tutor_turns` / `LearningTutorTurnRow` | redacted question/answer, context, citations, optional diagram and metrics | Session FK cascades; persisted evidence is bounded and redacted. |
 
 ## Relationship sketch
 
@@ -50,6 +54,8 @@ runs 1 ── * run_checkpoints 1 ── * fork_drafts
 documents 1 ── * vector_chunks
 eval_runs 1 ── * eval_case_results
 mcp_servers 1 ── * mcp_tools
+learning_sources 1 ── * learning_chunks
+learning_tutor_sessions 1 ── * learning_tutor_turns
 ```
 
 Other identifiers such as `messages.conversation_id`, `artifacts.conversation_id`, evaluation `source_run_id`, and approval `run_id` are application-level associations unless the current model/migration declares an FK.

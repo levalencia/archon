@@ -22,7 +22,7 @@ CORE_TABLES = (
     "artifacts",
 )
 CORE_METADATA = [Base.metadata.tables[name] for name in CORE_TABLES]
-EXPECTED_HEAD = "20260902_22"
+EXPECTED_HEAD = "20260912_23"
 
 
 def _config(database: Path) -> Config:

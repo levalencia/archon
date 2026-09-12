@@ -5,9 +5,11 @@
   import ArchitectureView from './ArchitectureView.svelte';
   import EvidenceView from './EvidenceView.svelte';
   import LearningLibrary from './LearningLibrary.svelte';
+  import LearningTutorPanel from './LearningTutorPanel.svelte';
   import RoadmapView from './RoadmapView.svelte';
   import StoriesView from './StoriesView.svelte';
   import { loadVisualLearningStudio, type VisualLearningStudio } from '$lib/visual-learning';
+  import type { LearningTutorContext } from '$lib/learning-tutor';
 
   type StudioView = 'roadmap' | 'stories' | 'architecture' | 'evidence' | 'present' | 'listen' | 'study';
   const views: Array<{ id: StudioView; label: string; question: string; icon: typeof Map }> = [
@@ -23,6 +25,8 @@
   let studio = $state<VisualLearningStudio | null>(null);
   let loading = $state(true);
   let error = $state('');
+  let tutorContext = $state<LearningTutorContext>({ view: 'roadmap' });
+  let tutorContextTitle = $state('Visual Learning: Roadmap');
 
   function parseView(value: string | null): StudioView {
     const requested = value as StudioView | null;
@@ -30,6 +34,16 @@
   }
 
   let activeView = $derived(parseView(page.url.searchParams.get('view')));
+
+  function updateTutorContext(context: LearningTutorContext, title: string) {
+    tutorContext = context;
+    tutorContextTitle = title;
+  }
+
+  $effect(() => {
+    tutorContext = { view: activeView };
+    tutorContextTitle = `Visual Learning: ${activeView.charAt(0).toUpperCase()}${activeView.slice(1)}`;
+  });
 
   onMount(() => {
     void loadVisualLearningStudio()
@@ -61,16 +75,17 @@
     {#if loading}<div class="grid min-h-[55vh] place-items-center rounded-2xl border border-[var(--border)] bg-[var(--panel)] text-sm text-[var(--muted)]">Loading structured learning views…</div>
     {:else if error}<div role="alert" class="rounded-xl border border-[rgba(255,107,114,.4)] bg-[rgba(255,107,114,.08)] p-4 text-sm text-[var(--danger)]">{error}</div>
     {:else if studio}
-      {#if activeView === 'roadmap'}<RoadmapView {studio}/>
-      {:else if activeView === 'stories'}<StoriesView {studio}/>
-      {:else if activeView === 'architecture'}<ArchitectureView {studio}/>
-      {:else if activeView === 'evidence'}<EvidenceView {studio}/>
-      {:else if activeView === 'present'}<LearningLibrary mode="present"/>
-      {:else if activeView === 'listen'}<LearningLibrary mode="listen"/>
-      {:else}<LearningLibrary mode="study"/>
+      {#if activeView === 'roadmap'}<RoadmapView {studio} onContextChange={updateTutorContext}/>
+      {:else if activeView === 'stories'}<StoriesView {studio} onContextChange={updateTutorContext}/>
+      {:else if activeView === 'architecture'}<ArchitectureView {studio} onContextChange={updateTutorContext}/>
+      {:else if activeView === 'evidence'}<EvidenceView {studio} onContextChange={updateTutorContext}/>
+      {:else if activeView === 'present'}<LearningLibrary mode="present" onContextChange={updateTutorContext}/>
+      {:else if activeView === 'listen'}<LearningLibrary mode="listen" onContextChange={updateTutorContext}/>
+      {:else}<LearningLibrary mode="study" onContextChange={updateTutorContext}/>
       {/if}
     {/if}
   </main>
+  <LearningTutorPanel context={tutorContext} contextTitle={tutorContextTitle}/>
 </div>
 
 <style>

@@ -13,6 +13,7 @@ COPY backend/app ./app
 COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./alembic.ini
 COPY backend/container-entrypoint.sh ./container-entrypoint.sh
+COPY frontend/static/learning/cogentrex-studio.json ./learning/cogentrex-studio.json
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1

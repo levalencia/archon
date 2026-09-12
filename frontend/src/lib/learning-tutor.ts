@@ -1,0 +1,140 @@
+import { authenticatedFetch } from '$lib/auth';
+
+export type LearningView = 'roadmap' | 'stories' | 'architecture' | 'evidence' | 'present' | 'listen' | 'study';
+
+export interface LearningTutorContext {
+  view: LearningView;
+  concept_id?: string;
+  module_id?: string;
+  story_id?: string;
+  step_index?: number;
+  artifact_id?: string;
+  playback_seconds?: number;
+  selected_node_id?: string;
+  selected_edge_id?: string;
+}
+
+export interface TutorCitation {
+  id: string;
+  kind: 'documentation' | 'code' | 'test' | 'video' | 'visual';
+  title: string;
+  excerpt: string;
+  score: number;
+  source_commit: string;
+  locator: {
+    path?: string;
+    line_start?: number;
+    line_end?: number;
+    symbol?: string;
+    language?: string;
+    artifact_id?: string;
+    pack_id?: string;
+    chapter?: string;
+    start_seconds?: number;
+    end_seconds?: number;
+    route?: string;
+    concept_id?: string;
+  };
+}
+
+export interface TutorDiagramNode {
+  id: string;
+  label: string;
+  evidence_ids: string[];
+}
+
+export interface TutorDiagramEdge {
+  from: string;
+  to: string;
+  label: string;
+  evidence_ids: string[];
+}
+
+export interface TutorDiagram {
+  title: string;
+  kind: 'flow' | 'sequence' | 'architecture';
+  nodes: TutorDiagramNode[];
+  edges: TutorDiagramEdge[];
+  reading_order: string[];
+}
+
+export interface LearningTutorAnswer {
+  run_id: string;
+  session_id: string;
+  answer_markdown: string;
+  citations: TutorCitation[];
+  related_questions: string[];
+  diagram: TutorDiagram | null;
+  grounded: boolean;
+  unsupported: string[];
+  metrics: Record<string, unknown>;
+}
+
+export interface TutorTurn {
+  id: string;
+  question: string;
+  answer_markdown: string;
+  context: LearningTutorContext;
+  citations: TutorCitation[];
+  diagram: TutorDiagram | null;
+  metrics: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TutorSession {
+  id: string;
+  project_id: string;
+  context_key: string;
+  title: string;
+  turns: TutorTurn[];
+}
+
+type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+export async function askLearningTutor(
+  question: string,
+  context: LearningTutorContext,
+  fetcher: Fetcher = authenticatedFetch,
+): Promise<LearningTutorAnswer> {
+  const response = await fetcher('/api/learning-tutor/answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, project_id: 'default', context }),
+  });
+  if (!response.ok) throw new Error(`Learning tutor request failed (${response.status})`);
+  return await response.json() as LearningTutorAnswer;
+}
+
+export async function getLearningTutorSession(
+  sessionId: string,
+  fetcher: Fetcher = authenticatedFetch,
+): Promise<TutorSession> {
+  const response = await fetcher(`/api/learning-tutor/sessions/${encodeURIComponent(sessionId)}`);
+  if (!response.ok) throw new Error(`Learning tutor history failed (${response.status})`);
+  return await response.json() as TutorSession;
+}
+
+export function citationHref(citation: TutorCitation): string | undefined {
+  const locator = citation.locator;
+  if (citation.kind === 'video' && locator.artifact_id && locator.start_seconds !== undefined) {
+    const params = new URLSearchParams({
+      view: 'present',
+      pack: locator.pack_id || 'code-first-series',
+      artifact: locator.artifact_id,
+      t: String(locator.start_seconds),
+    });
+    return `/learn?${params.toString()}`;
+  }
+  if (citation.kind === 'visual' && locator.route) return locator.route;
+  if (!locator.path || !/^[0-9a-f]{40}$/.test(citation.source_commit)) return undefined;
+  const safe = locator.path.split('/');
+  if (safe.some(part => !part || part === '..') || locator.path.startsWith('/')) return undefined;
+  let anchor = '';
+  if (Number.isInteger(locator.line_start) && (locator.line_start ?? 0) > 0) {
+    anchor = `#L${locator.line_start}`;
+    if (Number.isInteger(locator.line_end) && (locator.line_end ?? 0) >= (locator.line_start ?? 0)) {
+      anchor += `-L${locator.line_end}`;
+    }
+  }
+  return `https://github.com/levalencia/cogentrex/blob/${citation.source_commit}/${safe.map(encodeURIComponent).join('/')}${anchor}`;
+}

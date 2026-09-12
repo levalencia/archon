@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import { Download, ExternalLink, RefreshCw } from 'lucide-svelte';
+  import type { LearningTutorContext } from '$lib/learning-tutor';
   import {
     getLearningArtifact,
     getMediaAccess,
@@ -20,7 +22,7 @@
   import VideoLessonPlayer from './VideoLessonPlayer.svelte';
 
   type MediaMode = 'present' | 'listen' | 'study';
-  let { mode }: { mode: MediaMode } = $props();
+  let { mode, onContextChange = () => {} }: { mode: MediaMode; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
   const types = {
     present: ['deck', 'diagram', 'infographic', 'video'],
     listen: ['audio', 'podcast'],
@@ -32,9 +34,13 @@
     study: ['Study', 'Practice retrieval and comprehension', 'Explore a focused mind map, flashcards, scenarios, and a study guide.'],
   } as const;
 
+  const requestedTime = Number(page.url.searchParams.get('t'));
   let catalog = $state<LearningLibraryCatalog | null>(null);
-  let selectedPack = $state('request-lifecycle');
-  let selectedId = $state('');
+  let selectedPack = $state(page.url.searchParams.get('pack') || 'request-lifecycle');
+  let selectedId = $state(page.url.searchParams.get('artifact') || '');
+  let playbackSeconds = $state<number | undefined>(
+    Number.isFinite(requestedTime) && requestedTime >= 0 ? requestedTime : undefined,
+  );
   let detail = $state<LearningArtifactDetail | null>(null);
   let mediaUrl = $state('');
   let loading = $state(true);
@@ -52,6 +58,11 @@
       if (['audio', 'podcast', 'video'].includes(artifact.type)) {
         mediaUrl = (await getMediaAccess(artifact.id)).url;
       }
+      const params = new URLSearchParams(page.url.searchParams);
+      params.set('view', mode);
+      params.set('pack', selectedPack);
+      params.set('artifact', artifact.id);
+      history.replaceState({}, '', `/learn?${params.toString()}`);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Unable to load learning artifact';
     }
@@ -72,8 +83,9 @@
   onMount(async () => {
     try {
       catalog = await loadLearningLibrary();
-      const first = catalog.packs.find(pack => pack.id === selectedPack)?.artifacts.find(item => (types[mode] as readonly string[]).includes(item.type));
-      await loadArtifact(first);
+      if (!catalog.packs.some(pack => pack.id === selectedPack)) selectedPack = 'request-lifecycle';
+      const available = catalog.packs.find(pack => pack.id === selectedPack)?.artifacts.filter(item => (types[mode] as readonly string[]).includes(item.type)) ?? [];
+      await loadArtifact(available.find(item => item.id === selectedId) ?? available[0]);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Learning library unavailable';
     } finally {
@@ -86,6 +98,15 @@
     if (!catalog) return;
     const first = visibleArtifacts[0];
     if (first && !visibleArtifacts.some(item => item.id === selectedId)) void loadArtifact(first);
+  });
+
+  $effect(() => {
+    if (!selected) return;
+    onContextChange({
+      view: mode,
+      artifact_id: selected.id,
+      playback_seconds: selected.type === 'video' ? playbackSeconds : undefined,
+    }, selected.title);
   });
 </script>
 
@@ -114,7 +135,7 @@
           {:else if selected?.type === 'flashcards'}<FlashcardPlayer cards={content.cards} sourceCommit={selected.source_commit}/>
           {:else if selected?.type === 'quiz'}<QuizPlayer questions={content.questions} sourceCommit={selected.source_commit}/>
           {:else if selected?.type === 'study-guide'}<StudyGuideViewer sections={content.sections} sourceCommit={selected.source_commit}/>
-          {:else if selected?.type === 'video'}{#if mediaUrl}<VideoLessonPlayer title={selected.title} {mediaUrl} {content} limitations={selected.limitations} sourceCommit={selected.source_commit} durationSeconds={selected.duration_seconds}/>{/if}
+          {:else if selected?.type === 'video'}{#if mediaUrl}<VideoLessonPlayer title={selected.title} {mediaUrl} {content} limitations={selected.limitations} sourceCommit={selected.source_commit} durationSeconds={selected.duration_seconds} initialTime={playbackSeconds} onTimeChange={(seconds) => playbackSeconds = seconds}/>{/if}
           {:else}<div class="state">This accepted artifact can be opened as a file.</div>{/if}
         {:else if selected}<div class="state"><RefreshCw size={18}/> Loading {selected.title}…</div>
         {:else}<div class="state">No accepted {mode} artifacts are available for this pack.</div>{/if}

@@ -217,6 +217,88 @@ class VectorChunkRow(Base):
     embedding_json = Column(Text, nullable=False)
 
 
+class LearningSourceRow(Base):
+    """Application-owned source indexed for the read-only learning tutor."""
+
+    __tablename__ = "learning_sources"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('documentation','code','test','video','visual')",
+            name="ck_learning_sources_kind",
+        ),
+        Index("ix_learning_sources_kind_revision", "kind", "source_revision"),
+    )
+    id = Column(String(32), primary_key=True)
+    kind = Column(String(32), nullable=False)
+    source_key = Column(String(1000), nullable=False, unique=True)
+    title = Column(String(500), nullable=False)
+    source_revision = Column(String(80), nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    locator_json = Column(Text, nullable=False)
+    context_keys_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class LearningChunkRow(Base):
+    """Curated learning chunk with a JSON embedding; never tenant-uploaded content."""
+
+    __tablename__ = "learning_chunks"
+    __table_args__ = (
+        UniqueConstraint("source_id", "chunk_index", name="uq_learning_chunk_index"),
+        Index("ix_learning_chunks_source", "source_id"),
+    )
+    id = Column(String(64), primary_key=True)
+    source_id = Column(
+        String(32), ForeignKey("learning_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    chunk_index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    metadata_json = Column(Text, nullable=False)
+    embedding_json = Column(Text, nullable=False)
+
+
+class LearningTutorSessionRow(Base):
+    """Owner-scoped tutor thread for one stable learning context."""
+
+    __tablename__ = "learning_tutor_sessions"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "project_id", "context_key", name="uq_learning_tutor_context"),
+        Index("ix_learning_tutor_owner_updated", "owner_id", "updated_at"),
+    )
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False, default="default")
+    context_key = Column(String(255), nullable=False)
+    title = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class LearningTutorTurnRow(Base):
+    """Redacted tutor answer plus immutable context and evidence snapshots."""
+
+    __tablename__ = "learning_tutor_turns"
+    __table_args__ = (
+        Index("ix_learning_tutor_turns_session_created", "session_id", "created_at"),
+        Index("ix_learning_tutor_turns_owner_project", "owner_id", "project_id"),
+    )
+    id = Column(String(36), primary_key=True)
+    session_id = Column(
+        String(36), ForeignKey("learning_tutor_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    owner_id = Column(String(255), nullable=False)
+    project_id = Column(String(255), nullable=False, default="default")
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    context_json = Column(Text, nullable=False)
+    evidence_json = Column(Text, nullable=False)
+    diagram_json = Column(Text, nullable=True)
+    metrics_json = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class ApiKeyRow(Base):
     __tablename__ = "api_keys"
     id = Column(String(36), primary_key=True)
@@ -1182,8 +1264,8 @@ class DatabaseStore:
                 revisions = tuple(result.scalars())
             except Exception as exc:
                 raise RuntimeError("database schema is not managed by Alembic") from exc
-        if revisions != ("20260902_22",):
-            raise RuntimeError("database schema is not at expected Alembic head 20260902_22")
+        if revisions != ("20260912_23",):
+            raise RuntimeError("database schema is not at expected Alembic head 20260912_23")
         logger.info("database_schema_verified", alembic_revision=revisions[0])
 
     @property

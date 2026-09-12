@@ -1,8 +1,7 @@
 # Remaining Deferred Gaps
 
-**Current boundary:** merged `main` at `1f71f0e` with Alembic head
-`20260902_22`. CI run `33858051794` passed at the exact SHA. No public
-deployment is claimed.
+**Current boundary:** Alembic head `20260912_23`. GitHub Actions is authoritative
+for exact-revision CI status. No public deployment is claimed.
 
 Cogentrex is an evidence-rich **local Agent Reliability Workbench**. The omissions below are deliberate product and evidence boundaries, not hidden implementation promises. `Deferred` means outside the current capstone scope with no delivery date. A nearby file, manifest, test double, or local observation does not change that status.
 

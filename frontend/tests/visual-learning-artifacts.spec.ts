@@ -53,6 +53,15 @@ const details: Record<string, Record<string, unknown>> = {
 
 async function mockLibrary(page: Page) {
   await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'playwright-token'));
+  await page.route('**/api/learning-tutor/answer', async (route: Route) => {
+    return route.fulfill({ json: {
+      run_id: 'run-tutor-1', session_id: 'session-tutor-1',
+      answer_markdown: '## Direct answer\nA service slot reserves an application-owned location. [E1]\n\n## Code excerpts\n```python\napp.state.sandbox_executor = None\n```',
+      citations: [{ ...base, id: 'E1', kind: 'code', title: 'main.py — create_app', excerpt: 'app.state.sandbox_executor = None', score: 1, source_commit: 'a'.repeat(40), locator: { path: 'backend/app/main.py', line_start: 418, line_end: 420 } }],
+      related_questions: ['When does lifespan populate the slot?'], diagram: null,
+      grounded: true, unsupported: [], metrics: { faithfulness_score: 1 },
+    } });
+  });
   await page.route('**/api/learning-media/**', async (route: Route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/catalog')) return route.fulfill({ json: catalog });
@@ -128,6 +137,22 @@ test('Present view opens a code-first video with timed transcript and source lin
   await expect(page.getByRole('heading', { name: 'Factory pattern' })).toBeVisible();
   await expect(page.getByText('Create app centralizes construction and supports controlled injection.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Main' })).toHaveAttribute('href', /main\.py#L391-L401/);
+});
+
+test('every learning page exposes a tutor and Video 2 sends its timestamp', async ({ page }) => {
+  await mockLibrary(page);
+  await page.goto('/learn?view=present&pack=code-first-series&artifact=code-first-video-02&t=300');
+  await page.getByRole('button', { name: 'Ask about this topic' }).click();
+  await expect(page.getByRole('complementary', { name: 'Learning tutor' })).toContainText('Video 2');
+  await page.getByLabel('Question about this topic').fill('What is a service slot?');
+  const requestPromise = page.waitForRequest('**/api/learning-tutor/answer');
+  await page.getByRole('button', { name: 'Ask Cogentrex tutor' }).click();
+  const request = await requestPromise;
+  expect(request.postDataJSON().context).toMatchObject({
+    view: 'present', artifact_id: 'code-first-video-02', playback_seconds: 300,
+  });
+  await expect(page.getByText('A service slot reserves an application-owned location. [E1]')).toBeVisible();
+  await expect(page.getByText('app.state.sandbox_executor = None').first()).toBeVisible();
 });
 
 test('published Listen view exposes English audio and transcript', async ({ page }) => {
