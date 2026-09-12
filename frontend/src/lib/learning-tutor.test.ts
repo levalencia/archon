@@ -117,4 +117,54 @@ describe('learning tutor client', () => {
     const fetcher = vi.fn(async () => new Response('Unauthorized', { status: 401 }));
     await expect(streamLearningTutor('test', context, {}, fetcher)).rejects.toThrow('401');
   });
+
+  it('builds web citation href for allowlisted HTTPS domains', () => {
+    const webCitation: TutorCitation = {
+      id: 'W1',
+      kind: 'web',
+      title: 'Shared services - Wikipedia',
+      excerpt: 'A shared service is...',
+      score: 0,
+      source_commit: '',
+      locator: {
+        url: 'https://en.wikipedia.org/wiki/Shared_services',
+        domain: 'en.wikipedia.org',
+        retrieved_at: 1000,
+        search_source: 'brave',
+      },
+    };
+    expect(citationHref(webCitation)).toBe('https://en.wikipedia.org/wiki/Shared_services');
+  });
+
+  it('rejects web citations from non-allowlisted domains', () => {
+    const webCitation: TutorCitation = {
+      id: 'W2',
+      kind: 'web',
+      title: 'Evil page',
+      excerpt: 'Nefarious content',
+      score: 0,
+      source_commit: '',
+      locator: {
+        url: 'https://evil.example.com/page',
+        domain: 'evil.example.com',
+      },
+    };
+    expect(citationHref(webCitation)).toBeUndefined();
+  });
+
+  it('rejects web citations with HTTP (non-HTTPS) URLs', () => {
+    const webCitation: TutorCitation = {
+      id: 'W3',
+      kind: 'web',
+      title: 'Python docs',
+      excerpt: 'asyncio',
+      score: 0,
+      source_commit: '',
+      locator: {
+        url: 'http://docs.python.org/3/library/asyncio.html',
+        domain: 'docs.python.org',
+      },
+    };
+    expect(citationHref(webCitation)).toBeUndefined();
+  });
 });

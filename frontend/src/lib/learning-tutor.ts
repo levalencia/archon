@@ -17,7 +17,7 @@ export interface LearningTutorContext {
 
 export interface TutorCitation {
   id: string;
-  kind: 'documentation' | 'code' | 'test' | 'video' | 'visual';
+  kind: 'documentation' | 'code' | 'test' | 'video' | 'visual' | 'web';
   title: string;
   excerpt: string;
   score: number;
@@ -35,6 +35,10 @@ export interface TutorCitation {
     end_seconds?: number;
     route?: string;
     concept_id?: string;
+    url?: string;
+    domain?: string;
+    retrieved_at?: number;
+    search_source?: string;
   };
 }
 
@@ -170,8 +174,52 @@ export async function getLearningTutorSession(
   return await response.json() as TutorSession;
 }
 
+/** Allowed domains for web citation hrefs (HTTPS only). */
+const WEB_CITATION_ALLOWED_DOMAINS: ReadonlySet<string> = new Set([
+  'docs.python.org',
+  'learn.microsoft.com',
+  'developer.mozilla.org',
+  'docs.aws.amazon.com',
+  'cloud.google.com',
+  'kubernetes.io',
+  'docs.docker.com',
+  'fastapi.tiangolo.com',
+  'starlette.io',
+  'pydantic-docs.helpmanual.io',
+  'docs.pydantic.dev',
+  'www.postgresql.org',
+  'redis.io',
+  'opentelemetry.io',
+  'wikipedia.org',
+  'en.wikipedia.org',
+  'swagger.io',
+  'spec.openapis.org',
+  'www.rfc-editor.org',
+  'datatracker.ietf.org',
+]);
+
+function isAllowedWebDomain(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, '');
+  for (const allowed of WEB_CITATION_ALLOWED_DOMAINS) {
+    if (h === allowed || h.endsWith(`.${allowed}`)) return true;
+  }
+  return false;
+}
+
 export function citationHref(citation: TutorCitation): string | undefined {
   const locator = citation.locator;
+  // Web citations: validate URL is HTTPS and domain-allowlisted
+  if (citation.kind === 'web' && locator.url) {
+    try {
+      const parsed = new URL(locator.url);
+      if (parsed.protocol === 'https:' && isAllowedWebDomain(parsed.hostname)) {
+        return locator.url;
+      }
+    } catch {
+      // Invalid URL
+    }
+    return undefined;
+  }
   if (citation.kind === 'video' && locator.artifact_id && locator.start_seconds !== undefined) {
     const params = new URLSearchParams({
       view: 'present',
