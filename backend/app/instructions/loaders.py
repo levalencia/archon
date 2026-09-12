@@ -31,7 +31,7 @@ class InstructionLoadError(ValueError):
 class InstructionFamily(StrEnum):
     """Explicitly selected on-disk compatibility family."""
 
-    ARCHON = "archon"
+    COGENTREX = "cogentrex"
     AGENTS = "agents"
     CLAUDE = "claude"
     MANUAL = "manual"
@@ -118,7 +118,7 @@ def load_project_instructions(
     workspace_root: Path | str,
     target_path: Path | str = ".",
     *,
-    family: InstructionFamily | str = InstructionFamily.ARCHON,
+    family: InstructionFamily | str = InstructionFamily.COGENTREX,
     limits: InstructionLimits | None = None,
 ) -> tuple[InstructionSource, ...]:
     """Load one configured family from workspace root toward ``target_path``.
@@ -158,8 +158,8 @@ def load_project_instructions(
 
 
 def _candidate(directory: Path, family: InstructionFamily) -> tuple[Path | None, bool]:
-    if family is InstructionFamily.ARCHON:
-        path = directory / ".archon" / "instructions.md"
+    if family is InstructionFamily.COGENTREX:
+        path = directory / ".cogentrex" / "instructions.md"
         return (path, False) if path.exists() or path.is_symlink() else (None, False)
     if family is InstructionFamily.CLAUDE:
         path = directory / "CLAUDE.md"

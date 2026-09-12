@@ -18,7 +18,7 @@ def _config(database: Path) -> Config:
 
 
 def test_transport_migration_is_linear_and_accepts_http(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "transport-migration.db"
     config = _config(database)
     command.upgrade(config, "20260901_17")

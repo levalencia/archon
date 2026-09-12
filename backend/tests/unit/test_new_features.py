@@ -142,5 +142,5 @@ class TestMetrics:
     @pytest.mark.unit
     def test_prometheus_format(self) -> None:
         text = get_prometheus_text()
-        assert "archon_llm_calls_total" in text
-        assert "archon_tool_calls_total" in text
+        assert "cogentrex_llm_calls_total" in text
+        assert "cogentrex_tool_calls_total" in text

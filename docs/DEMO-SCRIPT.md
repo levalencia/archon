@@ -1,8 +1,8 @@
-# Archon 3–5 Minute Demo Script
+# Cogentrex 3–5 Minute Demo Script
 
 ## Demo claim
 
-> Archon is a local Agent Reliability Workbench that makes policy, approvals, tool execution, evidence and evaluation inspectable. This demo proves the local control plane; it does not claim public deployment or external-model quality.
+> Cogentrex is a local Agent Reliability Workbench that makes policy, approvals, tool execution, evidence and evaluation inspectable. This demo proves the local control plane; it does not claim public deployment or external-model quality.
 
 ## Before recording
 
@@ -18,7 +18,7 @@ Show the README title and architecture flow.
 
 Say:
 
-> Agent demos often show only a final answer. Archon records why an action was allowed, whether approval matched the exact call, what evidence supported the answer, and how the run evaluated afterward.
+> Agent demos often show only a final answer. Cogentrex records why an action was allowed, whether approval matched the exact call, what evidence supported the answer, and how the run evaluated afterward.
 
 Point to:
 
@@ -136,7 +136,7 @@ Local deployment smoke:
 DR:
 
 ```bash
-./scripts/local-dr-smoke.sh /tmp/archon-dr-report.json
+./scripts/local-dr-smoke.sh /tmp/cogentrex-dr-report.json
 ```
 
 Benchmark:
@@ -144,7 +144,7 @@ Benchmark:
 ```bash
 cd backend
 uv run python scripts/portfolio_benchmark.py \
-  --output /tmp/archon-portfolio-benchmark.json \
+  --output /tmp/cogentrex-portfolio-benchmark.json \
   --iterations 10
 ```
 

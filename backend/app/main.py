@@ -1,4 +1,4 @@
-"""Archon: Production AI Agent Webapp — FastAPI application."""
+"""Cogentrex: Production AI Agent Webapp — FastAPI application."""
 
 # ruff: noqa: E402 -- environment must be loaded before importing app configuration/routes.
 
@@ -153,7 +153,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
 
     logger.info(
-        "archon_starting",
+        "cogentrex_starting",
         app=settings.app_name,
         version=settings.app_version,
         llm_provider=settings.llm_provider,
@@ -212,7 +212,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     skill_descriptors = tuple(
         CapabilityDescriptor(
-            id=f"archon.{item.parsed.name}",
+            id=f"cogentrex.{item.parsed.name}",
             kind="skill",
             name=item.parsed.name,
             description=item.parsed.description,
@@ -385,7 +385,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await app.state.embedding_service.close()
         if exporter:
             exporter.shutdown()
-        logger.info("archon_shutdown")
+        logger.info("cogentrex_shutdown")
 
 
 def create_app(

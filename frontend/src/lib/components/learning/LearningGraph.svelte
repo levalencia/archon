@@ -13,7 +13,7 @@
   import LearningNodeCard from './LearningNodeCard.svelte';
   import TeachingInspector from './TeachingInspector.svelte';
   import type { LearningEdge, LearningNode } from '$lib/learning-teaching';
-  import { ARCHON_THEME, LEARNING_KIND_COLORS } from '$lib/archon-theme';
+  import { COGENTREX_THEME, LEARNING_KIND_COLORS } from '$lib/cogentrex-theme';
 
   let { graphNodes, graphEdges, sourceCommit, layout='flow' }: { graphNodes:LearningNode[]; graphEdges:LearningEdge[]; sourceCommit:string; layout?:'flow'|'radial' } = $props();
   let selectedNodeId=$state('');
@@ -33,7 +33,7 @@
     id:node.id,
     type:'learning',
     position:node.position,
-    data:{label:node.label,color:colors[node.kind]??'#94a3b8',sequence:layout==='flow'?index+1:undefined},
+    data:{label:node.label,color:colors[node.kind]??'#a9b4cc',sequence:layout==='flow'?index+1:undefined},
     draggable:false,
     selectable:true,
     focusable:true,
@@ -65,9 +65,9 @@
       selectable:true,
       zIndex:0,
       animated:edge.style==='approval',
-      markerEnd:{type:MarkerType.ArrowClosed,color:ARCHON_THEME.orange},
-      style:`stroke:${ARCHON_THEME.orange};stroke-width:2.5`,
-      labelStyle:'color:#f8fafc;font-size:11px;font-weight:700'
+      markerEnd:{type:MarkerType.ArrowClosed,color:COGENTREX_THEME.orange},
+      style:`stroke:${COGENTREX_THEME.orange};stroke-width:2.5`,
+      labelStyle:'color:#f4f7fb;font-size:11px;font-weight:700'
     };
   }));
 
@@ -94,5 +94,5 @@
 <details class="steps"><summary>Read the diagram as steps</summary><ol>{#each graphEdges as edge,index}<li><button onclick={()=>{selectedEdgeId=edge.id??`${edge.source}-${edge.target}-${index}`;selectedNodeId=''}}><strong>{graphNodes.find(node=>node.id===edge.source)?.label??edge.source}</strong>{#if edge.label} <span>{edge.label}</span>{/if} <strong>{graphNodes.find(node=>node.id===edge.target)?.label??edge.target}</strong></button>{#if edge.explanation}<p>{edge.explanation}</p>{/if}</li>{/each}</ol></details>
 
 <style>
-  .graph-shell{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(230px,.62fr);gap:.85rem}.graph-shell.radial{grid-template-columns:1fr}.canvas{height:600px;border:1px solid var(--archon-border,var(--border));border-radius:.9rem;overflow:hidden;background:var(--archon-canvas,#050b16)}.radial .canvas{height:680px}.explanation{border:1px solid var(--border);border-radius:.9rem;background:var(--panel);padding:1rem;min-height:180px}.radial .explanation{min-height:0}.explanation h4{margin:.45rem 0;font-size:1.15rem}.explanation p{color:var(--secondary);line-height:1.6;font-size:.84rem}.steps{margin-top:.85rem;border:1px solid var(--border);border-radius:.75rem;padding:.8rem;color:var(--secondary);font-size:.8rem}.steps summary{cursor:pointer;color:var(--text);font-weight:700}.steps ol{display:grid;gap:.65rem}.steps button{border:0;background:none;color:var(--text);padding:0;text-align:left;cursor:pointer}.steps button:hover,.steps button:focus-visible{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}.steps li span{color:var(--accent);font-weight:700}.steps p{margin:.25rem 0 0;color:var(--muted)}:global(.svelte-flow__node:focus-visible),:global(.svelte-flow__edge:focus-visible){outline:3px solid var(--archon-orange,#f59e0b);outline-offset:3px;filter:drop-shadow(0 0 9px rgba(245,158,11,.55))}:global(.svelte-flow__controls){background:#0f172a;border-color:#334155}:global(.svelte-flow__controls-button){background:#0f172a;color:#e2e8f0;border-color:#334155}:global(.svelte-flow__edge-label){z-index:10!important;background:#0f172a!important;color:#f8fafc!important;border:1px solid #475569;border-radius:5px;padding:3px 6px;box-shadow:0 0 0 5px #0f172a,0 2px 8px rgba(0,0,0,.45);white-space:nowrap}@media(max-width:850px){.graph-shell{grid-template-columns:1fr}.canvas,.radial .canvas{height:520px}}@media(max-width:520px){.canvas,.radial .canvas{height:480px}.explanation{min-height:0}}
+  .graph-shell{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(230px,.62fr);gap:.85rem}.graph-shell.radial{grid-template-columns:1fr}.canvas{height:600px;border:1px solid var(--cogentrex-border,var(--border));border-radius:.9rem;overflow:hidden;background:var(--cogentrex-canvas,#050712)}.radial .canvas{height:680px}.explanation{border:1px solid var(--border);border-radius:.9rem;background:var(--panel);padding:1rem;min-height:180px}.radial .explanation{min-height:0}.explanation h4{margin:.45rem 0;font-size:1.15rem}.explanation p{color:var(--secondary);line-height:1.6;font-size:.84rem}.steps{margin-top:.85rem;border:1px solid var(--border);border-radius:.75rem;padding:.8rem;color:var(--secondary);font-size:.8rem}.steps summary{cursor:pointer;color:var(--text);font-weight:700}.steps ol{display:grid;gap:.65rem}.steps button{border:0;background:none;color:var(--text);padding:0;text-align:left;cursor:pointer}.steps button:hover,.steps button:focus-visible{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}.steps li span{color:var(--accent);font-weight:700}.steps p{margin:.25rem 0 0;color:var(--muted)}:global(.svelte-flow__node:focus-visible),:global(.svelte-flow__edge:focus-visible){outline:3px solid var(--cogentrex-orange,#f6b44b);outline-offset:3px;filter:drop-shadow(0 0 9px rgba(246,180,75,.55))}:global(.svelte-flow__controls){background:#0a1022;border-color:#26324d}:global(.svelte-flow__controls-button){background:#0a1022;color:#e2e8f0;border-color:#26324d}:global(.svelte-flow__edge-label){z-index:10!important;background:#0a1022!important;color:#f4f7fb!important;border:1px solid #475569;border-radius:5px;padding:3px 6px;box-shadow:0 0 0 5px #0a1022,0 2px 8px rgba(0,0,0,.45);white-space:nowrap}@media(max-width:850px){.graph-shell{grid-template-columns:1fr}.canvas,.radial .canvas{height:520px}}@media(max-width:520px){.canvas,.radial .canvas{height:480px}.explanation{min-height:0}}
 </style>

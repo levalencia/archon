@@ -8,7 +8,7 @@
 ## Idea
 
 Delegation is useful only when the child receives less authority than the parent.
-Archon delegates one narrow task: review already-formed claims against selected evidence.
+Cogentrex delegates one narrow task: review already-formed claims against selected evidence.
 The parent sends a sealed packet rather than its whole conversation, runtime context, credentials, or tools.
 The child returns structured verdicts; it does not edit storage or invoke another system.
 Learn [Run Ledger](run-ledger.md) and [Groundedness](groundedness.md) first.
@@ -142,7 +142,7 @@ The deterministic envelope is reusable; quality thresholds must come from repres
 A deterministic-only verifier is cheaper and repeatable but misses semantic nuance.
 A human reviewer offers stronger judgment for high-impact cases but adds queue time and cost.
 A larger parent prompt avoids another call but gives no authority separation and can dilute attention.
-Multiple debating agents increase cost and attack surface; Archon does not claim that design here.
+Multiple debating agents increase cost and attack surface; Cogentrex does not claim that design here.
 The implemented choice is one narrow child whose failures become escalation.
 
 ## Exercise: break the envelope safely
@@ -158,7 +158,7 @@ Expected conclusion: code can bound authority and accepted shape, but it cannot 
 
 ## 30-second answer
 
-“Archon delegates one evidence-review task to one model child. Frozen contracts limit claims, evidence, text, IDs, tokens, time, and retries; the provider gets `tools=()`, and strict parsing rejects foreign or malformed verdicts. Failures escalate and lineage is durable. Those controls are deterministic, but the supported/rejected judgment remains model-generated—this is bounded review, not a swarm or proof of truth.”
+“Cogentrex delegates one evidence-review task to one model child. Frozen contracts limit claims, evidence, text, IDs, tokens, time, and retries; the provider gets `tools=()`, and strict parsing rejects foreign or malformed verdicts. Failures escalate and lineage is durable. Those controls are deterministic, but the supported/rejected judgment remains model-generated—this is bounded review, not a swarm or proof of truth.”
 
 ## Self-check
 

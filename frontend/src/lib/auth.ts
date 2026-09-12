@@ -1,5 +1,5 @@
-const TOKEN_KEY = 'archon_token';
-const USER_KEY = 'archon_user';
+const TOKEN_KEY = 'cogentrex_token';
+const USER_KEY = 'cogentrex_user';
 
 export function authHeaders(headers: HeadersInit = {}): Headers {
   const result = new Headers(headers);

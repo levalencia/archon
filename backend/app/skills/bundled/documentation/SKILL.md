@@ -2,7 +2,7 @@
 name: documentation
 description: Create precise technical documentation
 version: 1.0.0
-tags: [documentation, archon]
+tags: [documentation, cogentrex]
 references: [references/checklist.md]
 triggers: ['documentation', 'write docs', 'readme']
 negative_triggers: ['do not document', 'skip docs']

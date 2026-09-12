@@ -9,7 +9,7 @@ It protects capacity, fairness, cost, and abuse boundaries.
 It is different from a concurrency limit, which bounds simultaneous work.
 It is different from a quota, which commonly spans a longer billing or policy period.
 It is different from a model token budget, which constrains consumption rather than request count.
-Archon uses a sliding-window request limiter.
+Cogentrex uses a sliding-window request limiter.
 
 ## Sliding-window intuition
 
@@ -208,7 +208,7 @@ These controls can be layered; they solve different dimensions.
 
 ## 30-second interview answer
 
-“Archon implements a sliding-window limiter. Redis uses one atomic Lua prune/count/conditional-add operation with unique sorted-set members; Redis-compatible servers lacking `EVAL` use a WATCH/MULTI retry transaction with equivalent cutoff semantics. Other Redis errors propagate rather than silently weakening to local mode. The local locked monotonic implementation is explicitly process-local. Routes consume action-scoped user quota and then direct-peer quota, so an IP rejection does not refund the already consumed user unit.”
+“Cogentrex implements a sliding-window limiter. Redis uses one atomic Lua prune/count/conditional-add operation with unique sorted-set members; Redis-compatible servers lacking `EVAL` use a WATCH/MULTI retry transaction with equivalent cutoff semantics. Other Redis errors propagate rather than silently weakening to local mode. The local locked monotonic implementation is explicitly process-local. Routes consume action-scoped user quota and then direct-peer quota, so an IP rejection does not refund the already consumed user unit.”
 
 ## Self-checks
 

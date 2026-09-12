@@ -43,7 +43,7 @@ lmr = _import_release_module()
 # Constants
 # ---------------------------------------------------------------------------
 SOURCE_COMMIT = "07b527103e2863e09a71802463f5af91c37eb69e"
-MARKER_FILE = ".archon-learning-library"
+MARKER_FILE = ".cogentrex-learning-library"
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ def _sha256_file(path: Path) -> str:
 def _make_minimal_library(root: Path, *, commit: str = SOURCE_COMMIT) -> dict:
     """Create a minimal library directory tree that passes validation."""
     marker = root / MARKER_FILE
-    marker.write_text("archon.learning-library/v1\n")
+    marker.write_text("cogentrex.learning-library/v1\n")
 
     pub = root / "published" / "demo-pack" / "demo-deck"
     pub.mkdir(parents=True, exist_ok=True)
@@ -81,7 +81,7 @@ def _make_minimal_library(root: Path, *, commit: str = SOURCE_COMMIT) -> dict:
     svg_file.write_bytes(svg_content)
 
     catalog = {
-        "schema": "archon.learning-library",
+        "schema": "cogentrex.learning-library",
         "version": 1,
         "generated_at": "2026-09-08T11:00:00+00:00",
         "source_commit": commit,
@@ -148,13 +148,13 @@ def _manifest_for_raw_archive(archive_path: Path) -> dict:
     sha = _sha256_file(archive_path)
     short = SOURCE_COMMIT[:12]
     tag = f"learning-media-{short}"
-    asset = f"archon-learning-media-{short}.tar.gz"
+    asset = f"cogentrex-learning-media-{short}.tar.gz"
     return {
         "schema_version": 1,
         "release_tag": tag,
         "source_commit": SOURCE_COMMIT,
         "asset_name": asset,
-        "download_url": f"https://github.com/levalencia/archon/releases/download/{tag}/{asset}",
+        "download_url": f"https://github.com/levalencia/cogentrex/releases/download/{tag}/{asset}",
         "byte_size": bs,
         "archive_sha256": sha,
     }
@@ -171,13 +171,13 @@ class TestManifestValidation:
     def _base_manifest(self) -> dict:
         short = SOURCE_COMMIT[:12]
         tag = f"learning-media-{short}"
-        asset = f"archon-learning-media-{short}.tar.gz"
+        asset = f"cogentrex-learning-media-{short}.tar.gz"
         return {
             "schema_version": 1,
             "release_tag": tag,
             "source_commit": SOURCE_COMMIT,
             "asset_name": asset,
-            "download_url": f"https://github.com/levalencia/archon/releases/download/{tag}/{asset}",
+            "download_url": f"https://github.com/levalencia/cogentrex/releases/download/{tag}/{asset}",
             "byte_size": 12345,
             "archive_sha256": "a" * 64,
         }
@@ -285,8 +285,10 @@ class TestManifestValidation:
         m = self._base_manifest()
         short = SOURCE_COMMIT[:12]
         tag = f"learning-media-{short}"
-        asset = f"archon-learning-media-{short}.tar.gz"
-        m["download_url"] = f"http://github.com/levalencia/archon/releases/download/{tag}/{asset}"
+        asset = f"cogentrex-learning-media-{short}.tar.gz"
+        m["download_url"] = (
+            f"http://github.com/levalencia/cogentrex/releases/download/{tag}/{asset}"
+        )
         with pytest.raises(lmr.InstallError, match="download_url"):
             lmr.validate_manifest(m)
 
@@ -408,7 +410,7 @@ class TestSymlinkRejection:
 
     def test_invalid_ownership_marker_rejected(self, tmp_path: Path):
         _make_minimal_library(tmp_path)
-        (tmp_path / MARKER_FILE).write_text("not-archon\n")
+        (tmp_path / MARKER_FILE).write_text("not-cogentrex\n")
         with pytest.raises(lmr.PackageError, match="ownership marker"):
             lmr.scan_for_irregular_files(tmp_path)
 
@@ -448,7 +450,7 @@ class TestDeterministicPackaging:
         lmr.create_archive(lib, out, SOURCE_COMMIT)
         with tarfile.open(out, "r:gz") as tf:
             names = sorted(tf.getnames())
-        assert ".archon-learning-library" in names
+        assert ".cogentrex-learning-library" in names
         assert "catalog.json" in names
         assert any("published/" in n for n in names)
 
@@ -499,7 +501,7 @@ class TestDeterministicPackaging:
             names = tf.getnames()
         for n in names:
             top = n.split("/")[0]
-            assert top in {".archon-learning-library", "catalog.json", "published"}, (
+            assert top in {".cogentrex-learning-library", "catalog.json", "published"}, (
                 f"Unexpected entry {n!r} in archive"
             )
 
@@ -534,11 +536,11 @@ class TestManifestOutput:
         lmr.validate_manifest(manifest)  # should not raise
 
     def test_asset_naming_no_duplication(self, tmp_path: Path):
-        """Tag is learning-media-<short>, asset is archon-learning-media-<short>.tar.gz."""
+        """Tag is learning-media-<short>, asset is cogentrex-learning-media-<short>.tar.gz."""
         archive, manifest = _make_archive_and_manifest(tmp_path)
         short = SOURCE_COMMIT[:12]
         assert manifest["release_tag"] == f"learning-media-{short}"
-        assert manifest["asset_name"] == f"archon-learning-media-{short}.tar.gz"
+        assert manifest["asset_name"] == f"cogentrex-learning-media-{short}.tar.gz"
         # Specifically: no doubled "learning-media-learning-media-" in asset name
         assert "learning-media-learning-media-" not in manifest["asset_name"]
 
@@ -710,12 +712,12 @@ class TestTarSecurity:
         info.size = 5
         out = tmp_path / "rogue.tar.gz"
         cat_bytes = (
-            b'{"schema":"archon.learning-library","version":1,'
+            b'{"schema":"cogentrex.learning-library","version":1,'
             b'"source_commit":"07b527103e2863e09a71802463f5af91c37eb69e",'
             b'"generated_at":"2026-09-08T11:00:00+00:00","packs":[]}'
         )
         with tarfile.open(out, "w:gz") as tf:
-            marker = tarfile.TarInfo(name=".archon-learning-library")
+            marker = tarfile.TarInfo(name=".cogentrex-learning-library")
             marker.size = 0
             tf.addfile(marker)
             cat = tarfile.TarInfo(name="catalog.json")
@@ -731,10 +733,10 @@ class TestTarSecurity:
         """Duplicate names in archive must be rejected."""
         out = tmp_path / "dup.tar.gz"
         with tarfile.open(out, "w:gz") as tf:
-            m1 = tarfile.TarInfo(name=".archon-learning-library")
+            m1 = tarfile.TarInfo(name=".cogentrex-learning-library")
             m1.size = 0
             tf.addfile(m1)
-            m2 = tarfile.TarInfo(name=".archon-learning-library")
+            m2 = tarfile.TarInfo(name=".cogentrex-learning-library")
             m2.size = 0
             tf.addfile(m2)
         manifest = _manifest_for_raw_archive(out)
@@ -762,7 +764,7 @@ class TestTarSecurity:
         """Member claiming huge size must be rejected by per-member cap."""
         out = tmp_path / "big.tar.gz"
         with tarfile.open(out, "w:gz") as tf:
-            m = tarfile.TarInfo(name=".archon-learning-library")
+            m = tarfile.TarInfo(name=".cogentrex-learning-library")
             m.size = 0
             tf.addfile(m)
             big = tarfile.TarInfo(name="published/huge.bin")
@@ -807,7 +809,7 @@ class TestDownloadSecurity:
             "schema_version": 1,
             "release_tag": f"learning-media-{SOURCE_COMMIT[:12]}",
             "source_commit": SOURCE_COMMIT,
-            "asset_name": f"archon-learning-media-{SOURCE_COMMIT[:12]}.tar.gz",
+            "asset_name": f"cogentrex-learning-media-{SOURCE_COMMIT[:12]}.tar.gz",
             "download_url": "http://evil.com/pkg.tar.gz",
             "archive_sha256": "a" * 64,
             "byte_size": 100,
@@ -822,8 +824,8 @@ class TestDownloadSecurity:
             "schema_version": 1,
             "release_tag": f"learning-media-{SOURCE_COMMIT[:12]}",
             "source_commit": SOURCE_COMMIT,
-            "asset_name": f"archon-learning-media-{SOURCE_COMMIT[:12]}.tar.gz",
-            "download_url": "https://evil.com/levalencia/archon/releases/download/x/y",
+            "asset_name": f"cogentrex-learning-media-{SOURCE_COMMIT[:12]}.tar.gz",
+            "download_url": "https://evil.com/levalencia/cogentrex/releases/download/x/y",
             "archive_sha256": "a" * 64,
             "byte_size": 100,
         }

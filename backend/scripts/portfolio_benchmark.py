@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic, offline portfolio benchmark over Archon's production control plane.
+"""Deterministic, offline portfolio benchmark over Cogentrex's production control plane.
 
 This benchmark measures control-plane behavior with scripted local adapters. It does not
 measure model quality and never contacts an external model or network service.
@@ -422,7 +422,7 @@ class _GroundingProvider:
 
 async def _scenario_grounding() -> dict[str, Any]:
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="archon-portfolio-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-portfolio-") as directory:
         store = DatabaseStore(f"sqlite+aiosqlite:///{Path(directory) / 'runs.db'}")
         await store.initialize()
         try:
@@ -576,7 +576,7 @@ async def _scenario_reflection() -> dict[str, Any]:
 
 async def _scenario_duplicate_effect() -> dict[str, Any]:
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="archon-effects-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-effects-") as directory:
         engine = create_async_engine(f"sqlite+aiosqlite:///{Path(directory) / 'effects.db'}")
         sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with engine.begin() as connection:
@@ -627,7 +627,7 @@ async def _scenario_duplicate_effect() -> dict[str, Any]:
 
 async def _scenario_budget_failure() -> dict[str, Any]:
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="archon-budget-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-budget-") as directory:
         store = DatabaseStore(f"sqlite+aiosqlite:///{Path(directory) / 'budget.db'}")
         await store.initialize()
         runs = RunRepository(store.session_factory, PersistenceRedactor())
@@ -702,7 +702,7 @@ async def _scenario_context_rotation() -> dict[str, Any]:
         images=["data:image/png;base64,AAAA"],
         asset_hmac_key=derive_context_asset_hmac_key("benchmark-secret"),
     )
-    with tempfile.TemporaryDirectory(prefix="archon-rotation-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-rotation-") as directory:
         store = DatabaseStore(f"sqlite+aiosqlite:///{Path(directory) / 'rotation.db'}")
         await store.initialize()
         legacy = ScopedEncryptedMemoryRepository(
@@ -763,7 +763,7 @@ async def _scenario_context_rotation() -> dict[str, Any]:
 async def _scenario_share_grants() -> dict[str, Any]:
     started = time.perf_counter()
     now = [datetime(2026, 1, 1, tzinfo=UTC)]
-    with tempfile.TemporaryDirectory(prefix="archon-share-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-share-") as directory:
         store = DatabaseStore(f"sqlite+aiosqlite:///{Path(directory) / 'share.db'}")
         await store.initialize()
         runs = RunRepository(store.session_factory, PersistenceRedactor())
@@ -827,7 +827,7 @@ async def _scenario_share_grants() -> dict[str, Any]:
 
 async def _scenario_child_envelope() -> dict[str, Any]:
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="archon-envelope-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-envelope-") as directory:
         engine = create_async_engine(f"sqlite+aiosqlite:///{Path(directory) / 'envelope.db'}")
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
@@ -886,7 +886,7 @@ async def _scenario_child_envelope() -> dict[str, Any]:
 async def _scenario_durable_job() -> dict[str, Any]:
     started = time.perf_counter()
     now = [datetime(2026, 1, 1, tzinfo=UTC)]
-    with tempfile.TemporaryDirectory(prefix="archon-job-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-job-") as directory:
         engine = create_async_engine(f"sqlite+aiosqlite:///{Path(directory) / 'jobs.db'}")
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
@@ -936,7 +936,7 @@ async def _scenario_sandbox_breakout() -> dict[str, Any]:
     linux_seccomp = sys.platform == "linux"
     socket_blocked = unlink_blocked = volume_blocked = chmod_blocked = False
     protected_preserved = payload_absent = False
-    with tempfile.TemporaryDirectory(prefix="archon-sandbox-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-sandbox-") as directory:
         work_dir = Path(directory)
         previous_work_dir = runner_server.WORK_DIR
         previous_python = runner_server.COMMANDS.get("python")
@@ -1027,7 +1027,7 @@ async def _scenario_sandbox_breakout() -> dict[str, Any]:
 
 async def _scenario_drift_approval() -> dict[str, Any]:
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="archon-candidate-") as directory:
+    with tempfile.TemporaryDirectory(prefix="cogentrex-candidate-") as directory:
         store = DatabaseStore(f"sqlite+aiosqlite:///{Path(directory) / 'candidate.db'}")
         await store.initialize()
         evaluations = EvaluationRepository(store.session_factory)

@@ -2,7 +2,7 @@
 name: performance-analysis
 description: Measure and improve runtime performance
 version: 1.0.0
-tags: [performance-analysis, archon]
+tags: [performance-analysis, cogentrex]
 references: [references/checklist.md]
 triggers: ['performance', 'benchmark', 'optimize']
 negative_triggers: ['do not optimize', 'ignore performance']

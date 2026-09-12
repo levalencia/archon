@@ -2,7 +2,7 @@
 
 ## What you will do
 
-Across eight workshops you will trace Archon from agent anatomy through reliability, producing one evidence-backed artifact per session. The schedule and prereads are in the [company workshop track](../tracks/company-workshops.md); detailed tasks are in [exercises](exercises.md).
+Across eight workshops you will trace Cogentrex from agent anatomy through reliability, producing one evidence-backed artifact per session. The schedule and prereads are in the [company workshop track](../tracks/company-workshops.md); detailed tasks are in [exercises](exercises.md).
 
 ## Setup
 

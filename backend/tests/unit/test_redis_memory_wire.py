@@ -70,7 +70,7 @@ async def test_redis_memory_retrieve_with_limit():
 @pytest.mark.asyncio
 async def test_get_redis_memory_returns_none_for_file_backend(monkeypatch):
     """get_redis_memory returns None when memory_backend='file'."""
-    monkeypatch.setenv("ARCHON_MEMORY_BACKEND", "file")
+    monkeypatch.setenv("COGENTREX_MEMORY_BACKEND", "file")
 
     from app.memory.persistent import get_redis_memory, reset_singletons
 
@@ -86,10 +86,10 @@ async def test_get_redis_memory_returns_none_for_file_backend(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_redis_memory_graceful_fallback_when_redis_down(monkeypatch):
     """get_redis_memory returns None when redis is configured but unreachable."""
-    monkeypatch.setenv("ARCHON_MEMORY_BACKEND", "redis")
+    monkeypatch.setenv("COGENTREX_MEMORY_BACKEND", "redis")
     # Use an unreachable URL
     bad = "redis://unreachable-host-xyzzy"
-    monkeypatch.setenv("ARCHON_REDIS_URL", bad)
+    monkeypatch.setenv("COGENTREX_REDIS_URL", bad)
 
     from app.memory.persistent import get_redis_memory, reset_singletons
 

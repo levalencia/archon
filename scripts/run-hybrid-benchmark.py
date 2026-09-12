@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the versioned Single-vs-Team benchmark against an authorized Archon endpoint.
+"""Run the versioned Single-vs-Team benchmark against an authorized Cogentrex endpoint.
 
 Raw responses are written outside the repository. Credentials are generated in memory and
 never persisted. The harness checkpoints after every provider-backed run and can resume from
@@ -26,8 +26,8 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATASET = REPO_ROOT / "benchmarks/hybrid-orchestration/v1/cases.json"
-DEFAULT_OUTPUT = Path("/tmp/archon-hybrid-benchmark-v1-results.json")
-SCHEMA = "archon.hybrid-orchestration-live-results"
+DEFAULT_OUTPUT = Path("/tmp/cogentrex-hybrid-benchmark-v1-results.json")
+SCHEMA = "cogentrex.hybrid-orchestration-live-results"
 VERSION = 1
 MODES = ("single", "team")
 
@@ -70,7 +70,7 @@ def dataset_hash(path: Path) -> str:
 def load_dataset(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     cases = payload.get("cases")
-    if payload.get("schema") != "archon.hybrid-orchestration-benchmark-cases":
+    if payload.get("schema") != "cogentrex.hybrid-orchestration-benchmark-cases":
         raise ValueError("unsupported benchmark dataset schema")
     if payload.get("version") != 1 or not isinstance(cases, list) or len(cases) != 100:
         raise ValueError("benchmark dataset must contain exactly 100 version-one cases")
@@ -484,7 +484,7 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     result.add_argument("--output", type=external_output, default=DEFAULT_OUTPUT)
-    result.add_argument("--base-url", default="http://archon")
+    result.add_argument("--base-url", default="http://cogentrex")
     result.add_argument("--phase", choices=("calibration", "remainder", "all"), required=True)
     result.add_argument("--limit", type=bounded_int)
     result.add_argument("--seed", type=int, default=20260905)

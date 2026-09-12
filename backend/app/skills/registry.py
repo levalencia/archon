@@ -3,7 +3,7 @@
 Skills are structured knowledge files that agents can load at runtime
 to gain domain expertise. Similar to god-mode skill search.
 
-See: https://github.com/levalencia/production-ai-agents/
+See: https://github.com/levalencia/cogentrex/
 Concept: Skills and MCP native (Architecture Principle 3.0)
 """
 
@@ -222,7 +222,7 @@ class SkillRegistry:
 
 
 def create_default_skills() -> SkillRegistry:
-    """Create a registry with built-in Archon skills."""
+    """Create a registry with built-in Cogentrex skills."""
     registry = SkillRegistry()
 
     registry.register(

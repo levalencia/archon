@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[3]
 SCRIPT = ROOT / "scripts" / "build-visual-learning.py"
-OUTPUT = ROOT / "frontend/static/learning/archon-studio.json"
+OUTPUT = ROOT / "frontend/static/learning/cogentrex-studio.json"
 SPEC = importlib.util.spec_from_file_location("build_visual_learning", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 builder = importlib.util.module_from_spec(SPEC)
@@ -18,15 +18,15 @@ SPEC.loader.exec_module(builder)
 def test_studio_preserves_catalog_and_view_counts() -> None:
     studio = builder.build_studio()
 
-    assert studio["schema"] == "archon.visual-learning-studio"
+    assert studio["schema"] == "cogentrex.visual-learning-studio"
     assert studio["version"] == 3
     assert studio["stats"] == {
-        "concepts": 66,
+        "concepts": 67,
         "modules": 16,
         "stories": 5,
         "architecture_layers": 5,
         "learning_packs": 6,
-        "statuses": {"deferred": 7, "implemented": 59, "partial": 0},
+        "statuses": {"deferred": 7, "implemented": 60, "partial": 0},
     }
 
 
@@ -37,7 +37,9 @@ def test_every_concept_has_truthful_learning_and_proof_metadata() -> None:
         assert concept["title"]
         assert concept["summary"]
         assert concept["limitations"]
-        assert concept["detail_href"].startswith("https://github.com/levalencia/archon/blob/main/")
+        assert concept["detail_href"].startswith(
+            "https://github.com/levalencia/cogentrex/blob/main/"
+        )
         assert concept["content_source"] in {"concept", "module"}
         assert concept["proof"] == {
             "code": bool(concept["sources"]),
@@ -56,7 +58,7 @@ def test_aliases_fallbacks_and_roadmap_are_explicit() -> None:
     studio = builder.build_studio()
     by_id = {concept["id"]: concept for concept in studio["concepts"]}
 
-    assert sum(item["content_source"] == "concept" for item in studio["concepts"]) == 64
+    assert sum(item["content_source"] == "concept" for item in studio["concepts"]) == 65
     assert {item["id"] for item in studio["concepts"] if item["content_source"] == "module"} == {
         "public-anonymous-sharing",
         "autonomous-unapproved-production-optimization",
@@ -136,7 +138,7 @@ def test_force_map_is_retired_and_legacy_route_redirects() -> None:
     assert "d3" not in dependencies
     assert "@types/d3" not in dependencies
     assert not (ROOT / "frontend/src/lib/components/VisualLearningMap.svelte").exists()
-    assert not (ROOT / "frontend/static/learning/archon-graph.json").exists()
+    assert not (ROOT / "frontend/static/learning/cogentrex-graph.json").exists()
     redirect = (ROOT / "frontend/src/routes/learn/map/+page.ts").read_text()
     assert "redirect(307, '/learn?view=stories')" in redirect
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-IMAGES_DIR = Path(tempfile.mkdtemp(prefix="archon_generated_images_"))
+IMAGES_DIR = Path(tempfile.mkdtemp(prefix="cogentrex_generated_images_"))
 
 
 def image_path(filename: str) -> Path:

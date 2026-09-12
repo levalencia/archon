@@ -12,7 +12,7 @@ Use this template for every ordered course module. Remove authoring prompts befo
 
 ## Why this module exists
 
-State the learner problem in beginner-friendly language, why it matters in Archon, and the artifact the learner will produce. Do not repeat mutable project status; link to canonical evidence.
+State the learner problem in beginner-friendly language, why it matters in Cogentrex, and the artifact the learner will produce. Do not repeat mutable project status; link to canonical evidence.
 
 ## Prerequisites and vocabulary
 

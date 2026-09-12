@@ -31,13 +31,13 @@ def _create_immutability_guards() -> None:
                 )
     elif dialect == "postgresql":
         op.execute(
-            "CREATE FUNCTION archon_spi_reject_revision_mutation() RETURNS trigger "
+            "CREATE FUNCTION cogentrex_spi_reject_revision_mutation() RETURNS trigger "
             "LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable revision'; END $$"
         )
         for table in _IMMUTABLE:
             op.execute(
                 f"CREATE TRIGGER trg_{table}_immutable BEFORE UPDATE OR DELETE ON {table} "
-                "FOR EACH ROW EXECUTE FUNCTION archon_spi_reject_revision_mutation()"
+                "FOR EACH ROW EXECUTE FUNCTION cogentrex_spi_reject_revision_mutation()"
             )
 
 
@@ -50,7 +50,7 @@ def _drop_immutability_guards() -> None:
     elif dialect == "postgresql":
         for table in _IMMUTABLE:
             op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_immutable ON {table}")
-        op.execute("DROP FUNCTION IF EXISTS archon_spi_reject_revision_mutation()")
+        op.execute("DROP FUNCTION IF EXISTS cogentrex_spi_reject_revision_mutation()")
 
 
 def upgrade() -> None:

@@ -5,7 +5,7 @@
 
 ## Beginner explanation
 
-Failures are normal: providers time out, clients disconnect, retries duplicate work, and traffic spikes. Resilience means bounding damage and preserving a truthful terminal state—not merely “trying again.” Archon demonstrates idempotent creation/finalization guards, bounded retries in selected paths, timeout/cancellation handling, a concurrency-safe circuit breaker, fallback adapters, and sliding-window rate limiting.
+Failures are normal: providers time out, clients disconnect, retries duplicate work, and traffic spikes. Resilience means bounding damage and preserving a truthful terminal state—not merely “trying again.” Cogentrex demonstrates idempotent creation/finalization guards, bounded retries in selected paths, timeout/cancellation handling, a concurrency-safe circuit breaker, fallback adapters, and sliding-window rate limiting.
 
 ## Prerequisites
 
@@ -139,7 +139,7 @@ The deterministic benchmark proves state transitions and secondary selection und
 
 ## Interview answer
 
-“Archon layers admission control, deadlines/cancellation, selective retries, an app-scoped circuit breaker, and typed fallback. The breaker is lock-protected, admits one half-open probe, ignores stale success after a concurrent open, and sanitizes provider errors. The fallback chain requires one candidate to preserve the complete tools/images/JSON contract and raises typed errors rather than returning outage text. Redis sliding windows are atomic and hash identifiers; local mode is process-local. I still would not claim live provider parity or universal resilience.”
+“Cogentrex layers admission control, deadlines/cancellation, selective retries, an app-scoped circuit breaker, and typed fallback. The breaker is lock-protected, admits one half-open probe, ignores stale success after a concurrent open, and sanitizes provider errors. The fallback chain requires one candidate to preserve the complete tools/images/JSON contract and raises typed errors rather than returning outage text. Redis sliding windows are atomic and hash identifiers; local mode is process-local. I still would not claim live provider parity or universal resilience.”
 
 ## Self-check
 

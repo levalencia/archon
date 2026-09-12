@@ -25,7 +25,7 @@ def _library(root: Path) -> None:
         encoding="utf-8",
     )
     catalog = {
-        "schema": "archon.learning-library",
+        "schema": "cogentrex.learning-library",
         "version": 1,
         "generated_at": "2026-09-04T12:00:00Z",
         "source_commit": "a" * 40,

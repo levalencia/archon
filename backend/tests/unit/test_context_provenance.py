@@ -99,13 +99,13 @@ async def test_persisted_current_message_and_image_fingerprint_match_provider_co
     assert context.manifest.selected_message_ids == (21,)
     expected = hmac.new(
         fingerprint_key,
-        b"archon/context-asset/v1\0alice\0project\0run-1\0" + image.encode("utf-8"),
+        b"cogentrex/context-asset/v1\0alice\0project\0run-1\0" + image.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
     assert context.manifest.input_asset_fingerprints == (expected,)
     other_owner = hmac.new(
         fingerprint_key,
-        b"archon/context-asset/v1\0bob\0project\0run-1\0" + image.encode("utf-8"),
+        b"cogentrex/context-asset/v1\0bob\0project\0run-1\0" + image.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
     assert expected != other_owner

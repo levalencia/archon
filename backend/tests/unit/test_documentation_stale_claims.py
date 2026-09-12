@@ -205,7 +205,7 @@ def test_current_observability_learning_docs_match_collector_fanout() -> None:
             assert phrase not in content, f"{path.relative_to(ROOT)} contains stale OTEL claim"
 
     studio = json.loads(
-        (ROOT / "frontend" / "static" / "learning" / "archon-studio.json").read_text(
+        (ROOT / "frontend" / "static" / "learning" / "cogentrex-studio.json").read_text(
             encoding="utf-8"
         )
     )
@@ -219,7 +219,7 @@ class TestReflectionNotClaimedAbsent:
     """Generic reflection is implemented; docs must not claim it absent."""
 
     STALE_ABSENT_CLAIMS = [
-        "not implemented in Archon",
+        "not implemented in Cogentrex",
         "Not implemented as a generic capability",
         "not a dependency backed by a generic implementation claim",
     ]

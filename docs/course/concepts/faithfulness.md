@@ -48,7 +48,7 @@ flowchart TD
   CC -. explicit link .-> GR
 ```
 
-## Three operational checks in Archon
+## Three operational checks in Cogentrex
 
 The stronger answer-path proxy is `backend/app/services/grounded_rag.py::_supports_claim`.
 It works on atomic claims and explicitly cited `DocumentEvidence`.
@@ -166,7 +166,7 @@ Then ask an unrelated question and explain why a faithful restatement can still 
 
 ## 30-second interview answer
 
-“Faithfulness means the answer stays within supplied evidence without contradictions or unsupported additions. Archon first applies deterministic citation, number, and polarity checks, then delegates surviving claims and exact evidence slices to a bounded no-tools Foundry verifier. The response exposes claim-level outcomes, method, and score; the managed sentinel passed at `1.0`. That proves the accepted RAG path, not universal semantic truth, so production claims still require representative human-labeled calibration.”
+“Faithfulness means the answer stays within supplied evidence without contradictions or unsupported additions. Cogentrex first applies deterministic citation, number, and polarity checks, then delegates surviving claims and exact evidence slices to a bounded no-tools Foundry verifier. The response exposes claim-level outcomes, method, and score; the managed sentinel passed at `1.0`. That proves the accepted RAG path, not universal semantic truth, so production claims still require representative human-labeled calibration.”
 
 ## Self-checks
 

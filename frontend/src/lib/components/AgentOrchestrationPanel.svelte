@@ -131,8 +131,8 @@
   .route-card div { display: grid; gap: .2rem; }
   .route-card small { grid-column: 1 / -1; color: var(--muted); text-transform: capitalize; }
   .eyebrow { color: var(--muted); font-size: .65rem; letter-spacing: .08em; text-transform: uppercase; }
-  .route-state, .status { align-self: start; border-radius: 999px; background: color-mix(in srgb, var(--archon-green) 15%, transparent); color: var(--archon-green); padding: .2rem .45rem; font-size: .65rem; font-weight: 700; text-transform: capitalize; }
-  .route-state.degraded, .status.failed { background: color-mix(in srgb, var(--archon-coral) 14%, transparent); color: var(--archon-coral); }
+  .route-state, .status { align-self: start; border-radius: 999px; background: color-mix(in srgb, var(--cogentrex-green) 15%, transparent); color: var(--cogentrex-green); padding: .2rem .45rem; font-size: .65rem; font-weight: 700; text-transform: capitalize; }
+  .route-state.degraded, .status.failed { background: color-mix(in srgb, var(--cogentrex-coral) 14%, transparent); color: var(--cogentrex-coral); }
   .agent-tree { display: grid; gap: .4rem; }
   .parent-node { border-color: var(--accent); display: grid; gap: .15rem; }
   .parent-node span { color: var(--accent); font-size: .65rem; text-transform: uppercase; }

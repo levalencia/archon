@@ -42,9 +42,9 @@
 </script>
 
 <div class="min-h-full bg-[var(--bg)] text-[var(--text)]">
-  <header class="border-b border-[var(--border)] bg-[radial-gradient(circle_at_top_left,var(--archon-orange-glow),transparent_38%),var(--panel)] px-4 py-6 md:px-8">
+  <header class="border-b border-[var(--border)] bg-[radial-gradient(circle_at_top_left,var(--cogentrex-orange-glow),transparent_38%),var(--panel)] px-4 py-6 md:px-8">
     <div class="mx-auto flex max-w-[1500px] flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-      <div class="max-w-3xl"><span class="eyebrow">Archon Visual Learning Studio</span><h1 class="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Choose the view that matches your question</h1><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--secondary)]">Stable roadmaps, explicit flows, layered architecture, evidence boundaries, and Hermes-authored English learning media — all derived from canonical project sources.</p></div>
+      <div class="max-w-3xl"><span class="eyebrow">Cogentrex Visual Learning Studio</span><h1 class="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Choose the view that matches your question</h1><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--secondary)]">Stable roadmaps, explicit flows, layered architecture, evidence boundaries, and Hermes-authored English learning media — all derived from canonical project sources.</p></div>
       {#if studio}<div class="grid grid-cols-4 gap-2" aria-label="Visual Learning Studio summary"><div class="metric"><strong>{studio.stats.concepts}</strong><span>Concepts</span></div><div class="metric"><strong>{studio.stats.modules}</strong><span>Modules</span></div><div class="metric"><strong>{studio.stats.stories}</strong><span>Stories</span></div><div class="metric"><strong>{studio.stats.learning_packs}</strong><span>Packs</span></div></div>{/if}
     </div>
   </header>
@@ -52,7 +52,7 @@
   <nav class="sticky top-0 z-30 border-b border-[var(--border)] bg-[rgba(8,11,16,.94)] px-3 py-2 backdrop-blur" aria-label="Visual Learning Studio views">
     <div class="mx-auto flex max-w-[1500px] flex-wrap gap-2 pb-1">
       {#each views as view}
-        <a href={`/learn?view=${view.id}`} aria-current={activeView === view.id ? 'page' : undefined} class="flex min-h-14 min-w-32 flex-1 items-center gap-2 rounded-xl border px-3 text-left no-underline transition {activeView === view.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] text-[var(--text)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'border-[var(--border)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--accent)]'}"><view.icon size={17}/><span class="min-w-0"><strong class="block text-xs">{view.label}</strong><small class="mt-0.5 block truncate text-[9px]">{view.question}</small></span></a>
+        <a href={`/learn?view=${view.id}`} aria-current={activeView === view.id ? 'page' : undefined} class="flex min-h-14 min-w-32 flex-1 items-center gap-2 rounded-xl border px-3 text-left no-underline transition {activeView === view.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] text-[var(--text)] shadow-[0_0_18px_var(--cogentrex-orange-glow)]' : 'border-[var(--border)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--accent)]'}"><view.icon size={17}/><span class="min-w-0"><strong class="block text-xs">{view.label}</strong><small class="mt-0.5 block truncate text-[9px]">{view.question}</small></span></a>
       {/each}
     </div>
   </nav>

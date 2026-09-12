@@ -5,7 +5,7 @@ Every action in the system is logged with:
 - security_level (info, warning, error)
 - correlation_id (links all entries for a single request)
 
-See: https://github.com/levalencia/production-ai-agents/articles/day-01-anatomy-of-production-agent/
+See: https://github.com/levalencia/cogentrex/articles/day-01-anatomy-of-production-agent/
 Concept: Layer 6 - Observability (audit trails with correlation IDs)
 """
 

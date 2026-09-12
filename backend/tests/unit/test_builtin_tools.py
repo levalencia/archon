@@ -107,7 +107,7 @@ class TestWebSearchTool:
             del max_chars
             return [{**result, "content": result["snippet"]} for result in results]
 
-        monkeypatch.delenv("ARCHON_BRAVE_API_KEY", raising=False)
+        monkeypatch.delenv("COGENTREX_BRAVE_API_KEY", raising=False)
         monkeypatch.setattr(web_search_module, "_searxng_search", fake_searxng)
         monkeypatch.setattr(web_search_module, "_extract_content", fake_extract)
 
@@ -451,11 +451,11 @@ class TestRegisterBuiltinTools:
             (
                 "write_file",
                 {
-                    "path": "/tmp/archon-registry-escape.txt",
+                    "path": "/tmp/cogentrex-registry-escape.txt",
                     "content": "blocked",
                     "workspace_root": "/",
                 },
-                Path("/tmp/archon-registry-escape.txt"),
+                Path("/tmp/cogentrex-registry-escape.txt"),
             ),
         ],
     )
@@ -467,7 +467,7 @@ class TestRegisterBuiltinTools:
         arguments: dict[str, object],
         outside_path: Path | None,
     ) -> None:
-        monkeypatch.setenv("ARCHON_WORKSPACE_ROOT", str(tmp_path))
+        monkeypatch.setenv("COGENTREX_WORKSPACE_ROOT", str(tmp_path))
         if outside_path is not None:
             outside_path.unlink(missing_ok=True)
         registry = SecureToolRegistry()

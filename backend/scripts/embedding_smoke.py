@@ -33,7 +33,7 @@ from scripts.acceptance_support import (
     write_report,
 )
 
-_PROBE_TEXT = "Archon acceptance vector marker cobalt seven."
+_PROBE_TEXT = "Cogentrex acceptance vector marker cobalt seven."
 
 
 class _RecordingEmbedding:
@@ -310,7 +310,7 @@ async def main() -> int:
                 operation_count=4,
             )
         except ValueError:
-            print(json.dumps({"schema": "archon.provider-acceptance", "status": "fail"}))
+            print(json.dumps({"schema": "cogentrex.provider-acceptance", "status": "fail"}))
             return 2
         print(json.dumps({"schema": report["schema"], "status": report["status"]}, sort_keys=True))
         return code

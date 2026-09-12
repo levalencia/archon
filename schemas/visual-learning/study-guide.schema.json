@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "const": "archon.learning.study-guide"
+      "const": "cogentrex.learning.study-guide"
     },
     "version": {
       "const": 1

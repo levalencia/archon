@@ -10,7 +10,7 @@ MCP makes tools portable, but portability is not trust. This module follows an a
 
 ## Beginner explanation
 
-MCP standardizes tool discovery and calls; it does not confer trust. Archon supports one concrete path: deployment-owned stdio profiles become scoped inventory, then immutable runtime bindings that still cross schema, policy, approval and timeout controls.
+MCP standardizes tool discovery and calls; it does not confer trust. Cogentrex supports one concrete path: deployment-owned stdio profiles become scoped inventory, then immutable runtime bindings that still cross schema, policy, approval and timeout controls.
 
 ## Prerequisites and vocabulary
 
@@ -234,7 +234,7 @@ MCP 2.1.1 stdio was verified locally against the fixture server, including pagin
 
 ### 30-second answer
 
-> Archon treats MCP as untrusted tool supply. Deployment-owned stdio profiles are allowlisted; discovery is bounded and persists owner/project inventory. Only enabled healthy selected tools become immutable request-scoped specs. Calls are schema checked, revalidated, and routed through the same policy, approval, timeout and audit controls as native tools. Local stdio is verified; HTTP/OAuth is not.
+> Cogentrex treats MCP as untrusted tool supply. Deployment-owned stdio profiles are allowlisted; discovery is bounded and persists owner/project inventory. Only enabled healthy selected tools become immutable request-scoped specs. Calls are schema checked, revalidated, and routed through the same policy, approval, timeout and audit controls as native tools. Local stdio is verified; HTTP/OAuth is not.
 
 ### Deeper follow-ups
 

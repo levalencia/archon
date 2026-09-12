@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-REPORT_SCHEMA = "archon.provider-acceptance"
+REPORT_SCHEMA = "cogentrex.provider-acceptance"
 REPORT_VERSION = 1
 MAX_REPORT_BYTES = 65536
 _STATUSES = frozenset({"pass", "fail", "skipped"})

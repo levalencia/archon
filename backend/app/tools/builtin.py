@@ -3,7 +3,7 @@
 Each tool is a plain async function — no framework dependency.
 Web search uses real DuckDuckGo via app/tools/web_search.py.
 
-See: https://github.com/levalencia/production-ai-agents/
+See: https://github.com/levalencia/cogentrex/
 Concept: Layer 3 - Tools (registered, validated, timeout-enforced)
 """
 
@@ -158,7 +158,7 @@ def _workspace_root(workspace_root: str | Path | TenantWorkspace | None = None) 
     root_value = (
         workspace_root
         if workspace_root is not None
-        else os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
+        else os.environ.get("COGENTREX_WORKSPACE_ROOT", str(Path.cwd()))
     )
     return Path(root_value).resolve()
 
@@ -207,7 +207,7 @@ def _relative_workspace_components(
             if isinstance(workspace_root, TenantWorkspace)
             else workspace_root
             if workspace_root is not None
-            else os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
+            else os.environ.get("COGENTREX_WORKSPACE_ROOT", str(Path.cwd()))
         )
         lexical_root = Path(os.path.abspath(os.fspath(root_value)))
         if lexical_root not in roots:

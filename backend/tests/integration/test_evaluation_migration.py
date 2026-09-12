@@ -19,7 +19,7 @@ def _config(database: Path) -> Config:
 
 
 def test_evaluation_migration_round_trip(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "migration.db"
     config = _config(database)
     command.upgrade(config, "head")

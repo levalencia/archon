@@ -13,7 +13,7 @@ class MockLLM:
     capabilities = ProviderCapabilities(native_tools=True, usage=True)
     DEFAULT_RESPONSE = (
         "Mock mode: no live model inference was performed. "
-        "Restart Archon with --live-provider for real responses."
+        "Restart Cogentrex with --live-provider for real responses."
     )
     EXHAUSTED_RESPONSE = "Mock response sequence exhausted; no live model inference was performed."
 

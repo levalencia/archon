@@ -10,7 +10,7 @@ from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
-server = MCPServer("archon-test-server", version="1.0.0")
+server = MCPServer("cogentrex-test-server", version="1.0.0")
 _notes: list[str] = []
 
 if len(sys.argv) > 1:
@@ -53,7 +53,7 @@ def write_note(note: str) -> dict[str, object]:
 )
 def env_probe() -> dict[str, bool]:
     """Return only canary presence."""
-    return {"secret_canary_present": "ARCHON_SECRET_CANARY" in os.environ}
+    return {"secret_canary_present": "COGENTREX_SECRET_CANARY" in os.environ}
 
 
 if __name__ == "__main__":

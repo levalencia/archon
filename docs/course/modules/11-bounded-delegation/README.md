@@ -6,11 +6,11 @@
 
 ## Why this module exists
 
-A second model can add cost and authority without adding trust. This module starts with Archon's narrow evidence-only verifier and then extends the same signed, bounded lineage model into the feature-flagged hybrid orchestration pilot. You will produce a parent-child evidence graph and explain why neither design is an unbounded swarm nor generic self-reflection.
+A second model can add cost and authority without adding trust. This module starts with Cogentrex's narrow evidence-only verifier and then extends the same signed, bounded lineage model into the feature-flagged hybrid orchestration pilot. You will produce a parent-child evidence graph and explain why neither design is an unbounded swarm nor generic self-reflection.
 
 ## Beginner explanation
 
-Archon has two distinct bounded delegation paths. The verifier sees a sealed claim/evidence packet and has no tools. The hybrid pilot can run a fixed researcher and a server-templated dynamic analyst with read-only capability subsets. Both paths use finite budgets, signed one-use scope, durable lineage, and fail-closed validation; model output can still be wrong.
+Cogentrex has two distinct bounded delegation paths. The verifier sees a sealed claim/evidence packet and has no tools. The hybrid pilot can run a fixed researcher and a server-templated dynamic analyst with read-only capability subsets. Both paths use finite budgets, signed one-use scope, durable lineage, and fail-closed validation; model output can still be wrong.
 
 ## Prerequisites and vocabulary
 
@@ -294,7 +294,7 @@ Contract, integration, benchmark fixture, and local UI evidence establish one ch
 
 ### 30-second answer
 
-> Archon uses one bounded verifier child only after grounded claim construction. It receives exact claims and evidence, no tools, and finite token/time/retry budgets. Strict parsing rejects unknown claims and evidence; child events persist under parent_run_id. Tests and a deterministic benefit fixture prove the control path, not model truth. External providers and swarms are not claimed.
+> Cogentrex uses one bounded verifier child only after grounded claim construction. It receives exact claims and evidence, no tools, and finite token/time/retry budgets. Strict parsing rejects unknown claims and evidence; child events persist under parent_run_id. Tests and a deterministic benefit fixture prove the control path, not model truth. External providers and swarms are not claimed.
 
 ### Deeper follow-ups
 

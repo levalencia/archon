@@ -50,7 +50,7 @@ flowchart TD
   S -->|yes| A[Correct for this claim]
 ```
 
-## Archon implementation
+## Cogentrex implementation
 
 `backend/app/services/grounded_rag.py::DocumentEvidence` is the evidence record.
 It carries `id`, `document_id`, `chunk_id`, `content_hash`, `title`, `score`, `quote`, and private `verification_text`.
@@ -170,7 +170,7 @@ Explain why citation correctness can pass while answer relevance fails.
 
 ## 30-second interview answer
 
-“A citation is a claim-to-evidence binding, not just brackets. In Archon's grounded workflow, run-local `E#` IDs resolve to document ID, chunk ID, content hash, title, score, and quote. Unknown IDs, tampered content, and unsupported claims are filtered; only used citations are returned. For production I would separately measure citation correctness and completeness and retain immutable, access-controlled provenance.”
+“A citation is a claim-to-evidence binding, not just brackets. In Cogentrex's grounded workflow, run-local `E#` IDs resolve to document ID, chunk ID, content hash, title, score, and quote. Unknown IDs, tampered content, and unsupported claims are filtered; only used citations are returned. For production I would separately measure citation correctness and completeness and retain immutable, access-controlled provenance.”
 
 ## Self-checks
 

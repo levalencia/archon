@@ -8,7 +8,7 @@
 
 ## Beginner explanation
 
-A project instruction is reviewed guidance that applies to one project. A skill is a versioned reusable package selected for a task. MCP tools are external capabilities, not instructions, but the same project preference layer can enable, disable, or pin them before provider schemas are built. Archon now keeps these concerns separate and records hashes and revision identifiers instead of treating an unversioned text concatenation as governance.
+A project instruction is reviewed guidance that applies to one project. A skill is a versioned reusable package selected for a task. MCP tools are external capabilities, not instructions, but the same project preference layer can enable, disable, or pin them before provider schemas are built. Cogentrex now keeps these concerns separate and records hashes and revision identifiers instead of treating an unversioned text concatenation as governance.
 
 ## Problem and mental model
 
@@ -40,7 +40,7 @@ flowchart LR
     Selection --> Manifest
 ```
 
-The filesystem loader supports one explicitly selected family per scan: `.archon/instructions.md`, `AGENTS.md`/`AGENTS.override.md`, or `CLAUDE.md`. Relative `@include` files are bounded and cycle checked. Secure descriptor-relative traversal rejects symlinks, hardlinks, non-regular files, path escapes, excess depth, count, or bytes. The caller must first authorize the workspace root.
+The filesystem loader supports one explicitly selected family per scan: `.cogentrex/instructions.md`, `AGENTS.md`/`AGENTS.override.md`, or `CLAUDE.md`. Relative `@include` files are bounded and cycle checked. Secure descriptor-relative traversal rejects symlinks, hardlinks, non-regular files, path escapes, excess depth, count, or bytes. The caller must first authorize the workspace root.
 
 ## Startup and request sequence
 
@@ -71,7 +71,7 @@ The live request preparation uses durable project instruction snapshots and proj
 
 MCP remains a tool boundary. Enabled, healthy, owner/project-scoped MCP metadata participates in capability selection; only selected schemas are materialized, and provider-visible capabilities carry permission, selection reason, and schema hash in provenance. Calls still pass through schema validation, policy, approval, timeout, audit, and stale-binding checks. Deployment-owned Streamable HTTP profiles are supported in addition to stdio, but profile URLs and credential references are not persisted in inventory or exposed by the profile API.
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 ### Source symbols
 
@@ -135,7 +135,7 @@ The bounded capability is **implemented in the candidate**: exact revisions, sco
 
 ## Interview answer
 
-> Archon treats instructions, skills, and MCP as distinct governed inputs. Project files are loaded under an authorized root, snapshotted immutably, reviewed, and activated per owner/project. Skills are immutable approved revisions selected metadata-first under permissions, preferences, negative triggers, and budgets. MCP schemas are selected lazily and remain behind normal policy and approval. Sync and SSE persist exact hash-only provenance. That bounded path is implemented and repository-tested at `a642952`; it is a local candidate, not a deployed production claim.
+> Cogentrex treats instructions, skills, and MCP as distinct governed inputs. Project files are loaded under an authorized root, snapshotted immutably, reviewed, and activated per owner/project. Skills are immutable approved revisions selected metadata-first under permissions, preferences, negative triggers, and budgets. MCP schemas are selected lazily and remain behind normal policy and approval. Sync and SSE persist exact hash-only provenance. That bounded path is implemented and repository-tested at `a642952`; it is a local candidate, not a deployed production claim.
 
 ## Self-check
 

@@ -51,7 +51,7 @@ def test_pilot_builds_valid_english_visual_and_study_artifacts(tmp_path: Path) -
     assert "<script" not in (tmp_path / artifacts["request-deck"]["file"]).read_text().lower()
     assert "Teach this slide" in (tmp_path / artifacts["request-deck"]["file"]).read_text()
     deck_html = (tmp_path / artifacts["request-deck"]["file"]).read_text()
-    assert "github.com/levalencia/archon/blob/" in deck_html
+    assert "github.com/levalencia/cogentrex/blob/" in deck_html
     assert "What this does not prove" in deck_html
     spec = json.loads(builder.SPEC.read_text())
     assert all(limitation in deck_html for limitation in spec["limitations"])

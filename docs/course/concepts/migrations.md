@@ -12,7 +12,7 @@ A migration is a named, ordered program that moves the schema from one revision 
 Examples include creating a table, adding a foreign key, or changing a constraint.
 A migration is not ordinary application startup code and not a model-generated action.
 It runs with database-definition authority and must fail visibly.
-Archon uses Alembic to keep the revision chain and execute transitions.
+Cogentrex uses Alembic to keep the revision chain and execute transitions.
 The local container path upgrades to `head` before the application begins serving.
 A successful fresh upgrade does not automatically prove safe rollback or compatibility between old and new application versions.
 
@@ -40,14 +40,14 @@ Migration scripts are operational database code, not authenticated Core API obje
 ```mermaid
 flowchart LR
     V[versioned files] --> A[Alembic]
-    CFG[ARCHON_DATABASE_URL] --> A
+    CFG[COGENTREX_DATABASE_URL] --> A
     MD[SQLAlchemy Base.metadata] --> A
     A -->|transactional DDL where supported| P[(PostgreSQL schema)]
     P --> REV[(alembic_version)]
     P --> B[backend startup/readiness]
 ```
 
-[`backend/alembic/env.py`](../../../backend/alembic/env.py) loads `ARCHON_DATABASE_URL` when present and uses `Base.metadata` as target metadata.
+[`backend/alembic/env.py`](../../../backend/alembic/env.py) loads `COGENTREX_DATABASE_URL` when present and uses `Base.metadata` as target metadata.
 `run_migrations_offline` configures literal SQL generation.
 `run_async_migrations` creates an async engine with `NullPool`, runs synchronous migration logic through the connection, then disposes it.
 Both paths set `compare_type=True`.
@@ -138,11 +138,11 @@ Run focused migration round-trip tests and inspect the revision chain without to
 
 Run from the repository root with backend dev dependencies.
 The tests manage temporary databases and fixtures.
-Remove any production-like `ARCHON_DATABASE_URL` from the shell before running so the tests cannot target it accidentally.
+Remove any production-like `COGENTREX_DATABASE_URL` from the shell before running so the tests cannot target it accidentally.
 
 ```bash
 cd backend
-unset ARCHON_DATABASE_URL
+unset COGENTREX_DATABASE_URL
 uv run pytest -q \
   tests/integration/test_mcp_inventory_migration.py::test_mcp_migration_round_trip_and_postgresql_safe \
   tests/integration/test_run_parent_migration.py::test_run_parent_fk_migrates_valid_rows_and_roundtrips
@@ -195,7 +195,7 @@ Avoid logging database URLs, row payloads, or migration-time secrets.
 | dedicated migration job | explicit authority and lifecycle | deployment orchestration required |
 | expand/contract rollout | supports mixed versions | more revisions and temporary complexity |
 
-Archon’s entrypoint upgrade is suitable for the local single-backend target.
+Cogentrex’s entrypoint upgrade is suitable for the local single-backend target.
 A production orchestrator should normally make migration ownership explicit and design mixed-version compatibility.
 
 ## Lab vs production
@@ -215,7 +215,7 @@ The concept is `implemented` for explicit local upgrade and tested selected tran
 
 ### 30-second answer
 
-> Archon uses an ordered Alembic revision chain. The container entrypoint runs `alembic upgrade head` against PostgreSQL before the backend can serve, so migration failure blocks readiness. The current observed head is `20260826_08`, and focused integration tests cover MCP and run-parent round trips. That proves selected local transitions, not distributed migration ownership, lock safety, mixed-version rollout, or guaranteed rollback.
+> Cogentrex uses an ordered Alembic revision chain. The container entrypoint runs `alembic upgrade head` against PostgreSQL before the backend can serve, so migration failure blocks readiness. The current observed head is `20260826_08`, and focused integration tests cover MCP and run-parent round trips. That proves selected local transitions, not distributed migration ownership, lock safety, mixed-version rollout, or guaranteed rollback.
 
 ## Self-check
 

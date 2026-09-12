@@ -244,7 +244,7 @@ The defensible product is an evidence-rich local Agent Reliability Workbench. Ex
 
 ### 30-second answer
 
-> I frame Archon as an evidence-first local reliability workbench, not a deployed platform. The typed runtime sends every tool—including allowlisted MCP stdio tools—through deterministic policy and exact approvals, persists owner-scoped run evidence, evaluates grounded outputs, and optionally invokes one no-tools verifier child. Auth, SSE, redacted logs, process metrics and OTLP spans make a request inspectable. Compose and a clean restore drill prove local operability. I show source, test, observed artifact and limitation for every claim.
+> I frame Cogentrex as an evidence-first local reliability workbench, not a deployed platform. The typed runtime sends every tool—including allowlisted MCP stdio tools—through deterministic policy and exact approvals, persists owner-scoped run evidence, evaluates grounded outputs, and optionally invokes one no-tools verifier child. Auth, SSE, redacted logs, process metrics and OTLP spans make a request inspectable. Compose and a clean restore drill prove local operability. I show source, test, observed artifact and limitation for every claim.
 
 ### Deeper follow-ups
 

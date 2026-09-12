@@ -7,7 +7,7 @@ import pytest
 
 from app.services.db_store import DatabaseStore
 from app.skills.bootstrap import BundledSkillBootstrap
-from app.skills.bundled import ARCHON_OWNER_ID, bundled_skills
+from app.skills.bundled import COGENTREX_OWNER_ID, bundled_skills
 from app.skills.context import EffectiveContextEnrichmentService
 from app.skills.discovery import DiscoveryRequest, SkillDiscoveryService
 from app.skills.parser import parse_skill_markdown
@@ -37,7 +37,7 @@ async def test_bundled_bootstrap_is_strict_idempotent_and_restart_safe(tmp_path:
     restarted = DatabaseStore(url)
     await restarted.initialize()
     rows = await SkillRepository(restarted.session_factory).list_discoverable(
-        owner_id=ARCHON_OWNER_ID
+        owner_id=COGENTREX_OWNER_ID
     )
     assert len(rows) == 10
     assert all(x.trust_state == "verified" and x.review_state == "approved" for x in rows)
@@ -59,7 +59,7 @@ async def test_metadata_first_discovery_negative_denied_budget_and_lazy_referenc
             project_id="p",
             package_id=skill.package_id,
             revision_id=skill.revision_id,
-            revision_owner_id=ARCHON_OWNER_ID,
+            revision_owner_id=COGENTREX_OWNER_ID,
         )
     service = SkillDiscoveryService(repository)
     result = await service.discover(
@@ -74,7 +74,9 @@ async def test_metadata_first_discovery_negative_denied_budget_and_lazy_referenc
     assert result.selected
     assert result.selected[0].metadata["required_capability_ids"]
     assert all("instructions" not in json.dumps(item.metadata) for item in result.candidates)
-    deploy = next(item for item in result.rejected if item.capability_id == "archon.deploy-safety")
+    deploy = next(
+        item for item in result.rejected if item.capability_id == "cogentrex.deploy-safety"
+    )
     assert any(reason.startswith("negative_trigger:") for reason in deploy.reasons)
     selected = result.selected[0]
     loaded = await service.load_selected(
@@ -124,7 +126,7 @@ async def test_runtime_is_project_scoped_pins_exact_revision_and_revalidates_ref
         project_id="one",
         package_id=review.package_id,
         revision_id=review.revision_id,
-        revision_owner_id=ARCHON_OWNER_ID,
+        revision_owner_id=COGENTREX_OWNER_ID,
     )
     service = SkillDiscoveryService(repository)
     with pytest.raises(LookupError):
@@ -133,7 +135,7 @@ async def test_runtime_is_project_scoped_pins_exact_revision_and_revalidates_ref
                 owner_id="alice",
                 project_id="two",
                 intent="review code",
-                explicit_ids=("archon.code-review",),
+                explicit_ids=("cogentrex.code-review",),
             )
         )
     assert not (
@@ -206,10 +208,10 @@ triggers: [version]
         owner_id="alice",
         project_id="one",
         permission_decisions={},
-        disabled_ids=frozenset({"archon.code-review"}),
+        disabled_ids=frozenset({"cogentrex.code-review"}),
     )
     with pytest.raises(LookupError):
-        await disabled_tools.discover_capabilities("review", "archon.code-review")
+        await disabled_tools.discover_capabilities("review", "cogentrex.code-review")
     await store.close()
 
 
@@ -227,7 +229,7 @@ async def test_explicit_invocation_and_enrichment_provenance_have_no_raw_content
         project_id="p",
         package_id=review.package_id,
         revision_id=review.revision_id,
-        revision_owner_id=ARCHON_OWNER_ID,
+        revision_owner_id=COGENTREX_OWNER_ID,
     )
     instructions = ProjectInstructionRepository(store.session_factory)
     instruction = await instructions.append(
@@ -239,7 +241,7 @@ async def test_explicit_invocation_and_enrichment_provenance_have_no_raw_content
             owner_id="alice",
             project_id="p",
             intent="unrelated",
-            explicit_ids=("archon.code-review",),
+            explicit_ids=("cogentrex.code-review",),
             context_budget=10000,
             permission_decisions={"capability.code.read": "allow"},
         )
@@ -253,5 +255,5 @@ async def test_explicit_invocation_and_enrichment_provenance_have_no_raw_content
     serialized = json.dumps(enriched.manifest.semantic_document())
     assert "SECRET" not in serialized
     assert enriched.manifest.context_cost_bytes > 0
-    assert enriched.manifest.selected_capability_ids == ("archon.code-review",)
+    assert enriched.manifest.selected_capability_ids == ("cogentrex.code-review",)
     await store.close()

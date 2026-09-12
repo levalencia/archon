@@ -6,13 +6,13 @@ const commit = 'a'.repeat(40);
 describe('learning source links', () => {
   it('builds a commit-pinned GitHub URL for repository-relative documentation', () => {
     expect(githubSourceHref('docs/course/modules/05-policy-and-approvals/README.md', commit)).toBe(
-      `https://github.com/levalencia/archon/blob/${commit}/docs/course/modules/05-policy-and-approvals/README.md`,
+      `https://github.com/levalencia/cogentrex/blob/${commit}/docs/course/modules/05-policy-and-approvals/README.md`,
     );
   });
 
   it('adds validated line anchors when a structured source includes them', () => {
     expect(githubSourceHref({ path: 'README.md', line_start: 20, line_end: 28 }, commit)).toBe(
-      `https://github.com/levalencia/archon/blob/${commit}/README.md#L20-L28`,
+      `https://github.com/levalencia/cogentrex/blob/${commit}/README.md#L20-L28`,
     );
   });
 

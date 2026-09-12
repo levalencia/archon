@@ -2,7 +2,7 @@
 
 Pipeline: query → embed → search → rerank → build prompt → generate answer
 
-See: https://github.com/levalencia/production-ai-agents/
+See: https://github.com/levalencia/cogentrex/
 Concept: RAG Pipeline — end-to-end retrieval-augmented generation
 Course reference: Advanced Architectures L19-L30, L35-L44
 """

@@ -22,7 +22,7 @@ class OTLPExporter:
 
     def __init__(
         self,
-        service_name: str = "archon",
+        service_name: str = "cogentrex",
         endpoint: str = "http://localhost:4317",
     ) -> None:
         self.service_name = service_name
@@ -172,7 +172,7 @@ class OTLPExporter:
             return
         from opentelemetry import trace
 
-        run_id = str(span.attributes.get("archon.run.id", ""))
+        run_id = str(span.attributes.get("cogentrex.run.id", ""))
         parent = self._active_agent_spans.get(run_id)
         context = trace.set_span_in_context(parent) if parent is not None else None
         with self._real_tracer.start_as_current_span(
@@ -190,7 +190,7 @@ class OTLPExporter:
         """Start a long-lived agent root used to parent model and tool spans."""
         if not self._real_tracer:
             return
-        run_id = str(span.attributes.get("archon.run.id", ""))
+        run_id = str(span.attributes.get("cogentrex.run.id", ""))
         if not run_id or run_id in self._active_agent_spans:
             return
         self._active_agent_spans[run_id] = self._real_tracer.start_span(
@@ -200,7 +200,7 @@ class OTLPExporter:
 
     def finish_agent_span(self, span: Span) -> None:
         """Apply terminal attributes and close a previously started agent root."""
-        run_id = str(span.attributes.get("archon.run.id", ""))
+        run_id = str(span.attributes.get("cogentrex.run.id", ""))
         exported = self._active_agent_spans.pop(run_id, None)
         if exported is None:
             self.export_span(span)

@@ -3,12 +3,12 @@ set -euo pipefail
 export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:${PATH:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE="archon-backend:verify"
-CONTAINER="${ARCHON_VERIFY_CONTAINER:-archon-backend-verify-$$}"
+IMAGE="cogentrex-backend:verify"
+CONTAINER="${COGENTREX_VERIFY_CONTAINER:-cogentrex-backend-verify-$$}"
 CONTAINER_ID=""
-PORT="${ARCHON_VERIFY_PORT:-18000}"
-PLATFORM="${ARCHON_VERIFY_PLATFORM:-linux/amd64}"
-VERIFY_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/archon-verify.XXXXXX")"
+PORT="${COGENTREX_VERIFY_PORT:-18000}"
+PLATFORM="${COGENTREX_VERIFY_PLATFORM:-linux/amd64}"
+VERIFY_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/cogentrex-verify.XXXXXX")"
 BENCHMARK_REPORT="$VERIFY_TMPDIR/portfolio-benchmark.json"
 
 ACCEPTANCE_SCRIPTS=(
@@ -126,7 +126,7 @@ printf '\n== Docker sandbox containment smoke ==\n'
 SANDBOX_IMAGE_ID="$("$ROOT/scripts/build-sandbox.sh")"
 (
   cd "$ROOT/backend"
-  ARCHON_SANDBOX_IMAGE="$SANDBOX_IMAGE_ID" uv run python ../scripts/sandbox_smoke.py
+  COGENTREX_SANDBOX_IMAGE="$SANDBOX_IMAGE_ID" uv run python ../scripts/sandbox_smoke.py
 )
 unset SANDBOX_IMAGE_ID
 
@@ -140,12 +140,12 @@ memory_master_key="$(
   cd "$ROOT/backend"
   uv run python -c 'import secrets; from app.memory.keys import decode_memory_master_key; key = secrets.token_urlsafe(32); decode_memory_master_key(key); print(key, end="")'
 )"
-CONTAINER_ID="$(ARCHON_ENCRYPTION_MASTER_KEY="$memory_master_key" docker run -d \
+CONTAINER_ID="$(COGENTREX_ENCRYPTION_MASTER_KEY="$memory_master_key" docker run -d \
   --platform "$PLATFORM" \
   --name "$CONTAINER" -p "$PORT:8000" \
-  -e ARCHON_DATABASE_URL="sqlite+aiosqlite:////tmp/archon-verify.db" \
-  -e ARCHON_MEMORY_ENCRYPTION_ENABLED=true \
-  -e ARCHON_ENCRYPTION_MASTER_KEY \
+  -e COGENTREX_DATABASE_URL="sqlite+aiosqlite:////tmp/cogentrex-verify.db" \
+  -e COGENTREX_MEMORY_ENCRYPTION_ENABLED=true \
+  -e COGENTREX_ENCRYPTION_MASTER_KEY \
   "$IMAGE")"
 unset memory_master_key
 
@@ -173,4 +173,4 @@ printf '\n== Final portfolio benchmark preflight ==\n'
 printf '\n== Clean workspace verification ==\n'
 assert_clean_tree
 
-printf '\nAll Archon acceptance checks passed.\n'
+printf '\nAll Cogentrex acceptance checks passed.\n'

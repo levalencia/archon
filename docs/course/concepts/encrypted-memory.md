@@ -5,8 +5,8 @@
 
 ## Beginner explanation
 
-Encrypted memory is Archon's durable store for selected facts such as a user preference.
-Before a fact is written, Archon redacts it, packages content with provenance, derives a scope-specific key, and encrypts the package with authenticated encryption.
+Encrypted memory is Cogentrex's durable store for selected facts such as a user preference.
+Before a fact is written, Cogentrex redacts it, packages content with provenance, derives a scope-specific key, and encrypts the package with authenticated encryption.
 On read, it verifies authenticity before returning plaintext to the authorized application path.
 
 Encryption protects database bytes at rest from casual disclosure.
@@ -44,7 +44,7 @@ flowchart LR
 ```
 
 `ScopedEncryptedMemoryRepository._key` derives 32 bytes with HKDF-SHA256.
-Its info includes `archon/memory/v1`, `user_id`, `project_id`, and key version; its salt is `archon-scoped-memory-hkdf-v1`.
+Its info includes `cogentrex/memory/v1`, `user_id`, `project_id`, and key version; its salt is `cogentrex-scoped-memory-hkdf-v1`.
 `_aad` binds the domain label, owner, project, fact ID, and version.
 AES-GCM uses a fresh 12-byte nonce from `os.urandom` for every encryption.
 The stored envelope begins with the key-version byte followed by nonce and authenticated ciphertext.
@@ -200,7 +200,7 @@ Then explain why swapping two ciphertext blobs fails even when both were encrypt
 
 ## 30-second interview answer
 
-“Archon stores selected facts as redacted JSON encrypted with AES-GCM. It derives a 256-bit owner/project/version key from a 32-byte master key using HKDF, uses a random 12-byte nonce, and authenticates owner, project, fact ID, and version as AAD. Scope predicates authorize access, while a locked `MemoryScopeRow` makes quota mutations atomic. Tamper, wrong key, malformed data, or row swapping fails closed. This protects fact bytes at rest; it does not encrypt conversation rows, prove facts true, or protect plaintext once selected into model context.”
+“Cogentrex stores selected facts as redacted JSON encrypted with AES-GCM. It derives a 256-bit owner/project/version key from a 32-byte master key using HKDF, uses a random 12-byte nonce, and authenticates owner, project, fact ID, and version as AAD. Scope predicates authorize access, while a locked `MemoryScopeRow` makes quota mutations atomic. Tamper, wrong key, malformed data, or row swapping fails closed. This protects fact bytes at rest; it does not encrypt conversation rows, prove facts true, or protect plaintext once selected into model context.”
 
 ## Self-check
 

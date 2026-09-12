@@ -18,11 +18,11 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "docs/visual-learning/notebooklm-sources.yaml"
-DEFAULT_OUTPUT = ROOT.parent / "archon-notebooklm" / "source-packs"
+DEFAULT_OUTPUT = ROOT.parent / "cogentrex-notebooklm" / "source-packs"
 ALLOWED_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".txt"}
 FORBIDDEN_PARTS = {".env", ".git", "auth.json", "storage_state.json", "secrets"}
-OWNER_MARKER = ".archon-notebooklm-packs.json"
-OWNER_SCHEMA = "archon.notebooklm-pack-directory/v1"
+OWNER_MARKER = ".cogentrex-notebooklm-packs.json"
+OWNER_SCHEMA = "cogentrex.notebooklm-pack-directory/v1"
 PRIVATE_KEY_PATTERN = re.compile(
     r"-----BEGIN (?:ENCRYPTED |RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----"
     r"|-----BEGIN PGP PRIVATE KEY BLOCK-----"
@@ -32,9 +32,9 @@ JWT_PATTERN = re.compile(
 )
 CLOUD_KEY_PATTERN = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
 
-TRUTH_BOUNDARIES = """# Archon source priority and truth boundaries
+TRUTH_BOUNDARIES = """# Cogentrex source priority and truth boundaries
 
-This notebook contains public, repository-grounded Archon learning material.
+This notebook contains public, repository-grounded Cogentrex learning material.
 
 ## Source priority
 
@@ -50,7 +50,7 @@ This notebook contains public, repository-grounded Archon learning material.
 - Process health or dependency readiness is not proof of useful model behavior.
 - Deterministic mock output is not live provider inference.
 - Provider-live embeddings are not inferred from configuration; cite them only when the evidence source records an executed live acceptance.
-- Native provider JSON Schema parity is not claimed; Archon applies strict local validation.
+- Native provider JSON Schema parity is not claimed; Cogentrex applies strict local validation.
 - OTEL debug/stdout export is not a Jaeger or Azure Monitor deployment.
 - Approval-gated optimization is not autonomous production mutation.
 - Code existence is not automatically runtime or user-facing evidence.
@@ -183,7 +183,7 @@ def build_packs(output_dir: Path, *, require_clean: bool = True) -> dict[str, An
         tempfile.mkdtemp(prefix=f".{output_dir.name}.staging-", dir=output_dir.parent)
     )
     manifest: dict[str, Any] = {
-        "schema": "archon.notebooklm-source-packs",
+        "schema": "cogentrex.notebooklm-source-packs",
         "version": 1,
         "source_commit": _git_head(),
         "source_config": str(CONFIG.relative_to(ROOT)),
@@ -195,7 +195,7 @@ def build_packs(output_dir: Path, *, require_clean: bool = True) -> dict[str, An
         if notebook_dir.exists():
             shutil.rmtree(notebook_dir)
         notebook_dir.mkdir(parents=True)
-        truth_path = notebook_dir / "00-ARCHON-TRUTH-BOUNDARIES.md"
+        truth_path = notebook_dir / "00-COGENTREX-TRUTH-BOUNDARIES.md"
         truth_path.write_text(TRUTH_BOUNDARIES, encoding="utf-8")
         files = [
             {
@@ -225,7 +225,7 @@ def build_packs(output_dir: Path, *, require_clean: bool = True) -> dict[str, An
             "# Upload this folder to NotebookLM\n\n"
             f"Notebook title: **{notebook['title']}**\n\n"
             f"Purpose: {notebook['purpose']}\n\n"
-            "Upload `00-ARCHON-TRUTH-BOUNDARIES.md` first, then every numbered source file. "
+            "Upload `00-COGENTREX-TRUTH-BOUNDARIES.md` first, then every numbered source file. "
             "Do not upload this README as a source. Use the repository promptbook to generate artifacts.\n",
             encoding="utf-8",
         )

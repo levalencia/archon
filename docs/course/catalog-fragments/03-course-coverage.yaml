@@ -194,7 +194,7 @@
     - frontend/src/lib/components/DriftOptimizationPanel.test.ts
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Archon records deterministic descriptive drift warnings and human-approved revision recommendations. Promotion is a durable evidence record only; it does not mutate runtime configuration, train a model, claim statistical significance, or prove live-provider quality. Autonomous unapproved production optimization is deliberately deferred."
+  limitations: "Cogentrex records deterministic descriptive drift warnings and human-approved revision recommendations. Promotion is a durable evidence record only; it does not mutate runtime configuration, train a model, claim statistical significance, or prove live-provider quality. Autonomous unapproved production optimization is deliberately deferred."
 
 - id: distributed-agent-networks
   title: "Distributed agent networks"
@@ -204,7 +204,7 @@
   tests: []
   evidence:
     - docs/REMAINING-DEFERRED-GAPS.md
-  limitations: "No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. No broker, discovery, leases, distributed cancellation, deduplication, cross-node auth, or deployment evidence."
+  limitations: "No distributed agent network is implemented; Cogentrex intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. No broker, discovery, leases, distributed cancellation, deduplication, cross-node auth, or deployment evidence."
 
 - id: high-throughput-serving
   title: "High-throughput model serving"
@@ -214,7 +214,7 @@
   tests: []
   evidence:
     - docs/REMAINING-DEFERRED-GAPS.md
-  limitations: "Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. No serving engine, batching scheduler, queue policy, GPU topology, load test, or measured capacity."
+  limitations: "Cogentrex does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. No serving engine, batching scheduler, queue policy, GPU topology, load test, or measured capacity."
 
 - id: fine-tuning-vertical-adaptation
   title: "Fine-tuning and vertical adaptation"
@@ -231,8 +231,8 @@
   status: deferred
   module: docs/course/modules/14-local-operations/README.md
   sources:
-    - deploy/k8s/archon.yaml
-    - deploy/helm/archon/Chart.yaml
+    - deploy/k8s/cogentrex.yaml
+    - deploy/helm/cogentrex/Chart.yaml
   tests: []
   evidence:
     - docs/REMAINING-DEFERRED-GAPS.md

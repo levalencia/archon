@@ -64,7 +64,7 @@ class AuthRepository:
         return user if user and verify_password(password, user["password_hash"]) else None
 
     async def register_api_key(self, name: str, user_id: str) -> str:
-        key = f"archon_{secrets.token_hex(24)}"
+        key = f"cogentrex_{secrets.token_hex(24)}"
         await self.store.create_api_key(
             str(uuid.uuid4()), hashlib.sha256(key.encode()).hexdigest(), user_id, name
         )
@@ -158,7 +158,7 @@ async def get_current_user(
         if user:
             return {**user, "auth_method": "api_key"}
 
-    token = credentials.credentials if credentials else request.cookies.get("archon_token", "")
+    token = credentials.credentials if credentials else request.cookies.get("cogentrex_token", "")
     if token:
         payload = repository.verify_jwt(token)
         if payload:

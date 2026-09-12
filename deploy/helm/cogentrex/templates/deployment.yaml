@@ -20,24 +20,24 @@ spec:
           ports:
             - containerPort: {{ .Values.service.port }}
           env:
-            - name: ARCHON_DATABASE_URL
+            - name: COGENTREX_DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ .Release.Name }}-secrets
                   key: database-url
-            - name: ARCHON_REDIS_URL
+            - name: COGENTREX_REDIS_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ .Release.Name }}-secrets
                   key: redis-url
-            - name: ARCHON_JWT_SECRET
+            - name: COGENTREX_JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Release.Name }}-secrets
                   key: jwt-secret
-            - name: ARCHON_LLM_PROVIDER
+            - name: COGENTREX_LLM_PROVIDER
               value: {{ .Values.config.llmProvider | quote }}
-            - name: ARCHON_LLM_MODEL
+            - name: COGENTREX_LLM_MODEL
               value: {{ .Values.config.llmModel | quote }}
           livenessProbe:
             httpGet:

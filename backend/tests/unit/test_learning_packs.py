@@ -80,7 +80,7 @@ def test_builds_all_six_catalog_packs_with_complete_structured_artifacts(tmp_pat
         assert len(deck["slides"]) == 10
         assert all(len(slide["presenter_script"].split()) >= 75 for slide in deck["slides"])
         html = (tmp_path / deck_item["file"]).read_text().lower()
-        assert "github.com/levalencia/archon/blob/" in html
+        assert "github.com/levalencia/cogentrex/blob/" in html
         assert all(phrase not in html for phrase in builder.FORBIDDEN_PHRASES)
 
         diagram_items = [
@@ -162,7 +162,7 @@ def test_builder_refuses_nonempty_unowned_output(tmp_path: Path) -> None:
 
 def test_library_schema_requires_content_checksum_pair() -> None:
     payload = {
-        "schema": "archon.learning-library",
+        "schema": "cogentrex.learning-library",
         "version": 1,
         "generated_at": "2026-09-04T00:00:00Z",
         "source_commit": "a" * 40,

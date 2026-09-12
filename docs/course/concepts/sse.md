@@ -186,7 +186,7 @@ Expected conclusion: SSE optimizes live presentation; durable evidence and repla
 
 ## 30-second answer
 
-“Archon uses SSE as a transient, authenticated projection of typed runtime events. Every request has its own queue; safe event mappings avoid raw tool output; heartbeats keep the response active; and disconnect cleanup cancels unfinished runtime work and approvals. There is no acknowledgement or reconnect replay guarantee. The inline eval is UI telemetry, while the run ledger and `EvaluationService` provide separate durable evidence.”
+“Cogentrex uses SSE as a transient, authenticated projection of typed runtime events. Every request has its own queue; safe event mappings avoid raw tool output; heartbeats keep the response active; and disconnect cleanup cancels unfinished runtime work and approvals. There is no acknowledgement or reconnect replay guarantee. The inline eval is UI telemetry, while the run ledger and `EvaluationService` provide separate durable evidence.”
 
 ## Self-check
 

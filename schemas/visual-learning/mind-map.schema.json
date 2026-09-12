@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "const": "archon.learning.mind-map"
+      "const": "cogentrex.learning.mind-map"
     },
     "version": {
       "const": 1

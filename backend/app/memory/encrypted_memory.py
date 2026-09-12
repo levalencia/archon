@@ -6,7 +6,7 @@ using PBKDF2. Messages are encrypted with AES-GCM (Fernet) before storage.
 This fixes the single-key vulnerability found in AIAMastery Day 2:
 if one conversation key is compromised, other conversations remain safe.
 
-See: https://github.com/levalencia/production-ai-agents/articles/day-01-anatomy-of-production-agent/
+See: https://github.com/levalencia/cogentrex/articles/day-01-anatomy-of-production-agent/
 Concept: Layer 4 - Memory with per-conversation encryption
 """
 

@@ -1,19 +1,19 @@
 # Checkpoints
 
 > **Implementation status:** `implemented`
-> **Boundary:** Archon durably snapshots safe conversation/run state for inspection, replay, and fork. Restoring arbitrary workspace files, process memory, tool state, or external side effects is explicitly outside this server-product checkpoint contract.
+> **Boundary:** Cogentrex durably snapshots safe conversation/run state for inspection, replay, and fork. Restoring arbitrary workspace files, process memory, tool state, or external side effects is explicitly outside this server-product checkpoint contract.
 
 ## Beginner explanation
 
-A checkpoint names a stable boundary and saves the state that Archon explicitly knows how to persist at that boundary.
+A checkpoint names a stable boundary and saves the state that Cogentrex explicitly knows how to persist at that boundary.
 Think of it as a photograph of selected application data, not a virtual-machine image.
-Archon has two different implementations: a small in-memory teaching utility and the durable checkpoint created by the Run Ledger fork path.
+Cogentrex has two different implementations: a small in-memory teaching utility and the durable checkpoint created by the Run Ledger fork path.
 The durable path copies redacted conversation rows through a selected run-event time and records lineage metadata.
 It does **not** turn time backward, undo an email, reopen a network connection, or restore arbitrary files.
 
 ## Vocabulary and distinctions
 
-| Term | Meaning in Archon | Not the same as |
+| Term | Meaning in Cogentrex | Not the same as |
 |---|---|---|
 | checkpoint | Selected state captured at a known run-event boundary | Full machine snapshot |
 | conversation snapshot | Ordered redacted role/content items | Effective model context |
@@ -127,7 +127,7 @@ The Run Ledger records later child lineage, but it is evidence of stored control
 
 ## Trade-offs
 
-Deterministic checkpoint identity gives idempotency and deduplication, but means mutable checkpoint contents would be dangerous; Archon reuses the first persisted snapshot.
+Deterministic checkpoint identity gives idempotency and deduplication, but means mutable checkpoint contents would be dangerous; Cogentrex reuses the first persisted snapshot.
 Copying conversation rows makes branches understandable, but duplicates storage and preserves only dialogue selected by time.
 Event timestamps provide a practical boundary, but conversation writes and run events are separate records; tests define the intended ordering semantics.
 Capturing less state reduces secret and side-effect risk, but shifts setup work to the child run.
@@ -158,7 +158,7 @@ Done means you can explain why four concurrent fork calls produce one checkpoint
 
 ## 30-second interview answer
 
-“An Archon checkpoint is a bounded snapshot at an owned Run Ledger event. The durable fork path redacts conversation messages through the event cutoff, idempotently stores one `RunCheckpointRow`, then creates a new conversation and one-time fork draft. The first child run can consume that draft to record parent and source-sequence lineage. It does not restore arbitrary workspace files, process memory, tools, network state, external side effects, or proven memory hydration; `workspace_restoration` is explicitly `none`.”
+“An Cogentrex checkpoint is a bounded snapshot at an owned Run Ledger event. The durable fork path redacts conversation messages through the event cutoff, idempotently stores one `RunCheckpointRow`, then creates a new conversation and one-time fork draft. The first child run can consume that draft to record parent and source-sequence lineage. It does not restore arbitrary workspace files, process memory, tools, network state, external side effects, or proven memory hydration; `workspace_restoration` is explicitly `none`.”
 
 ## Self-check
 

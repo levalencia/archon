@@ -100,14 +100,14 @@ def prepare(args: argparse.Namespace) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     atomic_json(
         args.output_dir / "blind-key.json",
-        {"schema": "archon.hybrid-benchmark-blind-key", "version": 1, "mapping": key},
+        {"schema": "cogentrex.hybrid-benchmark-blind-key", "version": 1, "mapping": key},
     )
     for index in range(0, len(packets), args.chunk_size):
         chunk = packets[index : index + args.chunk_size]
         atomic_json(
             args.output_dir / f"blind-packet-{index // args.chunk_size + 1:02d}.json",
             {
-                "schema": "archon.hybrid-benchmark-blind-packet",
+                "schema": "cogentrex.hybrid-benchmark-blind-packet",
                 "version": 1,
                 "dimensions": rubric["primary_quality_rubric"]["dimensions"],
                 "scoring_contract": {
@@ -129,7 +129,7 @@ def load_scores(patterns: list[str]) -> list[dict[str, Any]]:
         raise ValueError("no score files matched")
     payloads = [load_json(path) for path in paths]
     for payload in payloads:
-        if payload.get("schema") != "archon.hybrid-benchmark-grades":
+        if payload.get("schema") != "cogentrex.hybrid-benchmark-grades":
             raise ValueError("unsupported score file schema")
         if not payload.get("grader_id") or not isinstance(payload.get("cases"), list):
             raise ValueError("score file requires grader_id and cases")
@@ -324,7 +324,7 @@ def analyze(args: argparse.Namespace) -> int:
         item for item in results["results"] if not args.calibration_only or item.get("calibration")
     ]
     summary = {
-        "schema": "archon.hybrid-benchmark-analysis",
+        "schema": "cogentrex.hybrid-benchmark-analysis",
         "version": 1,
         "created_from_results_sha256": hashlib.sha256(args.results.read_bytes()).hexdigest(),
         "case_count": len(rows),

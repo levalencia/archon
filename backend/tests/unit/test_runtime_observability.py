@@ -56,7 +56,7 @@ async def test_message_content_is_opt_in_redacted_and_logfire_renderable() -> No
     disabled.capture_assistant_response("private assistant output")
     await disabled.emit(AgentEvent(AgentEventKind.RUN_STOPPED, 1))
     private_root = next(
-        span for span in disabled_tracer.spans if span.name == "invoke_agent Archon"
+        span for span in disabled_tracer.spans if span.name == "invoke_agent Cogentrex"
     )
     assert "gen_ai.input.messages" not in private_root.attributes
     assert "gen_ai.output.messages" not in private_root.attributes
@@ -77,7 +77,9 @@ async def test_message_content_is_opt_in_redacted_and_logfire_renderable() -> No
     await enabled.emit(AgentEvent(AgentEventKind.RUN_STARTED, 0))
     enabled.capture_assistant_response("Show this assistant output for alice@example.com")
     await enabled.emit(AgentEvent(AgentEventKind.RUN_STOPPED, 1))
-    visible_root = next(span for span in enabled_tracer.spans if span.name == "invoke_agent Archon")
+    visible_root = next(
+        span for span in enabled_tracer.spans if span.name == "invoke_agent Cogentrex"
+    )
 
     assert json.loads(visible_root.attributes["gen_ai.input.messages"]) == [
         {
@@ -171,14 +173,14 @@ async def test_exact_event_to_metric_span_and_correlation_mapping() -> None:
     assert [span.name for span in tracer.spans] == [
         "chat model-1",
         "execute_tool search",
-        "invoke_agent Archon",
+        "invoke_agent Cogentrex",
     ]
     for span in tracer.spans:
-        assert span.attributes["archon.run.id"] == "run-1"
-        assert span.attributes["archon.conversation.id"] == "conversation-1"
-        assert span.attributes["archon.correlation.id"] == "correlation-1"
-    assert tracer.spans[-1].attributes["archon.stop_reason"] == "completed"
-    assert tracer.spans[-1].attributes["archon.tool_call_count"] == 1
+        assert span.attributes["cogentrex.run.id"] == "run-1"
+        assert span.attributes["cogentrex.conversation.id"] == "conversation-1"
+        assert span.attributes["cogentrex.correlation.id"] == "correlation-1"
+    assert tracer.spans[-1].attributes["cogentrex.stop_reason"] == "completed"
+    assert tracer.spans[-1].attributes["cogentrex.tool_call_count"] == 1
     assert {event["kind"] for event in repository.events} == {
         "run_started",
         "iteration_started",

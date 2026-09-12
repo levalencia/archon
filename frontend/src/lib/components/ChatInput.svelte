@@ -32,7 +32,7 @@
           value={mode}
           bind:group={executionMode}
           disabled={streaming}
-          title={mode === 'auto' ? 'Archon chooses Single or Team' : mode === 'single' ? 'Use one governed agent' : 'Use bounded specialist agents'}
+          title={mode === 'auto' ? 'Cogentrex chooses Single or Team' : mode === 'single' ? 'Use one governed agent' : 'Use bounded specialist agents'}
         />
         {mode[0].toUpperCase() + mode.slice(1)}
       </label>

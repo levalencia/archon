@@ -21,8 +21,8 @@
 <div class="sidebar-shell">
   <header class="brand !h-16 !px-4 !py-0">
     <a href="/" class="flex min-h-11 items-center gap-3 no-underline">
-      <span class="grid size-8 place-items-center rounded-lg bg-[var(--accent)] font-extrabold text-[#07110f]">A</span>
-      <span><strong>Archon</strong><small>Reliability workbench</small></span>
+      <img src="/brand/cogentrex-icon.svg" alt="" class="size-8" />
+      <span><strong>Cogentrex</strong><small>Build agents you can explain.</small></span>
     </a>
     <button class="icon-button mobile-only ml-auto" aria-label="Close conversations" onclick={onClose}><X size={20}/></button>
   </header>

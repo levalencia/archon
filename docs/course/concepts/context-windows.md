@@ -1,7 +1,7 @@
 # Context windows
 
 > **Implementation status:** `implemented`
-> **Boundary:** sync and SSE share token-aware compaction with output reserve, and every runtime iteration fails closed before dispatch when its request bound exceeds the configured context allowance. Without a provider tokenizer, Archon counts every known provider-visible field: role/content bytes, image references, `tool_call_id`, tool calls, tool definitions, response format and response-contract schema. It uses one token per UTF-8 byte plus framing, revalidates image data/MIME/dimensions at the request boundary, and reserves 22k tokens per validated image. This is intentionally conservative, not an exact usage estimate. Persisted provenance describes initial effective context rather than every later tool/model call.
+> **Boundary:** sync and SSE share token-aware compaction with output reserve, and every runtime iteration fails closed before dispatch when its request bound exceeds the configured context allowance. Without a provider tokenizer, Cogentrex counts every known provider-visible field: role/content bytes, image references, `tool_call_id`, tool calls, tool definitions, response format and response-contract schema. It uses one token per UTF-8 byte plus framing, revalidates image data/MIME/dimensions at the request boundary, and reserves 22k tokens per validated image. This is intentionally conservative, not an exact usage estimate. Persisted provenance describes initial effective context rather than every later tool/model call.
 
 ## Beginner explanation
 
@@ -156,7 +156,7 @@ Recent-only history is cheap and predictable but can omit an old constraint.
 Summaries compress long dialogue but introduce another lossy interpretation step.
 Putting facts in a system section improves salience but gives stale or poisoned memory more influence.
 Exact tokenization is provider-specific; a cheap estimator is portable but imprecise.
-Capturing full context provenance aids debugging but creates a high-value privacy store, so Archon currently avoids claiming it.
+Capturing full context provenance aids debugging but creates a high-value privacy store, so Cogentrex currently avoids claiming it.
 
 ## Lab versus production
 
@@ -182,7 +182,7 @@ For an advanced exercise, call `auto_compact_context` with a tiny `max_tokens` a
 
 ## 30-second interview answer
 
-“Context is the bounded input to one model call, not durable memory. Archon builds it from system and tool instructions, owner/project-scoped encrypted facts, up to 20 owner-scoped conversation rows, and the current user turn. Where compaction is wired, old dialogue may become a labeled summary while recent messages remain. Message counts and token estimates are bounds and signals, not exact provider guarantees, and Archon does not claim a complete effective-context provenance inspector.”
+“Context is the bounded input to one model call, not durable memory. Cogentrex builds it from system and tool instructions, owner/project-scoped encrypted facts, up to 20 owner-scoped conversation rows, and the current user turn. Where compaction is wired, old dialogue may become a labeled summary while recent messages remain. Message counts and token estimates are bounds and signals, not exact provider guarantees, and Cogentrex does not claim a complete effective-context provenance inspector.”
 
 ## Self-check
 

@@ -6,7 +6,7 @@ Updated: 2026-08-27
 
 ## Decision
 
-Luis explicitly chose not to deploy Archon to Azure or any public environment during this evidence cycle. No Azure infrastructure, resource group, registry, database, secret store, DNS, or billable service was created or modified.
+Luis explicitly chose not to deploy Cogentrex to Azure or any public environment during this evidence cycle. No Azure infrastructure, resource group, registry, database, secret store, DNS, or billable service was created or modified.
 
 The verified target is the production-like local Docker Compose stack documented in:
 

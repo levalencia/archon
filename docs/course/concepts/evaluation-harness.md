@@ -34,7 +34,7 @@ What decision was made from those values?
 
 ## Three implementations in this repository
 
-Archon has multiple evaluation mechanisms, and they must not be conflated.
+Cogentrex has multiple evaluation mechanisms, and they must not be conflated.
 `backend/app/eval/harness.py::EvalHarness` is an inline, transient test helper.
 It calls an `agent_fn` for each in-memory `EvalCase` and returns an in-memory `EvalSummary`.
 `backend/app/eval/evaluators.py` contains heuristic faithfulness, relevance, safety, and cost functions.
@@ -200,7 +200,7 @@ The right architecture often combines a fast transient suite, a durable regressi
 
 ## 30-second interview answer
 
-“An evaluation harness makes a measurement procedure repeatable by binding cases, outputs, checks, aggregation, and a gate. Archon has a transient inline `EvalHarness` and lexical heuristics, but its stronger path is `EvaluationService`, which evaluates completed owner/project-scoped Run Ledger trajectories without calling a model, retriever, or tool and persists the result. That durable lineage supports regression auditing. It still uses narrow deterministic checks, so passing it is implementation evidence, not broad model-quality proof.”
+“An evaluation harness makes a measurement procedure repeatable by binding cases, outputs, checks, aggregation, and a gate. Cogentrex has a transient inline `EvalHarness` and lexical heuristics, but its stronger path is `EvaluationService`, which evaluates completed owner/project-scoped Run Ledger trajectories without calling a model, retriever, or tool and persists the result. That durable lineage supports regression auditing. It still uses narrow deterministic checks, so passing it is implementation evidence, not broad model-quality proof.”
 
 ## Self-checks
 

@@ -47,9 +47,9 @@ def _bool(value: str, key: str) -> bool:
 
 
 def parse_destinations(env: Mapping[str, str]) -> tuple[str, ...]:
-    if "ARCHON_OTEL_DESTINATIONS" not in env:
+    if "COGENTREX_OTEL_DESTINATIONS" not in env:
         return ("debug",)
-    raw = env.get("ARCHON_OTEL_DESTINATIONS", "")
+    raw = env.get("COGENTREX_OTEL_DESTINATIONS", "")
     destinations = tuple(part.strip().lower() for part in raw.split(",") if part.strip())
     if not destinations:
         raise ValueError("at least one OTel destination is required")
@@ -103,10 +103,10 @@ def generate_config(env: Mapping[str, str]) -> str:
             }
             pipeline_exporters.append("otlp/tempo")
         else:
-            endpoint = _required(env, "ARCHON_OTEL_GENERIC_ENDPOINT", destination)
+            endpoint = _required(env, "COGENTREX_OTEL_GENERIC_ENDPOINT", destination)
             insecure = _bool(
-                env.get("ARCHON_OTEL_GENERIC_INSECURE", "false"),
-                "ARCHON_OTEL_GENERIC_INSECURE",
+                env.get("COGENTREX_OTEL_GENERIC_INSECURE", "false"),
+                "COGENTREX_OTEL_GENERIC_INSECURE",
             )
             if insecure and not _LOCAL_ENDPOINT.fullmatch(endpoint):
                 raise ValueError(

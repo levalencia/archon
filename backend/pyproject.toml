@@ -1,7 +1,7 @@
 [project]
-name = "archon"
+name = "cogentrex"
 version = "0.1.0"
-description = "Archon: Production AI Agent Webapp"
+description = "Cogentrex: Production AI Agent Webapp"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
@@ -64,7 +64,7 @@ markers = [
     "unit: Unit tests (no external deps)",
     "integration: Integration tests (needs Docker services)",
     "security: Security probe tests",
-    "live: Live API tests (opt-in, run with ARCHON_LIVE_TESTS=1)",
+    "live: Live API tests (opt-in, run with COGENTREX_LIVE_TESTS=1)",
 ]
 
 [tool.ruff]

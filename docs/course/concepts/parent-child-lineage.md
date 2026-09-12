@@ -137,7 +137,7 @@ A trace span link is useful for live observability but may expire or be sampled.
 An event-only `parent_id` can work but makes referential integrity and direct queries harder.
 Embedding child output in the parent record hides independent lifecycle and retries.
 A durable database edge costs schema and retention complexity but remains queryable after transient streams disappear.
-Archon uses both the edge and ordered child events for inspectable association.
+Cogentrex uses both the edge and ordered child events for inspectable association.
 
 ## Exercise: test an attempted foreign edge
 
@@ -152,7 +152,7 @@ Expected conclusion: the database and repository preserve a scoped association; 
 
 ## 30-second answer
 
-“Archon gives verifier children a durable `parent_run_id`. `ensure_child_run` locks and validates the parent under the same owner and project before a conflict-safe insert, then verifies any existing child has identical identity. The foreign key prevents orphaning and events record lifecycle. This proves scoped traceability and idempotency—not that the child improved the answer.”
+“Cogentrex gives verifier children a durable `parent_run_id`. `ensure_child_run` locks and validates the parent under the same owner and project before a conflict-safe insert, then verifies any existing child has identical identity. The foreign key prevents orphaning and events record lifecycle. This proves scoped traceability and idempotency—not that the child improved the answer.”
 
 ## Self-check
 

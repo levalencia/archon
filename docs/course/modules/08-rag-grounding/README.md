@@ -17,7 +17,7 @@ You can trace ingest/query, name the actual storage backend, separate five quali
 
 ## Precision vocabulary
 
-| Dimension | Question | Archon signal |
+| Dimension | Question | Cogentrex signal |
 |---|---|---|
 | Retrieval relevance | Did search return useful chunks for the query? | cosine `score`; not truth |
 | Groundedness | Are answer claims attached to retrieved evidence and accepted? | `grounded`, supported/unsupported counts |
@@ -138,7 +138,7 @@ The final benchmark uses fake provider output and deterministic mock embeddings.
 
 ## Interview answer
 
-“Archon ingests overlapping chunks, validates embeddings, and stores JSON vectors in SQL. Query retrieval is owner/project scoped and computes cosine similarity in Python—not pgvector. The grounded workflow asks for atomic JSON claims with evidence IDs, rejects unknown or weakly supported claims using hash, lexical, number, and polarity checks, then records safe evidence metadata in the Run Ledger. Tests prove control invariants with mocks; they do not establish live model or retrieval quality.”
+“Cogentrex ingests overlapping chunks, validates embeddings, and stores JSON vectors in SQL. Query retrieval is owner/project scoped and computes cosine similarity in Python—not pgvector. The grounded workflow asks for atomic JSON claims with evidence IDs, rejects unknown or weakly supported claims using hash, lexical, number, and polarity checks, then records safe evidence metadata in the Run Ledger. Tests prove control invariants with mocks; they do not establish live model or retrieval quality.”
 
 ## Self-check
 

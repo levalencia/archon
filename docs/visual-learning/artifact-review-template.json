@@ -1,12 +1,12 @@
 {
-  "schema": "archon.learning-artifact-review",
+  "schema": "cogentrex.learning-artifact-review",
   "version": 1,
   "artifact_id": "<artifact id>",
   "pack_id": "<learning pack id>",
   "source_commit": "<40-character git commit>",
   "source_checksums": {},
   "prompt_version": "<version>",
-  "generator_profile": "archon-learning",
+  "generator_profile": "cogentrex-learning",
   "language": "en",
   "generated_at": "<UTC ISO-8601 timestamp>",
   "automated_checks": {

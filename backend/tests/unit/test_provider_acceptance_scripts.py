@@ -420,7 +420,7 @@ def test_anthropic_sdk_usage_allows_optional_null_cache_counters() -> None:
 
 
 @pytest.mark.skipif(
-    os.getenv("ARCHON_RUN_LIVE_ACCEPTANCE") != "1",
+    os.getenv("COGENTREX_RUN_LIVE_ACCEPTANCE") != "1",
     reason="requires explicit live acceptance opt-in",
 )
 def test_live_acceptance_requires_operator_invocation() -> None:

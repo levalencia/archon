@@ -4,7 +4,7 @@
 
 A typed runtime represents messages, model responses, tool calls, usage, events, budgets, and outcomes as named validated values instead of loosely related dictionaries and magic strings.
 Types make illegal states harder to construct and responsibilities easier to inspect.
-Archon implements a **custom typed runtime**; it is not LangChain, LangGraph, or another agent framework.
+Cogentrex implements a **custom typed runtime**; it is not LangChain, LangGraph, or another agent framework.
 
 ## Prerequisites and vocabulary
 
@@ -126,7 +126,7 @@ Tests that mutate retained references are strong evidence for snapshot ordering 
 Raw dictionaries are flexible and easy to serialize but defer mistakes and encourage undocumented keys.
 Pydantic adds parsing, JSON-schema generation, and rich validation at runtime cost and dependency coupling.
 Protobuf/Avro provide versioned cross-language contracts but add code generation and migration overhead.
-Third-party agent frameworks offer established model/tool types; Archon's custom values make its security and budget semantics explicit but require maintained adapters.
+Third-party agent frameworks offer established model/tool types; Cogentrex's custom values make its security and budget semantics explicit but require maintained adapters.
 
 ## Lab versus production
 
@@ -136,7 +136,7 @@ Typed values improve the design vocabulary; they do not replace integration test
 
 ## 30-second interview answer
 
-“Archon's custom typed runtime uses frozen dataclasses and enums for `Message`, native `ToolCall`, `ModelResponse`, `TokenUsage`, events, budgets, stop reasons, and results, connected by Protocol-based adapters. Constructors reject selected invalid states, and the runtime deep-snapshots nested provider data before awaits or callbacks. This prevents many stringly typed and mutation bugs, but Python hints and shallow freezing are not security boundaries; validation, policy, sanitization, and behavior tests remain necessary.”
+“Cogentrex's custom typed runtime uses frozen dataclasses and enums for `Message`, native `ToolCall`, `ModelResponse`, `TokenUsage`, events, budgets, stop reasons, and results, connected by Protocol-based adapters. Constructors reject selected invalid states, and the runtime deep-snapshots nested provider data before awaits or callbacks. This prevents many stringly typed and mutation bugs, but Python hints and shallow freezing are not security boundaries; validation, policy, sanitization, and behavior tests remain necessary.”
 
 ## Self-check questions
 
@@ -145,7 +145,7 @@ Typed values improve the design vocabulary; they do not replace integration test
 3. **Why is a frozen dataclass insufficient?** Nested mutable objects may still change.
 4. **What closes terminal outcomes?** `StopReason` in every `AgentResult`.
 5. **Do Protocols validate adapters at runtime?** Generally no; only selected runtime-checkable shape tests exist.
-6. **Is this runtime framework-based?** No; it is Archon's custom typed runtime.
+6. **Is this runtime framework-based?** No; it is Cogentrex's custom typed runtime.
 
 ## Related modules and concepts
 

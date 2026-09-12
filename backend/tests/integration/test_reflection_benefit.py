@@ -20,7 +20,7 @@ class TestReflectionBenefit:
 
         report = measure_reflection_benefit(fixture)
 
-        assert report.dataset_id == "archon-reflection-benefit"
+        assert report.dataset_id == "cogentrex-reflection-benefit"
         assert report.version == "1.1.0"
         assert report.evidence_kind == "recorded_synthetic_fixture"
         assert report.runtime_executed is False

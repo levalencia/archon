@@ -28,7 +28,7 @@ def test_runner_image_installs_seccomp_runtime() -> None:
 
 
 def short_socket(name: str) -> Path:
-    return Path("/tmp") / f"archon-{name}-{uuid.uuid4().hex[:8]}.sock"
+    return Path("/tmp") / f"cogentrex-{name}-{uuid.uuid4().hex[:8]}.sock"
 
 
 @pytest.mark.asyncio
@@ -419,7 +419,7 @@ def test_compose_runner_boundary() -> None:
     assert runner["user"] == "10001:10001"
     assert runner["pids_limit"] == 64 and runner["mem_limit"] == "128m"
     assert not any("docker.sock" in mount or ".:/" in mount for mount in runner["volumes"])
-    assert backend["environment"]["ARCHON_EXECUTION_ENABLED"] == "true"
+    assert backend["environment"]["COGENTREX_EXECUTION_ENABLED"] == "true"
     assert not any("docker.sock" in mount for mount in backend["volumes"])
     main_source = (Path(__file__).parents[2] / "app" / "main.py").read_text()
     assert "DockerSandboxExecutor" not in main_source

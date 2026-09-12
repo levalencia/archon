@@ -1,27 +1,27 @@
-# POCOCK-SKILLS-ADDITIONS.md — Matt Pocock's Engineering Skills Applied to Archon
+# POCOCK-SKILLS-ADDITIONS.md — Matt Pocock's Engineering Skills Applied to Cogentrex
 
 > **Audience:** Contributors exploring engineering discipline patterns considered during planning.
-> **Purpose:** Research notes — improvement ideas from Matt Pocock's engineering skills repo, mapped to the original Archon plan.
+> **Purpose:** Research notes — improvement ideas from Matt Pocock's engineering skills repo, mapped to the original Cogentrex plan.
 > **Status:** Historical research input. Current capability status lives in the acceptance manifest and implementation evidence.
 
 **Source:** 10 skills from `github.com/mattpocock/skills` (engineering + productivity)
-**Purpose:** Concrete improvements to Archon webapp plan using battle-tested engineering disciplines
+**Purpose:** Concrete improvements to Cogentrex webapp plan using battle-tested engineering disciplines
 **Created:** 2026-08-21
 
 ---
 
 ## Executive Summary
 
-Matt Pocock's skills repo codifies **engineering disciplines** — not tools or frameworks, but *how* to think, build, review, and maintain software. After analyzing all 10 skills against the Archon plan (WEBAPP-PLAN.md + GOD-MODE-ADDITIONS.md), here are the highest-impact additions missing from our current approach:
+Matt Pocock's skills repo codifies **engineering disciplines** — not tools or frameworks, but *how* to think, build, review, and maintain software. After analyzing all 10 skills against the Cogentrex plan (WEBAPP-PLAN.md + GOD-MODE-ADDITIONS.md), here are the highest-impact additions missing from our current approach:
 
-1. **Deep Module Design** — Archon's module boundaries are layer-organized but not depth-optimized
+1. **Deep Module Design** — Cogentrex's module boundaries are layer-organized but not depth-optimized
 2. **Vertical-Slice TDD** — Plan mentions TDD but doesn't enforce one-test-one-impl cadence
 3. **Two-Axis Code Review** — No review discipline defined; Pocock's Standards+Spec split is immediately actionable
 4. **Feedback-Loop Bug Diagnosis** — No bug workflow defined; critical for production maintenance
 5. **Domain Modeling as Living Practice** — Plan lacks CONTEXT.md / glossary discipline
 6. **Throwaway Prototypes** — No prototype workflow; critical for UI/UX and state model exploration
 7. **Grilling for Design Decisions** — No structured challenge process for architecture choices
-8. **Writing for Agents** — Archon's agent prompts need the same rigor as code
+8. **Writing for Agents** — Cogentrex's agent prompts need the same rigor as code
 9. **Architecture Improvement Scanning** — No continuous codebase health discipline
 
 ---
@@ -43,12 +43,12 @@ Matt Pocock's skills repo codifies **engineering disciplines** — not tools or 
 
 ### What's Missing from Current Plan
 
-**Gap 1: Archon's modules are organized by layer, not by depth.** The hexagonal architecture from GOD-MODE-ADDITIONS organizes by ports/adapters/domain, but doesn't ask "is each module *deep*?"
+**Gap 1: Cogentrex's modules are organized by layer, not by depth.** The hexagonal architecture from GOD-MODE-ADDITIONS organizes by ports/adapters/domain, but doesn't ask "is each module *deep*?"
 
 **Concrete additions:**
 
 ```
-For every module in Archon, apply the deletion test:
+For every module in Cogentrex, apply the deletion test:
   "If I delete this module, does complexity vanish (shallow/pass-through)
    or reappear across N callers (deep, earning its keep)?"
 
@@ -112,9 +112,9 @@ RIGHT (vertical slice):
   Each slice: one seam, one test, one implementation.
 ```
 
-**Gap 2: No pre-agreed seams.** TDD skill says "write down the seams under test and confirm them before writing any test." Archon needs an explicit seam map.
+**Gap 2: No pre-agreed seams.** TDD skill says "write down the seams under test and confirm them before writing any test." Cogentrex needs an explicit seam map.
 
-**Seam map for Archon:**
+**Seam map for Cogentrex:**
 
 ```markdown
 ## Pre-Agreed Test Seams
@@ -195,7 +195,7 @@ A change can pass one axis and fail the other. Reporting them separately prevent
 
 ### Phase: Production Maintenance & Debugging
 
-**What's missing:** No bug workflow. When Archon breaks in production, what's the process?
+**What's missing:** No bug workflow. When Cogentrex breaks in production, what's the process?
 
 **Add to project documentation:**
 
@@ -240,7 +240,7 @@ Format: "If <X> is cause, then <changing Y> will make bug disappear"
 - [ ] Hypothesis stated in commit message
 ```
 
-**Archon-specific application:** The OTel trace viewer we're building becomes a **diagnostic superpower** — replay captured traces as bug reproduction loops.
+**Cogentrex-specific application:** The OTel trace viewer we're building becomes a **diagnostic superpower** — replay captured traces as bug reproduction loops.
 
 ---
 
@@ -256,7 +256,7 @@ Actively build and sharpen the project's domain model. Challenge terms, invent e
 **Create `/CONTEXT.md` in Phase 0:**
 
 ```markdown
-# CONTEXT.md — Archon Domain Glossary
+# CONTEXT.md — Cogentrex Domain Glossary
 
 ## Core Concepts
 
@@ -460,7 +460,7 @@ Agent tool descriptions ARE context pointers. They must:
 - Delete no-ops (instructions the model already follows by default)
 - Hunt for negation ("don't do X") and replace with positive ("do Y instead")
 
-### 5. Apply to Archon Agent Prompts
+### 5. Apply to Cogentrex Agent Prompts
 The Coordinator agent's system prompt should be written as a skill document:
 - Steps: how to handle a query (decompose → retrieve → validate → synthesize)
 - Reference: when to use each tool, quality criteria
@@ -522,7 +522,7 @@ For each candidate:
 ### Core Discipline
 Build from spec with TDD at seams. Run typechecking regularly. Review with two-axis code review when done.
 
-### Archon Implementation Cadence
+### Cogentrex Implementation Cadence
 
 ```markdown
 ## Per-Feature Implementation Loop

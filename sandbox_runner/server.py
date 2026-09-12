@@ -16,7 +16,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any, cast
 
-SOCKET_PATH = Path(os.environ.get("SANDBOX_SOCKET_PATH", "/run/archon-sandbox/runner.sock"))
+SOCKET_PATH = Path(os.environ.get("SANDBOX_SOCKET_PATH", "/run/cogentrex-sandbox/runner.sock"))
 WORK_DIR = Path(os.environ.get("SANDBOX_WORK_DIR", "/work"))
 MAX_FRAME_BYTES = 1_100_000
 MAX_INPUT_BYTES = 1_048_576

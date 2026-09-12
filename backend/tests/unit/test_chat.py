@@ -95,7 +95,7 @@ class TestChatEndpoint:
     def test_basic_chat(self, client: TestClient) -> None:
         response = client.post(
             "/api/chat",
-            json={"message": "Hello, Archon!"},
+            json={"message": "Hello, Cogentrex!"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -175,7 +175,7 @@ class TestChatEndpoint:
         )
         assert response.status_code == 200
         body = response.json()
-        assert any(item["name"] == "archon.code-review" for item in body["skills_used"])
+        assert any(item["name"] == "cogentrex.code-review" for item in body["skills_used"])
         assert len(body["skills_used"]) <= 3
 
         provenance = client.get(f"/api/runs/{body['run_id']}/effective-context")
@@ -278,7 +278,7 @@ class TestChatStreamEndpoint:
         )
         assert response.status_code == 200
         assert "event: skill" in response.text
-        assert "archon.code-review" in response.text
+        assert "cogentrex.code-review" in response.text
 
 
 class TestChatHistory:

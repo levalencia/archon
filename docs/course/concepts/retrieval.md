@@ -49,7 +49,7 @@ flowchart TD
   RR -. does not guarantee .-> F
 ```
 
-## Archon implementation
+## Cogentrex implementation
 
 The durable backend is `backend/app/services/sql_json_vector_store.py::SqlJsonVectorStore`.
 Its public backend identity is `sql-json-cosine`.
@@ -160,7 +160,7 @@ Explain why the retrieval score alone cannot decide those answer-level propertie
 
 ## 30-second interview answer
 
-“Retrieval selects candidate evidence; it does not certify the answer. Archon stores vectors as SQL JSON, applies owner/project and optional document predicates in SQL, validates hashes and vectors, then computes cosine in Python and returns thresholded top-k results. It is explicitly not pgvector. This is inspectable for a bounded lab, while production needs measured recall, scalable indexing, and the same fail-closed scope guarantees.”
+“Retrieval selects candidate evidence; it does not certify the answer. Cogentrex stores vectors as SQL JSON, applies owner/project and optional document predicates in SQL, validates hashes and vectors, then computes cosine in Python and returns thresholded top-k results. It is explicitly not pgvector. This is inspectable for a bounded lab, while production needs measured recall, scalable indexing, and the same fail-closed scope guarantees.”
 
 ## Self-checks
 

@@ -238,7 +238,7 @@ The local stack and DR drill have revision-scoped observations. Their recovery v
 
 ### 30-second answer
 
-> Archon has a reproducible local Compose target with loopback-only ingress, migrations and dependency-aware readiness. Recovery uses a private PostgreSQL custom dump, checksum/metadata, clean-target guard and exact checks. The canonical evidence page records one drill's recovery observations and one revision's CI result; neither is an objective, SLO, or public deployment claim.
+> Cogentrex has a reproducible local Compose target with loopback-only ingress, migrations and dependency-aware readiness. Recovery uses a private PostgreSQL custom dump, checksum/metadata, clean-target guard and exact checks. The canonical evidence page records one drill's recovery observations and one revision's CI result; neither is an objective, SLO, or public deployment claim.
 
 ### Deeper follow-ups
 

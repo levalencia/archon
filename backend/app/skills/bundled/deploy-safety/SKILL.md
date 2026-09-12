@@ -2,7 +2,7 @@
 name: deploy-safety
 description: Plan safe, reversible deployments
 version: 1.0.0
-tags: [deploy-safety, archon]
+tags: [deploy-safety, cogentrex]
 references: [references/checklist.md]
 triggers: ['deploy', 'release', 'rollout']
 negative_triggers: ['do not deploy', 'no release']

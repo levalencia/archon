@@ -1,7 +1,7 @@
 # High-throughput model serving
 
 > **Implementation status:** `deferred`
-> **Status boundary:** Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability.
+> **Status boundary:** Cogentrex does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability.
 > **Reviewed boundary:** S8.10 documentation candidate based at `440f08e`; no final gate claimed
 > **Used by module:** [Module 14-local-operations](../modules/14-local-operations/README.md)
 > **Catalog ID:** `high-throughput-serving`
@@ -35,10 +35,10 @@ sequenceDiagram
     Batcher->>ModelServers: scheduled batch
     ModelServers-->>Client: streamed tokens
     Metrics->>Autoscaler: measured saturation
-    Note over Client,Autoscaler: Deferred; no Archon benchmark
+    Note over Client,Autoscaler: Deferred; no Cogentrex benchmark
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 This is an expected architecture, not a source walkthrough. No serving engine, batching scheduler, queue policy, GPU topology, load test, or measured capacity. The diagram and sequence define the boundary a future design would need; they do not imply scheduled work.
 
@@ -46,7 +46,7 @@ This is an expected architecture, not a source walkthrough. No serving engine, b
 
 | Source symbol | Role and boundary |
 |---|---|
-| None | No Archon implementation is claimed for this concept. |
+| None | No Cogentrex implementation is claimed for this concept. |
 
 ### Tests
 
@@ -75,11 +75,11 @@ Code-reading exercise: search the repository for the missing components named in
 
 ## Lab vs production
 
-The status remains **deferred** at `6e3e13f`. Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **deferred** at `6e3e13f`. Cogentrex does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 
-> High-throughput serving maximizes useful requests or tokens per second while controlling latency and memory. Techniques include continuous batching, request admission, KV-cache management, and backpressure. A web API that calls an external model is not itself a high-throughput model server. In Archon the honest status is **deferred**: Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability.
+> High-throughput serving maximizes useful requests or tokens per second while controlling latency and memory. Techniques include continuous batching, request admission, KV-cache management, and backpressure. A web API that calls an external model is not itself a high-throughput model server. In Cogentrex the honest status is **deferred**: Cogentrex does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability.
 
 ## Self-check
 

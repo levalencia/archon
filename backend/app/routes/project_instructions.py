@@ -34,7 +34,7 @@ class InstructionCreate(StrictModel):
 
 class ScanRequest(StrictModel):
     target_path: str = Field(default=".", max_length=1000)
-    family: Literal["archon", "agents", "claude"] = "archon"
+    family: Literal["cogentrex", "agents", "claude"] = "cogentrex"
 
 
 class InstructionItem(StrictModel):

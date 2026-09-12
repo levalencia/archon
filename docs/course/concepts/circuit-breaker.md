@@ -19,7 +19,7 @@ A controlled probe avoids a recovery stampede.
 The tradeoff is intentional false rejection while the breaker believes the dependency is unhealthy.
 That tradeoff must be observable and scoped to the right dependency and failure class.
 
-## Exact Archon state machine
+## Exact Cogentrex state machine
 
 ```mermaid
 stateDiagram-v2
@@ -197,7 +197,7 @@ Health checks can inform routing but should not create synchronized probe storms
 
 ## 30-second interview answer
 
-“Archon's breaker is a process-local, lock-protected state machine. Closed calls run concurrently, ordinary exceptions count toward the threshold, open calls fail fast, and after a monotonic recovery interval exactly one tokenized half-open probe runs. Probe success closes, while failure or cancellation reopens and starts a new wait. Epoch and generation guards prevent stale concurrent success from erasing newer failures. The provider wrapper emits a sanitized typed error, but the breaker neither retries nor coordinates replicas.”
+“Cogentrex's breaker is a process-local, lock-protected state machine. Closed calls run concurrently, ordinary exceptions count toward the threshold, open calls fail fast, and after a monotonic recovery interval exactly one tokenized half-open probe runs. Probe success closes, while failure or cancellation reopens and starts a new wait. Epoch and generation guards prevent stale concurrent success from erasing newer failures. The provider wrapper emits a sanitized typed error, but the breaker neither retries nor coordinates replicas.”
 
 ## Self-checks
 

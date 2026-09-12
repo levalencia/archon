@@ -10,7 +10,7 @@ Each run has one summary row and an ordered sequence of event rows.
 The sequence is append-only while the run is active and frozen after terminal completion.
 
 “Flight recorder” does not mean “record everything.”
-Archon deliberately excludes raw prompts, hidden reasoning, tool arguments/results, evidence quotes, and provider exception text.
+Cogentrex deliberately excludes raw prompts, hidden reasoning, tool arguments/results, evidence quotes, and provider exception text.
 It keeps safe metadata such as event kind, sequence, iteration, IDs, hashes, counts, statuses, reason codes, token totals, and latency.
 
 ## Data model
@@ -224,7 +224,7 @@ Explain how the `UPDATE ... RETURNING` allocator and same-transaction insert pre
 
 ## 30-second interview answer
 
-“Archon's Run Ledger is an owner-scoped durable run summary plus append-only, run-local ordered safe events. `RunRepository.append` allowlists and redacts payload metadata, atomically increments `RunRow.next_sequence`, inserts the event, and guardedly freezes terminal status and metrics. Reads validate schema and payload shape, and retention deletes whole terminal trajectories. It records inspectable control evidence without raw prompts, chain-of-thought, tool arguments/results, or evidence quotes. It is not WORM storage, a global clock, re-execution, or proof that an event's semantic claim is true.”
+“Cogentrex's Run Ledger is an owner-scoped durable run summary plus append-only, run-local ordered safe events. `RunRepository.append` allowlists and redacts payload metadata, atomically increments `RunRow.next_sequence`, inserts the event, and guardedly freezes terminal status and metrics. Reads validate schema and payload shape, and retention deletes whole terminal trajectories. It records inspectable control evidence without raw prompts, chain-of-thought, tool arguments/results, or evidence quotes. It is not WORM storage, a global clock, re-execution, or proof that an event's semantic claim is true.”
 
 ## Self-check
 

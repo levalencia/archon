@@ -6,7 +6,7 @@ Trace one request without treating UI events, logs, metrics, traces, or database
 
 ## 1. Identity and middleware
 
-[`AuthRepository`](../../../backend/app/security/auth.py) stores scrypt password hashes, hashes API keys before persistence, and signs/validates exact HS256 JWT headers, subjects, and expiry. `get_current_user` accepts API key, bearer, or `archon_token` cookie and re-loads the durable user. Invalid credentials return 401.
+[`AuthRepository`](../../../backend/app/security/auth.py) stores scrypt password hashes, hashes API keys before persistence, and signs/validates exact HS256 JWT headers, subjects, and expiry. `get_current_user` accepts API key, bearer, or `cogentrex_token` cookie and re-loads the durable user. Invalid credentials return 401.
 
 [`CSRFMiddleware`](../../../backend/app/middleware/security.py) protects mutating cookie-authenticated requests; bearer/API-key clients have a different CSRF boundary. [`CorrelationIdMiddleware`](../../../backend/app/middleware/correlation.py) sets a request `ContextVar` and echoes `X-Correlation-ID`.
 
@@ -43,7 +43,7 @@ sequenceDiagram
 
 [`CompositeEventSink.emit`](../../../backend/app/observability/runtime_events.py) makes an independently redacted copy before operational or persistent use. It:
 
-- starts/finishes `invoke_agent Archon`, `chat {model}`, and `execute_tool {name}` spans;
+- starts/finishes `invoke_agent Cogentrex`, `chat {model}`, and `execute_tool {name}` spans;
 - increments process-local counters/latency samples;
 - writes a structured `runtime_event` and owner-scoped buffer entry;
 - appends a sanitized Run Ledger event;

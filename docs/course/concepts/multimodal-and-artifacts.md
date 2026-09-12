@@ -8,7 +8,7 @@
 
 ## Beginner explanation
 
-An image string is not trusted merely because it starts with `data:image`. Archon caps the encoded request, decodes strict base64, inspects actual image bytes, compares the declared MIME type, rejects oversized dimensions before pixel decoding, strips metadata by re-encoding pixels, and caps the sanitized output. Only then may the image enter a model request.
+An image string is not trusted merely because it starts with `data:image`. Cogentrex caps the encoded request, decodes strict base64, inspects actual image bytes, compares the declared MIME type, rejects oversized dimensions before pixel decoding, strips metadata by re-encoding pixels, and caps the sanitized output. Only then may the image enter a model request.
 
 Artifacts are a separate output concern. This note focuses on provider-bound image inputs; existing artifact ownership and inert-rendering controls remain independently tested.
 
@@ -68,7 +68,7 @@ The frontend already supplies image Data URIs through the authenticated workbenc
 
 ## Interview answer
 
-> Archon treats images as hostile input. Sync and SSE routes validate strict Data URIs, decoded bytes, actual MIME, dimensions and pixel budgets before persistence. The service then re-encodes pixels to strip metadata, caps the sanitized result and passes only that value to a capability-aware provider adapter. Deterministic tests cover OpenAI, Anthropic and Ollama builders; live provider behavior and durable media storage remain explicit gaps.
+> Cogentrex treats images as hostile input. Sync and SSE routes validate strict Data URIs, decoded bytes, actual MIME, dimensions and pixel budgets before persistence. The service then re-encodes pixels to strip metadata, caps the sanitized result and passes only that value to a capability-aware provider adapter. Deterministic tests cover OpenAI, Anthropic and Ollama builders; live provider behavior and durable media storage remain explicit gaps.
 
 ## Self-check
 

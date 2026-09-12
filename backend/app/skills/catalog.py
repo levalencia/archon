@@ -134,7 +134,7 @@ class AgentGodModeCatalogProvider:
         self._safe_executable: Path | None = None
         self._execution_identity: tuple[int, int] | None = None
         if executable:
-            execution_dir = tempfile.mkdtemp(prefix="archon-skill-catalog-")
+            execution_dir = tempfile.mkdtemp(prefix="cogentrex-skill-catalog-")
             safe_executable = Path(execution_dir) / "catalog"
             copy_fd = os.open(safe_executable, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o500)
             with os.fdopen(copy_fd, "wb") as stream:

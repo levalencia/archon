@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "const": "archon.learning-library"
+      "const": "cogentrex.learning-library"
     },
     "version": {
       "const": 1

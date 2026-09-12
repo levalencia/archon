@@ -57,7 +57,7 @@ class RedisMemory:
         """Store a message in the hot tier."""
         if self._redis:
             try:
-                key = f"archon:conv:{conversation_id}:messages"
+                key = f"cogentrex:conv:{conversation_id}:messages"
                 await self._redis.rpush(key, json.dumps(message))
                 # Trim to max_messages
                 await self._redis.ltrim(key, -self.max_messages, -1)
@@ -77,7 +77,7 @@ class RedisMemory:
         """Retrieve messages from hot tier."""
         if self._redis:
             try:
-                key = f"archon:conv:{conversation_id}:messages"
+                key = f"cogentrex:conv:{conversation_id}:messages"
                 raw = await self._redis.lrange(key, -limit, -1)
                 return [json.loads(r) for r in raw]
             except Exception as exc:
@@ -93,7 +93,7 @@ class RedisMemory:
         """Delete conversation from hot tier."""
         if self._redis:
             try:
-                key = f"archon:conv:{conversation_id}:messages"
+                key = f"cogentrex:conv:{conversation_id}:messages"
                 await self._redis.delete(key)
                 return
             except Exception:

@@ -87,14 +87,14 @@ async def test_otel_exporter_receives_spans_when_wired():
     # Exporter should receive a model span and an OTel GenAI agent invocation.
     exported_names = [s.name for s in exporter.exported]
     assert "chat test-model" in exported_names
-    assert "invoke_agent Archon" in exported_names
-    agent_span = next(s for s in exporter.exported if s.name == "invoke_agent Archon")
+    assert "invoke_agent Cogentrex" in exported_names
+    agent_span = next(s for s in exporter.exported if s.name == "invoke_agent Cogentrex")
     assert agent_span.attributes["gen_ai.operation.name"] == "invoke_agent"
-    assert agent_span.attributes["gen_ai.agent.name"] == "Archon"
+    assert agent_span.attributes["gen_ai.agent.name"] == "Cogentrex"
     assert agent_span.attributes["gen_ai.agent.call.id"] == sink.run_id
     assert agent_span.attributes["gen_ai.conversation.id"] == "conv-otel-1"
     assert agent_span.attributes["gen_ai.request.model"] == "test-model"
-    assert agent_span.attributes["archon.provider"] == "foundry"
+    assert agent_span.attributes["cogentrex.provider"] == "foundry"
     assert json.loads(agent_span.attributes["gen_ai.tool.definitions"]) == [
         {
             "type": "function",
@@ -173,7 +173,7 @@ async def test_otel_exporter_receives_tool_spans():
     assert tool_span.attributes["gen_ai.tool.name"] == "web_search"
     assert tool_span.attributes["gen_ai.tool.type"] == "function"
     assert tool_span.attributes["gen_ai.tool.call.id"] == "call-42"
-    assert tool_span.attributes["gen_ai.agent.name"] == "Archon"
+    assert tool_span.attributes["gen_ai.agent.name"] == "Cogentrex"
     assert tool_span.attributes["gen_ai.agent.call.id"] == sink.run_id
     assert tool_span.attributes["gen_ai.conversation.id"] == "conv-otel-2"
     assert tool_span.attributes["logfire.msg"] == "running tool: web_search"
@@ -212,4 +212,4 @@ async def test_no_exporter_means_no_export():
 
     # Tracer still collects spans even without exporter
     assert len(tracer.spans) >= 1
-    assert any(s.name == "invoke_agent Archon" for s in tracer.spans)
+    assert any(s.name == "invoke_agent Cogentrex" for s in tracer.spans)

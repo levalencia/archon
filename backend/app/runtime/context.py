@@ -93,7 +93,7 @@ def derive_context_asset_hmac_key(application_secret: str) -> bytes:
         raise ValueError("context asset fingerprint key is unavailable")
     return hmac.new(
         application_secret.encode("utf-8"),
-        b"archon/context-asset-fingerprint-key/v1",
+        b"cogentrex/context-asset-fingerprint-key/v1",
         hashlib.sha256,
     ).digest()
 
@@ -116,7 +116,7 @@ def _asset_fingerprints(
     return tuple(
         hmac.new(
             key,
-            b"archon/context-asset/v1\0" + scope + b"\0" + image.encode("utf-8"),
+            b"cogentrex/context-asset/v1\0" + scope + b"\0" + image.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
         for image in images

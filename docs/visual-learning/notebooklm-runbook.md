@@ -1,11 +1,11 @@
-# NotebookLM Runbook for Archon
+# NotebookLM Runbook for Cogentrex
 
 > **Deprecated migration reference:** NotebookLM is no longer the active generation lane. Use [`hermes-generation-runbook.md`](hermes-generation-runbook.md). The steps below are preserved only to explain the previous workflow and must not be used to claim current artifact freshness.
 
 ## Prerequisites
 
 - A Google account with NotebookLM access.
-- The canonical Archon repository checked out on `main` with a clean working tree.
+- The canonical Cogentrex repository checked out on `main` with a clean working tree.
 - No secrets, `.env` files, profile memories, Tolaria private notes, backups, tokens, cookies, or paid-course raw material in any source pack.
 
 ## 1. Generate the packs
@@ -13,14 +13,14 @@
 From the canonical repository:
 
 ```bash
-cd /Users/luisvalencia/Documents/archon
+cd /Users/luisvalencia/Documents/cogentrex
 backend/.venv/bin/python scripts/build-notebooklm-source-packs.py
 ```
 
 Output:
 
 ```text
-/Users/luisvalencia/Documents/archon-notebooklm/source-packs/
+/Users/luisvalencia/Documents/cogentrex-notebooklm/source-packs/
 ├── manifest.json
 ├── system-overview/
 ├── request-lifecycle/
@@ -31,7 +31,7 @@ Output:
 
 Each notebook folder contains:
 
-- `00-ARCHON-TRUTH-BOUNDARIES.md`;
+- `00-COGENTREX-TRUTH-BOUNDARIES.md`;
 - numbered public source files;
 - `UPLOAD-README.md` for humans only.
 
@@ -42,15 +42,15 @@ Each notebook folder contains:
 Start with the pilot:
 
 ```text
-Archon — Request Lifecycle and Governed Tools
+Cogentrex — Request Lifecycle and Governed Tools
 ```
 
 In NotebookLM:
 
 1. Select **Create notebook**.
 2. Use the exact title above.
-3. Open `archon-notebooklm/source-packs/request-lifecycle/`.
-4. Upload `00-ARCHON-TRUTH-BOUNDARIES.md` first.
+3. Open `cogentrex-notebooklm/source-packs/request-lifecycle/`.
+4. Upload `00-COGENTREX-TRUTH-BOUNDARIES.md` first.
 5. Upload every numbered source file.
 6. Do not upload `UPLOAD-README.md` or `manifest.json` as sources.
 7. Wait until every source finishes processing.
@@ -94,7 +94,7 @@ Generate only one version of each before reviewing. Multiple variants make compa
 Use this external directory:
 
 ```text
-/Users/luisvalencia/Documents/archon-notebooklm/artifacts/
+/Users/luisvalencia/Documents/cogentrex-notebooklm/artifacts/
 ├── audio/
 ├── video/
 ├── slides/
@@ -131,7 +131,7 @@ Large generated media does not belong in the Git repository. Copy [`notebooklm-a
 
 Reject any artifact that:
 
-- calls Archon publicly deployed or production-ready;
+- calls Cogentrex publicly deployed or production-ready;
 - presents mock output as live inference;
 - claims provider-live embeddings;
 - claims native JSON Schema parity;

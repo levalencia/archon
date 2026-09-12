@@ -87,7 +87,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
     SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
     EXEMPT_PATHS = {"/api/auth/login", "/api/auth/register", "/healthz", "/readyz", "/metrics"}
-    AUTH_COOKIE_NAMES = {"access_token", "archon_token", "session"}
+    AUTH_COOKIE_NAMES = {"access_token", "cogentrex_token", "session"}
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Skip for safe methods

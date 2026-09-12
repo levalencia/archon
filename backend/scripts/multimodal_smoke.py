@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in multimodal acceptance through Archon's image and provider boundaries."""
+"""Opt-in multimodal acceptance through Cogentrex's image and provider boundaries."""
 # ruff: noqa: E402 -- direct script execution bootstraps the backend import root.
 
 from __future__ import annotations
@@ -190,7 +190,7 @@ async def main() -> int:
                 operation_count=2,
             )
         except ValueError:
-            print(json.dumps({"schema": "archon.provider-acceptance", "status": "fail"}))
+            print(json.dumps({"schema": "cogentrex.provider-acceptance", "status": "fail"}))
             return 2
         print(json.dumps({"schema": report["schema"], "status": report["status"]}, sort_keys=True))
         return code

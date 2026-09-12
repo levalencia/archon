@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 async function openStudio(page: Page, view?: string) {
-  await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
+  await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'playwright-token'));
   await page.goto(view ? `/learn?view=${view}` : '/learn');
   await expect(page.getByRole('heading', { name: 'Choose the view that matches your question' })).toBeVisible();
 }
@@ -67,11 +67,11 @@ test('evidence view preserves status and proof boundaries', async ({ page }) => 
 
 test('Present, Listen, and Study expose explicit unpublished-library states', async ({ page }) => {
   await openStudio(page, 'present');
-  await expect(page.getByRole('heading', { name: 'Explain Archon visually' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Explain Cogentrex visually' })).toBeVisible();
   await expect(page.getByText('Learning media is not published in this runtime.')).toBeVisible();
 
   await page.getByRole('link', { name: /Listen/ }).click();
-  await expect(page.getByRole('heading', { name: 'Review Archon through English audio' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review Cogentrex through English audio' })).toBeVisible();
   await expect(page.getByText('Learning media is not published in this runtime.')).toBeVisible();
 
   await page.getByRole('link', { name: /Study/ }).click();
@@ -89,7 +89,7 @@ test('browser history restores the previous studio mode', async ({ page }) => {
 });
 
 test('legacy map URL redirects to the structured Stories view', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
+  await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'playwright-token'));
   await page.goto('/learn/map');
   await expect(page).toHaveURL(/\/learn\?view=stories$/);
   await expect(page.getByRole('heading', { name: 'Follow one flow at a time' })).toBeVisible();
@@ -97,7 +97,7 @@ test('legacy map URL redirects to the structured Stories view', async ({ page })
 
 test('all studio modes avoid horizontal overflow on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
+  await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'playwright-token'));
   for (const view of ['roadmap', 'stories', 'architecture', 'evidence', 'present', 'listen', 'study']) {
     await page.goto(`/learn?view=${view}`);
     await expect(page.getByRole('heading', { name: 'Choose the view that matches your question' })).toBeVisible();

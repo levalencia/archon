@@ -1,4 +1,4 @@
-# Archon Evidence-First Feature Roadmap v2
+# Cogentrex Evidence-First Feature Roadmap v2
 
 > **Audience:** Maintainers and Hermes subagents executing implementation slices.
 > **Purpose:** Records the roadmap that defined five deep capabilities and their acceptance gates.
@@ -6,7 +6,7 @@
 
 > **For Hermes:** Use subagent-driven-development to execute this plan task-by-task. Every slice requires spec review, code review, and a green acceptance gate before integration.
 
-**Goal:** Turn Archon's broad course/competitor feature coverage into five deep, credible, end-to-end Agent Reliability Workbench capabilities that demonstrate employability.
+**Goal:** Turn Cogentrex's broad course/competitor feature coverage into five deep, credible, end-to-end Agent Reliability Workbench capabilities that demonstrate employability.
 
 **Architecture:** Keep the existing custom typed runtime, provider protocols, FastAPI backend, SvelteKit frontend, and local-first operation. Do not add another agent framework. Build vertical slices around immutable run evidence, explicit policy, grounded evaluation, and bounded delegation. Existing mock/stub features must either become real or be renamed/removed from the demo path.
 
@@ -15,13 +15,13 @@
 **Source audits:**
 
 - `docs/FEATURE-AND-COURSE-AUDIT-V2.md`
-- `docs/ARCHON-GPT56-REAUDIT-2026-08-25.md`
+- `docs/COGENTREX-GPT56-REAUDIT-2026-08-25.md`
 
 ---
 
 # Product thesis
 
-Archon will not claim generic parity with Hermes, Codex, Claude Code, or OpenCode.
+Cogentrex will not claim generic parity with Hermes, Codex, Claude Code, or OpenCode.
 
 Its portfolio differentiator will be this inspectable workflow:
 
@@ -88,7 +88,7 @@ Additional rules:
 **Files:**
 
 - Add: `docs/FEATURE-AND-COURSE-AUDIT-V2.md`
-- Add: `docs/ARCHON-GPT56-REAUDIT-2026-08-25.md`
+- Add: `docs/COGENTREX-GPT56-REAUDIT-2026-08-25.md`
 - Create: `docs/IMPLEMENTATION-EVIDENCE.md`
 
 **Steps:**
@@ -225,7 +225,7 @@ Additional rules:
 - Encryption applies to persisted value, not an unused side store.
 - User B never receives User A's memory.
 - List/edit/delete/export operate through ownership checks.
-- No plaintext `archon_memory.json` in the live path.
+- No plaintext `cogentrex_memory.json` in the live path.
 
 ## Task 1.5 — Apply PII policy before persistence
 
@@ -610,7 +610,7 @@ Backup database, restore into clean environment, prove conversations/runs/docume
 - Dynamic swarms.
 - Scheduled autonomous work.
 - Full Kubernetes production operations if Azure Container Apps is selected.
-- LSP/code-review IDE features unless Archon deliberately adds a coding-agent scenario.
+- LSP/code-review IDE features unless Cogentrex deliberately adds a coding-agent scenario.
 
 These remain documented course concepts, not false completeness claims.
 

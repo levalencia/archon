@@ -9,7 +9,7 @@ You will distinguish reasoning/action/observation iteration from reflection, ver
 
 ## Mental model
 
-ReAct alternates model decisions and tool observations. Archon does not expose hidden chain-of-thought; it handles provider-native calls and visible observations. A tool error can be returned to the model for another bounded attempt. That is local error feedback—not final-answer reflection. Separately, optional [`BoundedReflectionService`](../../../../backend/app/reflection/service.py) can critique a completed unstructured draft without tools and perform at most one hard-bounded revision. The evidence-only verifier child and recorded-run evaluations are also separate features.
+ReAct alternates model decisions and tool observations. Cogentrex does not expose hidden chain-of-thought; it handles provider-native calls and visible observations. A tool error can be returned to the model for another bounded attempt. That is local error feedback—not final-answer reflection. Separately, optional [`BoundedReflectionService`](../../../../backend/app/reflection/service.py) can critique a completed unstructured draft without tools and perform at most one hard-bounded revision. The evidence-only verifier child and recorded-run evaluations are also separate features.
 
 ```mermaid
 flowchart TD
@@ -61,7 +61,7 @@ Mocked recovery demonstrates orchestration, not autonomous reasoning quality. No
 
 ## Interview answer
 
-> Archon implements a bounded ReAct-style control loop: model-native action, deterministic authorization, tool observation, repeat. Every loop consumes explicit budgets and ends with a typed reason. Error feedback allows a model to try a corrected call, but I would not market that as general self-reflection.
+> Cogentrex implements a bounded ReAct-style control loop: model-native action, deterministic authorization, tool observation, repeat. Every loop consumes explicit budgets and ends with a typed reason. Error feedback allows a model to try a corrected call, but I would not market that as general self-reflection.
 
 ## Self-check
 

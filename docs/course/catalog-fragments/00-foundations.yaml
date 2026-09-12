@@ -13,6 +13,23 @@
     - docs/IMPLEMENTATION-EVIDENCE.md
   limitations: Custom local runtime; no agent framework and no public production evidence.
 
+- id: application-composition
+  title: Application factory, middleware, routers, and application state
+  status: implemented
+  module: docs/course/modules/01-python-architecture/README.md
+  sources:
+    - backend/app/main.py
+    - backend/app/middleware/security.py
+    - backend/app/middleware/correlation.py
+    - backend/app/routes/chat.py
+  tests:
+    - backend/tests/unit/test_health.py
+    - backend/tests/unit/test_chat.py
+    - backend/tests/unit/test_memory_startup.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Application composition and local probe contracts are implemented; readiness is point-in-time and does not actively call every reported capability or prove public availability.
+
 - id: python-protocols-di
   title: Python OOP, Protocols, and dependency injection
   status: implemented

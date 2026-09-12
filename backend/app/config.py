@@ -10,10 +10,10 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Archon configuration. All values can be overridden via environment variables."""
+    """Cogentrex configuration. All values can be overridden via environment variables."""
 
     # App
-    app_name: str = "Archon"
+    app_name: str = "Cogentrex"
     app_version: str = "0.1.0"
     debug: bool = False
 
@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     learning_media_signed_url_ttl_seconds: int = Field(default=300, ge=30, le=3600)
 
     # Database
-    database_url: str = "sqlite+aiosqlite:///archon.db"
+    database_url: str = "sqlite+aiosqlite:///cogentrex.db"
     vector_store_backend: Literal["sql-json"] = "sql-json"
 
     # Redis
@@ -127,7 +127,7 @@ class Settings(BaseSettings):
 
     # Observability
     otel_endpoint: str = ""
-    otel_service_name: str = "archon"
+    otel_service_name: str = "cogentrex"
     otel_capture_message_content: bool = False
 
     # Security
@@ -155,13 +155,13 @@ class Settings(BaseSettings):
     # Isolated execution (disabled and absent from the live registry by default)
     execution_enabled: bool = False
     execution_runner_socket: str = Field(
-        default="/run/archon-sandbox/runner.sock", pattern=r"^/[A-Za-z0-9_./-]+$"
+        default="/run/cogentrex-sandbox/runner.sock", pattern=r"^/[A-Za-z0-9_./-]+$"
     )
     # Legacy settings remain parseable for developer tooling, but the live backend
     # never invokes Docker.
     execution_docker_binary: str = Field(default="docker", pattern=r"^[A-Za-z0-9_./-]+$")
     execution_docker_image: str = Field(
-        default="archon-sandbox:local", pattern=r"^[A-Za-z0-9][A-Za-z0-9._/@:-]+$"
+        default="cogentrex-sandbox:local", pattern=r"^[A-Za-z0-9][A-Za-z0-9._/@:-]+$"
     )
     execution_docker_platform: str = Field(default="linux/amd64", pattern=r"^linux/(amd64|arm64)$")
     execution_timeout_seconds: float = Field(default=10.0, ge=0.1, le=120.0)
@@ -243,8 +243,8 @@ class Settings(BaseSettings):
     def reject_legacy_input_reservation_setting(self) -> Settings:
         if self.agent_model_input_reservation_tokens is not None:
             raise ValueError(
-                "ARCHON_AGENT_MODEL_INPUT_RESERVATION_TOKENS was replaced by "
-                "ARCHON_AGENT_MODEL_INPUT_QUOTE_HEADROOM_TOKENS"
+                "COGENTREX_AGENT_MODEL_INPUT_RESERVATION_TOKENS was replaced by "
+                "COGENTREX_AGENT_MODEL_INPUT_QUOTE_HEADROOM_TOKENS"
             )
         return self
 
@@ -273,7 +273,7 @@ class Settings(BaseSettings):
     context_length: int = 200000  # Claude Opus: 200K, Sonnet: 200K, llama3.1: 128K
     prompt_caching_enabled: bool = True
 
-    model_config = {"env_prefix": "ARCHON_", "env_file": ".env", "extra": "ignore"}
+    model_config = {"env_prefix": "COGENTREX_", "env_file": ".env", "extra": "ignore"}
 
 
 def get_settings() -> Settings:

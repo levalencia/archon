@@ -17,12 +17,12 @@ COPY backend/container-entrypoint.sh ./container-entrypoint.sh
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
-RUN groupadd --system --gid 10001 archon \
-    && useradd --system --uid 10001 --gid archon --home-dir /app archon \
+RUN groupadd --system --gid 10001 cogentrex \
+    && useradd --system --uid 10001 --gid cogentrex --home-dir /app cogentrex \
     && chmod 0555 /app/container-entrypoint.sh \
-    && chown -R archon:archon /app
+    && chown -R cogentrex:cogentrex /app
 
-USER archon
+USER cogentrex
 
 EXPOSE 8000
 

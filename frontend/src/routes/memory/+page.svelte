@@ -200,7 +200,7 @@
         </div>
       </div>
       {#if rotation}
-        <span class="w-fit rounded-full px-2.5 py-1 text-xs font-medium {rotation.complete ? 'bg-[color-mix(in_srgb,var(--archon-green)_12%,transparent)] text-[var(--archon-green)]' : 'bg-[rgba(240,189,98,.12)] text-[var(--warning)]'}">
+        <span class="w-fit rounded-full px-2.5 py-1 text-xs font-medium {rotation.complete ? 'bg-[color-mix(in_srgb,var(--cogentrex-green)_12%,transparent)] text-[var(--cogentrex-green)]' : 'bg-[rgba(240,189,98,.12)] text-[var(--warning)]'}">
           {rotation.complete ? 'Current' : `${rotation.remaining} remaining`}
         </span>
       {/if}

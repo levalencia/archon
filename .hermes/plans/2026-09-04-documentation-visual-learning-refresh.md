@@ -2,7 +2,7 @@
 
 ## Goal
 
-Bring Archon's public GitHub documentation and Visual Learning Studio sources into alignment with merged `main` at `1f71f0e1ada7da4989ef7e313581b7476f82c804`, while preserving historical evidence as historical evidence and avoiding claims not proven by current acceptance.
+Bring Cogentrex's public GitHub documentation and Visual Learning Studio sources into alignment with merged `main` at `1f71f0e1ada7da4989ef7e313581b7476f82c804`, while preserving historical evidence as historical evidence and avoiding claims not proven by current acceptance.
 
 ## Evidence baseline
 
@@ -30,7 +30,7 @@ Bring Archon's public GitHub documentation and Visual Learning Studio sources in
    - forward-head core-table reconciliation and accepted known PostgreSQL legacy forms;
    - current migration head and schema reference.
 3. Reconcile `docs/implementation/CAPABILITY-ACCEPTANCE.yaml` wording and test pointers without upgrading unsupported dimensions.
-4. Regenerate `frontend/static/learning/archon-studio.json` from canonical sources.
+4. Regenerate `frontend/static/learning/cogentrex-studio.json` from canonical sources.
 5. Add or extend documentation regression checks for current-state invariants and prohibited stale claims.
 
 ## Honesty constraints

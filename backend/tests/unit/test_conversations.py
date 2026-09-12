@@ -28,7 +28,7 @@ def client() -> TestClient:
 async def isolated_database(tmp_path, monkeypatch):
     """Use an isolated persistent database for each test."""
     database_url = f"sqlite+aiosqlite:///{tmp_path / 'conversations.db'}"
-    monkeypatch.setenv("ARCHON_DATABASE_URL", database_url)
+    monkeypatch.setenv("COGENTREX_DATABASE_URL", database_url)
     yield database_url
 
 

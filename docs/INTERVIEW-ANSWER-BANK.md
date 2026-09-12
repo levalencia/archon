@@ -1,10 +1,10 @@
-# Archon Interview Answer Bank
+# Cogentrex Interview Answer Bank
 
 Use these as concise, evidence-backed answers. Do not memorize them word for word; adapt them to the question.
 
-## 1. What is Archon?
+## 1. What is Cogentrex?
 
-Archon is a local Agent Reliability Workbench. Its core workflow is `Policy → Run → Approval → Tool → Evidence → Evaluation`. I built it to make agent behavior inspectable: exact tool-call decisions, durable run events, grounded claims, evaluations, recovery and operations evidence. It is a portfolio system, not a publicly deployed production service.
+Cogentrex is a local Agent Reliability Workbench. Its core workflow is `Policy → Run → Approval → Tool → Evidence → Evaluation`. I built it to make agent behavior inspectable: exact tool-call decisions, durable run events, grounded claims, evaluations, recovery and operations evidence. It is a portfolio system, not a publicly deployed production service.
 
 ## 2. Why did you avoid LangChain/AutoGen/CrewAI?
 
@@ -40,7 +40,7 @@ One constrained specialist made the benefit measurable. The child receives only 
 
 ## 10. How is MCP governed?
 
-Archon governs allowlisted stdio and bounded Streamable HTTP profiles. Protected credential references are resolved outside model-visible metadata. Discovery stores owner/project inventory with tools disabled by default; enabled tools become typed runtime definitions and still require normal policy/approval. Profile, health, enabled state and schema hash are rechecked just before execution. This is not a public MCP marketplace, generic OAuth platform, or deployed multi-region gateway.
+Cogentrex governs allowlisted stdio and bounded Streamable HTTP profiles. Protected credential references are resolved outside model-visible metadata. Discovery stores owner/project inventory with tools disabled by default; enabled tools become typed runtime definitions and still require normal policy/approval. Profile, health, enabled state and schema hash are rechecked just before execution. This is not a public MCP marketplace, generic OAuth platform, or deployed multi-region gateway.
 
 ## 10A. How do skills and project instructions remain auditable?
 
@@ -60,7 +60,7 @@ The native ARM image repeatedly exited 132 while importing `cryptography` before
 
 ## 14. How did you prove OpenTelemetry works?
 
-Archon owns a standard OpenTelemetry provider and emits one OTLP stream to the local Collector. The Collector owns batching, retries, credentials and allowlisted fan-out. I validated every generated destination config against Collector 0.118, then observed one real `invoke_agent Archon` trace with `chat` and `execute_tool calculator` spans in Jaeger while Logfire was selected in the same pipeline. Earlier Logfire Agents/Tools rendering was visually accepted; the newest Summary/Messages rendering still needs visual acceptance. A running collector or error-free export alone is not counted as destination proof.
+Cogentrex owns a standard OpenTelemetry provider and emits one OTLP stream to the local Collector. The Collector owns batching, retries, credentials and allowlisted fan-out. I validated every generated destination config against Collector 0.118, then observed one real `invoke_agent Cogentrex` trace with `chat` and `execute_tool calculator` spans in Jaeger while Logfire was selected in the same pipeline. Earlier Logfire Agents/Tools rendering was visually accepted; the newest Summary/Messages rendering still needs visual acceptance. A running collector or error-free export alone is not counted as destination proof.
 
 ## 15. Describe the DR design.
 

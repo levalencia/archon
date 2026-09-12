@@ -19,7 +19,7 @@ Making the model explicit exposes impossible transitions, races, and missing cle
 ## Problem and mental model
 
 Ask four questions at every step: where are we, what input is legal, what invariant must hold, and how can we stop?
-Archon's runtime, approval, and run-ledger lifecycles overlap, but they are distinct machines: a pending approval is not itself a runtime stop reason or ledger status.
+Cogentrex's runtime, approval, and run-ledger lifecycles overlap, but they are distinct machines: a pending approval is not itself a runtime stop reason or ledger status.
 
 ```mermaid
 stateDiagram-v2
@@ -51,7 +51,7 @@ stateDiagram-v2
   CANCELLED --> [*]
 ```
 
-## Archon runtime state mapping
+## Cogentrex runtime state mapping
 
 [`AgentRuntime.run`](../../../backend/app/runtime/engine.py) carries state in history, `iterations`, `calls`, `seen_calls`, cumulative `TokenUsage`, content, and monotonic start time.
 [`RuntimeBudget`](../../../backend/app/runtime/engine.py) supplies guards for iterations, calls, tokens, seconds, result length, and final synthesis.
@@ -96,7 +96,7 @@ Then create a five-column transition row: current state, command, guard, side ef
 - Check-then-update transitions race; use one conditional atomic write.
 - Conflating “approved” with “executed” hides a crash window and encourages exactly-once overclaims.
 - Event emission can fail between internal transitions; durable sequencing and explicit failure policy matter.
-- Mutable callback-owned objects can violate transition invariants; Archon snapshots bindings before awaits/events.
+- Mutable callback-owned objects can violate transition invariants; Cogentrex snapshots bindings before awaits/events.
 - Recovery code must reject impossible persisted combinations rather than guessing.
 
 ## Observability and evidence
@@ -111,7 +111,7 @@ Events describe what code reported; behavior tests and durable rows establish wh
 Explicit transition-table libraries improve visualization and exhaustive checks but can add indirection to a compact loop.
 Enums plus guarded SQL updates are effective for durable lifecycles.
 Event sourcing derives state from an append-only log and improves audit/replay, at greater schema/versioning complexity.
-Workflow engines provide timers and durable resumption, but introduce infrastructure and execution semantics beyond Archon's current runtime.
+Workflow engines provide timers and durable resumption, but introduce infrastructure and execution semantics beyond Cogentrex's current runtime.
 
 ## Lab versus production
 
@@ -121,7 +121,7 @@ A diagram is documentation; only guards, constraints, and tests enforce it.
 
 ## 30-second interview answer
 
-“State-machine thinking makes agent control explicit even when implemented as a Python loop. Archon's runtime state is history plus counters and bindings; `RuntimeBudget` supplies guards and `StopReason` supplies terminal outcomes. Approval has a separate durable `ApprovalStatus` machine with atomic pending-only transitions, while the run ledger accepts appends only in running state and finalizes on `RUN_STOPPED`. Keeping these machines separate exposes crash windows and prevents ‘approved’ from being confused with ‘executed.’”
+“State-machine thinking makes agent control explicit even when implemented as a Python loop. Cogentrex's runtime state is history plus counters and bindings; `RuntimeBudget` supplies guards and `StopReason` supplies terminal outcomes. Approval has a separate durable `ApprovalStatus` machine with atomic pending-only transitions, while the run ledger accepts appends only in running state and finalizes on `RUN_STOPPED`. Keeping these machines separate exposes crash windows and prevents ‘approved’ from being confused with ‘executed.’”
 
 ## Self-check questions
 

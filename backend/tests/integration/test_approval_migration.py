@@ -27,7 +27,7 @@ def config(database: Path) -> Config:
 
 
 def test_migration_existing_schema_downgrade_and_upgrade(tmp_path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "migration.db"
     # Representative pre-Alembic create_all database: the baseline must adopt
     # complete core tables without recreating or dropping their data.
@@ -87,7 +87,7 @@ def test_migration_existing_schema_downgrade_and_upgrade(tmp_path, monkeypatch) 
 
 
 def test_migration_fresh_database(tmp_path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "fresh.db"
     command.upgrade(config(database), "head")
     engine = create_engine(f"sqlite:///{database}")

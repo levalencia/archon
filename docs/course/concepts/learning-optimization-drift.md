@@ -1,7 +1,7 @@
 # Learning recommendations and drift governance
 
 > **Implementation status:** `implemented` for the verified local target
-> **Status boundary:** Archon compares immutable evaluation cohorts and records human-reviewed revision recommendations. It does not retrain models, rewrite prompts, or mutate runtime/production configuration automatically.
+> **Status boundary:** Cogentrex compares immutable evaluation cohorts and records human-reviewed revision recommendations. It does not retrain models, rewrite prompts, or mutate runtime/production configuration automatically.
 > **Used by module:** [Module 09-evaluation-harness](../modules/09-evaluation-harness/README.md)
 > **Catalog ID:** `learning-optimization-drift`
 > **Deferred boundary:** [Autonomous unapproved production optimization](../../REMAINING-DEFERRED-GAPS.md#6-autonomous-unapproved-production-optimization) is a separate, intentionally omitted capability.
@@ -14,7 +14,7 @@ A trustworthy learning loop separates three things:
 2. **Recommendation:** describe a bounded prompt, policy, retrieval, or configuration revision.
 3. **Decision:** require a human-bound approval before recording promotion.
 
-Archon implements those records and gates. “Promoted” means the recommendation was approved and recorded; it does **not** mean runtime configuration changed.
+Cogentrex implements those records and gates. “Promoted” means the recommendation was approved and recorded; it does **not** mean runtime configuration changed.
 
 ## Architecture
 
@@ -125,7 +125,7 @@ This omission strengthens the implemented governance story: measurements may pro
 
 ## Interview answer
 
-> Archon implements a governed learning loop, not autonomous self-modification. It compares immutable, versioned evaluation cohorts with deterministic thresholds, creates bounded metadata-only recommendations, and requires an exact owner/project/version-bound human approval. A promoted candidate records the intended revision and before/after evidence, but deliberately does not change production or train a model.
+> Cogentrex implements a governed learning loop, not autonomous self-modification. It compares immutable, versioned evaluation cohorts with deterministic thresholds, creates bounded metadata-only recommendations, and requires an exact owner/project/version-bound human approval. A promoted candidate records the intended revision and before/after evidence, but deliberately does not change production or train a model.
 
 ## Self-check
 

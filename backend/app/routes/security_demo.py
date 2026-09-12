@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/security", tags=["security"], dependencies=[Depe
 _pii_detector = PIIDetector()
 _input_guardrail = InputGuardrail()
 _output_guardrail = OutputGuardrail()
-_temp_dir = Path(tempfile.mkdtemp(prefix="archon_demo_"))
+_temp_dir = Path(tempfile.mkdtemp(prefix="cogentrex_demo_"))
 _permission_manager = SecurePermissionManager(base_dir=_temp_dir)
 
 

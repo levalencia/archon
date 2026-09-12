@@ -23,7 +23,7 @@ from app.services.run_ledger import RunRepository
 SCHEMA_VERSION = 1
 PURPOSES = frozenset({"audit", "incident_review", "evaluation", "support"})
 _MAX_EVENTS = 10_000
-_TOKEN_KEY_DOMAIN = b"archon/run-share-token-key/v1"
+_TOKEN_KEY_DOMAIN = b"cogentrex/run-share-token-key/v1"
 
 
 def derive_share_token_hmac_key(application_secret: str) -> bytes:
@@ -199,7 +199,7 @@ class RunExportService:
         export_id = str(uuid.uuid4())
         now = self._now()
         manifest_core = {
-            "format": "archon.run-export",
+            "format": "cogentrex.run-export",
             "schema_version": SCHEMA_VERSION,
             "export_id": export_id,
             "run_id": run_id,
@@ -416,7 +416,7 @@ class RunExportService:
                 raise ExportIntegrityError("malformed export manifest")
             if (
                 row.schema_version != SCHEMA_VERSION
-                or manifest.get("format") != "archon.run-export"
+                or manifest.get("format") != "cogentrex.run-export"
                 or manifest.get("schema_version") != row.schema_version
                 or manifest.get("export_id") != row.export_id
                 or manifest.get("run_id") != row.run_id

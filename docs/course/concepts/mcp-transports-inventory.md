@@ -8,7 +8,7 @@
 ## Transport versus inventory
 
 A **transport** moves live protocol messages.
-Archon starts an allowlisted local child process and exchanges MCP messages over stdin and stdout.
+Cogentrex starts an allowlisted local child process and exchanges MCP messages over stdin and stdout.
 An **inventory** is a durable owner/project-scoped snapshot of normalized server and tool metadata discovered through that transport.
 The transport ends when its SDK/process context closes; the inventory remains in the database.
 Neither concept is the policy decision that authorizes a call.
@@ -164,7 +164,7 @@ Ephemeral discovery on every call avoids stale storage but adds latency and make
 A durable snapshot is fast and inspectable but must be refreshed and revalidated.
 A manually configured static catalog avoids untrusted discovery but increases operator work and drift risk.
 A long-lived MCP session may reduce startup cost but introduces session health, multiplexing, and cleanup complexity.
-Archon chooses short bounded stdio sessions plus durable scoped metadata.
+Cogentrex chooses short bounded stdio sessions plus durable scoped metadata.
 
 ## Exercise: reason about an in-flight profile change
 

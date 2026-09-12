@@ -1,9 +1,9 @@
-# Competitive Analysis: Archon vs Top AI Agent Projects
+# Competitive Analysis: Cogentrex vs Top AI Agent Projects
 
 > Generated: August 2026
-> Purpose: Identify gaps in Archon's feature set by analyzing the most successful AI agent projects.
+> Purpose: Identify gaps in Cogentrex's feature set by analyzing the most successful AI agent projects.
 
-## Archon's Current Capabilities (Baseline)
+## Cogentrex's Current Capabilities (Baseline)
 
 - **Architecture**: Svelte + FastAPI + Ollama webapp
 - **Agent**: ReAct agent with 5 tools
@@ -27,7 +27,7 @@
 - **Full web control**: Search, extract, browse, vision, image generation, TTS — bundled via Nous Portal
 - **Agent-curated memory**: Periodic nudges for persistent context
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Self-improving skill creation loop** — agents that learn from use and get better | 🔴 Critical |
@@ -53,7 +53,7 @@
 - **Voice commands**: Voice-commanded feature requests
 - **Pair programming UX**: Feels like having a senior dev in your Git repo
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Native Git integration** — auto-commit, diff review, rollback | 🔴 Critical |
@@ -79,7 +79,7 @@
 - **Shell completions**: Generate completions for your shell
 - **Focused loop**: Explore, edit, and run a repository in one tight loop
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Sandboxed code execution** with configurable permission levels | 🔴 Critical |
@@ -105,7 +105,7 @@
 - **Python + .NET**: Multi-language support
 - **Azure AI Foundry integration**: Cloud-native deployment path
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Event-driven async multi-agent orchestration** | 🔴 Critical |
@@ -129,7 +129,7 @@
 - **Multi-agent topologies**: Single, multi-agent, hierarchical — all in one framework
 - **Human-in-the-loop**: Native support for approval gates and user intervention points
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Graph-based workflow definition** (visual + code) | 🔴 Critical |
@@ -154,7 +154,7 @@
 - **Drag-and-drop UI**: Non-technical teams can design agent workflows
 - **Memory types**: Short-term, long-term, entity memory for agent teams
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Role-based agent personas** with goals/backstories | 🔴 Critical |
@@ -178,7 +178,7 @@
 - **Seamless observability**: Built-in tracing and logging with Logfire integration
 - **Correctness over breadth**: Trades integration count for validation guarantees
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Type-safe structured outputs** with Pydantic validation on all agent responses | 🔴 Critical |
@@ -202,7 +202,7 @@
 - **Framework-agnostic**: Same features across Next.js, SvelteKit, Nuxt, etc.
 - **Agent definition → UI**: Define agent once, get streaming UI integration automatically
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Pre-built AI UI component library** (chat bubbles, tool displays, etc.) | 🔴 Critical |
@@ -226,7 +226,7 @@
 - **Ambassador model**: Translates natural language to code your computer understands
 - **Minimal setup**: `uvx --from open-interpreter interpreter` — instant start
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Desktop/OS-level control** (file system, browser, applications) | 🔴 Critical |
@@ -250,7 +250,7 @@
 - **Rapid prototyping**: Developers go from idea to deployed prototype in minutes
 - **v0 component focus**: Generates individual UI components with shadcn/ui styling
 
-### What Archon Lacks
+### What Cogentrex Lacks
 | Gap | Priority |
 |-----|----------|
 | **Full app generation from prompt** (not just code snippets) | 🔴 Critical |
@@ -267,7 +267,7 @@
 
 | Capability | Found In | Impact |
 |-----------|----------|--------|
-| **Graph/workflow-based agent orchestration** | LangGraph, AutoGen, CrewAI | Archon's ReAct loop is too simple for complex multi-step workflows |
+| **Graph/workflow-based agent orchestration** | LangGraph, AutoGen, CrewAI | Cogentrex's ReAct loop is too simple for complex multi-step workflows |
 | **Sandboxed code execution** | Codex CLI, Open Interpreter, Bolt.new | No safe way to run LLM-generated code |
 | **Type-safe structured outputs** | PydanticAI, Vercel AI SDK | No validation/retry on agent outputs |
 | **Self-improving skills/learning loop** | Hermes Agent | Agents don't learn from experience |
@@ -300,7 +300,7 @@
 
 ---
 
-## Recommended Priority Actions for Archon
+## Recommended Priority Actions for Cogentrex
 
 1. **Add graph-based workflow engine** — Replace/augment ReAct with configurable DAG execution (nodes, edges, conditions, loops)
 2. **Implement sandboxed code execution** — Docker/WebContainer-based sandbox with configurable permission levels

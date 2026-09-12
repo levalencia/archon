@@ -5,7 +5,7 @@ const tool = { id: 't1', server_id: 's1', name: 'search_docs', title: 'Search do
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 async function mockSettingsBase(page: Page) {
-  await page.addInitScript(() => localStorage.setItem('archon_token', 'test-token'));
+  await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'test-token'));
   await page.route('**/api/projects/default/instructions', route => json(route, []));
   await page.route('**/api/skills/catalog?**', route => json(route, []));
   await page.route('**/api/capabilities/search', route => json(route, []));

@@ -33,5 +33,5 @@ export async function listProjectInstructions(projectId: string): Promise<Projec
   return Array.isArray(result) ? result : [];
 }
 export const scanProjectWorkspace = (projectId: string, targetPath = '.') => request<ProjectInstruction[]>(`${projectPath(projectId)}/instructions/scan`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_path: targetPath, family: 'archon' }),
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_path: targetPath, family: 'cogentrex' }),
 });

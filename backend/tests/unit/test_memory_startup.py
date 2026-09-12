@@ -43,7 +43,7 @@ def test_startup_rejects_missing_encryption_key_without_leaking_configuration(tm
     error = _startup_error(_settings(tmp_path, encryption_master_key=""))
     message = str(error)
     assert message == "Encrypted memory startup configuration is invalid"
-    assert "ARCHON_ENCRYPTION_MASTER_KEY" not in message
+    assert "COGENTREX_ENCRYPTION_MASTER_KEY" not in message
 
 
 @pytest.mark.parametrize(
@@ -67,9 +67,9 @@ def test_startup_rejects_malformed_wrong_length_and_known_weak_keys(tmp_path, we
 def test_example_template_key_is_rejected(tmp_path) -> None:
     template = Path(__file__).parents[2] / ".env.example"
     lines = template.read_text().splitlines()
-    line = next(line for line in lines if line.startswith("ARCHON_ENCRYPTION_MASTER_KEY="))
-    assert "ARCHON_MEMORY_KEYRING_JSON=" in lines
-    assert "ARCHON_MEMORY_ACTIVE_KEY_VERSION=1" in lines
+    line = next(line for line in lines if line.startswith("COGENTREX_ENCRYPTION_MASTER_KEY="))
+    assert "COGENTREX_MEMORY_KEYRING_JSON=" in lines
+    assert "COGENTREX_MEMORY_ACTIVE_KEY_VERSION=1" in lines
     error = _startup_error(_settings(tmp_path, encryption_master_key=line.partition("=")[2]))
     assert str(error) == "Encrypted memory startup configuration is invalid"
 

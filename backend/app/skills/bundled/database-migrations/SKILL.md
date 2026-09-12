@@ -2,7 +2,7 @@
 name: database-migrations
 description: Design reversible and safe database migrations
 version: 1.0.0
-tags: [database-migrations, archon]
+tags: [database-migrations, cogentrex]
 references: [references/checklist.md]
 triggers: ['database migration', 'schema migration', 'alembic']
 negative_triggers: ['do not migrate', 'no schema changes']

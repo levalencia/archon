@@ -1,4 +1,4 @@
-# Archon NotebookLM Promptbook — Deprecated
+# Cogentrex NotebookLM Promptbook — Deprecated
 
 > **Deprecated migration reference:** use [`hermes-generation-promptbook.md`](hermes-generation-promptbook.md) for all new learning artifacts. The prompts below document the superseded NotebookLM workflow only.
 
@@ -7,7 +7,7 @@
 Include this instruction in every artifact customization field:
 
 ```text
-Use only the selected Archon sources. When sources differ, prioritize IMPLEMENTATION-EVIDENCE.md, then CAPABILITY-ACCEPTANCE.yaml, then REMAINING-DEFERRED-GAPS.md, then ARCHITECTURE-DIAGRAMS.md, then course material.
+Use only the selected Cogentrex sources. When sources differ, prioritize IMPLEMENTATION-EVIDENCE.md, then CAPABILITY-ACCEPTANCE.yaml, then REMAINING-DEFERRED-GAPS.md, then ARCHITECTURE-DIAGRAMS.md, then course material.
 
 Never claim public production deployment, provider-live embeddings, native JSON Schema parity, Jaeger/Azure Monitor tracing, autonomous production optimization, or real inference when the evidence only shows deterministic mock execution. Distinguish process health, dependency readiness, user-facing functionality, and provider-live evidence. Explicitly identify implemented, partial, local-only, and deferred boundaries.
 ```
@@ -17,9 +17,9 @@ Never claim public production deployment, provider-live embeddings, native JSON 
 Recommended notebook: `system-overview`
 
 ```text
-Create a 12–15 minute deep-dive conversation for a software engineer learning Archon.
+Create a 12–15 minute deep-dive conversation for a software engineer learning Cogentrex.
 
-Explain the problem Archon solves, its five architectural layers, the lifecycle of one user request, how policy and approvals govern tools, how the Run Ledger preserves evidence, and how evaluation and observability differ.
+Explain the problem Cogentrex solves, its five architectural layers, the lifecycle of one user request, how policy and approvals govern tools, how the Run Ledger preserves evidence, and how evaluation and observability differ.
 
 Use concrete analogies, but do not invent functionality. Explicitly distinguish infrastructure health from agent functionality, mock mode from Foundry live inference, local deployment from production deployment, and code existence from observed evidence.
 
@@ -37,7 +37,7 @@ Create a technical debate between two senior AI engineers.
 
 Engineer A argues that similarity retrieval is enough for useful RAG. Engineer B argues that retrieval similarity is not proof and that grounding, citations, and faithfulness require separate evaluation.
 
-Use Archon's actual chunking, embedding, retrieval, grounding, citation, and evaluation boundaries. Discuss mock versus provider-live embeddings. End with a shared checklist for deciding whether an answer is trustworthy.
+Use Cogentrex's actual chunking, embedding, retrieval, grounding, citation, and evaluation boundaries. Discuss mock versus provider-live embeddings. End with a shared checklist for deciding whether an answer is trustworthy.
 ```
 
 Settings: `Debate`, `Long`.
@@ -47,7 +47,7 @@ Settings: `Debate`, `Long`.
 Recommended notebook: `request-lifecycle`
 
 ```text
-Create a whiteboard-style technical explainer following one user request through Archon.
+Create a whiteboard-style technical explainer following one user request through Cogentrex.
 
 Show these stages in order:
 Browser → Gateway → Authentication → Runtime → Model decision → Policy → Approval when required → Tool execution → Run Ledger → Evaluation → Workbench result.
@@ -62,7 +62,7 @@ Settings: `Explainer`, `Whiteboard`.
 Recommended notebook: `system-overview` or `interview-demo`
 
 ```text
-Create a detailed presenter deck for a 15-minute Founding AI Engineer walkthrough of Archon.
+Create a detailed presenter deck for a 15-minute Founding AI Engineer walkthrough of Cogentrex.
 
 Use 12–15 slides:
 1. Problem and design goals
@@ -91,7 +91,7 @@ Settings: `Presenter`, default length. Create a second `Detailed` version only a
 Recommended notebook: `request-lifecycle`
 
 ```text
-Create a detailed landscape infographic titled “How Archon Executes a Tool Safely.”
+Create a detailed landscape infographic titled “How Cogentrex Executes a Tool Safely.”
 
 Show a left-to-right flow:
 Structured model intent → schema validation → ALLOW/ASK/DENY policy → durable approval binding → idempotency/effect control → isolated execution → structured result → Run Ledger evidence.
@@ -148,7 +148,7 @@ Settings: `Hard`, `More`.
 Recommended notebook: every focused notebook.
 
 ```text
-Create a structured technical study guide for the selected Archon source pack.
+Create a structured technical study guide for the selected Cogentrex source pack.
 
 Include:
 1. purpose and learning outcomes;

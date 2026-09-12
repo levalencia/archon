@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "const": "archon.learning.diagram"
+      "const": "cogentrex.learning.diagram"
     },
     "version": {
       "const": 1

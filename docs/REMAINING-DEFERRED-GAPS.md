@@ -4,7 +4,7 @@
 `20260902_22`. CI run `33858051794` passed at the exact SHA. No public
 deployment is claimed.
 
-Archon is an evidence-rich **local Agent Reliability Workbench**. The omissions below are deliberate product and evidence boundaries, not hidden implementation promises. `Deferred` means outside the current capstone scope with no delivery date. A nearby file, manifest, test double, or local observation does not change that status.
+Cogentrex is an evidence-rich **local Agent Reliability Workbench**. The omissions below are deliberate product and evidence boundaries, not hidden implementation promises. `Deferred` means outside the current capstone scope with no delivery date. A nearby file, manifest, test double, or local observation does not change that status.
 
 ## How to use this register
 
@@ -26,7 +26,7 @@ For every gap, distinguish architecture artifacts from exercised capability. Sta
 
 ### Why it is out of scope
 
-The capstone needs an inspectable delegation boundary, not a swarm. Archon has one evidence-only verifier and a separate feature-flagged local Team pilot: one fixed researcher plus one server-templated dynamic analyst, depth one, read-only tools, signed scope, bounded resources, and durable lineage. Multi-node coordination would introduce network partitions, duplicate delivery, version skew, peer identity, and distributed cancellation without improving the capstone's central policy-and-evidence demonstration.
+The capstone needs an inspectable delegation boundary, not a swarm. Cogentrex has one evidence-only verifier and a separate feature-flagged local Team pilot: one fixed researcher plus one server-templated dynamic analyst, depth one, read-only tools, signed scope, bounded resources, and durable lineage. Multi-node coordination would introduce network partitions, duplicate delivery, version skew, peer identity, and distributed cancellation without improving the capstone's central policy-and-evidence demonstration.
 
 ### Architecture required
 
@@ -49,7 +49,7 @@ It keeps authority narrow and failures reproducible. The learner can inspect eve
 
 ### Why it is out of scope
 
-Archon demonstrates a provider-neutral reliability control plane. It is not a model-serving data plane, and local benchmark timings are not capacity evidence. GPU kernels, batching, cache topology, and fleet economics are a separate specialization from policy, approvals, run evidence, and evaluation.
+Cogentrex demonstrates a provider-neutral reliability control plane. It is not a model-serving data plane, and local benchmark timings are not capacity evidence. GPU kernels, batching, cache topology, and fleet economics are a separate specialization from policy, approvals, run evidence, and evaluation.
 
 ### Architecture required
 
@@ -116,7 +116,7 @@ The local target is reproducible, inexpensive, and safe to exercise destructivel
 
 ### Why it is out of scope
 
-Archon implements immutable disclosure-scanned exports and expiring/revocable grants bound to an authenticated recipient and closed purpose. It intentionally exposes no anonymous share URL. Anonymous Internet access removes the recipient identity boundary and greatly increases leakage, scraping, abuse, indexing, and revocation risk.
+Cogentrex implements immutable disclosure-scanned exports and expiring/revocable grants bound to an authenticated recipient and closed purpose. It intentionally exposes no anonymous share URL. Anonymous Internet access removes the recipient identity boundary and greatly increases leakage, scraping, abuse, indexing, and revocation risk.
 
 ### Architecture required
 
@@ -138,7 +138,7 @@ Recipient-bound authentication makes disclosure attributable and revocable while
 
 ### Why it is out of scope
 
-Archon records descriptive drift reports and bounded prompt/policy/retrieval/config recommendations. Exact human approval is required, and “promotion” records evidence only; it does not mutate runtime configuration. An unattended optimizer would combine noisy measurements with production authority and could amplify regressions, cost, bias, or security failures.
+Cogentrex records descriptive drift reports and bounded prompt/policy/retrieval/config recommendations. Exact human approval is required, and “promotion” records evidence only; it does not mutate runtime configuration. An unattended optimizer would combine noisy measurements with production authority and could amplify regressions, cost, bias, or security failures.
 
 ### Architecture required
 

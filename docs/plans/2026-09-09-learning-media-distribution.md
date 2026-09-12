@@ -7,9 +7,9 @@
 
 ## Problem
 
-Archon's rich Visual Learning media (audio, video, SVGs, HTML decks, study
+Cogentrex's rich Visual Learning media (audio, video, SVGs, HTML decks, study
 materials) lives outside Git in an external sibling library. Anyone cloning
-Archon cannot access these files without manual setup. We need a secure,
+Cogentrex cannot access these files without manual setup. We need a secure,
 reproducible distribution path via GitHub Release assets.
 
 ## Design
@@ -17,7 +17,7 @@ reproducible distribution path via GitHub Release assets.
 ### Packaging (`package` subcommand)
 
 1. Read the external library at `--library` path.
-2. Validate `catalog.json`: schema=`archon.learning-library`, version=1,
+2. Validate `catalog.json`: schema=`cogentrex.learning-library`, version=1,
    full 40-hex source_commit, non-empty packs with non-empty artifacts,
    artifact `file` paths must be relative `published/**` paths contained
    under library root, not symlinks, regular files only. SHA-256 checksums
@@ -25,7 +25,7 @@ reproducible distribution path via GitHub Release assets.
    also validated when present.
 3. Reject symlinks, FIFOs, device nodes, and other non-regular files.
 4. Create a **deterministic** tar.gz archive containing only:
-   - `.archon-learning-library` (ownership marker)
+   - `.cogentrex-learning-library` (ownership marker)
    - `catalog.json`
    - `published/**` (all published artifacts)
 5. Streaming: files streamed into tar→gzip→file (no full in-memory BytesIO).
@@ -44,9 +44,9 @@ reproducible distribution path via GitHub Release assets.
 2. **Manifest validation first**: before any network or filesystem work, validate
    `schema_version=1`, positive integer `byte_size`, 64 lowercase hex
    `archive_sha256`, full 40-hex `source_commit`, correct tag/asset naming
-   (`learning-media-<short12>` / `archon-learning-media-<short12>.tar.gz`),
+   (`learning-media-<short12>` / `cogentrex-learning-media-<short12>.tar.gz`),
    and `download_url` exactly matching
-   `https://github.com/levalencia/archon/releases/download/<tag>/<asset>`.
+   `https://github.com/levalencia/cogentrex/releases/download/<tag>/<asset>`.
    Null or missing fields fail immediately.
 3. **Target outside repo**: install target must be outside the repository root.
 4. **Size bounds before hashing**: reject archives outside `[MIN, MAX]` before
@@ -71,9 +71,9 @@ reproducible distribution path via GitHub Release assets.
 
 - **Release tag:** `learning-media-{commit_short12}`
   e.g. `learning-media-07b527103e28`
-- **Asset name:** `archon-learning-media-{commit_short12}.tar.gz`
-  e.g. `archon-learning-media-07b527103e28.tar.gz`
-- **Download URL:** `https://github.com/levalencia/archon/releases/download/{tag}/{asset}`
+- **Asset name:** `cogentrex-learning-media-{commit_short12}.tar.gz`
+  e.g. `cogentrex-learning-media-07b527103e28.tar.gz`
+- **Download URL:** `https://github.com/levalencia/cogentrex/releases/download/{tag}/{asset}`
 
 The release asset for source commit `07b527103e28` was uploaded and downloaded
 again for checksum and byte-size verification. Artifact status remains

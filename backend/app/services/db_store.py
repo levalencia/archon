@@ -908,7 +908,7 @@ class SkillReferenceRow(Base):
 
 
 class ProjectSkillPinRow(Base):
-    # Project pin supporting visible Archon-owned revisions.
+    # Project pin supporting visible Cogentrex-owned revisions.
     __tablename__ = "project_skill_pins"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -1010,7 +1010,7 @@ class ProjectInstructionSourceRow(Base):
             "byte_count >= 0 AND byte_count <= 262144", name="ck_instruction_source_bytes"
         ),
         CheckConstraint(
-            "family IN ('archon','agents','claude','manual')",
+            "family IN ('cogentrex','agents','claude','manual')",
             name="ck_instruction_source_family",
         ),
         Index("ix_instruction_sources_revision_order", "revision_id", "ordinal"),
@@ -1143,7 +1143,7 @@ class DatabaseStore:
     """PostgreSQL-backed store for conversations, messages, audit, artifacts.
 
     Usage:
-        store = DatabaseStore("postgresql+asyncpg://user:pass@localhost/archon")
+        store = DatabaseStore("postgresql+asyncpg://user:pass@localhost/cogentrex")
         await store.initialize()
         await store.store("conv-1", {"role": "user", "content": "hello"})
     """

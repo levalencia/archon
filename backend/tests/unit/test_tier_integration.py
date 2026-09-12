@@ -18,7 +18,7 @@ class TestTierIntegration:
     async def test_importance_weighted_preserves_key_messages(self) -> None:
         """Importance-weighted trim keeps system + recent user messages."""
         messages = [
-            {"role": "system", "content": "You are Archon."},
+            {"role": "system", "content": "You are Cogentrex."},
             {"role": "user", "content": "Old question about weather"},
             {"role": "assistant", "content": "Old answer about weather"},
             {"role": "user", "content": "Another old question"},

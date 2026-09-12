@@ -49,17 +49,17 @@ if [[ "$actual" != "$expected" ]]; then
 fi
 
 compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT")
-user_table_count=$("${compose[@]}" exec -T postgres psql -U archon -d archon -Atqc \
+user_table_count=$("${compose[@]}" exec -T postgres psql -U cogentrex -d cogentrex -Atqc \
   "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename <> 'alembic_version'")
 if [[ ! "$user_table_count" =~ ^[0-9]+$ ]]; then
   printf 'Unable to inspect target database\n' >&2
   exit 70
 fi
 if (( user_table_count > 0 )) && [[ "${ALLOW_REPLACE:-0}" != "1" ]]; then
-  printf 'Refusing to replace a target containing Archon user tables; set ALLOW_REPLACE=1 explicitly\n' >&2
+  printf 'Refusing to replace a target containing Cogentrex user tables; set ALLOW_REPLACE=1 explicitly\n' >&2
   exit 73
 fi
 
-"${compose[@]}" exec -T postgres pg_restore -U archon -d archon \
+"${compose[@]}" exec -T postgres pg_restore -U cogentrex -d cogentrex \
   --clean --if-exists --no-owner --no-acl --exit-on-error <"$INPUT_DUMP"
 printf 'Restore completed and checksum verified.\n'

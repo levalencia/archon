@@ -3,7 +3,7 @@
 Splits documents into overlapping chunks for embedding and retrieval.
 Supports recursive character splitting with configurable chunk size and overlap.
 
-See: https://github.com/levalencia/production-ai-agents/
+See: https://github.com/levalencia/cogentrex/
 Concept: RAG Pipeline — document ingestion (chunk → embed → store)
 Course reference: Advanced Architectures L19-L21
 """

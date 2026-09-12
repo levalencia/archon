@@ -91,7 +91,7 @@ async def run() -> None:
                 arguments={"sentinel": "bounded"},
                 input_schema={"type": "object"},
             ),
-            b"archon-control-plane-acceptance-key-32-bytes-minimum",
+            b"cogentrex-control-plane-acceptance-key-32-bytes-minimum",
         )
         reservations = await asyncio.gather(*(effects.reserve(binding) for _ in range(32)))
         effect_winners = sum(item.should_execute for item in reservations)

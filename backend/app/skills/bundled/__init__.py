@@ -1,4 +1,4 @@
-"""Validated Archon-owned skills distributed with the runtime."""
+"""Validated Cogentrex-owned skills distributed with the runtime."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from importlib.resources import files
 
 from app.skills.parser import ParsedSkill, SkillParseError, parse_skill_markdown
 
-ARCHON_OWNER_ID = "archon"
+COGENTREX_OWNER_ID = "cogentrex"
 
 
 @dataclass(frozen=True, slots=True)

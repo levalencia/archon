@@ -79,7 +79,7 @@
       "sources": ["backend/app/runtime/context.py", "backend/app/runtime/context_provenance.py", "backend/app/services/context_snapshots.py", "backend/app/services/auto_compact.py", "backend/app/routes/chat.py", "backend/app/routes/stream.py", "backend/app/routes/runs.py", "frontend/src/lib/components/Inspector.svelte", "frontend/src/lib/runs.ts"],
       "tests": ["backend/tests/unit/test_context_provenance.py", "backend/tests/integration/test_effect_budget_migration.py", "backend/tests/integration/test_run_replay_api.py", "frontend/src/lib/runs.test.ts", "frontend/tests/workbench.spec.ts"],
       "evidence": ["docs/course/concepts/context-windows.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
-      "limitation": "Archon persists metadata-only effective-context lineage with owner-scoped API and responsive inspector UI, including keyed asset fingerprints; no deployed observation is claimed."
+      "limitation": "Cogentrex persists metadata-only effective-context lineage with owner-scoped API and responsive inspector UI, including keyed asset fingerprints; no deployed observation is claimed."
     },
     {
       "id": "online-key-rotation",

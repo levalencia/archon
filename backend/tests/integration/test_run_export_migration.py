@@ -19,7 +19,7 @@ def _config(database: Path) -> Config:
 
 @pytest.mark.integration
 def test_migration_10_to_11_to_12(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "migration.db"
     config = _config(database)
     command.upgrade(config, "20260827_10")

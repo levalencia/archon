@@ -10,8 +10,8 @@ source_priority:
 - docs/course/README.md
 packs:
 - id: system-overview
-  title: Archon — System Overview
-  purpose: Understand Archon's mission, architecture, evidence posture, and explicit
+  title: Cogentrex — System Overview
+  purpose: Understand Cogentrex's mission, architecture, evidence posture, and explicit
     boundaries.
   language: en
   sources:
@@ -34,7 +34,7 @@ packs:
   - quiz
   - report
 - id: request-lifecycle
-  title: Archon — Request Lifecycle and Governed Tools
+  title: Cogentrex — Request Lifecycle and Governed Tools
   purpose: Follow one request through runtime, model, policy, approval, execution,
     and evidence.
   language: en
@@ -65,7 +65,7 @@ packs:
   - quiz
   - report
 - id: memory-rag-evaluation
-  title: Archon — Memory, RAG, and Evaluation
+  title: Cogentrex — Memory, RAG, and Evaluation
   purpose: Distinguish transient context, durable memory, retrieval, grounding, citations,
     and evaluation.
   language: en
@@ -95,7 +95,7 @@ packs:
   - quiz
   - report
 - id: reliability-operations
-  title: Archon — Reliability, Security, and Operations
+  title: Cogentrex — Reliability, Security, and Operations
   purpose: Understand failure containment, delegation, MCP, observability, and local
     operations.
   language: en
@@ -122,7 +122,7 @@ packs:
   - quiz
   - report
 - id: interview-demo
-  title: Archon — Interview and Demo Preparation
+  title: Cogentrex — Interview and Demo Preparation
   purpose: Practice concise, credible explanations without overstating implementation
     evidence.
   language: en
@@ -147,7 +147,7 @@ packs:
   - report
 
 - id: hybrid-agent-orchestration
-  title: Archon — Hybrid Agent Orchestration Pilot
+  title: Cogentrex — Hybrid Agent Orchestration Pilot
   purpose: Understand how Auto, Single, and Team route bounded fixed and dynamic
     children through the canonical runtime without creating an unbounded swarm.
   language: en

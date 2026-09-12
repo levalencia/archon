@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build deterministic data for Archon's multi-view Visual Learning Studio."""
+"""Build deterministic data for Cogentrex's multi-view Visual Learning Studio."""
 
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ CURATION = ROOT / "docs/visual-learning/studio-curation.yaml"
 LEARNING_ARTIFACTS = ROOT / "docs/visual-learning/learning-artifacts.yaml"
 PROMPTBOOK = ROOT / "docs/visual-learning/hermes-generation-promptbook.md"
 RUNBOOK = ROOT / "docs/visual-learning/hermes-generation-runbook.md"
-DEFAULT_OUTPUT = ROOT / "frontend/static/learning/archon-studio.json"
+DEFAULT_OUTPUT = ROOT / "frontend/static/learning/cogentrex-studio.json"
 ALLOWED_STATUSES = {"implemented", "partial", "deferred"}
-GITHUB_BASE = "https://github.com/levalencia/archon/blob/main/"
+GITHUB_BASE = "https://github.com/levalencia/cogentrex/blob/main/"
 CONCEPT_PAGE_ALIASES = {
     "python-protocols-di": "oop-protocols-dependency-injection",
     "runtime-state-machine": "state-machines",
@@ -101,9 +101,9 @@ def _load_concepts() -> tuple[
     list[dict[str, Any]], list[dict[str, Any]], dict[str, int]
 ]:
     raw = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
-    if not isinstance(raw, list) or len(raw) != 66:
+    if not isinstance(raw, list) or len(raw) != 67:
         count = len(raw) if isinstance(raw, list) else "invalid"
-        raise ValueError(f"expected 66 concepts, got {count}")
+        raise ValueError(f"expected 67 concepts, got {count}")
     ids = [item["id"] for item in raw]
     if len(ids) != len(set(ids)):
         raise ValueError("concept IDs must be unique")
@@ -293,7 +293,7 @@ def build_studio() -> dict[str, Any]:
     learning_library = _load_learning_library()
 
     return {
-        "schema": "archon.visual-learning-studio",
+        "schema": "cogentrex.visual-learning-studio",
         "version": 3,
         "generated_from": [
             "docs/course/concept-catalog.yaml",
@@ -339,11 +339,11 @@ def main() -> None:
             raise SystemExit(
                 f"visual learning studio is stale: run {Path(__file__).name}"
             )
-        print("Visual learning studio is current: 66 concepts, 16 modules")
+        print("Visual learning studio is current: 67 concepts, 16 modules")
         return
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(payload, encoding="utf-8")
-    print(f"Wrote {args.output.relative_to(ROOT)} with 66 concepts and 16 modules")
+    print(f"Wrote {args.output.relative_to(ROOT)} with 67 concepts and 16 modules")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 Input guardrails: block prompt injection, excessive length, suspicious patterns.
 Output guardrails: block harmful content, check for PII leakage, validate format.
 
-See: https://github.com/levalencia/production-ai-agents/
+See: https://github.com/levalencia/cogentrex/
 Concept: Layer 5 - Guardrails (input/output validation)
 """
 

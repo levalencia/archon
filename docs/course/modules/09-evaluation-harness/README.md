@@ -5,7 +5,7 @@
 
 ## Beginner explanation
 
-An evaluation turns examples and expectations into repeatable measurements. Archon has a lightweight live-call `EvalHarness`, heuristic evaluators, and a stronger durable path that evaluates already-completed Run Ledger trajectories against a versioned, hash-verified dataset. The durable path does not call a model, retriever, or tool.
+An evaluation turns examples and expectations into repeatable measurements. Cogentrex has a lightweight live-call `EvalHarness`, heuristic evaluators, and a stronger durable path that evaluates already-completed Run Ledger trajectories against a versioned, hash-verified dataset. The durable path does not call a model, retriever, or tool.
 
 ## Prerequisites
 
@@ -122,7 +122,7 @@ Recorded-run evals are real, durable, scoped, and deterministic. Their current t
 
 ## Interview answer
 
-“Archon evaluates completed, owner/project-scoped Run Ledger runs without invoking runtime dependencies. A strict allowlisted fixture has an exact schema, semantic version, and canonical content hash; every case maps to one unique completed run. The service pages all safe events, computes deterministic checks and rates, persists case results and aggregates, and supports comparison. This is strong reproducibility and regression evidence, but deterministic fixtures and substring checks are not model-quality proof.”
+“Cogentrex evaluates completed, owner/project-scoped Run Ledger runs without invoking runtime dependencies. A strict allowlisted fixture has an exact schema, semantic version, and canonical content hash; every case maps to one unique completed run. The service pages all safe events, computes deterministic checks and rates, persists case results and aggregates, and supports comparison. This is strong reproducibility and regression evidence, but deterministic fixtures and substring checks are not model-quality proof.”
 
 ## Self-check
 

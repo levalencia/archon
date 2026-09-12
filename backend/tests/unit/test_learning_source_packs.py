@@ -17,7 +17,7 @@ SPEC.loader.exec_module(builder)
 
 def test_builds_six_english_packs_with_checksums(tmp_path: Path) -> None:
     manifest = builder.build_packs(tmp_path / "packs", require_clean=False)
-    assert manifest["schema"] == "archon.learning-source-packs"
+    assert manifest["schema"] == "cogentrex.learning-source-packs"
     assert manifest["language"] == "en"
     assert len(manifest["packs"]) == 6
     assert all(pack["language"] == "en" for pack in manifest["packs"])

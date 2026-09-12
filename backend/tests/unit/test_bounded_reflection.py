@@ -91,13 +91,13 @@ def test_reflection_is_opt_in_and_requires_private_fingerprints() -> None:
     assert ReflectionPolicy(enabled=True, max_cost_usd=Decimal("0")).enabled is True
 
 
-def test_reflection_settings_use_documented_archon_prefix(monkeypatch) -> None:
+def test_reflection_settings_use_documented_cogentrex_prefix(monkeypatch) -> None:
     with pytest.raises(ValueError, match="requires pricing"):
         Settings(reflection_enabled=True)
-    monkeypatch.setenv("ARCHON_REFLECTION_ENABLED", "true")
-    monkeypatch.setenv("ARCHON_REFLECTION_MAX_REVISIONS", "0")
-    monkeypatch.setenv("ARCHON_REFLECTION_TIMEOUT_SECONDS", "3.5")
-    monkeypatch.setenv("ARCHON_REFLECTION_INPUT_COST_PER_MILLION_USD", "1")
+    monkeypatch.setenv("COGENTREX_REFLECTION_ENABLED", "true")
+    monkeypatch.setenv("COGENTREX_REFLECTION_MAX_REVISIONS", "0")
+    monkeypatch.setenv("COGENTREX_REFLECTION_TIMEOUT_SECONDS", "3.5")
+    monkeypatch.setenv("COGENTREX_REFLECTION_INPUT_COST_PER_MILLION_USD", "1")
 
     settings = Settings()
 
@@ -139,14 +139,14 @@ async def test_keep_uses_one_critique_and_no_revision() -> None:
     )
     expected_hash = hmac.new(
         HASH_KEY,
-        b"archon/reflection/v1\0alice\0project\0run-1\0draft\0private draft",
+        b"cogentrex/reflection/v1\0alice\0project\0run-1\0draft\0private draft",
         hashlib.sha256,
     ).hexdigest()
     assert started.data["draft_hash"] == expected_hash
     assert started.data["draft_hash"] != hashlib.sha256(b"private draft").hexdigest()
     other_scope_hash = hmac.new(
         HASH_KEY,
-        b"archon/reflection/v1\0bob\0project\0run-1\0draft\0private draft",
+        b"cogentrex/reflection/v1\0bob\0project\0run-1\0draft\0private draft",
         hashlib.sha256,
     ).hexdigest()
     assert started.data["draft_hash"] != other_scope_hash

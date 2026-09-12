@@ -1,9 +1,9 @@
 """Core Protocol definitions (interfaces). Zero framework dependencies.
 
-Every component in Archon depends on these Protocols, never on concrete implementations.
+Every component in Cogentrex depends on these Protocols, never on concrete implementations.
 This is how we achieve vendor-neutral, testable, swappable architecture.
 
-See: https://github.com/levalencia/production-ai-agents/articles/day-01-anatomy-of-production-agent/
+See: https://github.com/levalencia/cogentrex/articles/day-01-anatomy-of-production-agent/
 Concept: 6-layer architecture (Model, Orchestration, Tools, Memory, Guardrails, Observability)
 """
 

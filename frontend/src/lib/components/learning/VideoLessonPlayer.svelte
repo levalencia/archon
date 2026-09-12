@@ -1,24 +1,16 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import SourceLinks from './SourceLinks.svelte';
   import type { SourceReference } from '$lib/source-links';
-  type Segment = { chapter: string; text: string; speaker: string; sources?:SourceReference[] };
-  let { title, mediaUrl, content, limitations, sourceCommit }: { title:string; mediaUrl:string; content:{segments:Segment[]}; limitations:string[]; sourceCommit:string }=$props();
+  import { buildVideoCaptions } from '$lib/video-captions';
+  type Segment = { chapter: string; text: string; speaker: string; start_seconds?:number; end_seconds?:number; sources?:SourceReference[] };
+  let { title, mediaUrl, content, limitations, sourceCommit, durationSeconds }: { title:string; mediaUrl:string; content:{segments:Segment[]}; limitations:string[]; sourceCommit:string; durationSeconds?:number }=$props();
   let captionsUrl = $state('data:text/vtt,WEBVTT%0A%0A');
 
-  function stamp(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainder = (seconds % 60).toFixed(3).padStart(6, '0');
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${remainder}`;
-  }
-
-  onMount(() => {
-    const sentences = content.segments.flatMap(segment => segment.text.match(/[^.!?]+[.!?]+/g) ?? [segment.text]);
-    const cueLength = 70 / Math.max(sentences.length, 1);
-    const cues = sentences.map((sentence, index) => `${index + 1}\n${stamp(index * cueLength)} --> ${stamp((index + 1) * cueLength)}\n${sentence.trim()}\n`).join('\n');
-    captionsUrl = URL.createObjectURL(new Blob([`WEBVTT\n\n${cues}`], { type: 'text/vtt' }));
-    return () => URL.revokeObjectURL(captionsUrl);
+  $effect(() => {
+    const captions = buildVideoCaptions(content.segments, durationSeconds);
+    const url = URL.createObjectURL(new Blob([captions], { type: 'text/vtt' }));
+    captionsUrl = url;
+    return () => URL.revokeObjectURL(url);
   });
 </script>
 <section class="video" aria-label="Video lesson player"><span class="eyebrow">English explainer video</span><h3>{title}</h3><video controls preload="metadata" src={mediaUrl} aria-describedby="video-transcript"><track kind="captions" src={captionsUrl} srclang="en" label="English" default/>Your browser does not support HTML video.</video><details id="video-transcript"><summary>Accessible transcript</summary>{#each content.segments as segment}<article><h4>{segment.chapter}</h4><p>{segment.text}</p>{#if segment.sources}<SourceLinks sources={segment.sources} {sourceCommit} compact />{/if}</article>{/each}</details><details><summary>What this does not prove</summary><ul>{#each limitations as item}<li>{item}</li>{/each}</ul></details></section>

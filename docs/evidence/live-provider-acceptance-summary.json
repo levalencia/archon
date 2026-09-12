@@ -1,5 +1,5 @@
 {
-  "schema": "archon.live-provider-acceptance-summary",
+  "schema": "cogentrex.live-provider-acceptance-summary",
   "version": 1,
   "evidence_date": "2026-08-29",
   "claim_scope": "Sanitized operator-authorized live acceptance results; no prompts, responses, credentials, full endpoint URLs, or raw provider errors retained.",

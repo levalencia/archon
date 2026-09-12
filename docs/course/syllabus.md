@@ -1,8 +1,8 @@
-# Archon Course Syllabus
+# Cogentrex Course Syllabus
 
 ## Course purpose
 
-Build enough shared vocabulary and implementation understanding to explain, inspect, exercise, and defend Archon's reliability architecture. The course serves three uses without duplicating content: beginner onboarding, Luis's interview study, and contributor reference.
+Build enough shared vocabulary and implementation understanding to explain, inspect, exercise, and defend Cogentrex's reliability architecture. The course serves three uses without duplicating content: beginner onboarding, Luis's interview study, and contributor reference.
 
 Use the [course home](README.md) for module navigation and the [concept map](concept-map.md) for dependencies. Current capability status remains in the [implementation evidence matrix](../IMPLEMENTATION-EVIDENCE.md).
 
@@ -39,7 +39,7 @@ By the end, a learner can:
 4. register and reason about a typed tool contract, schema, risk metadata, policy decision, and exact-bound approval;
 5. explain context, conversation state, encrypted memory, ownership, and persistence boundaries;
 6. inspect durable run events and correctly describe replay, fork, compare, and their limitations;
-7. distinguish documents, chunks, embeddings, retrieval, grounding, faithfulness, and citations, including Archon's SQL JSON cosine boundary;
+7. distinguish documents, chunks, embeddings, retrieval, grounding, faithfulness, and citations, including Cogentrex's SQL JSON cosine boundary;
 8. evaluate a recorded run and interpret regression evidence without turning fixtures into model-quality claims;
 9. reason about retries, idempotency, timeouts, cancellation, circuit breakers, fallback, and rate limits;
 10. explain why the verifier is one bounded evidence-only child rather than a swarm or general reflection loop;
@@ -120,7 +120,7 @@ Apply this policy exactly to every module, concept, exercise, and interview answ
 3. **Use only the four concept statuses** `implemented`, `partial`, `not-implemented`, and `deferred`, and state the limiting boundary.
 4. **Link claims to exact source symbols, behavior-focused tests, and the canonical evidence path.** A route, class, manifest, mock, fixture, or passing import alone does not prove a live capability.
 5. **Label mocks, scripted adapters, fixtures, deterministic data, local smokes, and historical artifacts.** Never present them as external-provider, model-quality, load, SLO, or public-production evidence.
-6. **Never translate local Docker evidence into deployment.** Archon's verified target is production-like local Docker Compose; public/cloud deployment remains unverified and deferred.
+6. **Never translate local Docker evidence into deployment.** Cogentrex's verified target is production-like local Docker Compose; public/cloud deployment remains unverified and deferred.
 7. **Do not claim pgvector.** Current retrieval uses PostgreSQL JSON embeddings with cosine computed in Python (`sql-json-cosine`), not an indexed vector service.
 8. **Do not claim generic self-reflection.** ReAct tool-result feedback, deterministic claim verification, one bounded verifier child, and post-run evaluation are distinct mechanisms.
 9. **Do not claim a dynamic multi-agent swarm.** The evidence-backed capability is one constrained verifier specialist with explicit context, tools, budgets, and lineage.

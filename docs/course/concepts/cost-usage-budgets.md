@@ -9,7 +9,7 @@
 
 Usage reports what a model call consumed. Pricing converts that usage into money. A budget must reserve an upper bound **before** dispatch, then reconcile actual usage afterward. Reporting cost after a run is observability; preventing an over-budget call is enforcement.
 
-Archon uses integer nano-US-dollars (`nUSD`) for enforcement. It does not use binary floating point in authoritative counters.
+Cogentrex uses integer nano-US-dollars (`nUSD`) for enforcement. It does not use binary floating point in authoritative counters.
 The reservation is sized from the current serialized request plus bounded headroom and the maximum eligible provider/cache input price class—not from a fixed input-token reservation.
 
 ## Architecture
@@ -115,7 +115,7 @@ The charge ledger stores safe identities, integer amounts, token counters, and t
 
 ## Interview answer
 
-> Archon enforces monetary budgets with durable integer nUSD accounts. Every chat, RAG, or verifier model call reserves a conservative upper bound before dispatch, rejects an oversized serialized request, marks dispatch durably, and reconciles provider-reported usage. PostgreSQL contention proves one budget reservation winner and the live Foundry path exercises reconciliation. Unknown prices and insufficient capacity fail closed; post-dispatch ambiguity remains indeterminate. Price-book lifecycle and invoice parity remain explicit limits.
+> Cogentrex enforces monetary budgets with durable integer nUSD accounts. Every chat, RAG, or verifier model call reserves a conservative upper bound before dispatch, rejects an oversized serialized request, marks dispatch durably, and reconciles provider-reported usage. PostgreSQL contention proves one budget reservation winner and the live Foundry path exercises reconciliation. Unknown prices and insufficient capacity fail closed; post-dispatch ambiguity remains indeterminate. Price-book lifecycle and invoice parity remain explicit limits.
 
 ## Self-check
 

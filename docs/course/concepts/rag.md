@@ -54,7 +54,7 @@ flowchart TD
   A --> L[Finalize ledger]
 ```
 
-## Two Archon paths
+## Two Cogentrex paths
 
 `backend/app/services/rag_pipeline.py::RAGPipeline` is the simpler teaching path.
 `RAGPipeline.ingest_document` chunks with 500 characters and 50 characters of overlap.
@@ -171,7 +171,7 @@ Explain what the deterministic checks establish and what requires semantic or hu
 
 ## 30-second interview answer
 
-“RAG retrieves scoped evidence before generation. Archon has a simple prompt-based pipeline and a grounded workflow that assigns evidence IDs, requests atomic claims, rechecks hashes, applies conservative support rules, filters unsupported claims, reconstructs citations, and abstains when nothing survives. Its deterministic mock evidence proves plumbing rather than semantic truth; production quality needs real embeddings, labeled retrieval and answer evaluations, and scalable serving.”
+“RAG retrieves scoped evidence before generation. Cogentrex has a simple prompt-based pipeline and a grounded workflow that assigns evidence IDs, requests atomic claims, rechecks hashes, applies conservative support rules, filters unsupported claims, reconstructs citations, and abstains when nothing survives. Its deterministic mock evidence proves plumbing rather than semantic truth; production quality needs real embeddings, labeled retrieval and answer evaluations, and scalable serving.”
 
 ## Self-checks
 

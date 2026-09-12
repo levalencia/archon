@@ -19,7 +19,7 @@ def config_for(database: Path) -> Config:
 
 
 def test_skill_instruction_migration_round_trip_and_guards(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "spi.db"
     config = config_for(database)
     tables = {
@@ -79,7 +79,7 @@ def test_skill_instruction_migration_round_trip_and_guards(tmp_path: Path, monke
                 "INSERT INTO project_instruction_sources "
                 "(id,revision_id,owner_id,project_id,ordinal,relative_path,scope_path,family,"
                 "is_override,byte_count,content_hash,content) VALUES "
-                "('inst','inst','owner','project',0,'.archon/instructions.md','.',"
+                "('inst','inst','owner','project',0,'.cogentrex/instructions.md','.',"
                 "'manual',0,12,'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',"
                 "'instructions')"
             )

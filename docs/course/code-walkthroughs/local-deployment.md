@@ -6,7 +6,7 @@ The verified target is local, single-host, loopback-only Compose. Public deploym
 
 ## Startup graph
 
-[`docker-compose.local.yml`](../../../docker-compose.local.yml) defines digest-pinned nginx, PostgreSQL, Redis and OTEL images plus built frontend/backend images. Only nginx publishes `127.0.0.1:${ARCHON_LOCAL_PORT}:8080`; app dependencies stay internal. App containers use non-root/read-only/no-new-privileges boundaries where configured.
+[`docker-compose.local.yml`](../../../docker-compose.local.yml) defines digest-pinned nginx, PostgreSQL, Redis and OTEL images plus built frontend/backend images. Only nginx publishes `127.0.0.1:${COGENTREX_LOCAL_PORT}:8080`; app dependencies stay internal. App containers use non-root/read-only/no-new-privileges boundaries where configured.
 
 ```mermaid
 flowchart LR
@@ -69,7 +69,7 @@ python3 -m json.tool docs/evidence/local-dr-report.json >/dev/null
 The real smoke is expensive and destructive only to its isolated projects:
 
 ```bash
-./scripts/local-dr-smoke.sh /tmp/archon-dr-report.json
+./scripts/local-dr-smoke.sh /tmp/cogentrex-dr-report.json
 ```
 
 Run it only with Docker/Compose capacity and review cleanup first. `KEEP=1` retains sensitive temporary material and is not the default.

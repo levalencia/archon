@@ -102,7 +102,7 @@ class ScopedEncryptedMemoryRepository:
         return self._keyring.active_version
 
     def _key(self, user_id: str, project_id: str, version: int) -> bytes:
-        info = b"archon/memory/v1\0" + user_id.encode() + b"\0" + project_id.encode()
+        info = b"cogentrex/memory/v1\0" + user_id.encode() + b"\0" + project_id.encode()
         try:
             master_key = self._keyring.key(version)
         except ValueError:
@@ -110,7 +110,7 @@ class ScopedEncryptedMemoryRepository:
         derived_key: bytes = HKDF(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=b"archon-scoped-memory-hkdf-v1",
+            salt=b"cogentrex-scoped-memory-hkdf-v1",
             info=info + b"\0" + str(version).encode(),
         ).derive(master_key)
         return derived_key
@@ -119,7 +119,7 @@ class ScopedEncryptedMemoryRepository:
     def _aad(user_id: str, project_id: str, fact_id: str, version: int) -> bytes:
         return b"\0".join(
             (
-                b"archon-memory-fact",
+                b"cogentrex-memory-fact",
                 user_id.encode(),
                 project_id.encode(),
                 fact_id.encode(),

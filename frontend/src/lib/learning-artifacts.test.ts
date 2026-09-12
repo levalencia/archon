@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getLearningArtifact, getMediaAccess, loadLearningLibrary } from './learning-artifacts';
 
 const catalog = {
-  schema: 'archon.learning-library',
+  schema: 'cogentrex.learning-library',
   version: 1,
   generated_at: '2026-09-04T12:00:00Z',
   source_commit: 'a'.repeat(40),

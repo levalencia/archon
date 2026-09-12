@@ -2,7 +2,7 @@
 
 > **Documentation status:** Draft
 > **Concept status:** `implemented`
-> **Status boundary:** Archon supports governed, deployment-allowlisted MCP over local stdio. HTTP/OAuth and arbitrary user-supplied commands are outside the implemented claim.
+> **Status boundary:** Cogentrex supports governed, deployment-allowlisted MCP over local stdio. HTTP/OAuth and arbitrary user-supplied commands are outside the implemented claim.
 > **Used by:** [Module 12](../modules/12-governed-mcp/README.md)
 
 ## Definition and trust boundary
@@ -10,11 +10,11 @@
 MCP standardizes how a client discovers and invokes tools.
 Compatibility says that two components can exchange protocol messages.
 It does not say the tool is safe, truthful, authorized, or suitable for a tenant.
-Archon therefore treats MCP as an untrusted tool-supply boundary.
+Cogentrex therefore treats MCP as an untrusted tool-supply boundary.
 MCP tools join the same [tool contract](tool-contracts.md), [policy engine](policy-engine.md), approval, timeout, and evidence paths as native tools.
 
 The implemented transport is local **stdio** only.
-Archon starts a deployment-allowlisted child process and exchanges messages over its standard input and output.
+Cogentrex starts a deployment-allowlisted child process and exchanges messages over its standard input and output.
 The request API accepts a `profile_id`; it does not accept a command, argument vector, working directory, or environment map.
 No remote HTTP transport or OAuth flow is claimed here.
 
@@ -156,7 +156,7 @@ Native tools avoid a child protocol boundary and can have tighter application ty
 MCP improves interoperability and discovery but introduces metadata, process, and stale-binding risks.
 A fixed sidecar can strengthen process isolation but adds deployment complexity.
 Remote MCP may reduce local process exposure but adds network identity and availability problems.
-Archon's current choice is intentionally narrow: deployment-owned local stdio plus ordinary tool governance.
+Cogentrex's current choice is intentionally narrow: deployment-owned local stdio plus ordinary tool governance.
 
 ## Exercise: follow one approved MCP call
 
@@ -171,7 +171,7 @@ Expected conclusion: protocol compatibility supplies a candidate tool; scoped in
 
 ## 30-second answer
 
-“Archon treats MCP as untrusted tool supply. Operators own strict process profiles, and the only verified transport is local stdio through the official SDK. Discovery creates bounded owner/project metadata. Request-scoped bindings add conservative risks and approval, then revalidate profile, health, enablement, schema, and hints immediately before calling. No HTTP or OAuth support is claimed.”
+“Cogentrex treats MCP as untrusted tool supply. Operators own strict process profiles, and the only verified transport is local stdio through the official SDK. Discovery creates bounded owner/project metadata. Request-scoped bindings add conservative risks and approval, then revalidate profile, health, enablement, schema, and hints immediately before calling. No HTTP or OAuth support is claimed.”
 
 ## Self-check
 

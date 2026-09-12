@@ -21,7 +21,7 @@ def _write_library(root: Path) -> tuple[Path, str]:
     media.write_bytes(b"0123456789")
     checksum = hashlib.sha256(media.read_bytes()).hexdigest()
     catalog = {
-        "schema": "archon.learning-library",
+        "schema": "cogentrex.learning-library",
         "version": 1,
         "generated_at": "2026-09-04T12:00:00Z",
         "source_commit": "a" * 40,
@@ -57,7 +57,7 @@ def test_catalog_loads_only_valid_published_artifacts(tmp_path: Path) -> None:
     catalog = LearningMediaCatalog(tmp_path)
     payload = catalog.public_catalog()
 
-    assert payload["schema"] == "archon.learning-library"
+    assert payload["schema"] == "cogentrex.learning-library"
     artifact = payload["packs"][0]["artifacts"][0]
     assert artifact["id"] == "audio-overview"
     assert artifact["sha256"] == checksum

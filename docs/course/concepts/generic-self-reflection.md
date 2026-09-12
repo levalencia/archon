@@ -1,14 +1,14 @@
 # Generic self-reflection
 
 > **Implementation status:** `implemented`
-> **Status boundary:** Archon can optionally critique a tool-free final-answer draft and perform at most one bounded revision. It does not expose chain-of-thought, create recursive agents, or maintain learned reflection memory.
+> **Status boundary:** Cogentrex can optionally critique a tool-free final-answer draft and perform at most one bounded revision. It does not expose chain-of-thought, create recursive agents, or maintain learned reflection memory.
 > **Reviewed revision:** `eb5a448`
 > **Used by module:** [Module 03-react-loop](../modules/03-react-loop/README.md)
 > **Catalog ID:** `generic-self-reflection`
 
 ## Beginner explanation
 
-Self-reflection is a second, deliberately bounded look at a proposed final answer. Archon first produces the normal draft. If reflection is enabled, a tool-free critic returns a small structured verdict: keep or revise, issue codes, validated `request:L#` / `draft:L#` evidence locations, and confidence. A revise verdict permits at most one tool-free revision.
+Self-reflection is a second, deliberately bounded look at a proposed final answer. Cogentrex first produces the normal draft. If reflection is enabled, a tool-free critic returns a small structured verdict: keep or revise, issue codes, validated `request:L#` / `draft:L#` evidence locations, and confidence. A revise verdict permits at most one tool-free revision.
 
 This is different from ReAct tool-error feedback, verifier delegation, and post-run scoring.
 
@@ -102,7 +102,7 @@ Implemented and locally tested means the runtime wiring and hard boundaries exis
 
 ## Interview answer
 
-> Archon implements optional final-answer reflection as a bounded runtime phase, not another autonomous agent. The critic and optional single revision have no tools, use a strict structured verdict, inherit the run budget, add hard time/token/priced-cost limits, and persist only HMAC-scoped metadata. Failures retain the draft; monetary failures preserve established stop semantics. We have deterministic adversarial tests and a clearly labeled synthetic scorer fixture, but no claim that reflection improves live-provider quality yet.
+> Cogentrex implements optional final-answer reflection as a bounded runtime phase, not another autonomous agent. The critic and optional single revision have no tools, use a strict structured verdict, inherit the run budget, add hard time/token/priced-cost limits, and persist only HMAC-scoped metadata. Failures retain the draft; monetary failures preserve established stop semantics. We have deterministic adversarial tests and a clearly labeled synthetic scorer fixture, but no claim that reflection improves live-provider quality yet.
 
 ## Self-check
 

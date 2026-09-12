@@ -35,7 +35,7 @@ def _assert_process_gone(pid_file: Path) -> None:
 async def test_official_stdio_initialize_list_call_env_and_cleanup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("ARCHON_SECRET_CANARY", "must-not-reach-child")
+    monkeypatch.setenv("COGENTREX_SECRET_CANARY", "must-not-reach-child")
     pid_file = tmp_path / "server.pid"
     client = StdioMCPClient(_profile(pid_file))
 

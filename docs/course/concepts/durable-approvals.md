@@ -50,7 +50,7 @@ sequenceDiagram
   R->>R: verify outcome.binds(request)
 ```
 
-## Exact binding and Archon symbols
+## Exact binding and Cogentrex symbols
 
 The runtime constructs [`AuthorizationRequest`](../../../backend/app/security/approvals.py) from native `tool_call_id`, canonical `tool_name`, `arguments_hash`, risk classes, and matched rule.
 [`AuthorizationOutcome.binds`](../../../backend/app/security/approvals.py) compares call ID, name, and digest exactly.
@@ -103,7 +103,7 @@ Investigations should join the approval receipt to run events by exact binding, 
 
 An in-memory [`ApprovalBroker`](../../../backend/app/security/live_approvals.py) is lower latency and simpler but loses state on restart and cannot coordinate processes.
 A message broker can push decisions instead of polling, but still needs durable exact-binding records and deduplication.
-Long-lived reusable grants reduce friction but expand blast radius and require revocation; Archon's implemented durable scope is one exact call.
+Long-lived reusable grants reduce friction but expand blast radius and require revocation; Cogentrex's implemented durable scope is one exact call.
 Database polling is portable and clear, at the cost of query load and polling latency.
 
 ## Lab versus production
@@ -114,7 +114,7 @@ Durable approval persistence does not make the whole paused runtime resumable; t
 
 ## 30-second interview answer
 
-“Archon treats approval as a one-shot durable receipt, not a reusable yes. The runtime reserves `AuthorizationRequest` before publishing the prompt; the database binds owner, conversation, run, native call ID, canonical tool, SHA-256 argument digest, risks, rule, and expiry. Conditional pending-to-terminal updates give one winner, and the runtime rechecks `AuthorizationOutcome.binds`. This survives broker restart, but it does not guarantee exactly-once external effects or full run resumption.”
+“Cogentrex treats approval as a one-shot durable receipt, not a reusable yes. The runtime reserves `AuthorizationRequest` before publishing the prompt; the database binds owner, conversation, run, native call ID, canonical tool, SHA-256 argument digest, risks, rule, and expiry. Conditional pending-to-terminal updates give one winner, and the runtime rechecks `AuthorizationOutcome.binds`. This survives broker restart, but it does not guarantee exactly-once external effects or full run resumption.”
 
 ## Self-check questions
 

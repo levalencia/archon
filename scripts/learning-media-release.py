@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""learning-media-release.py – Package and install Archon rich Visual Learning media.
+"""learning-media-release.py – Package and install Cogentrex rich Visual Learning media.
 
 A standard-library-only CLI for creating deterministic, checksummed tar.gz
 archives of the rich media library and securely installing them from GitHub
@@ -11,11 +11,11 @@ Subcommands:
 
 Usage:
     python3 scripts/learning-media-release.py package \\
-        --library /path/to/archon-learning-media \\
-        --output archon-learning-media-v<tag>.tar.gz
+        --library /path/to/cogentrex-learning-media \\
+        --output cogentrex-learning-media-v<tag>.tar.gz
 
     python3 scripts/learning-media-release.py install \\
-        --target /path/to/archon-learning-media \\
+        --target /path/to/cogentrex-learning-media \\
         --manifest release-manifest.json \\
         [--archive local.tar.gz]
 """
@@ -42,12 +42,12 @@ from typing import Any
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-SCHEMA_NAME = "archon.learning-library"
+SCHEMA_NAME = "cogentrex.learning-library"
 MANIFEST_SCHEMA_VERSION = 1
-MARKER_FILE = ".archon-learning-library"
-MARKER_CONTENT = "archon.learning-library/v1\n"
+MARKER_FILE = ".cogentrex-learning-library"
+MARKER_CONTENT = "cogentrex.learning-library/v1\n"
 ALLOWED_TOP_LEVEL = {MARKER_FILE, "catalog.json", "published"}
-REPO_SLUG = "levalencia/archon"
+REPO_SLUG = "levalencia/cogentrex"
 
 # Size bounds
 MIN_ARCHIVE_SIZE = 100  # bytes – smallest plausible archive
@@ -69,7 +69,7 @@ TAR_GNAME = "root"
 DIR_MODE = 0o755
 FILE_MODE = 0o644
 
-_ALLOWED_HOST_PREFIX = "https://github.com/levalencia/archon/releases/download/"
+_ALLOWED_HOST_PREFIX = "https://github.com/levalencia/cogentrex/releases/download/"
 _ALLOWED_REDIRECT_HOSTS = {
     "github.com",
     "objects.githubusercontent.com",
@@ -133,7 +133,7 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
 
     short = commit[:12]
     expected_tag = f"learning-media-{short}"
-    expected_asset = f"archon-learning-media-{short}.tar.gz"
+    expected_asset = f"cogentrex-learning-media-{short}.tar.gz"
     if tag != expected_tag:
         raise InstallError(f"Manifest release_tag must be {expected_tag!r}, got {tag!r}")
     if asset != expected_asset:
@@ -408,7 +408,7 @@ def create_archive(
 
     short = source_commit[:12]
     tag = f"learning-media-{short}"
-    asset_name = f"archon-learning-media-{short}.tar.gz"
+    asset_name = f"cogentrex-learning-media-{short}.tar.gz"
 
     manifest: dict[str, Any] = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
@@ -626,7 +626,7 @@ def _download_with_checks(
 ) -> None:
     """Stream HTTPS download with Content-Length check and running byte cap.
 
-    Rejects redirects/final URLs outside github.com/levalencia/archon/releases/download/.
+    Rejects redirects/final URLs outside github.com/levalencia/cogentrex/releases/download/.
     """
     if not url.startswith(_ALLOWED_HOST_PREFIX):
         raise InstallError(f"Download URL not in allowed prefix: {url!r}")
@@ -705,7 +705,7 @@ def install_from_manifest(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="learning-media-release",
-        description="Package and install Archon rich Visual Learning media.",
+        description="Package and install Cogentrex rich Visual Learning media.",
     )
     sub = parser.add_subparsers(dest="command")
 

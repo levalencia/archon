@@ -1,6 +1,6 @@
 {
   "pack_id": "request-lifecycle",
-  "title": "Archon Request Lifecycle",
+  "title": "Cogentrex Request Lifecycle",
   "purpose": "Follow one request from the browser through governance, execution, evidence, and evaluation.",
   "language": "en",
   "sources": [
@@ -17,20 +17,20 @@
   ],
   "limitations": [
     "This is derivative learning material, not canonical implementation evidence.",
-    "Archon is locally verified; this artifact does not claim public or cloud deployment.",
+    "Cogentrex is locally verified; this artifact does not claim public or cloud deployment.",
     "Deterministic tests, local runtime evidence, and live-provider evidence are distinct proof levels."
   ],
   "slides": [
     {
       "id": "s1",
       "title": "One Request, Many Trust Boundaries",
-      "message": "Archon treats an agent request as a governed state transition, not a single model call.",
+      "message": "Cogentrex treats an agent request as a governed state transition, not a single model call.",
       "visual": "browser-to-ledger",
       "notes": "Start with the mental model: the model proposes; deterministic systems authorize, execute, and record.",
       "sources": [
         "docs/ARCHITECTURE-DIAGRAMS.md"
       ],
-      "presenter_script": "Start with the practical meaning of “One Request, Many Trust Boundaries.” Start with the mental model: the model proposes; deterministic systems authorize, execute, and record. Explain the visible browser to ledger from left to right and connect it to this mental model: Archon treats an agent request as a governed state transition, not a single model call. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “System Boundary” so the lifecycle remains one causal story rather than isolated boxes.",
+      "presenter_script": "Start with the practical meaning of “One Request, Many Trust Boundaries.” Start with the mental model: the model proposes; deterministic systems authorize, execute, and record. Explain the visible browser to ledger from left to right and connect it to this mental model: Cogentrex treats an agent request as a governed state transition, not a single model call. For a newcomer, name the responsibility at this boundary, what information or authority crosses it, and what explicit failure would look like. Do not imply that model confidence, valid syntax, or a healthy process proves successful execution. Ask the learner to restate the boundary in their own words and use the linked documentation when they want implementation detail. Then transition to “System Boundary” so the lifecycle remains one causal story rather than isolated boxes.",
       "key_terms": [
         {
           "term": "Browser To Ledger",
@@ -95,7 +95,7 @@
           "definition": "The part of the request lifecycle represented by the context build visual."
         }
       ],
-      "common_misconception": "Anything stored by Archon is automatically present in every model prompt.",
+      "common_misconception": "Anything stored by Cogentrex is automatically present in every model prompt.",
       "transition": "Next: The Runtime Is a Bounded Interpreter."
     },
     {
@@ -496,7 +496,7 @@
   ],
   "mind_map": {
     "id": "request-lifecycle",
-    "label": "Archon Request Lifecycle",
+    "label": "Cogentrex Request Lifecycle",
     "summary": "A governed path from request to evidence.",
     "sources": [
       "docs/ARCHITECTURE-DIAGRAMS.md"
@@ -996,7 +996,7 @@
     },
     {
       "heading": "Mental model",
-      "body": "Think of Archon as a bounded interpreter around a probabilistic model. The model proposes the next step; typed state, schemas, policy, approvals, budgets, and executors constrain what can happen."
+      "body": "Think of Cogentrex as a bounded interpreter around a probabilistic model. The model proposes the next step; typed state, schemas, policy, approvals, budgets, and executors constrain what can happen."
     },
     {
       "heading": "Entry and identity",
@@ -1020,7 +1020,7 @@
     },
     {
       "heading": "Interview explanation",
-      "body": "Archon separates probabilistic planning from deterministic control. The model can propose a tool call, but schemas, policy, durable approval, bounded execution, and an append-only evidence trail determine whether and how it runs."
+      "body": "Cogentrex separates probabilistic planning from deterministic control. The model can propose a tool call, but schemas, policy, durable approval, bounded execution, and an append-only evidence trail determine whether and how it runs."
     },
     {
       "heading": "What this does not prove",
@@ -1030,19 +1030,19 @@
   "audio_script": [
     {
       "chapter": "The mental model",
-      "text": "Imagine an AI agent not as an autonomous employee with unlimited authority, but as a probabilistic planner inside a deterministic control system. That is the central mental model for Archon. A user request begins in the browser, but it does not travel directly to a model and then straight into a tool. It crosses explicit trust boundaries. The gateway routes the request. Authentication establishes the caller. The runtime assembles context and enforces budgets. The model may answer or propose a structured action. Validation, policy, and approval decide whether that proposal can become an effect. Finally, the Run Ledger records what actually happened. This distinction matters because model intent is not execution evidence."
+      "text": "Imagine an AI agent not as an autonomous employee with unlimited authority, but as a probabilistic planner inside a deterministic control system. That is the central mental model for Cogentrex. A user request begins in the browser, but it does not travel directly to a model and then straight into a tool. It crosses explicit trust boundaries. The gateway routes the request. Authentication establishes the caller. The runtime assembles context and enforces budgets. The model may answer or propose a structured action. Validation, policy, and approval decide whether that proposal can become an effect. Finally, the Run Ledger records what actually happened. This distinction matters because model intent is not execution evidence."
     },
     {
       "chapter": "From request to governed action",
-      "text": "After identity and ownership checks, Archon constructs the model context from bounded conversation history, project instructions, relevant skills, and retrieval results when needed. The runtime behaves like a bounded interpreter. It limits iterations, tool calls, tokens, time, and cost. When the model proposes a tool call, the registry first checks the tool name and argument schema. A valid shape is still not authorization. The policy layer returns one of three outcomes: allow, ask, or deny. Allow can continue immediately. Ask pauses for a durable approval bound to the user, tool, normalized arguments, and execution identity. Deny produces an explicit controlled result. The model cannot approve its own request, and a previous approval cannot silently authorize changed arguments."
+      "text": "After identity and ownership checks, Cogentrex constructs the model context from bounded conversation history, project instructions, relevant skills, and retrieval results when needed. The runtime behaves like a bounded interpreter. It limits iterations, tool calls, tokens, time, and cost. When the model proposes a tool call, the registry first checks the tool name and argument schema. A valid shape is still not authorization. The policy layer returns one of three outcomes: allow, ask, or deny. Allow can continue immediately. Ask pauses for a durable approval bound to the user, tool, normalized arguments, and execution identity. Deny produces an explicit controlled result. The model cannot approve its own request, and a previous approval cannot silently authorize changed arguments."
     },
     {
       "chapter": "Execution, evidence, and limits",
-      "text": "Approved execution crosses another boundary. Code execution uses an isolated runner with bounded resources. Other tools return structured results to the runtime. Events, outcomes, usage, and stop reasons are preserved in the Run Ledger so the system can explain what happened. Evaluation is separate: it judges qualities such as groundedness after or around execution, while observability records operational facts. Failures remain part of the contract. A timeout means the deadline was reached; it is not a pass. A mock test proves deterministic wiring, not live provider behavior. A healthy process proves liveness, not complete readiness. And a locally verified stack does not imply public deployment. If you can explain those boundaries clearly, you understand the core of Archon's request lifecycle."
+      "text": "Approved execution crosses another boundary. Code execution uses an isolated runner with bounded resources. Other tools return structured results to the runtime. Events, outcomes, usage, and stop reasons are preserved in the Run Ledger so the system can explain what happened. Evaluation is separate: it judges qualities such as groundedness after or around execution, while observability records operational facts. Failures remain part of the contract. A timeout means the deadline was reached; it is not a pass. A mock test proves deterministic wiring, not live provider behavior. A healthy process proves liveness, not complete readiness. And a locally verified stack does not imply public deployment. If you can explain those boundaries clearly, you understand the core of Cogentrex's request lifecycle."
     },
     {
       "chapter": "Context is assembled deliberately",
-      "text": "Context is not magical memory. A production agent has several sources of information, and each has a different purpose. Recent conversation messages preserve the immediate exchange. Project instructions constrain behavior for the current workspace. Skills provide reusable procedures selected for the request. Retrieval can add relevant document chunks. Durable memory can preserve approved facts across sessions. The runtime must decide what enters the finite model window, in what order, and under what token budget. Too little context creates blind decisions. Too much context can hide the important evidence or exceed the provider limit. Archon therefore treats context construction as an explicit, observable stage. It can record token estimates and compaction behavior without pretending that a larger prompt is automatically a better prompt. When explaining this in an interview, separate storage from retrieval, retrieval from selection, and selected context from the model's final interpretation."
+      "text": "Context is not magical memory. A production agent has several sources of information, and each has a different purpose. Recent conversation messages preserve the immediate exchange. Project instructions constrain behavior for the current workspace. Skills provide reusable procedures selected for the request. Retrieval can add relevant document chunks. Durable memory can preserve approved facts across sessions. The runtime must decide what enters the finite model window, in what order, and under what token budget. Too little context creates blind decisions. Too much context can hide the important evidence or exceed the provider limit. Cogentrex therefore treats context construction as an explicit, observable stage. It can record token estimates and compaction behavior without pretending that a larger prompt is automatically a better prompt. When explaining this in an interview, separate storage from retrieval, retrieval from selection, and selected context from the model's final interpretation."
     },
     {
       "chapter": "Tool contracts and policy",
@@ -1050,7 +1050,7 @@
     },
     {
       "chapter": "Approval, retries, and effect identity",
-      "text": "Human approval must describe the exact action being authorized. Archon binds a durable approval to the owner, run, tool call, tool name, normalized arguments, and an effect identity. If the arguments change, the previous approval is not silently reused. Effect identity also supports idempotency. Distributed systems retry when networks fail or acknowledgements are lost, but repeating a side effect can charge a card twice, send duplicate messages, or modify the same resource more than once. The system therefore records whether an effect was reserved, executed, or completed. Exactly-once behavior cannot be promised universally across every external system, but Archon can enforce an at-most-once boundary for the effects under its durable control. The honest claim is as important as the mechanism."
+      "text": "Human approval must describe the exact action being authorized. Cogentrex binds a durable approval to the owner, run, tool call, tool name, normalized arguments, and an effect identity. If the arguments change, the previous approval is not silently reused. Effect identity also supports idempotency. Distributed systems retry when networks fail or acknowledgements are lost, but repeating a side effect can charge a card twice, send duplicate messages, or modify the same resource more than once. The system therefore records whether an effect was reserved, executed, or completed. Exactly-once behavior cannot be promised universally across every external system, but Cogentrex can enforce an at-most-once boundary for the effects under its durable control. The honest claim is as important as the mechanism."
     },
     {
       "chapter": "Isolation and failure containment",
@@ -1062,7 +1062,7 @@
     },
     {
       "chapter": "Evidence-first explanation",
-      "text": "A credible Archon explanation always names the evidence level. Source code proves that an implementation exists. Deterministic tests prove selected contracts under controlled inputs. A local runtime check proves that a retained stack served the behavior on a specific machine. A live-provider run proves that one configured provider completed a real interaction. Public deployment requires separate operational evidence. These levels must not be collapsed. The same discipline applies to learning media. A generated deck or podcast can explain architecture, but it cannot upgrade a capability from deferred to implemented. The strongest interview answer is not a long feature list. It is a precise explanation of where probabilistic reasoning ends, where deterministic controls begin, what was actually observed, and which limitations remain."
+      "text": "A credible Cogentrex explanation always names the evidence level. Source code proves that an implementation exists. Deterministic tests prove selected contracts under controlled inputs. A local runtime check proves that a retained stack served the behavior on a specific machine. A live-provider run proves that one configured provider completed a real interaction. Public deployment requires separate operational evidence. These levels must not be collapsed. The same discipline applies to learning media. A generated deck or podcast can explain architecture, but it cannot upgrade a capability from deferred to implemented. The strongest interview answer is not a long feature list. It is a precise explanation of where probabilistic reasoning ends, where deterministic controls begin, what was actually observed, and which limitations remain."
     }
   ]
 }

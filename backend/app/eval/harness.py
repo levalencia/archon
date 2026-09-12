@@ -5,7 +5,7 @@ Can be used in CI to block deployments if quality drops.
 
 Metrics: correctness, relevance, safety, latency, cost
 
-See: https://github.com/levalencia/production-ai-agents/
+See: https://github.com/levalencia/cogentrex/
 Concept: Evaluation framework (Phase 7 in plan, implemented early)
 Course reference: Advanced Architectures L44, L63-L64
 """

@@ -70,7 +70,7 @@ def test_instruction_and_capability_apis_are_scoped_and_restart_safe(tmp_path: P
         )
         assert effective_context.status_code == 200
         instruction_ref = effective_context.json()["instruction_revisions"][0]
-        assert instruction_ref["source_path"] == ".archon/instructions.md"
+        assert instruction_ref["source_path"] == ".cogentrex/instructions.md"
         assert instruction_ref["scope_path"] == "."
         assert instruction_ref["order"] == 0
         assert instruction_ref["content_hash"] == approved.json()["content_hash"]
@@ -145,7 +145,7 @@ def test_bundled_skill_catalog_binding_is_revision_pinned_and_restart_safe(
         assert len(catalog) >= 10
         review = next(item for item in catalog if item["name"] == "code-review")
         assert review["revision_id"]
-        assert review["revision_owner_id"] == "archon"
+        assert review["revision_owner_id"] == "cogentrex"
 
         bound = client.put(
             f"/api/skills/projects/project-a/{review['id']}",

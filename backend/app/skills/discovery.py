@@ -11,7 +11,7 @@ from typing import Any
 from app.capabilities.index import CapabilityIndex
 from app.capabilities.models import CapabilityDescriptor, PermissionDecision
 from app.capabilities.selector import SelectionRequest, select_capabilities
-from app.skills.bundled import ARCHON_OWNER_ID
+from app.skills.bundled import COGENTREX_OWNER_ID
 from app.skills.catalog import ExternalSkillMetadata, SkillCatalogProvider
 from app.skills.parser import parse_skill_markdown
 from app.skills.persistence import SkillRepository
@@ -97,7 +97,7 @@ class SkillDiscoveryService:
         by_id: dict[str, Any] = {}
         for row in rows:
             parsed = parse_skill_markdown(row.content.encode("utf-8"))
-            prefix = "archon" if row.owner_id == ARCHON_OWNER_ID else "owner"
+            prefix = "cogentrex" if row.owner_id == COGENTREX_OWNER_ID else "owner"
             capability_id = f"{prefix}.{parsed.name}"
             descriptor = CapabilityDescriptor(
                 id=capability_id,
@@ -169,7 +169,7 @@ class SkillDiscoveryService:
             owner_id=owner_id, project_id=project_id, revision_id=revision_id
         )
         parsed = parse_skill_markdown(row.content.encode("utf-8"))
-        prefix = "archon" if row.owner_id == ARCHON_OWNER_ID else "owner"
+        prefix = "cogentrex" if row.owner_id == COGENTREX_OWNER_ID else "owner"
         return LoadedSkill(
             f"{prefix}.{parsed.name}",
             row.id,
@@ -194,7 +194,7 @@ class SkillDiscoveryService:
             owner_id=owner_id, project_id=project_id, revision_id=revision_id
         )
         parsed = parse_skill_markdown(revision.content.encode("utf-8"))
-        prefix = "archon" if revision.owner_id == ARCHON_OWNER_ID else "owner"
+        prefix = "cogentrex" if revision.owner_id == COGENTREX_OWNER_ID else "owner"
         if f"{prefix}.{parsed.name}" in disabled_ids:
             raise PermissionError("skill is disabled in the current scope")
         row = await self._repository.get_reference(

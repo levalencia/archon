@@ -8,7 +8,7 @@
 A conversation is the durable chat container a user sees: metadata plus ordered user and assistant messages.
 A run is one execution attempt associated with a conversation.
 One conversation can accumulate many turns and many runs over time.
-When a new model call starts, Archon selects some conversation rows into an effective context, but the conversation itself remains larger and durable.
+When a new model call starts, Cogentrex selects some conversation rows into an effective context, but the conversation itself remains larger and durable.
 
 Keep these stores separate:
 
@@ -201,7 +201,7 @@ Then identify where redaction occurs and explain why that does not make conversa
 
 ## 30-second interview answer
 
-“An Archon conversation is owner-scoped durable metadata plus ordered redacted user/assistant rows. A run is one execution associated with that conversation, while encrypted facts are a separate owner/project store and effective context is rebuilt per request from selected history, facts, instructions, and current input. CRUD, search, restart persistence, and ownership are tested. Deletion and redaction do not imply provider erasure, cryptographic memory storage, or that every stored turn reached a later model call.”
+“An Cogentrex conversation is owner-scoped durable metadata plus ordered redacted user/assistant rows. A run is one execution associated with that conversation, while encrypted facts are a separate owner/project store and effective context is rebuilt per request from selected history, facts, instructions, and current input. CRUD, search, restart persistence, and ownership are tested. Deletion and redaction do not imply provider erasure, cryptographic memory storage, or that every stored turn reached a later model call.”
 
 ## Self-check
 

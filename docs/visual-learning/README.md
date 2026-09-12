@@ -1,6 +1,6 @@
 # Visual Learning Studio
 
-The Visual Learning Studio is a multi-view learning interface derived from Archon's canonical course, architecture, and evidence sources. It does not replace those sources.
+The Visual Learning Studio is a multi-view learning interface derived from Cogentrex's canonical course, architecture, and evidence sources. It does not replace those sources.
 
 ## Open it
 
@@ -20,11 +20,27 @@ The legacy `/learn/map` route redirects to the structured Stories view.
 | Stories | What happens during a workflow? | One labeled directional relationship per step |
 | Architecture | How is the system structured? | Five stable layers with typed relations |
 | Evidence | What is actually implemented and proven? | Searchable status/proof matrix |
-| Present | How do I explain Archon visually? | Published HTML decks, diagrams, infographics, and videos |
+| Present | How do I explain Cogentrex visually? | Published HTML decks, diagrams, infographics, and videos |
 | Listen | How can I review through audio? | Published English audio lessons and transcripts |
 | Study | How can I test comprehension? | Interactive mind maps, flashcards, quizzes, and study guides |
 
-The rejected force-directed overview is intentionally removed. The Studio never displays all 66 concepts as an unlabeled physics graph.
+The rejected force-directed overview is intentionally removed. The Studio never displays the full concept catalog as an unlabeled physics graph.
+
+## Source-grounded video series
+
+The **Cogentrex From the Code** series appears in the Studio at `/learn?view=present` when learning media is enabled and the configured external library contains the `code-first-series` pack.
+
+Each video package contains:
+
+- an immutable MP4 served through a short-lived signed URL;
+- a timed transcript used for accessible text and WebVTT captions;
+- source references pinned to the artifact's declared source revision;
+- explicit limitations distinguishing derived teaching material from implementation evidence;
+- a checksum validated before the catalog is exposed.
+
+The videos are not a parallel documentation system. Canonical explanations remain under `docs/course/concepts/`; modules sequence those concepts, and video transcripts link back to the same concept pages, source files, and tests. A source change can therefore make a video stale without changing the canonical concept definition.
+
+`review-ready` means the package is wired and technically validated but still awaits learner acceptance. Only accepted revisions should be promoted to `published`.
 
 ## One-source pipeline
 
@@ -34,7 +50,7 @@ flowchart LR
   M[concept and module Markdown] --> G
   S[studio-curation.yaml] --> G
   N[learning-artifacts.yaml] --> G
-  G --> J[archon-studio.json]
+  G --> J[cogentrex-studio.json]
   J --> V[Roadmap Stories Architecture Evidence Media]
 ```
 
@@ -49,7 +65,7 @@ Canonical inputs:
 
 Generated browser data:
 
-- `frontend/static/learning/archon-studio.json`
+- `frontend/static/learning/cogentrex-studio.json`
 
 ## Regenerate and verify
 
@@ -75,15 +91,15 @@ Hermes is an offline, supervised publishing lane, not a runtime dependency and n
 
 ```bash
 backend/.venv/bin/python scripts/build-learning-pilot.py \
-  --output ../archon-learning-media \
-  --audio ../archon-learning-media/candidates/request-lifecycle/request-lifecycle-english.mp3 \
-  --video ../archon-learning-media/candidates/request-lifecycle/request-lifecycle-video-final.mp4
+  --output ../cogentrex-learning-media \
+  --audio ../cogentrex-learning-media/candidates/request-lifecycle/request-lifecycle-english.mp3 \
+  --video ../cogentrex-learning-media/candidates/request-lifecycle/request-lifecycle-video-final.mp4
 ```
 
 Default output:
 
 ```text
-../archon-learning-media/
+../cogentrex-learning-media/
 ```
 
 The publisher:
@@ -107,6 +123,8 @@ Learning-pack definitions:
 
 All six recipes retain the same planned artifact families, but only artifacts present in the validated published catalog appear as available. The deterministic builders generate structured teaching artifacts and media scripts; audio/video count as published only after their real files pass the runbook checks.
 
+Video captions use authored segment timing from each transcript. If an older transcript lacks timing, the player distributes fallback cues across the artifact's declared duration rather than assuming a fixed one-minute lesson.
+
 Use [`hermes-generation-promptbook.md`](hermes-generation-promptbook.md) for generation contracts. Follow [`hermes-generation-runbook.md`](hermes-generation-runbook.md) for generation, media validation, publication, and local-runtime verification. NotebookLM files are deprecated migration references only; they are not the active generation lane.
 
 ## Base vs. Rich behavior
@@ -124,7 +142,7 @@ The Visual Learning Studio operates in two modes:
 make media-install
 # or directly:
 python3 scripts/learning-media-release.py install \
-  --target ../archon-learning-media \
+  --target ../cogentrex-learning-media \
   --manifest docs/visual-learning/release-manifest.json
 ```
 
@@ -138,19 +156,19 @@ application remains available when the library is absent.
 
 ```bash
 python3 scripts/learning-media-release.py install \
-  --target ../archon-learning-media \
-  --archive /path/to/archon-learning-media.tar.gz \
+  --target ../cogentrex-learning-media \
+  --archive /path/to/cogentrex-learning-media.tar.gz \
   --manifest docs/visual-learning/release-manifest.json
 ```
 
 ### Package rich media (maintainer only)
 
 ```bash
-make media-package MEDIA_LIBRARY=/path/to/archon-learning-media
+make media-package MEDIA_LIBRARY=/path/to/cogentrex-learning-media
 # or directly:
 python3 scripts/learning-media-release.py package \
-  --library /path/to/archon-learning-media \
-  --output dist/archon-learning-media.tar.gz \
+  --library /path/to/cogentrex-learning-media \
+  --output dist/cogentrex-learning-media.tar.gz \
   --manifest-output docs/visual-learning/release-manifest.json
 ```
 
@@ -163,7 +181,7 @@ The packager validates catalog schema, source commit, all artifact SHA-256 check
 - Tar member validation: rejects absolute paths, `..` traversal, symlinks, hard links, device nodes, unexpected top-level entries, excessive member counts
 - Post-extraction artifact checksum verification against catalog
 - Atomic directory replacement with rollback
-- Refuses to overwrite non-empty directories without `.archon-learning-library` marker
+- Refuses to overwrite non-empty directories without `.cogentrex-learning-library` marker
 
 ## Honesty boundaries
 

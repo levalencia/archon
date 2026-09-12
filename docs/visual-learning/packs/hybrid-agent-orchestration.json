@@ -1,7 +1,7 @@
 {
   "pack_id": "hybrid-agent-orchestration",
-  "title": "Archon — Hybrid Agent Orchestration Pilot",
-  "purpose": "Understand how Archon selects Single or Team execution, constrains fixed and dynamic children, synthesizes untrusted findings, and records inspectable evidence.",
+  "title": "Cogentrex — Hybrid Agent Orchestration Pilot",
+  "purpose": "Understand how Cogentrex selects Single or Team execution, constrains fixed and dynamic children, synthesizes untrusted findings, and records inspectable evidence.",
   "language": "en",
   "limitations": [
     "This is derivative learning material, not canonical implementation evidence.",
@@ -135,7 +135,7 @@
       },
       "boundary": "The envelope authenticates metadata; it does not encrypt content or establish remote multi-host identity.",
       "sources": ["docs/course/concepts/agent-communication-security.md", "docs/implementation/CAPABILITY-ACCEPTANCE.yaml"],
-      "narration": "Before a child runs, Archon signs and consumes an envelope tied to exact scope, content, tools, budget, and result schema.",
+      "narration": "Before a child runs, Cogentrex signs and consumes an envelope tied to exact scope, content, tools, budget, and result schema.",
       "scenario": "A valid envelope is submitted a second time.",
       "options": ["Run the child again", "Reject the replay", "Increase the budget", "Create a new parent ID silently"],
       "correct_index": 1,

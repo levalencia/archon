@@ -24,10 +24,10 @@ def test_precedence_is_structural_and_deterministic() -> None:
         system=[_block(ContextLayer.SYSTEM, "system")],
         project_instructions=[
             InstructionSource.from_content(
-                "leaf", "pkg/.archon/instructions.md", "pkg", InstructionFamily.ARCHON
+                "leaf", "pkg/.cogentrex/instructions.md", "pkg", InstructionFamily.COGENTREX
             ),
             InstructionSource.from_content(
-                "root", ".archon/instructions.md", ".", InstructionFamily.ARCHON
+                "root", ".cogentrex/instructions.md", ".", InstructionFamily.COGENTREX
             ),
         ],
         pinned_skills=[
@@ -39,8 +39,8 @@ def test_precedence_is_structural_and_deterministic() -> None:
     )
     assert [x.identifier for x in result.blocks] == [
         "system",
-        ".archon/instructions.md",
-        "pkg/.archon/instructions.md",
+        ".cogentrex/instructions.md",
+        "pkg/.cogentrex/instructions.md",
         "a",
         "z",
         "selected",

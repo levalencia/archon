@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 96" role="img" aria-labelledby="title desc">
+  <title id="title">Cogentrex</title>
+  <desc id="desc">Cogentrex horizontal logo for dark backgrounds.</desc>
+  <g transform="translate(8 8)">
+    <path d="M55 10.5A30 30 0 1 0 55 69.5" fill="none" stroke="#F6B44B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M26 25L54 53M54 25L26 53" fill="none" stroke="#F4F7FB" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="40" cy="39" r="4.8" fill="#F4F7FB"/>
+  </g>
+  <text x="96" y="65" fill="#F4F7FB" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="720" letter-spacing="-2">Cogentre<tspan fill="#F6B44B">x</tspan></text>
+</svg>

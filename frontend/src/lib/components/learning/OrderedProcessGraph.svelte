@@ -1,7 +1,7 @@
 <script lang="ts">
   import TeachingInspector from './TeachingInspector.svelte';
   import type { LearningEdge as GraphEdge, LearningNode as GraphNode } from '$lib/learning-teaching';
-  import { ARCHON_THEME, LEARNING_KIND_COLORS } from '$lib/archon-theme';
+  import { COGENTREX_THEME, LEARNING_KIND_COLORS } from '$lib/cogentrex-theme';
   type Point={x:number;y:number};
   let { graphNodes, graphEdges, sourceCommit }: { graphNodes:GraphNode[];graphEdges:GraphEdge[];sourceCommit:string }=$props();
   let selectedNodeId=$state('');
@@ -37,12 +37,12 @@
       <title id="ordered-title">Ordered request lifecycle</title>
       <desc id="ordered-description">A numbered left-to-right process arranged in three lanes with explicit continuation arrows between lanes.</desc>
       <defs>
-        <pattern id="ordered-grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#334155"/></pattern>
-        <marker id="ordered-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill={ARCHON_THEME.orange}/></marker>
+        <pattern id="ordered-grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#26324d"/></pattern>
+        <marker id="ordered-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill={COGENTREX_THEME.orange}/></marker>
       </defs>
-      <rect width="1040" height="620" fill={ARCHON_THEME.canvas}/><rect width="1040" height="620" fill="url(#ordered-grid)" opacity=".55"/>
+      <rect width="1040" height="620" fill={COGENTREX_THEME.canvas}/><rect width="1040" height="620" fill="url(#ordered-grid)" opacity=".55"/>
       {#each rowNames as name,row}
-        <text x="70" y={yPositions[row]-22} fill="#94a3b8" font-size="13" font-weight="700" letter-spacing="1.4">PHASE {row+1} · {name.toUpperCase()}</text>
+        <text x="70" y={yPositions[row]-22} fill="#a9b4cc" font-size="13" font-weight="700" letter-spacing="1.4">PHASE {row+1} · {name.toUpperCase()}</text>
       {/each}
       {#each graphEdges as edge,index}
         {@const geometry=edgeGeometry(edge)}
@@ -55,8 +55,8 @@
         {@const point=positions.get(node.id)}
         {#if point}
           <g class="node" class:selected={selectedNodeId===node.id} role="button" tabindex="0" aria-label={`Step ${index+1}: ${node.label}`} onclick={()=>chooseNode(node.id)} onkeydown={(event)=>activate(event,()=>chooseNode(node.id))}>
-            <rect x={point.x} y={point.y} width={nodeWidth} height={nodeHeight} rx="12" fill="#0f172a" stroke={colors[node.kind]??'#94a3b8'} stroke-width="2"/>
-            <circle cx={point.x+3} cy={point.y+3} r="17" fill={colors[node.kind]??'#94a3b8'}/>
+            <rect x={point.x} y={point.y} width={nodeWidth} height={nodeHeight} rx="12" fill="#0a1022" stroke={colors[node.kind]??'#a9b4cc'} stroke-width="2"/>
+            <circle cx={point.x+3} cy={point.y+3} r="17" fill={colors[node.kind]??'#a9b4cc'}/>
             <text class="number" x={point.x+3} y={point.y+8} text-anchor="middle">{index+1}</text>
             <text class="node-label" x={point.x+nodeWidth/2} y={point.y+40} text-anchor="middle">{node.label}</text>
           </g>
@@ -75,6 +75,6 @@
 <details class="steps"><summary>Read the diagram as steps</summary><ol>{#each graphEdges as edge,index}<li><button onclick={()=>chooseEdge(edge,index)}><strong>{graphNodes.find(node=>node.id===edge.source)?.label}</strong> <span>{edge.label}</span> <strong>{graphNodes.find(node=>node.id===edge.target)?.label}</strong></button>{#if edge.explanation}<p>{edge.explanation}</p>{/if}</li>{/each}</ol></details>
 
 <style>
-  .ordered-shell{display:grid;grid-template-columns:1fr;gap:.85rem}.canvas{border:1px solid var(--archon-border,var(--border));border-radius:.9rem;overflow:hidden;background:var(--archon-canvas,#050b16)}.canvas svg{display:block;width:100%;height:auto}.node,.edge{cursor:pointer}.node:focus-visible,.edge:focus-visible{outline:none}.node:focus-visible rect,.node.selected rect{stroke:var(--archon-orange,#f59e0b);stroke-width:4;filter:drop-shadow(0 0 12px rgba(245,158,11,.55))}.node-label{fill:#f8fafc;font-size:17px;font-weight:750}.number{fill:#050b16;font:800 13px var(--font-mono)}.line{fill:none;stroke:var(--archon-orange,#f59e0b);stroke-width:3;stroke-linejoin:round}.edge.selected .line{stroke:#fbbf24;stroke-width:5;filter:drop-shadow(0 0 8px rgba(245,158,11,.65))}.hit{fill:none;stroke:transparent;stroke-width:22}.edge rect{fill:#0f172a;stroke:#475569;stroke-width:1}.edge.selected rect{stroke:var(--archon-orange,#f59e0b);stroke-width:2}.edge text{fill:#f8fafc;font-size:12px;font-weight:700}.explanation{border:1px solid var(--border);border-radius:.9rem;background:var(--panel);padding:1rem;min-height:0}.explanation h4{margin:.45rem 0;font-size:1.15rem}.explanation p{color:var(--secondary);line-height:1.6;font-size:.84rem}.steps{margin-top:.85rem;border:1px solid var(--border);border-radius:.75rem;padding:.8rem;color:var(--secondary);font-size:.8rem}.steps summary{cursor:pointer;color:var(--text);font-weight:700}.steps ol{display:grid;gap:.65rem}.steps button{border:0;background:none;color:var(--text);padding:0;text-align:left;cursor:pointer}.steps button:hover,.steps button:focus-visible{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}.steps li span{color:var(--accent);font-weight:700}.steps p{margin:.25rem 0 0;color:var(--muted)}@media(max-width:850px){.canvas{overflow-x:auto}.canvas svg{min-width:760px}}
+  .ordered-shell{display:grid;grid-template-columns:1fr;gap:.85rem}.canvas{border:1px solid var(--cogentrex-border,var(--border));border-radius:.9rem;overflow:hidden;background:var(--cogentrex-canvas,#050712)}.canvas svg{display:block;width:100%;height:auto}.node,.edge{cursor:pointer}.node:focus-visible,.edge:focus-visible{outline:none}.node:focus-visible rect,.node.selected rect{stroke:var(--cogentrex-orange,#f6b44b);stroke-width:4;filter:drop-shadow(0 0 12px rgba(246,180,75,.55))}.node-label{fill:#f4f7fb;font-size:17px;font-weight:750}.number{fill:#050712;font:800 13px var(--font-mono)}.line{fill:none;stroke:var(--cogentrex-orange,#f6b44b);stroke-width:3;stroke-linejoin:round}.edge.selected .line{stroke:#fbbf24;stroke-width:5;filter:drop-shadow(0 0 8px rgba(246,180,75,.65))}.hit{fill:none;stroke:transparent;stroke-width:22}.edge rect{fill:#0a1022;stroke:#475569;stroke-width:1}.edge.selected rect{stroke:var(--cogentrex-orange,#f6b44b);stroke-width:2}.edge text{fill:#f4f7fb;font-size:12px;font-weight:700}.explanation{border:1px solid var(--border);border-radius:.9rem;background:var(--panel);padding:1rem;min-height:0}.explanation h4{margin:.45rem 0;font-size:1.15rem}.explanation p{color:var(--secondary);line-height:1.6;font-size:.84rem}.steps{margin-top:.85rem;border:1px solid var(--border);border-radius:.75rem;padding:.8rem;color:var(--secondary);font-size:.8rem}.steps summary{cursor:pointer;color:var(--text);font-weight:700}.steps ol{display:grid;gap:.65rem}.steps button{border:0;background:none;color:var(--text);padding:0;text-align:left;cursor:pointer}.steps button:hover,.steps button:focus-visible{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}.steps li span{color:var(--accent);font-weight:700}.steps p{margin:.25rem 0 0;color:var(--muted)}@media(max-width:850px){.canvas{overflow-x:auto}.canvas svg{min-width:760px}}
   @media(forced-colors:active){.node:focus-visible,.edge:focus-visible{outline:2px solid CanvasText}.node.selected rect,.edge.selected rect{stroke:Highlight}}
 </style>

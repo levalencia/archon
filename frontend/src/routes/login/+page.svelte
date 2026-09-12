@@ -27,8 +27,8 @@
       const data = await res.json();
 
       if (data.access_token) {
-        localStorage.setItem('archon_token', data.access_token);
-        localStorage.setItem('archon_user', JSON.stringify({
+        localStorage.setItem('cogentrex_token', data.access_token);
+        localStorage.setItem('cogentrex_user', JSON.stringify({
           user_id: data.user_id,
           username: data.username,
         }));
@@ -48,13 +48,13 @@
   <div class="w-full max-w-md">
     <!-- Logo -->
     <div class="text-center mb-8">
-      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--purple)]
-        flex items-center justify-center text-3xl font-bold text-white mx-auto mb-4
-        shadow-[0_0_30px_var(--archon-orange-glow)]">
-        A
-      </div>
-      <h1 class="text-2xl font-semibold text-[var(--text-primary)]">Archon</h1>
-      <p class="text-sm text-[var(--text-secondary)] mt-1">Production AI Agent</p>
+      <img
+        src="/brand/cogentrex-icon.svg"
+        alt=""
+        class="w-16 h-16 mx-auto mb-4 shadow-[0_0_30px_var(--cogentrex-orange-glow)]"
+      />
+      <h1 class="text-2xl font-semibold text-[var(--text-primary)]">Cogentrex</h1>
+      <p class="text-sm text-[var(--text-secondary)] mt-1">Build agents you can explain.</p>
     </div>
 
     <!-- Form card -->
@@ -172,7 +172,7 @@
               transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
               {loading
                 ? 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
-                : 'bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] shadow-[0_0_18px_var(--archon-orange-glow)]'}"
+                : 'bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] shadow-[0_0_18px_var(--cogentrex-orange-glow)]'}"
           >
             {#if loading}
               <span class="w-4 h-4 border-2 border-[var(--text-muted)] border-t-transparent rounded-full animate-spin"></span>

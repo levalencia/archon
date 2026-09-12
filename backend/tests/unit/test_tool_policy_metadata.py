@@ -417,7 +417,7 @@ class TestWorkspacePathResolver:
     ) -> None:
         root = tmp_path / "workspace"
         root.mkdir()
-        monkeypatch.setenv("ARCHON_WORKSPACE_ROOT", str(root))
+        monkeypatch.setenv("COGENTREX_WORKSPACE_ROOT", str(root))
 
         with pytest.raises(ValueError, match="^Invalid workspace path$"):
             resolve_workspace_path({"path": r"allowed\secret.txt"})
@@ -442,7 +442,7 @@ class TestWorkspacePathResolver:
     ) -> None:
         root = tmp_path / "workspace"
         root.mkdir()
-        monkeypatch.setenv("ARCHON_WORKSPACE_ROOT", str(root))
+        monkeypatch.setenv("COGENTREX_WORKSPACE_ROOT", str(root))
 
         relative = resolve_workspace_path({"path": "nested/../file.txt"})
         absolute = resolve_workspace_path({"path": str(root / "dir" / "item.txt")})
@@ -455,7 +455,7 @@ class TestWorkspacePathResolver:
     ) -> None:
         root = tmp_path / "workspace"
         root.mkdir()
-        monkeypatch.setenv("ARCHON_WORKSPACE_ROOT", str(root))
+        monkeypatch.setenv("COGENTREX_WORKSPACE_ROOT", str(root))
 
         resolved = resolve_workspace_path({"path": "file.txt", "workspace_root": "/"})
 
@@ -492,7 +492,7 @@ class TestLiveClassifications:
     ) -> None:
         workspace = _tenant_workspace(tmp_path)
         (workspace.path / "notes.txt").write_text("hello", encoding="utf-8")
-        monkeypatch.delenv("ARCHON_BRAVE_API_KEY", raising=False)
+        monkeypatch.delenv("COGENTREX_BRAVE_API_KEY", raising=False)
 
         async def fake_search(query: str, num: int) -> list[dict[str, str]]:
             return [{"title": query, "url": "https://example.test", "snippet": str(num)}]

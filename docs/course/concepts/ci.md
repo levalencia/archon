@@ -12,7 +12,7 @@ A clean worker checks out one revision, installs declared dependencies, and exec
 The result answers “did these checks pass for this revision in this worker environment?”
 It does not answer “is production healthy?” or “will every later commit pass?”
 It also does not prove behavior that the workflow never checks.
-Archon’s CI is repository orchestration, not an authenticated Core API operation.
+Cogentrex’s CI is repository orchestration, not an authenticated Core API operation.
 Workflow jobs and scripts do not create agent runs, `Core.jobs` objects, product approvals, or runtime metrics.
 
 ## Vocabulary and proof boundary
@@ -166,7 +166,7 @@ revision event → workflow/jobs/steps → exit statuses and logs → revision-s
 ```
 
 This path is operational evidence rather than agent-runtime telemetry.
-Do not increment `archon_agent_runs_total` for workflow jobs.
+Do not increment `cogentrex_agent_runs_total` for workflow jobs.
 Do not store workflow status as an authenticated product run merely to make it look uniform.
 Useful CI evidence includes revision, workflow definition, worker image, completed/skipped job states, logs, and artifacts.
 A production release system would additionally attest artifacts, sign images, track provenance, and connect release status to deployment observation.
@@ -181,7 +181,7 @@ A production release system would additionally attest artifacts, sign images, tr
 | one serial job | simpler logs | slower and poor fault isolation |
 | many parallel jobs | faster feedback | duplicated setup and greater cost |
 
-Archon separates backend and frontend quality, then gates image smoke on both.
+Cogentrex separates backend and frontend quality, then gates image smoke on both.
 That offers useful parallelism while preventing an image success from masking quality failures.
 
 ## Lab vs production
@@ -201,7 +201,7 @@ It is not a deployment status.
 
 ### 30-second answer
 
-> Archon CI runs backend lint, format, security scan, tests and coverage; frontend checks, tests, build and browser tests; then a dependent backend-image liveness smoke with an ephemeral encryption key. A green result is evidence only for the exact revision and completed gates. The canonical evidence page links the current run; CI is not an authenticated Core API object, deployment proof, runtime availability, or an SLO.
+> Cogentrex CI runs backend lint, format, security scan, tests and coverage; frontend checks, tests, build and browser tests; then a dependent backend-image liveness smoke with an ephemeral encryption key. A green result is evidence only for the exact revision and completed gates. The canonical evidence page links the current run; CI is not an authenticated Core API object, deployment proof, runtime availability, or an SLO.
 
 ## Self-check
 

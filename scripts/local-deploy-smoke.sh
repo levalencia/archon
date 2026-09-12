@@ -3,10 +3,10 @@ set -Eeuo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 COMPOSE_FILE="$ROOT/docker-compose.local.yml"
-PROJECT="archon-local-$PPID-$RANDOM"
-ENV_FILE=$(mktemp "${TMPDIR:-/tmp}/archon-local.XXXXXX")
-COLLECTOR_CONFIG=$(mktemp "${TMPDIR:-/tmp}/archon-otel-collector.XXXXXX")
-STATE_FILE=${ARCHON_RUNTIME_STATE_FILE:-}
+PROJECT="cogentrex-local-$PPID-$RANDOM"
+ENV_FILE=$(mktemp "${TMPDIR:-/tmp}/cogentrex-local.XXXXXX")
+COLLECTOR_CONFIG=$(mktemp "${TMPDIR:-/tmp}/cogentrex-otel-collector.XXXXXX")
+STATE_FILE=${COGENTREX_RUNTIME_STATE_FILE:-}
 chmod 600 "$ENV_FILE"
 chmod 600 "$COLLECTOR_CONFIG"
 
@@ -18,14 +18,14 @@ cleanup() {
       umask 077
       state_tmp=$(mktemp "${STATE_FILE}.XXXXXX")
       {
-        printf 'ARCHON_COMPOSE_PROJECT=%q\n' "$PROJECT"
-        printf 'ARCHON_COMPOSE_ENV_FILE=%q\n' "$ENV_FILE"
-        printf 'ARCHON_OTEL_COLLECTOR_CONFIG_FILE=%q\n' "$COLLECTOR_CONFIG"
-        printf 'ARCHON_COMPOSE_FILE=%q\n' "$COMPOSE_FILE"
-        printf 'ARCHON_BASE_URL=%q\n' "$BASE_URL"
-        printf 'ARCHON_RUNTIME_MODE=%q\n' "$ARCHON_RUNTIME_MODE"
-        printf 'ARCHON_LLM_PROVIDER_NAME=%q\n' "$ARCHON_LLM_PROVIDER"
-        printf 'ARCHON_LLM_MODEL_NAME=%q\n' "$ARCHON_LLM_MODEL"
+        printf 'COGENTREX_COMPOSE_PROJECT=%q\n' "$PROJECT"
+        printf 'COGENTREX_COMPOSE_ENV_FILE=%q\n' "$ENV_FILE"
+        printf 'COGENTREX_OTEL_COLLECTOR_CONFIG_FILE=%q\n' "$COLLECTOR_CONFIG"
+        printf 'COGENTREX_COMPOSE_FILE=%q\n' "$COMPOSE_FILE"
+        printf 'COGENTREX_BASE_URL=%q\n' "$BASE_URL"
+        printf 'COGENTREX_RUNTIME_MODE=%q\n' "$COGENTREX_RUNTIME_MODE"
+        printf 'COGENTREX_LLM_PROVIDER_NAME=%q\n' "$COGENTREX_LLM_PROVIDER"
+        printf 'COGENTREX_LLM_MODEL_NAME=%q\n' "$COGENTREX_LLM_MODEL"
       } >"$state_tmp"
       chmod 600 "$state_tmp"
       mv -f "$state_tmp" "$STATE_FILE"
@@ -34,7 +34,7 @@ cleanup() {
     printf 'KEEP=1: deployment retained\n'
     printf 'PROJECT=%s\n' "$PROJECT"
     printf 'ENV_FILE=%s\n' "$ENV_FILE"
-    printf 'ARCHON_URL=%s\n' "$BASE_URL"
+    printf 'COGENTREX_URL=%s\n' "$BASE_URL"
     if [[ -n "$STATE_FILE" ]]; then
       printf 'STATE_FILE=%s\n' "$STATE_FILE"
     fi
@@ -54,10 +54,10 @@ trap cleanup EXIT INT TERM
 
 generate_env=(
   python3 "$ROOT/scripts/generate-local-env.py" "$ENV_FILE"
-  --learning-media-root "$ROOT/../archon-learning-media"
+  --learning-media-root "$ROOT/../cogentrex-learning-media"
 )
-if [[ -n "${ARCHON_PROVIDER_ENV_FILE:-}" ]]; then
-  generate_env+=(--provider-env "$ARCHON_PROVIDER_ENV_FILE")
+if [[ -n "${COGENTREX_PROVIDER_ENV_FILE:-}" ]]; then
+  generate_env+=(--provider-env "$COGENTREX_PROVIDER_ENV_FILE")
 fi
 "${generate_env[@]}"
 
@@ -66,21 +66,21 @@ set -a
 source "$ENV_FILE"
 set +a
 python3 "$ROOT/scripts/generate-otel-collector-config.py" "$COLLECTOR_CONFIG"
-printf 'ARCHON_OTEL_COLLECTOR_CONFIG_FILE=%s\n' "$COLLECTOR_CONFIG" >>"$ENV_FILE"
-export ARCHON_OTEL_COLLECTOR_CONFIG_FILE="$COLLECTOR_CONFIG"
-if [[ -z "${ARCHON_SANDBOX_PLATFORM:-}" ]]; then
+printf 'COGENTREX_OTEL_COLLECTOR_CONFIG_FILE=%s\n' "$COLLECTOR_CONFIG" >>"$ENV_FILE"
+export COGENTREX_OTEL_COLLECTOR_CONFIG_FILE="$COLLECTOR_CONFIG"
+if [[ -z "${COGENTREX_SANDBOX_PLATFORM:-}" ]]; then
   daemon_arch="$(docker info --format '{{.Architecture}}')"
   case "$daemon_arch" in
-    aarch64 | arm64) ARCHON_SANDBOX_PLATFORM="linux/arm64" ;;
-    x86_64 | amd64) ARCHON_SANDBOX_PLATFORM="linux/amd64" ;;
+    aarch64 | arm64) COGENTREX_SANDBOX_PLATFORM="linux/arm64" ;;
+    x86_64 | amd64) COGENTREX_SANDBOX_PLATFORM="linux/amd64" ;;
     *)
       printf 'Unsupported Docker daemon architecture: %s\n' "$daemon_arch" >&2
       exit 1
       ;;
   esac
-  export ARCHON_SANDBOX_PLATFORM
+  export COGENTREX_SANDBOX_PLATFORM
 fi
-BASE_URL="http://127.0.0.1:$ARCHON_LOCAL_PORT"
+BASE_URL="http://127.0.0.1:$COGENTREX_LOCAL_PORT"
 compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$PROJECT")
 
 printf 'Building isolated local deployment...\n'
@@ -101,8 +101,8 @@ curl --fail --silent --show-error "$BASE_URL/healthz" | python3 -c '
 import json, os, sys
 d=json.load(sys.stdin)
 assert d["status"] == "alive"
-assert d["llm_provider"] == os.environ["ARCHON_LLM_PROVIDER"]
-assert d["llm_model"] == os.environ["ARCHON_LLM_MODEL"]
+assert d["llm_provider"] == os.environ["COGENTREX_LLM_PROVIDER"]
+assert d["llm_model"] == os.environ["COGENTREX_LLM_MODEL"]
 '
 
 curl --fail --silent --show-error "$BASE_URL/readyz" | python3 -c '
@@ -111,7 +111,7 @@ d=json.load(sys.stdin); deps=d["dependencies"]
 assert d["status"] == "ready"
 assert deps["conversation_repository"] == "up"
 assert deps["rate_limiter"] == {"backend": "redis", "status": "up"}
-if os.environ["ARCHON_RUNTIME_MODE"] == "live-foundry":
+if os.environ["COGENTREX_RUNTIME_MODE"] == "live-foundry":
     assert deps["embeddings"]["mock"] is False
     assert deps["embeddings"]["readiness"] == "ready"
     assert deps["evidence_verifier"] == "enabled"
@@ -151,7 +151,7 @@ curl --fail --silent --show-error -X POST "$BASE_URL/api/chat" \
   --data '{"message":"local telemetry smoke"}' \
   | python3 -c 'import json,sys; assert json.load(sys.stdin)["response"]'
 
-if [[ "$ARCHON_RUNTIME_MODE" == "live-foundry" ]]; then
+if [[ "$COGENTREX_RUNTIME_MODE" == "live-foundry" ]]; then
   upload_response=$(curl --fail --silent --show-error -X POST "$BASE_URL/api/documents/upload" \
     -H 'Content-Type: application/json' \
     -H "${AUTH_HEADER_NAME}: Bearer ${ACCESS_TOKEN}" \
@@ -184,7 +184,7 @@ fi
 unset ACCESS_TOKEN AUTH_HEADER_NAME
 
 curl --fail --silent --show-error "$BASE_URL/metrics" | python3 -c 'import sys; assert sys.stdin.read().strip()'
-migration=$("${compose[@]}" exec -T postgres psql -U archon -d archon -Atqc 'select version_num from alembic_version')
+migration=$("${compose[@]}" exec -T postgres psql -U cogentrex -d cogentrex -Atqc 'select version_num from alembic_version')
 [[ "$migration" == "20260902_22" ]]
 "${compose[@]}" exec -T backend python -m app.acceptance.control_plane
 "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://otel-collector:13133/', timeout=3)"
@@ -203,11 +203,11 @@ print(sum(1 for line in sys.stdin if "\tTraces\t" in line and "resource spans" i
 done
 [[ "$otel_observed" == "1" ]]
 
-if [[ ",$ARCHON_OTEL_DESTINATIONS," == *",jaeger,"* ]]; then
+if [[ ",$COGENTREX_OTEL_DESTINATIONS," == *",jaeger,"* ]]; then
   jaeger_observed=0
   for _ in {1..30}; do
     if curl --fail --silent --show-error \
-      "http://127.0.0.1:$ARCHON_JAEGER_PORT/api/traces?service=archon-local&limit=20" \
+      "http://127.0.0.1:$COGENTREX_JAEGER_PORT/api/traces?service=cogentrex-local&limit=20" \
       | python3 -c 'import json,sys; assert len(json.load(sys.stdin).get("data", [])) >= 1' \
       >/dev/null 2>&1; then
       jaeger_observed=1
@@ -219,4 +219,4 @@ if [[ ",$ARCHON_OTEL_DESTINATIONS," == *",jaeger,"* ]]; then
 fi
 
 printf 'Local deployment smoke test passed: gateway, DB, Redis, configured embeddings, durable controls, PostgreSQL contention, auth, metrics, migration 14, and a newly exported OTEL trace batch.\n'
-printf 'RUNTIME_MODE=%s\nLLM_PROVIDER=%s\nLLM_MODEL=%s\n' "$ARCHON_RUNTIME_MODE" "$ARCHON_LLM_PROVIDER" "$ARCHON_LLM_MODEL"
+printf 'RUNTIME_MODE=%s\nLLM_PROVIDER=%s\nLLM_MODEL=%s\n' "$COGENTREX_RUNTIME_MODE" "$COGENTREX_LLM_PROVIDER" "$COGENTREX_LLM_MODEL"

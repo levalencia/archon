@@ -35,15 +35,15 @@ def config(**changes: Any) -> DockerSandboxConfig:
 
 def test_fixed_docker_argv_has_all_boundaries_and_no_content() -> None:
     executor = DockerSandboxExecutor(config())
-    argv = executor._argv("archon-sandbox-fixed", "python")
+    argv = executor._argv("cogentrex-sandbox-fixed", "python")
     assert argv == (
         "/trusted/docker",
         "run",
         "--rm",
         "--name",
-        "archon-sandbox-fixed",
+        "cogentrex-sandbox-fixed",
         "--label",
-        "com.archon.sandbox=true",
+        "com.cogentrex.sandbox=true",
         "--platform",
         "linux/amd64",
         "--network",
@@ -159,7 +159,7 @@ async def test_execute_uses_exec_fixed_env_and_stdin(monkeypatch: pytest.MonkeyP
     assert processes[0].stdin.value == b"untrusted-content"
     assert processes[0].stdin.closed
     assert calls[-1][0][1:3] == ("rm", "-f")
-    assert calls[-1][0][3].startswith("archon-sandbox-")
+    assert calls[-1][0][3].startswith("cogentrex-sandbox-")
     assert not hasattr(asyncio, "create_subprocess_shell") or all(
         args[1] != "sh -c" for args, _ in calls
     )
@@ -176,10 +176,10 @@ def test_live_runner_settings_do_not_depend_on_legacy_docker_image() -> None:
         memory_encryption_enabled=False,
         execution_enabled=True,
         execution_docker_image="sandbox:latest",
-        execution_runner_socket="/run/archon-sandbox/runner.sock",
+        execution_runner_socket="/run/cogentrex-sandbox/runner.sock",
     )
     assert settings.execution_enabled is True
-    assert settings.execution_runner_socket == "/run/archon-sandbox/runner.sock"
+    assert settings.execution_runner_socket == "/run/cogentrex-sandbox/runner.sock"
 
 
 def test_live_runner_settings_reject_relative_socket() -> None:

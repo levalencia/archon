@@ -32,7 +32,7 @@ def test_application_owns_provider_and_exports_only_to_collector(
         lambda exporter: SimpleSpanProcessor(exporter),
     )
 
-    exporter = OTLPExporter("archon-test", "http://otel-collector:4317")
+    exporter = OTLPExporter("cogentrex-test", "http://otel-collector:4317")
     exporter.export_span(Span("probe"))
     assert exporter.force_flush() is True
 
@@ -52,7 +52,7 @@ def test_fastapi_instrumentation_uses_safe_standard_otel_defaults(
         "instrument_app",
         lambda self, app, **kwargs: calls.append((app, kwargs)),
     )
-    exporter = OTLPExporter("archon-test", "http://otel-collector:4317")
+    exporter = OTLPExporter("cogentrex-test", "http://otel-collector:4317")
     app = FastAPI()
 
     assert exporter.instrument_fastapi(app) is True
@@ -71,7 +71,7 @@ def test_fastapi_instrumentation_uses_safe_standard_otel_defaults(
 
 
 @pytest.mark.unit
-def test_standard_provider_exports_archon_spans_to_collector(
+def test_standard_provider_exports_cogentrex_spans_to_collector(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured = InMemorySpanExporter()
@@ -83,13 +83,13 @@ def test_standard_provider_exports_archon_spans_to_collector(
         lambda exporter: SimpleSpanProcessor(exporter),
     )
 
-    exporter = OTLPExporter("archon-real-test", "http://otel-collector:4317")
+    exporter = OTLPExporter("cogentrex-real-test", "http://otel-collector:4317")
     exporter.export_span(
         Span(
-            "invoke_agent Archon",
+            "invoke_agent Cogentrex",
             {
                 "gen_ai.operation.name": "invoke_agent",
-                "gen_ai.agent.name": "Archon",
+                "gen_ai.agent.name": "Cogentrex",
             },
         )
     )
@@ -100,13 +100,18 @@ def test_standard_provider_exports_archon_spans_to_collector(
     assert exporter.force_flush() is True
 
     names = {span.name for span in captured.get_finished_spans()}
-    assert {"invoke_agent Archon", "rag.query", "chat model-a", "execute_tool web_search"} <= names
+    assert {
+        "invoke_agent Cogentrex",
+        "rag.query",
+        "chat model-a",
+        "execute_tool web_search",
+    } <= names
     agent_span = next(
-        span for span in captured.get_finished_spans() if span.name == "invoke_agent Archon"
+        span for span in captured.get_finished_spans() if span.name == "invoke_agent Cogentrex"
     )
     agent_attributes = dict(agent_span.attributes or {})
     assert agent_attributes["gen_ai.operation.name"] == "invoke_agent"
-    assert agent_attributes["gen_ai.agent.name"] == "Archon"
+    assert agent_attributes["gen_ai.agent.name"] == "Cogentrex"
     exporter.shutdown()
 
 
@@ -122,19 +127,19 @@ def test_tool_span_is_a_child_of_the_active_agent_span(
         "BatchSpanProcessor",
         lambda exporter: SimpleSpanProcessor(exporter),
     )
-    exporter = OTLPExporter("archon-agent-tree-test", "http://otel-collector:4317")
+    exporter = OTLPExporter("cogentrex-agent-tree-test", "http://otel-collector:4317")
     agent = Span(
-        "invoke_agent Archon",
+        "invoke_agent Cogentrex",
         {
-            "archon.run.id": "run-1",
+            "cogentrex.run.id": "run-1",
             "gen_ai.operation.name": "invoke_agent",
-            "gen_ai.agent.name": "Archon",
+            "gen_ai.agent.name": "Cogentrex",
         },
     )
     tool = Span(
         "execute_tool calculator",
         {
-            "archon.run.id": "run-1",
+            "cogentrex.run.id": "run-1",
             "gen_ai.operation.name": "execute_tool",
             "gen_ai.tool.name": "calculator",
         },
@@ -147,7 +152,7 @@ def test_tool_span_is_a_child_of_the_active_agent_span(
 
     spans = {span.name: span for span in captured.get_finished_spans()}
     tool_span = spans["execute_tool calculator"]
-    agent_span = spans["invoke_agent Archon"]
+    agent_span = spans["invoke_agent Cogentrex"]
     assert tool_span.context is not None
     assert tool_span.parent is not None
     assert agent_span.context is not None
@@ -178,7 +183,7 @@ def test_app_factory_wires_fastapi_instrumentation(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(main, "OTLPExporter", Exporter)
     app = main.create_app(Settings(otel_endpoint="http://otel-collector:4317"))
 
-    assert ("service", "archon") in calls
+    assert ("service", "cogentrex") in calls
     assert ("endpoint", "http://otel-collector:4317") in calls
     assert ("app", app) in calls
     assert isinstance(app.state.otel_exporter, Exporter)

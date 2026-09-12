@@ -20,7 +20,7 @@ def reset_chat_state(tmp_path, monkeypatch):
 
     chat._tools_singleton = None
     chat._db_store = None
-    monkeypatch.setenv("ARCHON_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/test.db")
+    monkeypatch.setenv("COGENTREX_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/test.db")
     yield
     chat._tools_singleton = None
     chat._db_store = None
@@ -148,8 +148,8 @@ def test_encrypted_memory_fallback_on_bad_config(tmp_path, monkeypatch):
 
     # Reset singleton
     persistent._persistent_memory = None
-    monkeypatch.setenv("ARCHON_MEMORY_ENCRYPTION_ENABLED", "true")
-    monkeypatch.setenv("ARCHON_ENCRYPTION_MASTER_KEY", "")  # empty key → skip
+    monkeypatch.setenv("COGENTREX_MEMORY_ENCRYPTION_ENABLED", "true")
+    monkeypatch.setenv("COGENTREX_ENCRYPTION_MASTER_KEY", "")  # empty key → skip
 
     try:
         mem = persistent.get_persistent_memory()

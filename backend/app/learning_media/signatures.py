@@ -8,7 +8,7 @@ import json
 import time
 from typing import TypedDict
 
-_DOMAIN = b"archon/learning-media/v1"
+_DOMAIN = b"cogentrex/learning-media/v1"
 
 
 class MediaToken(TypedDict):
