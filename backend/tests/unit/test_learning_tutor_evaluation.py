@@ -50,6 +50,20 @@ def test_preflight_case_preserves_the_reported_video_context() -> None:
     }
     assert case.rubric.definition_first is True
     assert case.rubric.minimum_citations == 1
+    assert "what is what is preflight?" in case.variants
+
+
+def test_basic_dataset_includes_colloquial_beginner_variants() -> None:
+    dataset = load_tutor_eval_dataset(_DATASET)
+    variants = {variant.casefold() for case in dataset.cases for variant in case.variants}
+
+    assert {
+        "what's factory?",
+        "what's di?",
+        "what's observability?",
+        "what's a policy in cogentrex?",
+        "what is oop?",
+    } <= variants
 
 
 def test_deterministic_score_rejects_fallback_and_missing_required_web() -> None:

@@ -27,7 +27,11 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": [
+        "what is OOP?",
+        "I do not know what OOP means"
+      ]
     },
     {
       "id": "BASIC-002",
@@ -53,7 +57,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-003",
@@ -80,7 +85,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-004",
@@ -108,7 +114,11 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": [
+        "what's DI?",
+        "explain DI simply"
+      ]
     },
     {
       "id": "BASIC-005",
@@ -135,7 +145,11 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": [
+        "what's factory?",
+        "what does factory mean?"
+      ]
     },
     {
       "id": "BASIC-006",
@@ -162,7 +176,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-007",
@@ -192,7 +207,11 @@
         "view": "present",
         "artifact_id": "code-first-video-01",
         "playback_seconds": 235.708
-      }
+      },
+      "variants": [
+        "what is preflight?",
+        "what is what is preflight?"
+      ]
     },
     {
       "id": "BASIC-008",
@@ -223,7 +242,11 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": [
+        "what's observability?",
+        "why observability?"
+      ]
     },
     {
       "id": "BASIC-009",
@@ -250,7 +273,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-010",
@@ -277,7 +301,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-011",
@@ -304,7 +329,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-012",
@@ -330,7 +356,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-013",
@@ -357,7 +384,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-014",
@@ -384,7 +412,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-015",
@@ -410,7 +439,11 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": [
+        "what's a policy in Cogentrex?",
+        "policy in Cogentrex?"
+      ]
     },
     {
       "id": "BASIC-016",
@@ -437,7 +470,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-017",
@@ -463,7 +497,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-018",
@@ -490,7 +525,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-019",
@@ -517,7 +553,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-020",
@@ -544,7 +581,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-021",
@@ -571,7 +609,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-022",
@@ -598,7 +637,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-023",
@@ -624,7 +664,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-024",
@@ -650,7 +691,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-025",
@@ -677,7 +719,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-026",
@@ -703,7 +746,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-027",
@@ -729,7 +773,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-028",
@@ -756,7 +801,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-029",
@@ -782,7 +828,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "BASIC-030",
@@ -808,7 +855,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-001",
@@ -839,7 +887,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-002",
@@ -869,7 +918,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-003",
@@ -900,7 +950,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-004",
@@ -931,7 +982,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-005",
@@ -962,7 +1014,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-006",
@@ -992,7 +1045,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-007",
@@ -1022,7 +1076,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-008",
@@ -1052,7 +1107,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-009",
@@ -1081,7 +1137,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-010",
@@ -1112,7 +1169,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-011",
@@ -1142,7 +1200,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-012",
@@ -1171,7 +1230,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-013",
@@ -1202,7 +1262,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-014",
@@ -1233,7 +1294,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-015",
@@ -1262,7 +1324,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-016",
@@ -1291,7 +1354,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-017",
@@ -1322,7 +1386,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-018",
@@ -1351,7 +1416,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-019",
@@ -1380,7 +1446,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-020",
@@ -1410,7 +1477,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-021",
@@ -1440,7 +1508,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-022",
@@ -1469,7 +1538,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-023",
@@ -1499,7 +1569,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-024",
@@ -1529,7 +1600,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-025",
@@ -1558,7 +1630,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-026",
@@ -1589,7 +1662,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-027",
@@ -1618,7 +1692,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-028",
@@ -1648,7 +1723,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-029",
@@ -1678,7 +1754,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "MEDIUM-030",
@@ -1707,7 +1784,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-001",
@@ -1738,7 +1816,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-002",
@@ -1771,7 +1850,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-003",
@@ -1801,7 +1881,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-004",
@@ -1834,7 +1915,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-005",
@@ -1866,7 +1948,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-006",
@@ -1897,7 +1980,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-007",
@@ -1929,7 +2013,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-008",
@@ -1960,7 +2045,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-009",
@@ -1992,7 +2078,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-010",
@@ -2025,7 +2112,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-011",
@@ -2056,7 +2144,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-012",
@@ -2087,7 +2176,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-013",
@@ -2118,7 +2208,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-014",
@@ -2148,7 +2239,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-015",
@@ -2178,7 +2270,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-016",
@@ -2209,7 +2302,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-017",
@@ -2239,7 +2333,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-018",
@@ -2271,7 +2366,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-019",
@@ -2303,7 +2399,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-020",
@@ -2333,7 +2430,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-021",
@@ -2364,7 +2462,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-022",
@@ -2395,7 +2494,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-023",
@@ -2429,7 +2529,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-024",
@@ -2460,7 +2561,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-025",
@@ -2490,7 +2592,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-026",
@@ -2522,7 +2625,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-027",
@@ -2555,7 +2659,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-028",
@@ -2588,7 +2693,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-029",
@@ -2622,7 +2728,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     },
     {
       "id": "HARD-030",
@@ -2655,7 +2762,8 @@
       },
       "context": {
         "view": "roadmap"
-      }
+      },
+      "variants": []
     }
   ]
 }

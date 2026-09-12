@@ -26,6 +26,7 @@ class TutorEvalCase(BaseModel):
     id: str
     difficulty: Literal["basic", "medium", "hard"]
     question: str = Field(min_length=3, max_length=2_000)
+    variants: list[str] = Field(default_factory=list, max_length=5)
     expected_concepts: list[str] = Field(min_length=1)
     web_policy: Literal["required", "allowed", "forbidden"]
     expected_source_areas: list[str] = Field(min_length=1)
