@@ -289,12 +289,12 @@ class LearningTutorWorkflow:
         by_id = {item.id: item for item in evidence}
         web_by_id = {item.id: item for item in (web_evidence or [])}
         valid_evidence_ids = set(by_id) | set(web_by_id)
-        raw_claims: list[tuple[str, str, tuple[str, ...]]] = []
+        raw_claims: list[tuple[str, Claim]] = []
         for section in payload["sections"]:
             for item in section["claims"]:
                 ids = tuple(dict.fromkeys(item["evidence_ids"]))
-                raw_claims.append((section["heading"], item["text"], ids))
-        claims = tuple(Claim(text, ids) for _, text, ids in raw_claims)
+                raw_claims.append((section["heading"], Claim(item["text"], ids)))
+        claims = tuple(claim for _, claim in raw_claims)
         document_evidence = tuple(
             DocumentEvidence(
                 id=item.id,
@@ -320,15 +320,16 @@ class LearningTutorWorkflow:
             )
             for item in (web_evidence or [])
         )
+        claims = await _rebind_miscited_claims(claims, document_evidence)
         supported, _, unsupported = await verify_document_claims(claims, document_evidence)
         supported_keys = {(claim.text, claim.evidence_ids) for claim in supported}
         rendered_sections: list[tuple[str, list[Claim]]] = []
-        for heading, text, ids in raw_claims:
-            if (text, ids) not in supported_keys:
+        for (heading, _), claim in zip(raw_claims, claims, strict=True):
+            if (claim.text, claim.evidence_ids) not in supported_keys:
                 continue
             if not rendered_sections or rendered_sections[-1][0] != heading:
                 rendered_sections.append((heading, []))
-            rendered_sections[-1][1].append(Claim(text, ids))
+            rendered_sections[-1][1].append(claim)
         cited_ids = {
             evidence_id
             for claim in supported
@@ -379,6 +380,27 @@ class LearningTutorWorkflow:
                 "web_cited_count": len(web_citations),
             },
         )
+
+
+async def _rebind_miscited_claims(
+    claims: tuple[Claim, ...], evidence: tuple[DocumentEvidence, ...]
+) -> tuple[Claim, ...]:
+    """Repair citation IDs only when one retrieved excerpt independently verifies the claim."""
+    rebound: list[Claim] = []
+    for claim in claims:
+        supported, _, _ = await verify_document_claims((claim,), evidence)
+        if supported:
+            rebound.append(claim)
+            continue
+        replacement = claim
+        for source in evidence:
+            candidate = Claim(claim.text, (source.id,))
+            candidate_supported, _, _ = await verify_document_claims((candidate,), evidence)
+            if candidate_supported:
+                replacement = candidate
+                break
+        rebound.append(replacement)
+    return tuple(rebound)
 
 
 def _prompt(
