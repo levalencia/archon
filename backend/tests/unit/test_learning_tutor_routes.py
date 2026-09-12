@@ -136,3 +136,137 @@ def test_tutor_history_is_owner_scoped(monkeypatch) -> None:
         app.dependency_overrides[get_current_user] = lambda: {"user_id": "bob"}
         denied = client.get("/api/learning-tutor/sessions/session-1")
     assert denied.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Streaming endpoint tests
+# ---------------------------------------------------------------------------
+
+
+def _parse_sse_events(raw: str) -> list[dict]:
+    """Parse raw SSE text into list of {event, data} dicts."""
+    events = []
+    current_event = ""
+    current_data: list[str] = []
+    for line in raw.split("\n"):
+        if line.startswith(": "):
+            events.append({"event": "heartbeat", "data": line})
+            continue
+        if line == "":
+            if current_data:
+                import json
+                joined = "\n".join(current_data)
+                events.append({
+                    "event": current_event or "message",
+                    "data": json.loads(joined),
+                })
+                current_event = ""
+                current_data = []
+            continue
+        if line.startswith("event: "):
+            current_event = line[7:]
+        elif line.startswith("data: "):
+            current_data.append(line[6:])
+    return events
+
+
+def test_stream_delivers_status_progress_deltas_result_done(monkeypatch) -> None:
+    async def no_limit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.learning_tutor.enforce_rate_limit", no_limit)
+    with TestClient(_app()) as client:
+        response = client.post(
+            "/api/learning-tutor/answer/stream",
+            json={
+                "question": "What is a service slot?",
+                "project_id": "default",
+                "context": {
+                    "view": "present",
+                    "artifact_id": "code-first-video-02",
+                    "playback_seconds": 300.0,
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers["content-type"]
+
+    events = _parse_sse_events(response.text)
+    event_types = [e["event"] for e in events]
+
+    # Must have status, progress, verified progress, answer_delta(s), result, done in order
+    assert event_types[0] == "status"
+    assert events[0]["data"]["phase"] == "started"
+
+    assert "progress" in event_types
+    progress_events = [e for e in events if e["event"] == "progress"]
+    phases = [e["data"]["phase"] for e in progress_events]
+    assert "retrieving" in phases
+    assert "verified" in phases
+
+    # answer_delta events carry verified text chunks
+    deltas = [e for e in events if e["event"] == "answer_delta"]
+    assert len(deltas) >= 1
+    reconstructed = "".join(e["data"]["delta"] for e in deltas)
+    assert "[E1]" in reconstructed  # only verified text
+
+    # result is authoritative full payload
+    result_events = [e for e in events if e["event"] == "result"]
+    assert len(result_events) == 1
+    result = result_events[0]["data"]
+    assert result["grounded"] is True
+    assert result["citations"][0]["locator"]["line_start"] == 418
+
+    # done is terminal
+    assert event_types[-1] == "done"
+
+
+def test_stream_rejects_unknown_context_fields(monkeypatch) -> None:
+    async def no_limit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.learning_tutor.enforce_rate_limit", no_limit)
+    with TestClient(_app()) as client:
+        response = client.post(
+            "/api/learning-tutor/answer/stream",
+            json={
+                "question": "Explain this",
+                "context": {
+                    "view": "present",
+                    "artifact_id": "code-first-video-02",
+                    "source_path": "../../.env",
+                },
+            },
+        )
+    assert response.status_code == 422
+
+
+def test_stream_answer_matches_json_endpoint(monkeypatch) -> None:
+    """The result event from stream must match the JSON endpoint output."""
+    async def no_limit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.learning_tutor.enforce_rate_limit", no_limit)
+    payload = {
+        "question": "What is a service slot?",
+        "project_id": "default",
+        "context": {
+            "view": "present",
+            "artifact_id": "code-first-video-02",
+            "playback_seconds": 300.0,
+        },
+    }
+    with TestClient(_app()) as client:
+        json_response = client.post("/api/learning-tutor/answer", json=payload)
+        stream_response = client.post("/api/learning-tutor/answer/stream", json=payload)
+
+    json_data = json_response.json()
+    stream_events = _parse_sse_events(stream_response.text)
+    stream_result = [e for e in stream_events if e["event"] == "result"][0]["data"]
+
+    # Core verified fields must match (run_id and session_id differ per call)
+    assert stream_result["grounded"] == json_data["grounded"]
+    assert stream_result["answer_markdown"] == json_data["answer_markdown"]
+    assert len(stream_result["citations"]) == len(json_data["citations"])
+

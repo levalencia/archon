@@ -6,6 +6,7 @@
     askLearningTutor,
     citationHref,
     getLearningTutorSession,
+    streamLearningTutor,
     type LearningTutorAnswer,
     type LearningTutorContext,
   } from '$lib/learning-tutor';
@@ -23,6 +24,8 @@
   let question = $state('');
   let loading = $state(false);
   let error = $state('');
+  let progressMessage = $state('');
+  let streamingText = $state('');
   let answers = $state<Array<{ question: string; result: LearningTutorAnswer }>>([]);
   let restoredKey = $state('');
 
@@ -69,17 +72,40 @@
     if (!clean || loading) return;
     loading = true;
     error = '';
+    progressMessage = '';
+    streamingText = '';
     try {
-      const result = await askLearningTutor(clean, context);
-      answers = [...answers, { question: clean, result }];
-      question = '';
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(`cogentrex_learning_tutor:${key(context)}`, result.session_id);
-      }
+      await streamLearningTutor(clean, context, {
+        onStatus(data) {
+          progressMessage = data.message;
+        },
+        onProgress(data) {
+          progressMessage = data.message;
+        },
+        onAnswerDelta(data) {
+          streamingText += data.delta;
+        },
+        onResult(data) {
+          answers = [...answers, { question: clean, result: data }];
+          streamingText = '';
+          progressMessage = '';
+          question = '';
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(`cogentrex_learning_tutor:${key(context)}`, data.session_id);
+          }
+        },
+        onError(data) {
+          error = data.message;
+        },
+        onDone() {
+          loading = false;
+        },
+      });
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'The learning tutor is unavailable.';
     } finally {
       loading = false;
+      progressMessage = '';
     }
   }
 
@@ -120,7 +146,8 @@
             {#if turn.result.related_questions.length}<div class="related"><span>Continue learning</span>{#each turn.result.related_questions as item}<button onclick={() => submit(item)}>{item}</button>{/each}</div>{/if}
           </article>
         {/each}
-        {#if loading}<p class="loading" role="status">Retrieving and verifying evidence…</p>{/if}
+        {#if loading}<p class="loading" role="status">{progressMessage || 'Retrieving and verifying evidence…'}</p>{/if}
+        {#if streamingText}<article class="answer streaming"><strong>Cogentrex tutor</strong><div class="markdown">{@html markdown(streamingText)}</div></article>{/if}
         {#if error}<p class="error" role="alert">{error}</p>{/if}
       </div>
       <form onsubmit={(event) => { event.preventDefault(); void submit(); }}>

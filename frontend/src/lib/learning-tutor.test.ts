@@ -3,9 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   askLearningTutor,
   citationHref,
+  streamLearningTutor,
   type LearningTutorContext,
   type TutorCitation,
+  type TutorStreamCallbacks,
 } from './learning-tutor';
+import { SSEParser } from './sse';
 
 const context: LearningTutorContext = {
   view: 'present',
@@ -61,5 +64,57 @@ describe('learning tutor client', () => {
       ...codeCitation,
       locator: { path: '../private.txt', line_start: 1, line_end: 1 },
     })).toBeUndefined();
+  });
+
+  it('streams verified tutor answer via SSE', async () => {
+    const ssePayload = [
+      'event: status\ndata: {"run_id":"r1","phase":"started","message":"Retrieving…"}\n\n',
+      'event: progress\ndata: {"run_id":"r1","phase":"retrieving","message":"Searching…"}\n\n',
+      ': heartbeat\n\n',
+      'event: progress\ndata: {"run_id":"r1","phase":"verified","message":"Verified."}\n\n',
+      'event: answer_delta\ndata: {"run_id":"r1","index":0,"delta":"A service slot "}\n\n',
+      'event: answer_delta\ndata: {"run_id":"r1","index":1,"delta":"starts empty. [E1]"}\n\n',
+      `event: result\ndata: ${JSON.stringify({
+        run_id: 'r1', session_id: 's1', answer_markdown: 'A service slot starts empty. [E1]',
+        citations: [codeCitation], related_questions: [], diagram: null,
+        grounded: true, unsupported: [], metrics: { faithfulness_score: 1 },
+      })}\n\n`,
+      'event: done\ndata: {"run_id":"r1"}\n\n',
+    ].join('');
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(ssePayload));
+        controller.close();
+      },
+    });
+
+    const fetcher = vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    }));
+
+    const collected: string[] = [];
+    const deltas: string[] = [];
+    let finalResult: any;
+
+    await streamLearningTutor('What is a service slot?', context, {
+      onStatus(d) { collected.push(`status:${d.phase}`); },
+      onProgress(d) { collected.push(`progress:${d.phase}`); },
+      onAnswerDelta(d) { deltas.push(d.delta); },
+      onResult(d) { finalResult = d; collected.push('result'); },
+      onDone() { collected.push('done'); },
+    }, fetcher);
+
+    expect(collected).toEqual(['status:started', 'progress:retrieving', 'progress:verified', 'result', 'done']);
+    expect(deltas.join('')).toBe('A service slot starts empty. [E1]');
+    expect(finalResult.grounded).toBe(true);
+    expect(finalResult.citations[0].locator.line_start).toBe(418);
+  });
+
+  it('throws on non-ok SSE response', async () => {
+    const fetcher = vi.fn(async () => new Response('Unauthorized', { status: 401 }));
+    await expect(streamLearningTutor('test', context, {}, fetcher)).rejects.toThrow('401');
   });
 });
