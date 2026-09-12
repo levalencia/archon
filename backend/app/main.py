@@ -128,6 +128,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         allowed_hosts=settings.embedding_allowed_hosts,
         allow_private_endpoint=settings.embedding_allow_private_endpoint,
         api_version=settings.embedding_api_version,
+        cache_path=settings.embedding_cache_path,
     )
     app.state.embedding_service.validate_configuration()
 
