@@ -292,12 +292,14 @@ class LearningKnowledgeRepository:
                 stored_contexts = tuple(json.loads(str(source.context_keys_json)))
             except (TypeError, ValueError, json.JSONDecodeError):
                 continue
+            if not _matches_embedding_space(
+                str(chunk.metadata_json),
+                provider=current_provider,
+                model=current_model,
+            ):
+                continue
             dense = 0.0
-            same_embedding_space = (
-                metadata.get("embedding_provider") == current_provider
-                and metadata.get("embedding_model") == current_model
-            )
-            if same_embedding_space and query_vector is not None:
+            if query_vector is not None:
                 try:
                     vector = validate_embedding(
                         json.loads(str(chunk.embedding_json)),

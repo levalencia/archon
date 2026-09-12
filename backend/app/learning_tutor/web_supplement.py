@@ -7,8 +7,12 @@ to prevent SSRF and untrusted fetches.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import ipaddress
+import json
 import re
+import socket
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -203,12 +207,16 @@ async def _safe_extract_content(
     async with httpx.AsyncClient(
         timeout=5.0,
         follow_redirects=False,
+        trust_env=False,
         headers={"User-Agent": "Mozilla/5.0 (compatible; CogentrexBot/1.0)"},
     ) as client:
         for result in results:
             url = result["url"]
             # Double-check allowlist (defense in depth)
             if not is_allowed_url(url):
+                result["content"] = result.get("snippet", "")
+                continue
+            if not await _resolves_to_public_host(url):
                 result["content"] = result.get("snippet", "")
                 continue
             try:
@@ -227,6 +235,28 @@ async def _safe_extract_content(
     return results
 
 
+async def _resolves_to_public_host(url: str) -> bool:
+    """Reject official-looking URLs that resolve to non-public network addresses."""
+    parsed = urlparse(url)
+    if parsed.hostname is None:
+        return False
+    try:
+        infos = await asyncio.wait_for(
+            asyncio.to_thread(
+                socket.getaddrinfo,
+                parsed.hostname,
+                parsed.port or 443,
+                type=socket.SOCK_STREAM,
+                proto=socket.IPPROTO_TCP,
+            ),
+            timeout=2.0,
+        )
+    except (TimeoutError, socket.gaierror):
+        return False
+    addresses = {info[4][0] for info in infos}
+    return bool(addresses) and all(ipaddress.ip_address(address).is_global for address in addresses)
+
+
 def format_web_evidence_for_prompt(evidence: list[WebEvidence]) -> str:
     """Format web evidence as clearly-labeled supplemental context for the LLM prompt."""
     if not evidence:
@@ -235,7 +265,7 @@ def format_web_evidence_for_prompt(evidence: list[WebEvidence]) -> str:
     for item in evidence:
         parts.append(
             f"<{item.id} kind=web domain={item.domain} url={item.url} "
-            f'title="{item.title}">\n{item.content}\n</{item.id}>'
+            f"title={json.dumps(item.title)}>\n{item.content}\n</{item.id}>"
         )
     parts.append("END SUPPLEMENTAL WEB EVIDENCE")
     return "\n\n".join(parts)

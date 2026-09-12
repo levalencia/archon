@@ -92,6 +92,7 @@ async def test_sync_reembeds_unchanged_sources_when_embedding_space_changes(repo
         provider="mock", model="mock-v2", dimensions=32
     )
 
+    assert await knowledge.search("service slot", top_k=3) == []
     result = await knowledge.sync(_sources())
 
     assert result == {"added": 0, "updated": 3, "unchanged": 0, "removed": 0}

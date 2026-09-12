@@ -7,6 +7,7 @@ import pytest
 from app.learning_tutor.web_supplement import (
     DEFAULT_ALLOWED_DOMAINS,
     WebEvidence,
+    _resolves_to_public_host,
     filter_allowed_results,
     format_web_evidence_for_prompt,
     is_allowed_url,
@@ -91,11 +92,11 @@ class TestFormatWebEvidence:
             WebEvidence(
                 id="W1",
                 kind="web",
-                title="Shared services",
-                url="https://en.wikipedia.org/wiki/Shared_services",
+                title='Shared "services"',
+                url="https://www.starlette.io/applications/",
                 snippet="A shared service is...",
                 content="A shared service is a common organizational model...",
-                domain="en.wikipedia.org",
+                domain="www.starlette.io",
                 retrieved_at=1000.0,
                 search_source="brave",
             )
@@ -105,10 +106,21 @@ class TestFormatWebEvidence:
         assert "END SUPPLEMENTAL WEB EVIDENCE" in result
         assert "non-authoritative" in result
         assert "W1" in result
-        assert "en.wikipedia.org" in result
+        assert "www.starlette.io" in result
+        assert 'title="Shared \\"services\\""' in result
 
     def test_empty_evidence(self):
         assert format_web_evidence_for_prompt([]) == ""
+
+
+@pytest.mark.asyncio
+async def test_dns_resolution_rejects_private_addresses(monkeypatch):
+    monkeypatch.setattr(
+        "app.learning_tutor.web_supplement.socket.getaddrinfo",
+        lambda *args, **kwargs: [(2, 1, 6, "", ("127.0.0.1", 443))],
+    )
+
+    assert await _resolves_to_public_host("https://docs.python.org/3/") is False
 
 
 class TestWebEvidence:

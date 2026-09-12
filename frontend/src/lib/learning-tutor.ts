@@ -115,6 +115,7 @@ export async function askLearningTutor(
 // ---------------------------------------------------------------------------
 
 export interface TutorStreamCallbacks {
+  signal?: AbortSignal;
   onStatus?: (data: { run_id: string; phase: string; message: string }) => void;
   onProgress?: (data: { run_id: string; phase: string; message: string }) => void;
   onAnswerDelta?: (data: { run_id: string; index: number; delta: string }) => void;
@@ -134,6 +135,7 @@ export async function streamLearningTutor(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, project_id: 'default', context }),
+    signal: callbacks.signal,
   });
   if (!response.ok) throw new Error(`Learning tutor stream failed (${response.status})`);
   if (!response.body) throw new Error('No response body for SSE stream');
@@ -148,7 +150,14 @@ export async function streamLearningTutor(
       const text = value ? decoder.decode(value, { stream: !done }) : '';
       const events = sseParser.push(text, done);
       for (const evt of events) {
-        const data = JSON.parse(evt.data);
+        let data: any;
+        try {
+          data = JSON.parse(evt.data);
+        } catch {
+          const message = 'The learning tutor returned an invalid stream event.';
+          callbacks.onError?.({ run_id: '', message });
+          throw new Error(message);
+        }
         switch (evt.event) {
           case 'status': callbacks.onStatus?.(data); break;
           case 'progress': callbacks.onProgress?.(data); break;

@@ -74,4 +74,24 @@ describe('LearningTutorPanel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Close learning tutor' }));
     expect(screen.queryByRole('complementary', { name: 'Learning tutor' })).toBeNull();
   });
+
+  it('cancels an active stream', async () => {
+    let observedSignal: AbortSignal | undefined;
+    api.streamLearningTutor.mockImplementation(
+      async (_question: string, _ctx: any, callbacks: any) => {
+        observedSignal = callbacks.signal;
+        await new Promise<void>((resolve) => callbacks.signal.addEventListener('abort', resolve));
+      },
+    );
+    render(LearningTutorPanel, { props: { context, contextTitle: 'Video 2' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ask about this topic' }));
+    await fireEvent.input(screen.getByLabelText('Question about this topic'), {
+      target: { value: 'Explain the service' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ask Cogentrex tutor' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    expect(observedSignal?.aborted).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  });
 });

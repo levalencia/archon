@@ -6,6 +6,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -135,16 +136,25 @@ async def stream_learning_answer(
         )
 
         # Heartbeat while waiting for the workflow
-        while not result_future.done():
-            try:
-                await asyncio.wait_for(asyncio.shield(result_future), timeout=5.0)
-            except TimeoutError:
-                yield ": heartbeat\n\n"
+        try:
+            while not result_future.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(result_future), timeout=5.0)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+        finally:
+            if not result_future.done():
+                result_future.cancel()
+                with suppress(asyncio.CancelledError):
+                    await result_future
 
         try:
             result = result_future.result()
-        except ValueError as exc:
-            yield _sse("error", {"run_id": run_id, "message": str(exc)})
+        except ValueError:
+            yield _sse(
+                "error",
+                {"run_id": run_id, "message": "The learning context could not be resolved."},
+            )
             yield _sse("done", {"run_id": run_id})
             return
         except Exception:

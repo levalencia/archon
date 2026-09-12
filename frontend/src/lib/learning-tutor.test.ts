@@ -118,6 +118,30 @@ describe('learning tutor client', () => {
     await expect(streamLearningTutor('test', context, {}, fetcher)).rejects.toThrow('401');
   });
 
+  it('passes an abort signal to fetch and rejects malformed SSE data', async () => {
+    const controller = new AbortController();
+    const stream = new ReadableStream({
+      start(streamController) {
+        streamController.enqueue(new TextEncoder().encode('event: status\ndata: {not-json}\n\n'));
+        streamController.close();
+      },
+    });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.signal).toBe(controller.signal);
+      return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });
+    });
+    const onError = vi.fn();
+
+    await expect(streamLearningTutor('test', context, {
+      signal: controller.signal,
+      onError,
+    }, fetcher)).rejects.toThrow('invalid stream event');
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining('invalid stream event'),
+    }));
+  });
+
   it('builds web citation href for allowlisted HTTPS domains', () => {
     const webCitation: TutorCitation = {
       id: 'W1',
