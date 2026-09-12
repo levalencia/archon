@@ -156,3 +156,17 @@ class ResponseContract:
             raise StructuredOutputError(
                 "schema_mismatch", "Response does not satisfy the declared schema"
             ) from exc
+
+    def prompt_instruction(self) -> str:
+        """Return a canonical schema instruction for prompt-only JSON providers."""
+        schema = json.dumps(
+            _plain_copy(self.json_schema),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        return (
+            "Return exactly one JSON value matching this contract. "
+            f"Schema ID: {self.schema_id}; version: {self.schema_version}. "
+            f"JSON Schema: {schema}"
+        )

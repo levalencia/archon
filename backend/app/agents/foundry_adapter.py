@@ -11,7 +11,7 @@ from app.runtime.anthropic import (
     normalize_json_mode_content,
 )
 from app.runtime.capabilities import ProviderCapabilities
-from app.runtime.models import Message, ModelResponse, ToolDefinition
+from app.runtime.models import Message, ModelResponse, Role, ToolDefinition
 from app.runtime.structured_output import ResponseContract
 
 
@@ -50,8 +50,11 @@ class FoundryAdapter:
         if response_contract is not None and response_format is not None:
             raise ValueError("response_contract and response_format are mutually exclusive")
         effective_format = "json" if response_contract is not None else response_format
+        request_messages = tuple(messages)
+        if response_contract is not None:
+            request_messages += (Message(Role.SYSTEM, response_contract.prompt_instruction()),)
         request = anthropic_request(
-            messages,
+            request_messages,
             tools,
             max_tokens,
             response_format=effective_format,

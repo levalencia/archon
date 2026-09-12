@@ -16,6 +16,7 @@ from app.agents.openai_adapter import OpenAIAdapter
 from app.agents.protocols import LLMClient
 from app.runtime.anthropic import anthropic_request, anthropic_response
 from app.runtime.models import Message, Role, TokenUsage, ToolCall, ToolDefinition
+from app.runtime.structured_output import ResponseContract
 
 
 @pytest.mark.unit
@@ -330,6 +331,57 @@ class TestFoundryAdapter:
             "messages": [{"role": "user", "content": "hi"}],
             "max_tokens": 321,
         }
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_response_contract_adds_schema_to_system_prompt(self, monkeypatch) -> None:
+        import anthropic
+
+        request: dict = {}
+
+        class Messages:
+            async def create(self, **kwargs):
+                request.update(kwargs)
+                return SimpleNamespace(
+                    content=[SimpleNamespace(type="text", text='{"answer":"ok"}')],
+                    usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+                    stop_reason="end_turn",
+                )
+
+        class Client:
+            def __init__(self, **kwargs):
+                del kwargs
+                self.messages = Messages()
+
+        monkeypatch.setattr(anthropic, "AsyncAnthropic", Client)
+        adapter = FoundryAdapter(api_key="test-key", base_url="https://foundry.example.com")
+        contract = ResponseContract(
+            schema_id="test.answer",
+            schema_version="1",
+            json_schema={
+                "type": "object",
+                "properties": {"answer": {"type": "string"}},
+                "required": ["answer"],
+                "additionalProperties": False,
+            },
+            validator=lambda value: value,
+        )
+
+        await adapter.complete(
+            [Message(Role.USER, "answer")],
+            max_tokens=321,
+            response_contract=contract,
+        )
+
+        system = request["system"]
+        system_text = (
+            system
+            if isinstance(system, str)
+            else "\n".join(item["text"] for item in system if item.get("type") == "text")
+        )
+        assert "test.answer" in system_text
+        assert '"required":["answer"]' in system_text
+        assert request["messages"] == [{"role": "user", "content": "answer"}]
 
 
 class TestOllamaAdapter:
