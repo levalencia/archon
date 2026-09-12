@@ -991,6 +991,12 @@ def _negated(value: str) -> bool:
     return bool(_NEGATIONS & set(_WORD_OR_NUMBER.findall(_normalize_support_text(value))))
 
 
+def _support_spans(value: str) -> tuple[str, ...]:
+    """Split prose so unrelated negation elsewhere in a chunk cannot taint a claim."""
+    spans = tuple(part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", value) if part.strip())
+    return spans or (value,)
+
+
 def _supports_claim(claim: Claim, evidence: tuple[DocumentEvidence, ...]) -> bool:
     """Accept only known citations with conservative lexical, numeric, and polarity support."""
     by_id = {item.id: item for item in evidence}
@@ -1005,10 +1011,13 @@ def _supports_claim(claim: Claim, evidence: tuple[DocumentEvidence, ...]) -> boo
     for source in sources:
         source_tokens = _substantive_tokens(source.verification_text)
         evidence_tokens.update(source_tokens)
-        # Ignore unrelated cited prose when determining polarity, but reject mixed
-        # polarity among excerpts that overlap materially with the claim.
-        if len(claim_tokens & source_tokens) / len(claim_tokens) >= 0.5:
-            relevant_polarities.add(_negated(source.verification_text))
+        # Inspect sentence-level spans so unrelated negation elsewhere in a long
+        # chunk does not taint an otherwise exact supporting sentence. Still
+        # reject mixed polarity when both relevant spans overlap the claim.
+        for span in _support_spans(source.verification_text):
+            span_tokens = _substantive_tokens(span)
+            if len(claim_tokens & span_tokens) / len(claim_tokens) >= 0.5:
+                relevant_polarities.add(_negated(span))
     overlap = len(claim_tokens & evidence_tokens) / len(claim_tokens)
     if overlap < _MIN_SUBSTANTIVE_OVERLAP:
         return False
