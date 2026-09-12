@@ -29,7 +29,7 @@ ENV COGENTREX_EMBEDDING_CACHE_PATH=/opt/embedding-models
 RUN groupadd --system --gid 10001 cogentrex \
     && useradd --system --uid 10001 --gid cogentrex --home-dir /app cogentrex \
     && chmod 0555 /app/container-entrypoint.sh \
-    && chown -R cogentrex:cogentrex /app
+    && chown -R cogentrex:cogentrex /app /opt/embedding-models
 
 USER cogentrex
 
