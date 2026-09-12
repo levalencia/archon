@@ -1,12 +1,12 @@
 # Documentation Guide
 
-> Conventions for writing and maintaining Archon documentation.
+> Conventions for writing and maintaining Cogentrex documentation.
 
 ---
 
 ## Audience
 
-Archon docs serve one primary audience: self-directed developers learning how
+Cogentrex docs serve one primary audience: self-directed developers learning how
 to build a full-featured agentic AI system. Within that audience, the docs support
 three learning needs:
 
@@ -81,7 +81,7 @@ Plans use the date-prefixed filename convention:
 4. **Concise.** Prefer short paragraphs, concrete examples, and descriptive links.
    Remove filler, repeated caveats, commit IDs, CI run IDs, and mutable counts
    from human-facing pages.
-5. **Humble.** Archon is a portfolio project with local evidence. Do not use
+5. **Humble.** Cogentrex is a portfolio project with local evidence. Do not use
    "production-grade," "enterprise-ready," or similar phrasing unless
    qualified by the exact deployment and evidence scope.
 6. **English.** All documentation is in English.

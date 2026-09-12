@@ -5,11 +5,11 @@
 
 ## Outcomes and prerequisites
 
-You will read Archon's Python boundaries, explain structural typing and dependency injection (DI), and identify where async work can block or be cancelled. Prerequisites: classes, type hints, `await`, and context managers. Canonical reading: [OOP, Protocols, and DI](../../concepts/oop-protocols-dependency-injection.md) and [Async Python](../../concepts/async-python.md).
+You will read Cogentrex's Python boundaries, explain application composition, structural typing and dependency injection (DI), and identify where async work can block or be cancelled. Prerequisites: classes, type hints, `await`, and context managers. Canonical reading: [Application factory, middleware, routers, and application state](../../concepts/application-composition.md), [OOP, Protocols, and DI](../../concepts/oop-protocols-dependency-injection.md), and [Async Python](../../concepts/async-python.md).
 
 ## Problem and mental model
 
-The runtime should depend on capabilities, not vendors or databases. Frozen dataclasses carry values; Protocols define ports; concrete adapters are injected at application/request composition roots.
+The application factory owns process composition: it seeds application state, registers the middleware onion and router groups, and separates liveness from readiness. The runtime should depend on capabilities, not vendors or databases. Frozen dataclasses carry values; Protocols define ports; concrete adapters are injected at application/request composition roots.
 
 ```mermaid
 classDiagram
@@ -51,7 +51,11 @@ sequenceDiagram
 
 ## Source, tests, and evidence
 
-Read [`runtime/ports.py`](../../../../backend/app/runtime/ports.py), [`runtime/models.py`](../../../../backend/app/runtime/models.py), [`AgentRuntime.__init__`](../../../../backend/app/runtime/engine.py), [`create_chat_runtime`](../../../../backend/app/runtime/factory.py), and [`create_app`/`lifespan`](../../../../backend/app/main.py). Tests: [`test_adapters.py`](../../../../backend/tests/unit/test_adapters.py), [`test_runtime_v2.py`](../../../../backend/tests/unit/test_runtime_v2.py), and `TestToolRegistration.test_satisfies_protocol` in [`test_tools.py`](../../../../backend/tests/unit/test_tools.py).
+Read [`create_app`/`lifespan`](../../../../backend/app/main.py), [`runtime/ports.py`](../../../../backend/app/runtime/ports.py), [`runtime/models.py`](../../../../backend/app/runtime/models.py), [`AgentRuntime.__init__`](../../../../backend/app/runtime/engine.py), and [`create_chat_runtime`](../../../../backend/app/runtime/factory.py). Use the [API map](../../reference/api-map.md) to distinguish router groups from endpoints. Tests: [`test_health.py`](../../../../backend/tests/unit/test_health.py), [`test_adapters.py`](../../../../backend/tests/unit/test_adapters.py), [`test_runtime_v2.py`](../../../../backend/tests/unit/test_runtime_v2.py), and `TestToolRegistration.test_satisfies_protocol` in [`test_tools.py`](../../../../backend/tests/unit/test_tools.py).
+
+### Visual sequence
+
+At `/learn?view=present`, the **Cogentrex From the Code** pack connects this module to Videos 1–4. Use Videos 1–3 for application/process/request composition, then Video 4 for Protocols, adapters, and dependency injection. Each player includes a timed transcript, source links, and evidence limitations.
 
 ## Read/test exercise
 
@@ -76,11 +80,14 @@ Protocols provide substitutability, not runtime isolation or operational reliabi
 
 ## Self-check
 
-1. How does a Protocol differ from inheritance?
-2. Where does request-level DI occur?
-3. Why inject a clock?
-4. Why copy values before an `await`?
-5. What can type checking not guarantee?
+1. Why is `create_app()` an application factory?
+2. How does a router differ from one endpoint?
+3. Which `app.state` values are constructors versus live service instances?
+4. How does a Protocol differ from inheritance?
+5. Where does request-level DI occur?
+6. Why inject a clock?
+7. Why copy values before an `await`?
+8. What can type checking not guarantee?
 
 ## Done criteria
 

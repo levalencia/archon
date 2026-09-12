@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { isAuthenticated, getUser, logout } from '$lib/auth';
-  import { MessageSquare, LayoutDashboard, FileText, Shield, Settings, Brain, LogOut, Zap, Network } from 'lucide-svelte';
+  import { MessageSquare, LayoutDashboard, FileText, Shield, Settings, Brain, LogOut, Network } from 'lucide-svelte';
 
   let { children } = $props();
   let user = $state<{ user_id: string; username: string } | null>(null);
@@ -38,12 +38,12 @@
   <div class="flex h-[100dvh] w-full overflow-hidden bg-[var(--bg)]">
     <aside class="hidden w-[232px] shrink-0 flex-col border-r border-[var(--border)] bg-[rgba(16,21,29,.97)] md:flex" aria-label="Primary navigation">
       <a href="/" class="flex h-16 min-h-16 items-center gap-3 border-b border-[var(--border)] px-5 no-underline">
-        <span class="grid size-8 place-items-center rounded-lg bg-[var(--accent)] font-extrabold text-[#07110f]"><Zap size={16}/></span>
-        <span><strong class="block text-sm text-[var(--text)]">Archon</strong><small class="text-[var(--muted)]">Reliability workbench</small></span>
+        <img src="/brand/cogentrex-icon.svg" alt="" class="size-8" />
+        <span><strong class="block text-sm text-[var(--text)]">Cogentrex</strong><small class="text-[var(--muted)]">Build agents you can explain.</small></span>
       </a>
       <nav class="flex-1 space-y-1 overflow-y-auto p-3">
         {#each navItems as item}
-          <a href={item.href} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm no-underline transition-colors {isActive(item.href, $page.url.pathname) ? 'bg-[var(--accent-glow)] text-[var(--accent)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'text-[var(--secondary)] hover:bg-[var(--raised)] hover:text-[var(--text)]'}">
+          <a href={item.href} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm no-underline transition-colors {isActive(item.href, $page.url.pathname) ? 'bg-[var(--accent-glow)] text-[var(--accent)] shadow-[0_0_18px_var(--cogentrex-orange-glow)]' : 'text-[var(--secondary)] hover:bg-[var(--raised)] hover:text-[var(--text)]'}">
             <item.icon size={18}/><span>{item.label}</span>
           </a>
         {/each}

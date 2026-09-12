@@ -193,7 +193,7 @@ Create two forks at the same sequence and predict which IDs match and which diff
 
 ## 30-second interview answer
 
-“Archon replay reads an owner-scoped sequence of already stored safe events; it never calls a model or tool. Fork creates or reuses a checkpoint at one event, copies redacted conversation rows into a new conversation, and lets one later run consume lineage, while explicitly restoring no arbitrary workspace. Compare deterministically groups the two runs' stored policy, approval, tool, evidence, and metric fields. These features explain recorded differences; they do not re-execute, undo side effects, recover chain-of-thought, or prove causality or semantic truth.”
+“Cogentrex replay reads an owner-scoped sequence of already stored safe events; it never calls a model or tool. Fork creates or reuses a checkpoint at one event, copies redacted conversation rows into a new conversation, and lets one later run consume lineage, while explicitly restoring no arbitrary workspace. Compare deterministically groups the two runs' stored policy, approval, tool, evidence, and metric fields. These features explain recorded differences; they do not re-execute, undo side effects, recover chain-of-thought, or prove causality or semantic truth.”
 
 ## Self-check
 

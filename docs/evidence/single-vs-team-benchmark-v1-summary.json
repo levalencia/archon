@@ -1,5 +1,5 @@
 {
-  "schema": "archon.single-vs-team-benchmark-summary",
+  "schema": "cogentrex.single-vs-team-benchmark-summary",
   "version": 1,
   "observed_at": "2026-09-06",
   "evidence_level": "local_live_provider",
@@ -167,11 +167,11 @@
     ]
   },
   "external_artifacts": {
-    "raw_results_path": "/tmp/archon-hybrid-benchmark-v1-results.json",
+    "raw_results_path": "/tmp/cogentrex-hybrid-benchmark-v1-results.json",
     "raw_results_sha256": "3cbbbe5df60fc8c133f556bb794f02b072c496fa26a639b6764f41597044e35e",
-    "grades_path": "/tmp/archon-full-grader-final-canonical.json",
+    "grades_path": "/tmp/cogentrex-full-grader-final-canonical.json",
     "grades_sha256": "df8939f302b63ab9c5f9e8a89fe89a1f9eab6a54ffcd38f89d4d6df1f22bf801",
-    "analysis_path": "/tmp/archon-hybrid-benchmark-v1-full-analysis.json",
+    "analysis_path": "/tmp/cogentrex-hybrid-benchmark-v1-full-analysis.json",
     "analysis_sha256_before_documentation_copy": "8e2d1ec663ea9c160e8bea30463227838fa1bf39b0c54ee0fbec98dc7a58fca2"
   },
   "limitations": [

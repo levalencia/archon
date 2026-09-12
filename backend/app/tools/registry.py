@@ -6,7 +6,7 @@ Every tool call goes through:
 3. Timeout enforcement (asyncio.wait_for prevents hanging tools)
 4. Audit logging (every call logged with correlation ID)
 
-See: https://github.com/levalencia/production-ai-agents/articles/day-01-anatomy-of-production-agent/
+See: https://github.com/levalencia/cogentrex/articles/day-01-anatomy-of-production-agent/
 Concept: Layer 3 - Tools (registered, validated, timeout-enforced, audited)
 """
 
@@ -158,7 +158,7 @@ class PolicyMetadataError(ValueError):
 
 
 def resolve_workspace_path(arguments: Mapping[str, Any]) -> tuple[ResourcePattern, ...]:
-    """Resolve a tool ``path`` argument against ``ARCHON_WORKSPACE_ROOT``.
+    """Resolve a tool ``path`` argument against ``COGENTREX_WORKSPACE_ROOT``.
 
     This supplies a canonical lexical identity to policy evaluation only. Tool execution must
     independently recheck workspace containment immediately before filesystem access because
@@ -172,7 +172,7 @@ def resolve_workspace_path(arguments: Mapping[str, Any]) -> tuple[ResourcePatter
         raise ValueError("Invalid workspace path")
     # The root is trusted server configuration. It must never be selected by model-controlled
     # tool arguments; registry validation also rejects ``workspace_root`` for all live tools.
-    root_value = os.environ.get("ARCHON_WORKSPACE_ROOT", str(Path.cwd()))
+    root_value = os.environ.get("COGENTREX_WORKSPACE_ROOT", str(Path.cwd()))
     root = Path(root_value).resolve(strict=False)
     requested = Path(path)
     candidate = requested if requested.is_absolute() else root / requested
@@ -379,7 +379,7 @@ class SecureToolRegistry:
         if self._permissions and tool.required_permissions:
             for permission in tool.required_permissions:
                 allowed = await self._permissions.check(
-                    agent_id="archon",
+                    agent_id="cogentrex",
                     resource=tool_name,
                     action=permission,
                     **audit_parameters,
@@ -387,7 +387,7 @@ class SecureToolRegistry:
                 if not allowed:
                     if self._audit:
                         await self._audit.log(
-                            agent_id="archon",
+                            agent_id="cogentrex",
                             action="permission_denied",
                             resource=tool_name,
                             parameters=audit_parameters,
@@ -417,7 +417,7 @@ class SecureToolRegistry:
             )
             if self._audit:
                 await self._audit.log(
-                    agent_id="archon",
+                    agent_id="cogentrex",
                     action="tool_timeout",
                     resource=tool_name,
                     parameters=audit_parameters,
@@ -436,7 +436,7 @@ class SecureToolRegistry:
             raise
         if self._audit:
             await self._audit.log(
-                agent_id="archon",
+                agent_id="cogentrex",
                 action="tool_executed",
                 resource=tool_name,
                 parameters=audit_parameters,

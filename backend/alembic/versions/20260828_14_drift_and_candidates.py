@@ -118,16 +118,17 @@ def _create_immutability_guards() -> None:
         )
     elif dialect == "postgresql":
         op.execute(
-            "CREATE FUNCTION archon_s8_8_reject_immutable() RETURNS trigger "
+            "CREATE FUNCTION cogentrex_s8_8_reject_immutable() RETURNS trigger "
             "LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable record'; END $$"
         )
         for table in immutable_tables:
             op.execute(
                 f"CREATE TRIGGER trg_{table}_immutable BEFORE UPDATE OR DELETE ON {table} "
-                "FOR EACH ROW EXECUTE FUNCTION archon_s8_8_reject_immutable()"
+                "FOR EACH ROW EXECUTE FUNCTION cogentrex_s8_8_reject_immutable()"
             )
         op.execute(
-            "CREATE FUNCTION archon_s8_8_candidate_guard() RETURNS trigger LANGUAGE plpgsql AS $$ "
+            "CREATE FUNCTION cogentrex_s8_8_candidate_guard() RETURNS trigger "
+            "LANGUAGE plpgsql AS $$ "
             "BEGIN IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'immutable candidate'; END IF; IF "
             "NEW.id IS DISTINCT FROM OLD.id OR NEW.owner_id IS DISTINCT FROM OLD.owner_id OR "
             "NEW.project_id IS DISTINCT FROM OLD.project_id OR "
@@ -156,7 +157,7 @@ def _create_immutability_guards() -> None:
         op.execute(
             "CREATE TRIGGER trg_optimization_candidates_guard BEFORE UPDATE OR DELETE "
             "ON optimization_candidates FOR EACH ROW "
-            "EXECUTE FUNCTION archon_s8_8_candidate_guard()"
+            "EXECUTE FUNCTION cogentrex_s8_8_candidate_guard()"
         )
 
 
@@ -189,8 +190,8 @@ def _drop_immutability_guards() -> None:
             "optimization_candidate_events",
         ):
             op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_immutable ON {table}")
-        op.execute("DROP FUNCTION IF EXISTS archon_s8_8_candidate_guard()")
-        op.execute("DROP FUNCTION IF EXISTS archon_s8_8_reject_immutable()")
+        op.execute("DROP FUNCTION IF EXISTS cogentrex_s8_8_candidate_guard()")
+        op.execute("DROP FUNCTION IF EXISTS cogentrex_s8_8_reject_immutable()")
 
 
 def upgrade() -> None:

@@ -2,7 +2,7 @@
 name: api-design
 description: Design stable typed API contracts
 version: 1.0.0
-tags: [api-design, archon]
+tags: [api-design, cogentrex]
 references: [references/checklist.md]
 triggers: ['api design', 'endpoint contract', 'rest api']
 negative_triggers: ['do not change api', 'no api']

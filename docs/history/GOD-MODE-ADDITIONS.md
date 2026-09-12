@@ -5,14 +5,14 @@
 > **Status:** Historical research input. Current capability status lives in the acceptance manifest and implementation evidence.
 
 **Source:** 8 skills from `agent-god-mode` vault (2404 skills)
-**Purpose:** Concrete improvements to the Archon webapp plan based on battle-tested patterns
+**Purpose:** Concrete improvements to the Cogentrex webapp plan based on battle-tested patterns
 **Created:** 2026-08-21
 
 ---
 
 ## Executive Summary
 
-After analyzing 8 specialized skills from the agent-god-mode vault, here are the **highest-impact additions** to the Archon plan, organized by theme:
+After analyzing 8 specialized skills from the agent-god-mode vault, here are the **highest-impact additions** to the Cogentrex plan, organized by theme:
 
 1. **Agent Architecture** — Uniform Tool Interface + DAG planning (from agent-creator, agent-native-architecture)
 2. **Software Architecture** — Hexagonal/Ports+Adapters for FastAPI (from architecture-patterns)
@@ -136,7 +136,7 @@ async def execute_plan(plan: Plan, tool_registry: ToolRegistry) -> dict:
 | Export chat | `export_conversation` tool |
 | Tag/organize chats | `tag_conversation` tool |
 
-**The test:** Pick any action a user can take in Archon's UI. Describe it to the agent. Can it accomplish the outcome?
+**The test:** Pick any action a user can take in Cogentrex's UI. Describe it to the agent. Can it accomplish the outcome?
 
 ### 1.4 Explicit Completion Signals (MEDIUM IMPACT)
 
@@ -405,11 +405,11 @@ mutmut run --paths-to-mutate=src/agent_core/security/ --tests-dir=tests/security
 
 ### Source: `senior-security`
 
-### 4.1 STRIDE Threat Model for Archon (HIGH IMPACT)
+### 4.1 STRIDE Threat Model for Cogentrex (HIGH IMPACT)
 
 **Addition to Phase 2:** Create a formal threat model before implementing security:
 
-| STRIDE Category | Threat to Archon | Mitigation |
+| STRIDE Category | Threat to Cogentrex | Mitigation |
 |----------------|-------------------|------------|
 | **S**poofing | Attacker impersonates user via stolen JWT | Short-lived JWTs (15min), refresh tokens, token rotation |
 | **T**ampering | Modify agent prompts in transit | HTTPS everywhere, signed inter-agent messages, input validation |
@@ -422,7 +422,7 @@ mutmut run --paths-to-mutate=src/agent_core/security/ --tests-dir=tests/security
 
 ### 4.2 OWASP Top 10 Mapping for AI Apps (HIGH IMPACT)
 
-| OWASP Risk | Archon Exposure | Mitigation in Plan |
+| OWASP Risk | Cogentrex Exposure | Mitigation in Plan |
 |-----------|-----------------|-------------------|
 | A01: Broken Access Control | Multi-tenant data leakage | PostgreSQL RLS + user-scoped queries (Phase 2) |
 | A02: Cryptographic Failures | Weak encryption of stored conversations | AES-256-GCM with per-conversation keys (existing) |
@@ -509,7 +509,7 @@ security-scan:
 import structlog
 from opentelemetry import trace
 
-def configure_logging(service_name: str = "archon", env: str = "dev"):
+def configure_logging(service_name: str = "cogentrex", env: str = "dev"):
     """Configure structlog with OTel trace correlation."""
     
     processors = [
@@ -569,7 +569,7 @@ from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 import functools
 
-def setup_tracing(app, service_name: str = "archon", otlp_endpoint: str = "localhost:4317"):
+def setup_tracing(app, service_name: str = "cogentrex", otlp_endpoint: str = "localhost:4317"):
     """Initialize OpenTelemetry with auto-instrumentation."""
     resource = Resource.create({SERVICE_NAME: service_name})
     provider = TracerProvider(resource=resource)
@@ -592,9 +592,9 @@ def trace_agent_operation(operation_name: str):
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            tracer = trace.get_tracer("archon.agents")
+            tracer = trace.get_tracer("cogentrex.agents")
             with tracer.start_as_current_span(operation_name) as span:
-                span.set_attribute("gen_ai.system", "archon")
+                span.set_attribute("gen_ai.system", "cogentrex")
                 span.set_attribute("gen_ai.operation.name", operation_name)
                 try:
                     result = await func(*args, **kwargs)
@@ -620,7 +620,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
 
-def setup_metrics(service_name: str = "archon"):
+def setup_metrics(service_name: str = "cogentrex"):
     """Initialize OTel metrics with Prometheus exporter."""
     reader = PrometheusMetricReader()
     provider = MeterProvider(metric_readers=[reader])
@@ -628,34 +628,34 @@ def setup_metrics(service_name: str = "archon"):
     
     meter = metrics.get_meter(service_name)
     
-    return ArchonMetrics(meter)
+    return CogentrexMetrics(meter)
 
-class ArchonMetrics:
+class CogentrexMetrics:
     def __init__(self, meter):
         self.llm_request_duration = meter.create_histogram(
-            "archon.llm.request.duration",
+            "cogentrex.llm.request.duration",
             unit="s",
             description="LLM API call duration"
         )
         self.llm_tokens_used = meter.create_counter(
-            "archon.llm.tokens.total",
+            "cogentrex.llm.tokens.total",
             description="Total tokens consumed",
         )
         self.agent_runs = meter.create_counter(
-            "archon.agent.runs.total",
+            "cogentrex.agent.runs.total",
             description="Total agent run count",
         )
         self.rag_retrieval_latency = meter.create_histogram(
-            "archon.rag.retrieval.duration",
+            "cogentrex.rag.retrieval.duration",
             unit="s",
             description="RAG retrieval latency",
         )
         self.circuit_breaker_state = meter.create_up_down_counter(
-            "archon.circuit_breaker.state",
+            "cogentrex.circuit_breaker.state",
             description="Circuit breaker state (0=closed, 1=open, 0.5=half-open)",
         )
         self.active_conversations = meter.create_up_down_counter(
-            "archon.conversations.active",
+            "cogentrex.conversations.active",
             description="Currently active conversations",
         )
 ```
@@ -765,11 +765,11 @@ service:
 
 ```yaml
 # eval/promptfooconfig.yaml
-description: "Archon Agent Quality Gates"
+description: "Cogentrex Agent Quality Gates"
 
 providers:
-  - id: python:eval/archon_provider.py  # Custom provider that calls Archon API
-    label: Archon-Agent
+  - id: python:eval/cogentrex_provider.py  # Custom provider that calls Cogentrex API
+    label: Cogentrex-Agent
 
 prompts:
   - file://eval/prompts/research_query.json
@@ -839,7 +839,7 @@ eval-gate:
   needs: [integration]
   steps:
     - uses: actions/checkout@v4
-    - name: Start Archon services
+    - name: Start Cogentrex services
       run: docker compose up -d
     - name: Wait for readiness
       run: |

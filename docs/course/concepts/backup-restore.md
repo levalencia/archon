@@ -10,7 +10,7 @@
 A backup is a protected copy of durable data.
 A restore is the act of rebuilding usable data from that copy.
 Creating a file is therefore only half of the job: the copy is credible only after a restore can read it and the application can use the recovered records.
-For Archon, PostgreSQL is the durable authority covered by this procedure.
+For Cogentrex, PostgreSQL is the durable authority covered by this procedure.
 Redis carries live rate-limit state and is intentionally not part of the durable restore.
 The same encryption master key must remain available after recovery or restored encrypted memory cannot be decrypted.
 This procedure is not continuous replication, point-in-time recovery, or automatic failover.
@@ -21,7 +21,7 @@ This procedure is not continuous replication, point-in-time recovery, or automat
 |---|---|
 | custom dump | PostgreSQL archive produced by `pg_dump -Fc` and consumed by `pg_restore` |
 | checksum | SHA-256 digest used to detect accidental changes to the dump |
-| clean target | Database with no Archon user tables before restore |
+| clean target | Database with no Cogentrex user tables before restore |
 | snapshot boundary | Time represented by the dump; later writes are outside it |
 | recovery verification | Checks that restored records and application access are useful |
 
@@ -190,7 +190,7 @@ The concept is `implemented` only for the stated local clean-restore boundary.
 
 ### 30-second answer
 
-> Archon treats recovery, not dump creation, as the proof. Its local scripts create a private PostgreSQL custom dump, revision metadata, and SHA-256 sidecar; restore verifies integrity and refuses a populated target by default. A destructive local drill then authenticates and compares exact durable evidence. That supports a bounded local observation, not scheduling, off-site encryption, PITR, or guaranteed recovery objectives.
+> Cogentrex treats recovery, not dump creation, as the proof. Its local scripts create a private PostgreSQL custom dump, revision metadata, and SHA-256 sidecar; restore verifies integrity and refuses a populated target by default. A destructive local drill then authenticates and compares exact durable evidence. That supports a bounded local observation, not scheduling, off-site encryption, PITR, or guaranteed recovery objectives.
 
 ## Self-check
 

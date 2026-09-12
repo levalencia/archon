@@ -4,13 +4,13 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: archon
-      POSTGRES_PASSWORD: archon_dev
-      POSTGRES_DB: archon
+      POSTGRES_USER: cogentrex
+      POSTGRES_PASSWORD: cogentrex_dev
+      POSTGRES_DB: cogentrex
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U archon"]
+      test: ["CMD-SHELL", "pg_isready -U cogentrex"]
       interval: 5s
       timeout: 3s
       retries: 5

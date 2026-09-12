@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  repository: archon-backend
+  repository: cogentrex-backend
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -11,7 +11,7 @@ service:
 
 ingress:
   enabled: true
-  host: archon.example.com
+  host: cogentrex.example.com
 
 resources:
   requests:
@@ -34,16 +34,16 @@ config:
   debug: "false"
 
 secrets:
-  databaseUrl: postgresql+asyncpg://archon:archon@postgres:5432/archon
+  databaseUrl: postgresql+asyncpg://cogentrex:cogentrex@postgres:5432/cogentrex
   redisUrl: redis://redis:6379/0
   jwtSecret: change-me-in-production
 
 postgresql:
   enabled: true
   auth:
-    username: archon
-    password: archon
-    database: archon
+    username: cogentrex
+    password: cogentrex
+    database: cogentrex
 
 redis:
   enabled: true

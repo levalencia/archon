@@ -1,4 +1,4 @@
-# Archon Local Disaster-Recovery Runbook
+# Cogentrex Local Disaster-Recovery Runbook
 
 ## Scope
 
@@ -21,9 +21,9 @@ Never print, commit, or copy the env file into the repository.
 The verified stack publishes only the gateway on loopback:
 
 ```bash
-curl --fail http://127.0.0.1:${ARCHON_LOCAL_PORT:-8080}/healthz
-curl --fail http://127.0.0.1:${ARCHON_LOCAL_PORT:-8080}/readyz
-curl --fail http://127.0.0.1:${ARCHON_LOCAL_PORT:-8080}/metrics
+curl --fail http://127.0.0.1:${COGENTREX_LOCAL_PORT:-8080}/healthz
+curl --fail http://127.0.0.1:${COGENTREX_LOCAL_PORT:-8080}/readyz
+curl --fail http://127.0.0.1:${COGENTREX_LOCAL_PORT:-8080}/metrics
 ```
 
 `/readyz` checks PostgreSQL, Redis rate-limit storage, embedding capability, and active OTEL configuration. Redis failure is not silently replaced by an in-memory limiter in the verified target.
@@ -34,7 +34,7 @@ curl --fail http://127.0.0.1:${ARCHON_LOCAL_PORT:-8080}/metrics
 ./scripts/local-backup.sh \
   <compose-project> \
   </absolute/path/to/mode-0600.env> \
-  </protected/path/archon.dump>
+  </protected/path/cogentrex.dump>
 ```
 
 The script:
@@ -50,7 +50,7 @@ The script:
 Verify artifacts exist:
 
 ```bash
-stat -f '%Sp %N' /protected/path/archon.dump*
+stat -f '%Sp %N' /protected/path/cogentrex.dump*
 ```
 
 Do not use the old plaintext `docker exec ... pg_dump > backup.sql` instructions from historical docs.
@@ -60,10 +60,10 @@ Do not use the old plaintext `docker exec ... pg_dump > backup.sql` instructions
 Start only destination dependencies in a fresh Compose project/volume:
 
 ```bash
-ARCHON_LOCAL_PORT=18081 docker compose \
+COGENTREX_LOCAL_PORT=18081 docker compose \
   --env-file /absolute/path/to/mode-0600.env \
   -f docker-compose.local.yml \
-  -p archon-restore \
+  -p cogentrex-restore \
   up -d --wait postgres redis otel-collector
 ```
 
@@ -71,20 +71,20 @@ Restore:
 
 ```bash
 ./scripts/local-restore.sh \
-  archon-restore \
+  cogentrex-restore \
   /absolute/path/to/mode-0600.env \
-  /protected/path/archon.dump
+  /protected/path/cogentrex.dump
 ```
 
-The restore script verifies SHA-256 and refuses a target containing Archon user tables. `ALLOW_REPLACE=1` is the only explicit destructive override and should not be used for the clean-restore drill.
+The restore script verifies SHA-256 and refuses a target containing Cogentrex user tables. `ALLOW_REPLACE=1` is the only explicit destructive override and should not be used for the clean-restore drill.
 
 Start the application after restore:
 
 ```bash
-ARCHON_LOCAL_PORT=18081 docker compose \
+COGENTREX_LOCAL_PORT=18081 docker compose \
   --env-file /absolute/path/to/mode-0600.env \
   -f docker-compose.local.yml \
-  -p archon-restore \
+  -p cogentrex-restore \
   up --build -d --wait
 ```
 
@@ -96,9 +96,9 @@ curl --fail http://127.0.0.1:18081/readyz
 docker compose \
   --env-file /absolute/path/to/mode-0600.env \
   -f docker-compose.local.yml \
-  -p archon-restore \
+  -p cogentrex-restore \
   exec -T postgres \
-  psql -U archon -d archon -Atqc 'SELECT version_num FROM alembic_version'
+  psql -U cogentrex -d cogentrex -Atqc 'SELECT version_num FROM alembic_version'
 ```
 
 Expected revision for the recorded S7 evidence: `20260826_08`.
@@ -106,7 +106,7 @@ Expected revision for the recorded S7 evidence: `20260826_08`.
 ## Automated clean-restore proof
 
 ```bash
-./scripts/local-dr-smoke.sh /tmp/archon-dr-report.json
+./scripts/local-dr-smoke.sh /tmp/cogentrex-dr-report.json
 ```
 
 The smoke:
@@ -163,7 +163,7 @@ Check Alembic revision, encryption key continuity, PostgreSQL readiness, Redis r
 docker compose \
   --env-file /absolute/path/to/mode-0600.env \
   -f docker-compose.local.yml \
-  -p archon-restore \
+  -p cogentrex-restore \
   down --volumes --remove-orphans
 ```
 

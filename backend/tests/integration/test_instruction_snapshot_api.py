@@ -34,21 +34,21 @@ def test_scan_api_persists_exact_sources_and_requires_admin_approval(tmp_path: P
         admin, admin_id = _register(client, "admin")
         other, _ = _register(client, "other")
         project = workspaces / admin_id / "project"
-        (project / ".archon").mkdir(parents=True)
-        (project / "nested" / ".archon").mkdir(parents=True)
-        (project / ".archon" / "instructions.md").write_text("root")
-        (project / "nested" / ".archon" / "instructions.md").write_text("leaf")
+        (project / ".cogentrex").mkdir(parents=True)
+        (project / "nested" / ".cogentrex").mkdir(parents=True)
+        (project / ".cogentrex" / "instructions.md").write_text("root")
+        (project / "nested" / ".cogentrex" / "instructions.md").write_text("leaf")
 
         response = client.post(
             "/api/projects/project/instructions/scan",
-            json={"target_path": "nested", "family": "archon"},
+            json={"target_path": "nested", "family": "cogentrex"},
             headers=admin,
         )
         assert response.status_code == 200, response.text
         scanned = response.json()
         assert [item["relative_path"] for item in scanned] == [
-            ".archon/instructions.md",
-            "nested/.archon/instructions.md",
+            ".cogentrex/instructions.md",
+            "nested/.cogentrex/instructions.md",
         ]
         assert all(len(item["content_hash"]) == 64 for item in scanned)
         revision_id = scanned[0]["id"]
@@ -74,7 +74,7 @@ def test_scan_api_persists_exact_sources_and_requires_admin_approval(tmp_path: P
         resolved = client.get("/api/projects/project/instructions/resolve", headers=headers)
         assert resolved.status_code == 200
         assert [item["relative_path"] for item in resolved.json()["items"]] == [
-            ".archon/instructions.md",
-            "nested/.archon/instructions.md",
+            ".cogentrex/instructions.md",
+            "nested/.cogentrex/instructions.md",
         ]
         assert "root" not in resolved.text and "leaf" not in resolved.text

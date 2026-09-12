@@ -48,7 +48,7 @@ flowchart TD
   D --> M[Measure recall and redundancy]
 ```
 
-## Archon implementation
+## Cogentrex implementation
 
 The source of truth is `backend/app/services/chunker.py`.
 `Document` represents an input document.
@@ -152,12 +152,12 @@ Then explain why this experiment says nothing by itself about groundedness or an
 
 ## 30-second interview answer
 
-“Chunking defines the units a RAG system can retrieve. Archon recursively prefers paragraph, newline, sentence, word, and finally character boundaries, then prepends configurable character overlap. Its defaults are inspectable lab choices, not universal optima. I would tune size and overlap against labeled retrieval recall, redundancy, token cost, and document structure, while preserving scope, redaction, hashes, and versioned re-indexing.”
+“Chunking defines the units a RAG system can retrieve. Cogentrex recursively prefers paragraph, newline, sentence, word, and finally character boundaries, then prepends configurable character overlap. Its defaults are inspectable lab choices, not universal optima. I would tune size and overlap against labeled retrieval recall, redundancy, token cost, and document structure, while preserving scope, redaction, hashes, and versioned re-indexing.”
 
 ## Self-checks
 
 1. **Does overlap increase the amount of source information?** No; it duplicates existing boundary text.
-2. **Is `chunk_size` a token limit in Archon?** No; `RecursiveChunker` measures Python string characters.
+2. **Is `chunk_size` a token limit in Cogentrex?** No; `RecursiveChunker` measures Python string characters.
 3. **What happens to whitespace-only documents?** `RecursiveChunker.chunk` returns no chunks.
 4. **Which boundary is preferred first?** A double newline, representing a paragraph boundary.
 5. **Does a valid chunk hash prove the claim is true?** No; it only helps verify content integrity.

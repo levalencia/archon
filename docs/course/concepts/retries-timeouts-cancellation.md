@@ -77,12 +77,12 @@ sequenceDiagram
   Note over C,T: cancellation stops waiting; it does not roll back a committed effect
 ```
 
-## Archon: shared managed-runtime deadline
+## Cogentrex: shared managed-runtime deadline
 
 `backend/app/runtime/deadline.py` creates a monotonic absolute deadline and awaits nested work only for the remaining budget. `AgentRuntime`, grounded RAG, and the child verifier wrap their complete managed operation—including run creation, event persistence, approval preparation, provider/tool waits, and normal finalization—inside that absolute deadline. If a collaborator absorbs cancellation, an immediate post-await fence prevents later provider/tool dispatch.
-Terminal recording uses one shared, shielded persistence task with a separate bounded cleanup budget (50 ms total for runtime/RAG and 250 ms total for the verifier). The first terminal decision wins: a late worker and timeout cleanup wait on the same task rather than starting competing `completed`/`timeout` sequences. If persistence still cannot finish, Archon logs an explicit `*_terminal_persistence_indeterminate` state rather than waiting indefinitely or claiming durable completion. Detached non-terminal operations may still consume resources or complete an already-started side effect; their result cannot re-enter provider/tool dispatch.
+Terminal recording uses one shared, shielded persistence task with a separate bounded cleanup budget (50 ms total for runtime/RAG and 250 ms total for the verifier). The first terminal decision wins: a late worker and timeout cleanup wait on the same task rather than starting competing `completed`/`timeout` sequences. If persistence still cannot finish, Cogentrex logs an explicit `*_terminal_persistence_indeterminate` state rather than waiting indefinitely or claiming durable completion. Detached non-terminal operations may still consume resources or complete an already-started side effect; their result cannot re-enter provider/tool dispatch.
 
-## Archon: legacy resilient coordinator
+## Cogentrex: legacy resilient coordinator
 
 `backend/app/agents/resilient_coordinator.py::ResilientCoordinator._execute_with_fallback` uses `asyncio.wait_for`.
 Each specialist attempt receives the same `timeout_seconds` value.
@@ -98,7 +98,7 @@ This is a teaching/prototype path and is unsafe for arbitrary side-effecting age
 The coordinator estimates and records response tokens only after a successful call.
 Its token accounting is not a pre-call admission budget.
 
-## Archon: secure tool timeout
+## Cogentrex: secure tool timeout
 
 `backend/app/tools/registry.py::SecureToolRegistry.execute` enforces each registered tool's timeout.
 Asynchronous handlers run under `asyncio.wait_for` directly.
@@ -108,7 +108,7 @@ The registry audits successful, denied, failed, and timed-out calls through its 
 A timeout bounds caller waiting; it is not a transactional rollback.
 Tool authors must provide their own idempotency and cancellation-safe resource handling.
 
-## Archon: grounded workflow cancellation
+## Cogentrex: grounded workflow cancellation
 
 `backend/app/services/grounded_rag.py::GroundedDocumentWorkflow.run` catches `asyncio.CancelledError` explicitly.
 It shields `_stop(..., reason="cancelled", error=False)` so terminal Run Ledger evidence can be written.
@@ -118,7 +118,7 @@ Shielding is narrow: it protects terminal recording, not the entire workflow.
 If cancellation occurs after a provider or tool committed an effect, the terminal record does not reverse that effect.
 Consumers must interpret `cancelled` as “the caller stopped waiting/work was asked to stop,” not “nothing happened.”
 
-## Archon: breaker probe cancellation
+## Cogentrex: breaker probe cancellation
 
 `backend/app/security/circuit_breaker.py::CircuitBreaker.call` treats cancellation separately from ordinary failure.
 A cancelled half-open probe calls `_abandon_probe`.
@@ -127,7 +127,7 @@ A cancelled ordinary closed-state call is propagated without incrementing the no
 This avoids wedging the breaker in half-open state.
 It does not guarantee that the provider stopped processing the cancelled request.
 
-## Archon: bounded evidence verifier
+## Cogentrex: bounded evidence verifier
 
 The bounded verifier has explicit attempt, absolute deadline, input, output, and accumulated usage budgets. Malformed JSON receives at most one corrective retry; the retry text does not include rejected model output and its enlarged request is re-estimated before dispatch.
 The managed RAG acceptance exercises the verifier through the same durable monetary gateway as the parent call and records a completed child verdict. This is evidence for the managed verifier boundary, not for arbitrary third-party code.
@@ -229,7 +229,7 @@ Sometimes the safest policy is one attempt followed by an explicit unknown-outco
 
 ## 30-second interview answer
 
-“Retries repeat classified transient work, timeouts bound one wait, deadlines bound the whole request, and cancellation propagates caller intent. Safe retries require idempotency or durable deduplication, plus attempt and time budgets with jitter. Archon applies these controls at selected boundaries: the coordinator has simple per-attempt `wait_for`, tools have timeout enforcement, the verifier has explicit budgets, and the grounded workflow shields a cancelled terminal record then re-raises. Crucially, timeout or cancellation does not undo a database commit or remote side effect, so ambiguous outcomes need operation IDs and reconciliation.”
+“Retries repeat classified transient work, timeouts bound one wait, deadlines bound the whole request, and cancellation propagates caller intent. Safe retries require idempotency or durable deduplication, plus attempt and time budgets with jitter. Cogentrex applies these controls at selected boundaries: the coordinator has simple per-attempt `wait_for`, tools have timeout enforcement, the verifier has explicit budgets, and the grounded workflow shields a cancelled terminal record then re-raises. Crucially, timeout or cancellation does not undo a database commit or remote side effect, so ambiguous outcomes need operation IDs and reconciliation.”
 
 ## Self-checks
 

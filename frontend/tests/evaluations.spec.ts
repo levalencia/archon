@@ -16,7 +16,7 @@ const evaluation = (id: string, score: number, includeCases = false) => ({
 });
 
 async function mockEvaluationApis(page: Page, options: { empty?: boolean; listStatus?: number } = {}) {
-  await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
+  await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'playwright-token'));
   const forbidden: string[] = [];
   page.on('request', request => {
     if (/\/api\/(chat|models?|llm|completions?)/.test(new URL(request.url()).pathname)) forbidden.push(`${request.method()} ${request.url()}`);

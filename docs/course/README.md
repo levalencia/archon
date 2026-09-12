@@ -1,8 +1,8 @@
-# Archon Course
+# Cogentrex Course
 
-The canonical learning home for Archon. This course teaches the system from agent fundamentals to an evidence-backed capstone while keeping one canonical page per concept. Modules sequence the learning; learning routes link back to the same modules and concepts rather than copy explanations.
+The canonical learning home for Cogentrex. This course teaches the system from agent fundamentals to an evidence-backed capstone while keeping one canonical page per concept. Modules sequence the learning; learning routes link back to the same modules and concepts rather than copy explanations.
 
-Archon is a local Agent Reliability Workbench, not a publicly deployed production service. For current implementation facts, use the [canonical evidence matrix](../IMPLEMENTATION-EVIDENCE.md); for system views, use the existing [architecture diagrams](../ARCHITECTURE-DIAGRAMS.md). This course does not replace either source.
+Cogentrex is a local Agent Reliability Workbench, not a publicly deployed production service. For current implementation facts, use the [canonical evidence matrix](../IMPLEMENTATION-EVIDENCE.md); for system views, use the existing [architecture diagrams](../ARCHITECTURE-DIAGRAMS.md). This course does not replace either source.
 
 > **Career preparation:** Use the career route to practice explaining the system, then use module self-checks to find gaps in your understanding.
 
@@ -12,7 +12,7 @@ Archon is a local Agent Reliability Workbench, not a publicly deployed productio
 - **Deepen practical mastery:** engineers who want to trace concepts into code, tests, and runtime evidence.
 - **Prepare for advanced roles:** learners practicing concise architecture and trade-off explanations.
 
-Start with the [syllabus](syllabus.md) for prerequisites, outcomes, pacing, and capstone artifacts. Use the [concept map](concept-map.md) when a module assumes unfamiliar vocabulary. For interactive learning, open the [Visual Learning Studio](../visual-learning/README.md) at `/learn`; it offers stable Roadmap, Stories, Architecture, Evidence, Present, Listen, and Study views derived from the same 66 catalog concepts. Use the [AIAMastery Days 1–30 coverage map](course-concept-coverage.md) to see every course topic—including partial, not-implemented, and deferred concepts—and the generated [`concept-catalog.yaml`](concept-catalog.yaml) for machine-readable source/test/evidence mappings. The repository-wide [deferred-gap register](../REMAINING-DEFERRED-GAPS.md) explains the architecture and evidence required to revisit the six intentional capstone omissions.
+Start with the [syllabus](syllabus.md) for prerequisites, outcomes, pacing, and capstone artifacts. Use the [concept map](concept-map.md) when a module assumes unfamiliar vocabulary. For interactive learning, open the [Visual Learning Studio](../visual-learning/README.md) at `/learn`; it offers stable Roadmap, Stories, Architecture, Evidence, Present, Listen, and Study views derived from the current concept catalog. Use the [AIAMastery Days 1–30 coverage map](course-concept-coverage.md) to see every course topic—including partial, not-implemented, and deferred concepts—and the generated [`concept-catalog.yaml`](concept-catalog.yaml) for machine-readable source/test/evidence mappings. The repository-wide [deferred-gap register](../REMAINING-DEFERRED-GAPS.md) explains the architecture and evidence required to revisit the six intentional capstone omissions.
 
 ## Information architecture
 

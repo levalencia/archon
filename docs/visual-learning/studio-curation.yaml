@@ -3,7 +3,7 @@ version: 2
 roadmap:
   - id: foundations
     title: Foundations and bounded runtime
-    question: What is an agent, and how does Archon keep execution bounded?
+    question: What is an agent, and how does Cogentrex keep execution bounded?
     outcome: Explain the trust boundary, typed contracts, state machine, and ReAct loop.
     module_ids: [00-agent-anatomy, 01-python-architecture, 02-typed-runtime, 03-react-loop]
   - id: governance
@@ -18,7 +18,7 @@ roadmap:
     module_ids: [06-context-and-memory, 07-run-ledger, 08-rag-grounding]
   - id: evaluation
     title: Evaluation and resilience
-    question: How does Archon measure quality and respond to failure?
+    question: How does Cogentrex measure quality and respond to failure?
     outcome: Explain recorded evaluation, drift, retries, breakers, fallbacks, rate limits, and jobs.
     module_ids: [09-evaluation-harness, 10-resilience]
   - id: coordination
@@ -28,7 +28,7 @@ roadmap:
     module_ids: [11-bounded-delegation, 12-governed-mcp]
   - id: product-operations
     title: Product surface and operations
-    question: How does the user inspect Archon, and how is the local system operated?
+    question: How does the user inspect Cogentrex, and how is the local system operated?
     outcome: Demonstrate auth, SSE, observability, multimodal artifacts, Docker, migrations, backup, and readiness.
     module_ids: [13-auth-ui-observability, 14-local-operations, 15-capstone]
 
@@ -134,7 +134,7 @@ stories:
         concept_ids: [react-loop, structured-logging]
 
   - id: memory-rag
-    title: Archon answers with grounded knowledge
+    title: Cogentrex answers with grounded knowledge
     description: Separate transient context, durable memory, retrieval, and answer verification.
     steps:
       - title: Build run context

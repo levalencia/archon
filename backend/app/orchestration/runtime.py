@@ -31,7 +31,7 @@ from app.tools.registry import SecureToolRegistry
 
 
 class RuntimeChildRunner:
-    """Run one depth-one child through Archon's canonical typed runtime."""
+    """Run one depth-one child through Cogentrex's canonical typed runtime."""
 
     def __init__(
         self,

@@ -20,7 +20,7 @@ def test_logfire_and_jaeger_generate_real_fanout_without_literal_secret() -> Non
     secret = "test-write-token-never-render"
     config = generator.generate_config(
         {
-            "ARCHON_OTEL_DESTINATIONS": "jaeger,logfire",
+            "COGENTREX_OTEL_DESTINATIONS": "jaeger,logfire",
             "LOGFIRE_TOKEN": secret,
             "LOGFIRE_BASE_URL": "https://logfire-eu.pydantic.dev",
         }
@@ -52,15 +52,15 @@ def test_debug_is_the_safe_default() -> None:
 @pytest.mark.parametrize("value", ["unknown", "debug,unknown", "logfire,logfire", ""])
 def test_invalid_destination_selection_fails_closed(value: str) -> None:
     with pytest.raises(ValueError, match="destination"):
-        generator.generate_config({"ARCHON_OTEL_DESTINATIONS": value})
+        generator.generate_config({"COGENTREX_OTEL_DESTINATIONS": value})
 
 
 def test_selected_destination_requires_credential_but_unselected_does_not() -> None:
-    generator.generate_config({"ARCHON_OTEL_DESTINATIONS": "jaeger"})
+    generator.generate_config({"COGENTREX_OTEL_DESTINATIONS": "jaeger"})
     with pytest.raises(ValueError, match="LOGFIRE_TOKEN"):
         generator.generate_config(
             {
-                "ARCHON_OTEL_DESTINATIONS": "logfire",
+                "COGENTREX_OTEL_DESTINATIONS": "logfire",
                 "LOGFIRE_BASE_URL": "https://logfire-eu.pydantic.dev",
             }
         )
@@ -70,7 +70,7 @@ def test_azure_tempo_and_generic_otlp_are_allowlisted() -> None:
     azure = yaml.safe_load(
         generator.generate_config(
             {
-                "ARCHON_OTEL_DESTINATIONS": "azure-monitor",
+                "COGENTREX_OTEL_DESTINATIONS": "azure-monitor",
                 "APPLICATIONINSIGHTS_CONNECTION_STRING": "InstrumentationKey=test",
             }
         )
@@ -83,7 +83,7 @@ def test_azure_tempo_and_generic_otlp_are_allowlisted() -> None:
     tempo = yaml.safe_load(
         generator.generate_config(
             {
-                "ARCHON_OTEL_DESTINATIONS": "tempo",
+                "COGENTREX_OTEL_DESTINATIONS": "tempo",
                 "TEMPO_OTLP_ENDPOINT": "tempo:4317",
                 "TEMPO_OTLP_INSECURE": "true",
             }
@@ -94,8 +94,8 @@ def test_azure_tempo_and_generic_otlp_are_allowlisted() -> None:
     generic = yaml.safe_load(
         generator.generate_config(
             {
-                "ARCHON_OTEL_DESTINATIONS": "otlp",
-                "ARCHON_OTEL_GENERIC_ENDPOINT": "otel.example.test:4317",
+                "COGENTREX_OTEL_DESTINATIONS": "otlp",
+                "COGENTREX_OTEL_GENERIC_ENDPOINT": "otel.example.test:4317",
             }
         )
     )

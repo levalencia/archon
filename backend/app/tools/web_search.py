@@ -30,7 +30,7 @@ async def web_search_tool(
     if max_results is not None:
         num_results = max_results
 
-    brave_key = os.environ.get("ARCHON_BRAVE_API_KEY", "")
+    brave_key = os.environ.get("COGENTREX_BRAVE_API_KEY", "")
 
     # Try Brave Search API first
     if brave_key:
@@ -177,7 +177,7 @@ async def _extract_content(results: list[dict], max_chars: int = 3000) -> list[d
     async with httpx.AsyncClient(
         timeout=5.0,
         follow_redirects=True,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; ArchonBot/1.0)"},
+        headers={"User-Agent": "Mozilla/5.0 (compatible; CogentrexBot/1.0)"},
     ) as client:
         for result in results:
             try:

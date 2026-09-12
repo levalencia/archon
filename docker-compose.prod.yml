@@ -34,15 +34,15 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: archon
-      POSTGRES_PASSWORD: archon
-      POSTGRES_DB: archon
+      POSTGRES_USER: cogentrex
+      POSTGRES_PASSWORD: cogentrex
+      POSTGRES_DB: cogentrex
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U archon"]
+      test: ["CMD-SHELL", "pg_isready -U cogentrex"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -85,7 +85,7 @@ services:
     ports:
       - "3001:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: archon
+      GF_SECURITY_ADMIN_PASSWORD: cogentrex
     volumes:
       - grafanadata:/var/lib/grafana
     restart: unless-stopped

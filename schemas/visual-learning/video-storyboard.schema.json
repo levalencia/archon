@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "const": "archon.learning.video-storyboard"
+      "const": "cogentrex.learning.video-storyboard"
     },
     "version": {
       "const": 1

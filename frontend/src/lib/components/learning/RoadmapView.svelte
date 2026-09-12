@@ -1,11 +1,13 @@
 <script lang="ts">
   import { ChevronDown, ChevronRight, ExternalLink, Target } from 'lucide-svelte';
+  import type { LearningTutorContext } from '$lib/learning-tutor';
   import { STATUS_META, conceptsForModule, type VisualLearningStudio } from '$lib/visual-learning';
 
-  let { studio }: { studio: VisualLearningStudio } = $props();
+  let { studio, onContextChange = () => {} }: { studio: VisualLearningStudio; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
   let selectedModule = $state('00-agent-anatomy');
   let module = $derived(studio.modules.find(item => item.id === selectedModule));
   let concepts = $derived(conceptsForModule(studio, selectedModule));
+  $effect(() => { if (module) onContextChange({ view: 'roadmap', module_id: module.id }, module.title); });
 </script>
 
 <section aria-labelledby="roadmap-heading">
@@ -20,7 +22,7 @@
       {#each studio.roadmap as phase, phaseIndex}
         <article class="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 md:p-5">
           <div class="mb-4 flex gap-3">
-            <span class="grid size-10 shrink-0 place-items-center rounded-full border border-[var(--accent)] bg-[var(--accent-glow)] font-mono text-sm text-[var(--accent)] shadow-[0_0_14px_var(--archon-orange-glow)]">{phaseIndex + 1}</span>
+            <span class="grid size-10 shrink-0 place-items-center rounded-full border border-[var(--accent)] bg-[var(--accent-glow)] font-mono text-sm text-[var(--accent)] shadow-[0_0_14px_var(--cogentrex-orange-glow)]">{phaseIndex + 1}</span>
             <div>
               <h3 class="m-0 text-lg font-semibold">{phase.title}</h3>
               <p class="mt-1 text-sm text-[var(--secondary)]">{phase.question}</p>
@@ -31,7 +33,7 @@
             {#each phase.module_ids as moduleId}
               {@const item = studio.modules.find(candidate => candidate.id === moduleId)}
               {#if item}
-                <button onclick={() => selectedModule = moduleId} aria-pressed={selectedModule === moduleId} class="min-h-16 rounded-xl border p-3 text-left transition {selectedModule === moduleId ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'border-[var(--border)] bg-[var(--bg)] hover:border-[var(--accent)]'}">
+                <button onclick={() => selectedModule = moduleId} aria-pressed={selectedModule === moduleId} class="min-h-16 rounded-xl border p-3 text-left transition {selectedModule === moduleId ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--cogentrex-orange-glow)]' : 'border-[var(--border)] bg-[var(--bg)] hover:border-[var(--accent)]'}">
                   <span class="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">{moduleId.slice(0, 2)} · {item.concept_count} concepts</span>
                   <strong class="mt-1 flex items-center justify-between gap-2 text-sm"><span>{item.title.replace(/^Module\s+\d+\s*[—-]\s*/, '')}</span><ChevronRight size={15}/></strong>
                 </button>

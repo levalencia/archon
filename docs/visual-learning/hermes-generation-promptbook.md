@@ -1,6 +1,6 @@
 # Hermes Learning Artifact Promptbook
 
-Hermes uses these contracts to create English derivative learning material from allowlisted Archon sources. Generated material never replaces canonical implementation evidence.
+Hermes uses these contracts to create English derivative learning material from allowlisted Cogentrex sources. Generated material never replaces canonical implementation evidence.
 
 ## Source priority
 

@@ -1,6 +1,6 @@
-# Archon Documentation
+# Cogentrex Documentation
 
-Use this page as the learning map for Archon. The material moves from agent
+Use this page as the learning map for Cogentrex. The material moves from agent
 fundamentals to implementation, operations, evidence, and advanced-role
 preparation. Current status lives in the
 [capability manifest](implementation/CAPABILITY-ACCEPTANCE.yaml) and its
@@ -28,7 +28,7 @@ Connect concepts to the real system.
 |-----|---------|
 | [Architecture Diagrams](ARCHITECTURE-DIAGRAMS.md) | Visual system overview — control plane, data flow, and deployment topology |
 | [Code Bookmarks](course/reference/code-bookmarks.md) | Exact source symbols behind the concepts |
-| [Remaining Deferred Gaps](REMAINING-DEFERRED-GAPS.md) | What Archon deliberately does *not* implement or claim |
+| [Remaining Deferred Gaps](REMAINING-DEFERRED-GAPS.md) | What Cogentrex deliberately does *not* implement or claim |
 
 ## Build and run
 
@@ -38,6 +38,7 @@ Exercise the same operational boundaries used by the project.
 |-----|---------|
 | [CI, Pipelines & Local Run](CI-PIPELINES-AND-LOCAL-RUN.md) | Tests, Docker Compose services, and local commands |
 | [DR Runbook](DR-RUNBOOK.md) | Backup, restore, health checks, and recovery practice |
+| [Cogentrex Namespace Cutover](operations/cogentrex-namespace-cutover.md) | Required clean-state transition for configuration, storage, and deployment namespaces |
 | [Postmortem — Local Deployment](POSTMORTEM-LOCAL-DEPLOYMENT.md) | Lessons from the local deployment smoke |
 
 ## Prepare for advanced roles
@@ -66,6 +67,7 @@ Architecture decisions, plans, and writing conventions.
 
 | Doc | Purpose |
 |-----|---------|
+| [Brand System](BRAND.md) | Logo assets, palette, tagline, and usage rules |
 | [Documentation Guide](DOCUMENTATION-GUIDE.md) | Audience, status conventions, front-matter rules |
 | [ADR: Local Production-Like Deployment](adr/0001-local-production-like-deployment.md) | Architecture decision record |
 | [Skills + Project Instructions Architecture](architecture/skills-project-instructions.md) | Design of the skill/instruction subsystem |

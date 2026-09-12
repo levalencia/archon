@@ -1,9 +1,9 @@
-# Plan — Hybrid Multi-Agent Orchestration for Archon
+# Plan — Hybrid Multi-Agent Orchestration for Cogentrex
 
 **Status:** Phase-one pilot implemented, independently approved, hot-swapped into the retained local stack, and deterministically verified; live-provider Team quality acceptance remains separate
 **Prepared with:** GPT-5.6
 **Date:** 2026-09-05
-**Target:** Archon local Agent Reliability Workbench
+**Target:** Cogentrex local Agent Reliability Workbench
 **Language policy:** implementation/docs in English; this planning explanation is in Spanish
 
 > Implementation note: the bounded phase-one slice is documented in
@@ -14,13 +14,13 @@
 > deadline, durable cancellation/lineage, reload reconstruction in the Agents
 > inspector, 745 marked backend unit tests, 73 frontend unit tests, a production
 > frontend build, and focused Playwright coverage. The retained stack is ready at
-> `http://archon` with the feature enabled; no live-provider Team prompt was sent.
+> `http://cogentrex` with the feature enabled; no live-provider Team prompt was sent.
 
 ## 1. Executive decision
 
 La dirección recomendada es un modelo híbrido con tres modos visibles:
 
-- **Auto** — default. Archon decide entre single-agent y team execution usando un router limitado y auditable.
+- **Auto** — default. Cogentrex decide entre single-agent y team execution usando un router limitado y auditable.
 - **Single** — override explícito. Un solo `AgentRuntime` ReAct, sin herramientas de delegación.
 - **Team** — override explícito. Fuerza planificación multi-agent, sujeto a política, presupuesto y límites.
 
@@ -1031,7 +1031,7 @@ Audit and correct documents that currently imply broad multi-agent operation, es
 
 ## 10. Visual Learning and media plan
 
-Because this changes Archon’s architecture materially, text documentation alone is insufficient.
+Because this changes Cogentrex’s architecture materially, text documentation alone is insufficient.
 
 ## 10.1 Add a sixth learning pack
 
@@ -1343,7 +1343,7 @@ The capability counts only when all applicable statements are true:
 
 ## 17. Interview-ready explanation after implementation
 
-> Archon uses a hybrid orchestration model. The normal mode is Auto: a bounded router chooses the existing single-agent ReAct runtime for simple tasks and a validated team plan for work that benefits from decomposition. Common quality-sensitive tasks use versioned fixed specialist profiles; unusual tasks use dynamic workers built from a server-owned system template, a runtime goal, a strict output schema and a policy-approved capability subset. Every child has a signed scope, finite token/cost/time/tool budgets, durable parent-child lineage and explicit failure semantics. Users can force Single or Team for control and comparison, and the Workbench shows operational evidence rather than hidden reasoning. The implementation is local and bounded; it is not a distributed swarm.
+> Cogentrex uses a hybrid orchestration model. The normal mode is Auto: a bounded router chooses the existing single-agent ReAct runtime for simple tasks and a validated team plan for work that benefits from decomposition. Common quality-sensitive tasks use versioned fixed specialist profiles; unusual tasks use dynamic workers built from a server-owned system template, a runtime goal, a strict output schema and a policy-approved capability subset. Every child has a signed scope, finite token/cost/time/tool budgets, durable parent-child lineage and explicit failure semantics. Users can force Single or Team for control and comparison, and the Workbench shows operational evidence rather than hidden reasoning. The implementation is local and bounded; it is not a distributed swarm.
 
 ---
 

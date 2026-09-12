@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe("ArtifactPanel", () => {
   it("loads persisted HTML content, sanitizes active markup, and keeps a scriptless sandbox", async () => {
-    localStorage.setItem("archon_token", "secret-token");
+    localStorage.setItem("cogentrex_token", "secret-token");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({ ...persistedArtifact, content: unsafeHtml }),

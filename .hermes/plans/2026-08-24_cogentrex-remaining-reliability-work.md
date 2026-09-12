@@ -1,8 +1,8 @@
-# Archon Remaining Reliability Work Implementation Plan
+# Cogentrex Remaining Reliability Work Implementation Plan
 
 > **For Hermes:** Execute task-by-task with isolated worktrees, integrate in dependency order, and run `./scripts/verify.sh` after each slice.
 
-**Goal:** Finish Archon's remaining reliability-workbench capabilities without adding disconnected feature files.
+**Goal:** Finish Cogentrex's remaining reliability-workbench capabilities without adding disconnected feature files.
 
 **Architecture:** Extend the existing typed runtime, user-scoped repositories, persisted runtime events, and Svelte Workbench. Every capability must be wired through the live path, owner-scoped, deterministic in CI, visible in the UI where relevant, and proven with a real-provider regression when provider behavior is involved.
 

@@ -6,7 +6,7 @@ This document describes the first bounded hybrid orchestration pilot. Local Foun
 
 ## Purpose
 
-Archon preserves the existing single-agent `AgentRuntime` path while adding a bounded team path:
+Cogentrex preserves the existing single-agent `AgentRuntime` path while adding a bounded team path:
 
 - **Auto** applies a deterministic, inspectable routing policy.
 - **Single** forces the existing canonical runtime.
@@ -244,7 +244,7 @@ Primary tests:
 The feature is off by default:
 
 ```text
-ARCHON_HYBRID_ORCHESTRATION_ENABLED=false
+COGENTREX_HYBRID_ORCHESTRATION_ENABLED=false
 ```
 
 Enabling it also requires the existing delegation signing-key configuration. Rollback is configuration-only: disable the feature and all requests resolve to the established single-agent runtime. No schema migration or destructive data operation is required.

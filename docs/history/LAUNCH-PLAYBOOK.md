@@ -1,8 +1,8 @@
-# Archon Launch Playbook: 0 → 10K Stars
+# Cogentrex Launch Playbook: 0 → 10K Stars
 
 > **Audience:** Project leads planning an open-source launch.
 > **Purpose:** Research compilation — launch tactics distilled from successful OSS projects (CrewAI, Ollama, LangChain, etc.).
-> **Status:** Aspirational reference — no public launch has occurred. Treat as a playbook to revisit when Archon reaches launch readiness.
+> **Status:** Aspirational reference — no public launch has occurred. Treat as a playbook to revisit when Cogentrex reaches launch readiness.
 
 > Compiled August 2026 from analysis of CrewAI (25K⭐), Ollama (130K⭐), Open Interpreter (58K⭐), LangChain (100K⭐), AutoGen (38K⭐), Dify (144K⭐), and PydanticAI launches.
 
@@ -24,7 +24,7 @@
 
 ### The Non-Negotiables (Every 10K+ repo had these on Day 1)
 
-- [ ] **One-liner install that works**: `pip install archon` or `npx create-archon` — must succeed on first try
+- [ ] **One-liner install that works**: `pip install cogentrex` or `npx create-cogentrex` — must succeed on first try
 - [ ] **< 60 second quickstart**: install → working demo in under a minute
 - [ ] **README is a landing page**, not docs (see Section 2)
 - [ ] **Demo GIF or video** embedded in README (see Section 3)
@@ -59,7 +59,7 @@
 │  Demo GIF / Video (≤30 seconds)             │
 │  Shows the WOW moment, not architecture     │
 ├─────────────────────────────────────────────┤
-│  Install: pip install archon                │
+│  Install: pip install cogentrex                │
 │  Quickstart: 5-10 lines of working code     │
 ├─────────────────────────────────────────────┤
 │  Feature Grid (icons + 1-line descriptions) │
@@ -82,17 +82,17 @@
 | Dify | "Open-source LLM app development platform" | Clear category claim |
 | AutoGen | "Multi-agent conversation framework" | Technical but precise |
 
-### Archon Tagline Candidates
+### Cogentrex Tagline Candidates
 - **"Build AI agents that build AI agents"** — recursive hook, memorable
 - **"The self-evolving AI agent framework"** — unique differentiator
 - **"AI agents that get better every time you use them"** — benefit-first
 
 ### Badge Rules
 ```markdown
-[![PyPI](https://img.shields.io/pypi/v/archon)](https://pypi.org/project/archon/)
+[![PyPI](https://img.shields.io/pypi/v/cogentrex)](https://pypi.org/project/cogentrex/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Tests](https://img.shields.io/github/actions/workflow/status/...)](...)
-[![Discord](https://img.shields.io/discord/XXXXX?label=Discord)](https://discord.gg/archon)
+[![Discord](https://img.shields.io/discord/XXXXX?label=Discord)](https://discord.gg/cogentrex)
 ```
 - **4 badges max.** CrewAI uses 4. Ollama uses 0 (just a clean logo). Both work.
 - Never: code coverage %, random third-party badges, "awesome" lists
@@ -105,7 +105,7 @@
 
 ```python
 # This is what the README quickstart should look like:
-from archon import Agent
+from cogentrex import Agent
 
 agent = Agent("researcher", model="ollama/llama3")
 result = agent.run("Find the top 3 AI papers this week and summarize them")
@@ -126,10 +126,10 @@ print(result)
 | Dify | Product screenshots in README showing actual UI | 6 feature screenshots embedded directly |
 | AutoGen | Multi-agent conversation transcript showing agents debating | The "conversation" format is inherently shareable |
 
-### Archon Demo Video Playbook
+### Cogentrex Demo Video Playbook
 
 #### Video 1: The "Holy Shit" GIF (README embed, ≤30s)
-- Screen recording of Archon building an agent from a natural language prompt
+- Screen recording of Cogentrex building an agent from a natural language prompt
 - Show: prompt → agent created → agent running → output
 - No narration, no setup — just the magic moment
 - Format: GIF for README, MP4 for Twitter
@@ -196,8 +196,8 @@ LAUNCH DAY:
 Show HN: [Name] – [What it does in ≤10 words]
 ```
 Examples:
-- `Show HN: Archon – AI agents that build and improve other AI agents`
-- `Show HN: Archon – A self-evolving framework for AI agents`
+- `Show HN: Cogentrex – AI agents that build and improve other AI agents`
+- `Show HN: Cogentrex – A self-evolving framework for AI agents`
 
 #### HN Success Rules
 1. **Title must be factual and understated** — HN penalizes hype
@@ -210,7 +210,7 @@ Examples:
 ### Reddit: Volume Play
 
 #### Subreddits (in priority order)
-1. **r/LocalLLaMA** (500K+) — if Archon supports local models, this is gold
+1. **r/LocalLLaMA** (500K+) — if Cogentrex supports local models, this is gold
 2. **r/MachineLearning** (3M+) — use [Project] tag
 3. **r/artificial** (300K+) — more general AI
 4. **r/Python** (1.5M+) — if you have a great Python DX story
@@ -274,7 +274,7 @@ Built with [Svelte/FastAPI/Ollama] — fully open source."
 💬 GENERAL
   #general            — main chat
   #introductions      — new members introduce themselves
-  #showcase           — show what you built with Archon
+  #showcase           — show what you built with Cogentrex
   
 🛠️ SUPPORT
   #help               — technical questions
@@ -302,7 +302,7 @@ Built with [Svelte/FastAPI/Ollama] — fully open source."
 
 #### Structure That Works
 ```markdown
-# Contributing to Archon
+# Contributing to Cogentrex
 
 ## Quick Start for Contributors
 1. Fork & clone
@@ -312,7 +312,7 @@ Built with [Svelte/FastAPI/Ollama] — fully open source."
 
 ## Good First Issues
 We maintain a curated list of beginner-friendly issues:
-→ [Good First Issues](https://github.com/levalencia/archon/issues?q=is%3Aissue%20label%3A%22good%20first%20issue%22)
+→ [Good First Issues](https://github.com/levalencia/cogentrex/issues?q=is%3Aissue%20label%3A%22good%20first%20issue%22)
 
 ## Development Setup
 [Step-by-step, no assumptions]
@@ -350,11 +350,11 @@ All contributors are added to our README contributors section.
 - [ ] Post daily updates on Twitter: star milestones, features added, bugs fixed
 
 ### Week 3-4: Content Engine
-- [ ] Write comparison articles: "Archon vs CrewAI", "Archon vs LangChain"
-- [ ] Create a "Built with Archon" showcase page
+- [ ] Write comparison articles: "Cogentrex vs CrewAI", "Cogentrex vs LangChain"
+- [ ] Create a "Built with Cogentrex" showcase page
 - [ ] Start weekly release cadence with changelog
 - [ ] Guest post on relevant dev blogs
-- [ ] Record a "Building X from scratch with Archon" YouTube tutorial
+- [ ] Record a "Building X from scratch with Cogentrex" YouTube tutorial
 
 ### Month 2-3: Community Flywheel
 - [ ] Run a community hackathon or building challenge
@@ -378,23 +378,23 @@ All contributors are added to our README contributors section.
 
 #### Hook Type 1: "I Can't Believe This Is Free/OSS"
 > Open Interpreter: "Wait, this is like a free version of ChatGPT Code Interpreter that runs locally?"
-- **Archon angle**: "A self-evolving agent framework? And it's MIT licensed?"
+- **Cogentrex angle**: "A self-evolving agent framework? And it's MIT licensed?"
 
 #### Hook Type 2: "This Replaces X Hours of My Work"
 > LangChain: devs shared because it saved them from writing boilerplate
-- **Archon angle**: "I built a complete agent system in 10 lines instead of 200"
+- **Cogentrex angle**: "I built a complete agent system in 10 lines instead of 200"
 
 #### Hook Type 3: "Look What I Built With This"
 > CrewAI: the "crew" metaphor made people want to share their custom crews
-- **Archon angle**: Make agents shareable — "Here's my research agent, try it yourself"
+- **Cogentrex angle**: Make agents shareable — "Here's my research agent, try it yourself"
 
 #### Hook Type 4: "This Is The Future"
 > Ollama: "Running LLMs locally is the future, and this makes it trivial"
-- **Archon angle**: "Self-improving agents are the next paradigm"
+- **Cogentrex angle**: "Self-improving agents are the next paradigm"
 
 #### Hook Type 5: "Holy Shit, Look At This Demo"
 > Open Interpreter: the terminal GIF was so compelling people shared it without context
-- **Archon angle**: Record an agent building another agent autonomously — that's inherently viral
+- **Cogentrex angle**: Record an agent building another agent autonomously — that's inherently viral
 
 ### The Shareability Checklist
 - [ ] **Does it have a WOW moment?** (agent builds another agent)
@@ -402,7 +402,7 @@ All contributors are added to our README contributors section.
 - [ ] **Does the demo GIF make sense without context?**
 - [ ] **Is there a personal brand behind it?** (people share from people, not orgs)
 - [ ] **Does it work locally?** (r/LocalLLaMA effect — huge amplification)
-- [ ] **Is the name memorable?** (Archon ✓ — strong, mythological, unique)
+- [ ] **Is the name memorable?** (Cogentrex ✓ — strong, mythological, unique)
 - [ ] **Does it solve a pain point devs complain about on Twitter?**
 
 ### What NOT To Do
@@ -425,7 +425,7 @@ All contributors are added to our README contributors section.
 | D-12 | Set up Discord server with all channels | - |
 | D-12 | Write CONTRIBUTING.md, label 15 good-first-issues | - |
 | D-10 | Create `/examples` with 5 working examples | - |
-| D-10 | Ensure `pip install archon` works flawlessly | - |
+| D-10 | Ensure `pip install cogentrex` works flawlessly | - |
 | D-8 | Write all launch posts (HN, Reddit, Twitter, LinkedIn) | - |
 | D-7 | Seed 10-20 stars from close network | - |
 | D-5 | Record 60-90s launch video | - |
@@ -457,14 +457,14 @@ All contributors are added to our README contributors section.
 
 ### Hacker News
 ```
-Title: Show HN: Archon – AI agents that build and improve other AI agents
+Title: Show HN: Cogentrex – AI agents that build and improve other AI agents
 
 First Comment:
-Hi HN, I'm [name], creator of Archon.
+Hi HN, I'm [name], creator of Cogentrex.
 
-Archon is an open-source framework where AI agents can create, test, and 
+Cogentrex is an open-source framework where AI agents can create, test, and
 improve other AI agents. Unlike frameworks where you manually define every 
-behavior, Archon agents evolve and get better through use.
+behavior, Cogentrex agents evolve and get better through use.
 
 Key things that make it different:
 - Self-improving agents (skills automatically optimize via evaluation loops)
@@ -475,7 +475,7 @@ Key things that make it different:
 
 Built with Svelte, FastAPI, and designed to run entirely on your machine.
 
-Try it: pip install archon && archon demo
+Try it: pip install cogentrex && cogentrex demo
 
 GitHub: [link]
 Docs: [link]
@@ -485,7 +485,7 @@ Happy to answer any questions about the architecture or approach.
 
 ### Reddit (r/LocalLLaMA)
 ```
-Title: [Project] Archon: Self-improving AI agents that run 100% locally with Ollama
+Title: [Project] Cogentrex: Self-improving AI agents that run 100% locally with Ollama
 
 I built a framework where AI agents can build other AI agents — and they 
 get better every time you use them.
@@ -500,7 +500,7 @@ What makes it different from CrewAI/AutoGen/LangChain:
 - Built-in multi-agent orchestration  
 - Full web UI for visual agent management
 
-pip install archon && archon demo
+pip install cogentrex && cogentrex demo
 
 GitHub: [link]
 
@@ -515,7 +515,7 @@ I built an AI agent framework where agents build other AI agents.
 
 And they get better every time you use them.
 
-Introducing Archon — fully open source 🧵👇
+Introducing Cogentrex — fully open source 🧵👇
 
 [Demo GIF]
 
@@ -526,7 +526,7 @@ Define tools. Write prompts. Debug loops. Repeat.
 
 What if agents could improve themselves?
 
-That's what Archon does.
+That's what Cogentrex does.
 
 Tweet 3:
 How it works:
@@ -546,7 +546,7 @@ MIT licensed.
 257 tests.
 Docker Compose deploy.
 
-pip install archon
+pip install cogentrex
 
 Tweet 5:
 ⭐ GitHub: [link]

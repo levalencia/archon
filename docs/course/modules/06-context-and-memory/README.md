@@ -5,7 +5,7 @@
 
 ## Beginner explanation
 
-A model does not remember a chat by itself. Archon constructs each request from a system instruction, tool descriptions, selected persistent facts, recent conversation messages, and the new user turn. **Context** is the bounded input sent now; **conversation history** is durable message data; **memory** is selected durable facts. Treating these as separate stores prevents accidental cross-user recall and makes deletion and provenance comprehensible.
+A model does not remember a chat by itself. Cogentrex constructs each request from a system instruction, tool descriptions, selected persistent facts, recent conversation messages, and the new user turn. **Context** is the bounded input sent now; **conversation history** is durable message data; **memory** is selected durable facts. Treating these as separate stores prevents accidental cross-user recall and makes deletion and provenance comprehensible.
 
 ## Prerequisites
 
@@ -123,7 +123,7 @@ The scoped AES-GCM repository is durable and tested locally. The separate Fernet
 
 ## Interview answer
 
-“Archon separates the model’s ephemeral context from durable conversation history and durable fact memory. It builds each call from system/tool instructions, up to 20 owner-scoped messages, project-scoped decrypted facts, and the current turn. Persistent facts are redacted then encrypted with AES-GCM under an HKDF-derived owner/project key; AAD binds identity and fact ID, and transactions serialize quota mutations. Tests prove restart, isolation, and tamper failure. Gaps are key rotation, expiry, and complete context inspection.”
+“Cogentrex separates the model’s ephemeral context from durable conversation history and durable fact memory. It builds each call from system/tool instructions, up to 20 owner-scoped messages, project-scoped decrypted facts, and the current turn. Persistent facts are redacted then encrypted with AES-GCM under an HKDF-derived owner/project key; AAD binds identity and fact ID, and transactions serialize quota mutations. Tests prove restart, isolation, and tamper failure. Gaps are key rotation, expiry, and complete context inspection.”
 
 ## Self-check
 

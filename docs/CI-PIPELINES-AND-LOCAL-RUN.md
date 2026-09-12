@@ -1,6 +1,6 @@
 # CI, pipelines, Docker services, and local execution
 
-This guide explains the repository's automated checks, the verified Docker Compose target, and the supported commands for running Archon locally.
+This guide explains the repository's automated checks, the verified Docker Compose target, and the supported commands for running Cogentrex locally.
 
 The canonical GitHub Actions file is:
 
@@ -19,7 +19,7 @@ There is no `cip.yaml`. The filename is `ci.yml`.
 - **CD** publishes or deploys a revision.
 - A local smoke script is an acceptance pipeline, but it is not GitHub Actions.
 
-Archon currently has:
+Cogentrex currently has:
 
 | Item | Count |
 |---|---:|
@@ -210,7 +210,7 @@ It requires a clean Git worktree. It intentionally does not enable provider-live
 ```bash
 cd backend
 uv run python scripts/portfolio_benchmark.py \
-  --output /tmp/archon-portfolio-benchmark.json \
+  --output /tmp/cogentrex-portfolio-benchmark.json \
   --iterations 10
 ```
 
@@ -255,7 +255,7 @@ An operator-authorized Foundry session is explicit:
 ./scripts/local-stack.sh start --live-provider
 ```
 
-The live path validates that `backend/.env` is mode `0600`, parses it without shell evaluation, copies only allowlisted `ARCHON_LLM_PROVIDER`, `ARCHON_LLM_MODEL`, `ARCHON_LLM_API_KEY`, `ARCHON_LLM_BASE_URL`, and optional caching configuration into the generated protected env, and requires Foundry plus an absolute HTTPS endpoint. It never exposes the values or passes the provider file wholesale to Compose. Startup performs one real chat request and incurs provider usage. Mock embeddings remain explicitly non-production.
+The live path validates that `backend/.env` is mode `0600`, parses it without shell evaluation, copies only allowlisted `COGENTREX_LLM_PROVIDER`, `COGENTREX_LLM_MODEL`, `COGENTREX_LLM_API_KEY`, `COGENTREX_LLM_BASE_URL`, and optional caching configuration into the generated protected env, and requires Foundry plus an absolute HTTPS endpoint. It never exposes the values or passes the provider file wholesale to Compose. Startup performs one real chat request and incurs provider usage. Mock embeddings remain explicitly non-production.
 
 Mode is part of managed runtime state. A running mock stack cannot silently become live, or vice versa; stop it explicitly before changing mode.
 
@@ -299,12 +299,12 @@ For low-level debugging only, direct retention remains available:
 KEEP=1 ./scripts/local-deploy-smoke.sh
 ```
 
-It prints `PROJECT`, `ENV_FILE`, and `ARCHON_URL`. Every later direct `docker compose` command must reuse that exact project and env file. Never substitute `backend/.env` or dummy values. A failed smoke cleans itself unless `KEEP_FAILED=1` is explicitly requested for debugging.
+It prints `PROJECT`, `ENV_FILE`, and `COGENTREX_URL`. Every later direct `docker compose` command must reuse that exact project and env file. Never substitute `backend/.env` or dummy values. A failed smoke cleans itself unless `KEEP_FAILED=1` is explicitly requested for debugging.
 
 ### Disaster recovery
 
 ```bash
-./scripts/local-dr-smoke.sh /tmp/archon-dr-report.json
+./scripts/local-dr-smoke.sh /tmp/cogentrex-dr-report.json
 ```
 
 The DR pipeline creates durable fixture data, backs up PostgreSQL, destroys the source deployment, restores into a clean deployment, verifies IDs/counts/hashes, records RPO/RTO, and cleans its resources.
@@ -351,7 +351,7 @@ flowchart TB
 ### `gateway`
 
 - image: digest-pinned `nginxinc/nginx-unprivileged`;
-- publishes `127.0.0.1:${ARCHON_LOCAL_PORT:-8080}:8080`;
+- publishes `127.0.0.1:${COGENTREX_LOCAL_PORT:-8080}:8080`;
 - listens on container port `8080`;
 - waits for backend and frontend health;
 - has no Compose healthcheck of its own;
@@ -406,7 +406,7 @@ flowchart TB
 
 - digest-pinned PostgreSQL 16 Alpine;
 - listens on internal port `5432` only;
-- database name: `archon`;
+- database name: `cogentrex`;
 - persistent `postgres-data` named volume;
 - health probe: `pg_isready`;
 - `no-new-privileges`;
@@ -439,7 +439,7 @@ flowchart TB
 - digest-pinned Jaeger all-in-one image;
 - starts only when the `jaeger` profile is selected;
 - receives traces from the Collector over the internal network;
-- publishes the trace UI only on `127.0.0.1:${ARCHON_JAEGER_PORT:-16686}`;
+- publishes the trace UI only on `127.0.0.1:${COGENTREX_JAEGER_PORT:-16686}`;
 - is local inspection evidence, not production retention, alerting, or deployment.
 
 ## Persistent volumes
@@ -461,7 +461,7 @@ Use this mode for code iteration, not deployment evidence.
 ```bash
 cd backend
 uv sync --extra dev --extra llm
-export ARCHON_ENCRYPTION_MASTER_KEY="$(python3 -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="))')"
+export COGENTREX_ENCRYPTION_MASTER_KEY="$(python3 -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="))')"
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 

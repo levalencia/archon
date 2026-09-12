@@ -18,9 +18,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "docs/visual-learning/learning-artifacts.yaml"
-DEFAULT_OUTPUT = ROOT.parent / "archon-learning-media" / "source-packs"
-OWNER_MARKER = ".archon-learning-source-packs.json"
-OWNER_SCHEMA = "archon.learning-pack-directory/v1"
+DEFAULT_OUTPUT = ROOT.parent / "cogentrex-learning-media" / "source-packs"
+OWNER_MARKER = ".cogentrex-learning-source-packs.json"
+OWNER_SCHEMA = "cogentrex.learning-pack-directory/v1"
 ALLOWED_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".txt"}
 FORBIDDEN_PARTS = {".env", ".git", "auth.json", "storage_state.json", "secrets"}
 PRIVATE_KEY_PATTERN = re.compile(
@@ -30,9 +30,9 @@ PRIVATE_KEY_PATTERN = re.compile(
 JWT_PATTERN = re.compile(r"\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b")
 CLOUD_KEY_PATTERN = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
 
-TRUTH_BOUNDARIES = """# Archon source priority and truth boundaries
+TRUTH_BOUNDARIES = """# Cogentrex source priority and truth boundaries
 
-This pack contains public, repository-grounded Archon learning material for Hermes.
+This pack contains public, repository-grounded Cogentrex learning material for Hermes.
 All generated learner-facing content must be English.
 
 1. IMPLEMENTATION-EVIDENCE is the current capability record.
@@ -133,7 +133,7 @@ def build_packs(output_dir: Path, *, require_clean: bool = True) -> dict[str, An
 
     staging = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.staging-", dir=output_dir.parent))
     manifest: dict[str, Any] = {
-        "schema": "archon.learning-source-packs",
+        "schema": "cogentrex.learning-source-packs",
         "version": 1,
         "language": "en",
         "source_commit": _git("rev-parse", "HEAD"),
@@ -144,7 +144,7 @@ def build_packs(output_dir: Path, *, require_clean: bool = True) -> dict[str, An
         for pack in packs:
             pack_dir = staging / pack["id"]
             pack_dir.mkdir(parents=True)
-            truth = pack_dir / "00-ARCHON-TRUTH-BOUNDARIES.md"
+            truth = pack_dir / "00-COGENTREX-TRUTH-BOUNDARIES.md"
             truth.write_text(TRUTH_BOUNDARIES, encoding="utf-8")
             files = [
                 {

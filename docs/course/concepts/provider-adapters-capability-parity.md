@@ -1,14 +1,14 @@
 # Provider adapters and capability parity
 
 > **Implementation status:** `implemented`
-> **Status boundary:** Archon declares capabilities, fails before dispatch when a required feature is unavailable, validates terminal output locally, and preserves the complete typed contract through fallback. “Parity” means non-degradation through negotiation, not identical vendor features; only Foundry has current live evidence.
+> **Status boundary:** Cogentrex declares capabilities, fails before dispatch when a required feature is unavailable, validates terminal output locally, and preserves the complete typed contract through fallback. “Parity” means non-degradation through negotiation, not identical vendor features; only Foundry has current live evidence.
 > **Reviewed revision:** current S8 provider-contract branch
 > **Used by module:** [Module 02-typed-runtime](../modules/02-typed-runtime/README.md)
 > **Catalog ID:** `provider-adapters-capability-parity`
 
 ## Beginner explanation
 
-A provider adapter translates Archon’s model request into one vendor’s API and translates the reply back. Capability parity means changing providers does not silently remove a feature. A shared method name alone is not parity: a text-only fallback cannot safely replace a request that requires typed tools.
+A provider adapter translates Cogentrex’s model request into one vendor’s API and translates the reply back. Capability parity means changing providers does not silently remove a feature. A shared method name alone is not parity: a text-only fallback cannot safely replace a request that requires typed tools.
 
 ## Problem and mental model
 
@@ -41,9 +41,9 @@ sequenceDiagram
     Note over Caller,Adapter: Live parity remains adapter-specific and evidence-bounded
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
-The mapped symbols implement explicit `ProviderCapabilities`, immutable `ResponseContract`, runtime fail-before-call for images/JSON/explicit requirements, local terminal validation, normalized stop reasons, and capability-aware typed fallback. OpenAI-compatible endpoints vary, so their tool, image, JSON, schema, and cache-usage settings default to false. Ollama similarly requires opt-ins through `ARCHON_OLLAMA_NATIVE_TOOLS_ENABLED`, `ARCHON_OLLAMA_JSON_MODE_ENABLED`, and `ARCHON_OLLAMA_JSON_SCHEMA_ENABLED`; images are enabled only by a nonblank `ARCHON_OLLAMA_VISION_MODEL`. Ollama performs no model discovery or silent vision fallback. Requests combining images with native tools require the separate `ARCHON_OLLAMA_VISION_NATIVE_TOOLS_ENABLED=true` opt-in; support is never inferred from text-model tool support. JSON Schema opt-in also enables JSON mode. These are unit-tested contracts, not claims of live model compatibility.
+The mapped symbols implement explicit `ProviderCapabilities`, immutable `ResponseContract`, runtime fail-before-call for images/JSON/explicit requirements, local terminal validation, normalized stop reasons, and capability-aware typed fallback. OpenAI-compatible endpoints vary, so their tool, image, JSON, schema, and cache-usage settings default to false. Ollama similarly requires opt-ins through `COGENTREX_OLLAMA_NATIVE_TOOLS_ENABLED`, `COGENTREX_OLLAMA_JSON_MODE_ENABLED`, and `COGENTREX_OLLAMA_JSON_SCHEMA_ENABLED`; images are enabled only by a nonblank `COGENTREX_OLLAMA_VISION_MODEL`. Ollama performs no model discovery or silent vision fallback. Requests combining images with native tools require the separate `COGENTREX_OLLAMA_VISION_NATIVE_TOOLS_ENABLED=true` opt-in; support is never inferred from text-model tool support. JSON Schema opt-in also enables JSON mode. These are unit-tested contracts, not claims of live model compatibility.
 
 ### Source symbols
 
@@ -90,7 +90,7 @@ The status is **implemented** for capability-aware non-degradation. Typed requir
 
 ## Interview answer
 
-> A provider adapter translates Archon’s typed request into one vendor API and translates the reply back. Capability parity here means a provider change cannot silently remove required tools, images, JSON mode, or response validation. Archon advertises and enforces capabilities and preserves the complete contract through fallback, otherwise it fails before dispatch. This is implemented as non-degradation; identical vendor features and live cross-provider equivalence are not claimed.
+> A provider adapter translates Cogentrex’s typed request into one vendor API and translates the reply back. Capability parity here means a provider change cannot silently remove required tools, images, JSON mode, or response validation. Cogentrex advertises and enforces capabilities and preserves the complete contract through fallback, otherwise it fails before dispatch. This is implemented as non-degradation; identical vendor features and live cross-provider equivalence are not claimed.
 
 ## Self-check
 

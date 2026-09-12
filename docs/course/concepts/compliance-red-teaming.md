@@ -39,7 +39,7 @@ sequenceDiagram
     Note over Admin,RedTeam: model/tools are not exercised end to end
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 The mapped symbols implement mandatory deterministic compliance before supported persistence and effect boundaries. The admin red-team/fuzz routes add bounded regression probes. Versioned legal-policy approvals, exhaustive external full-trajectory attacks, and compliance certification remain outside this local technical boundary.
 
@@ -84,7 +84,7 @@ The status is **implemented** for the local technical baseline. Mandatory compli
 
 ## Interview answer
 
-> Compliance controls encode deterministic obligations such as prohibited content or required disclaimers; red teaming probes whether those controls fail. Archon’s supported chat, document, structured-output, model-progress, and effect paths invoke mandatory compliance, while admin-only guardrail/fuzz routes provide a regression baseline. This implementation is not legal certification or an exhaustive external full-agent red-team.
+> Compliance controls encode deterministic obligations such as prohibited content or required disclaimers; red teaming probes whether those controls fail. Cogentrex’s supported chat, document, structured-output, model-progress, and effect paths invoke mandatory compliance, while admin-only guardrail/fuzz routes provide a regression baseline. This implementation is not legal certification or an exhaustive external full-agent red-team.
 
 ## Self-check
 

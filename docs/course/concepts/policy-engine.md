@@ -44,7 +44,7 @@ flowchart LR
   DENY[DENY] --> Stop
 ```
 
-## Code-grounded Archon semantics
+## Code-grounded Cogentrex semantics
 
 [`PolicyAction`, `RiskClass`, `ResourceKind`, `ResourcePattern`, `PolicyRule`, `PolicyRequest`, and `PolicyDecision`](../../../backend/app/security/policy.py) define the policy domain.
 [`canonical_tool_name`](../../../backend/app/security/policy.py) normalizes concrete tool identity; host/path helpers reject ambiguous wildcard forms in requests.
@@ -98,7 +98,7 @@ Evidence should show event order and zero handler calls after denial; raw argume
 Hard-coded `if` statements are simple for tiny surfaces but become difficult to audit and compare.
 External policy systems such as OPA centralize languages and administration but add network/cache consistency and deployment failure modes.
 Capability tokens move authorization into signed grants but require issuance, scope, expiry, and revocation design.
-Archon's pure in-process rules are fast and testable; changing them requires application configuration/deployment discipline.
+Cogentrex's pure in-process rules are fast and testable; changing them requires application configuration/deployment discipline.
 
 ## Lab versus production
 
@@ -108,7 +108,7 @@ A green policy unit suite does not prove an unregistered effect inside a handler
 
 ## 30-second interview answer
 
-“Archon's `RulePolicyEngine` is a pure deterministic classifier over canonical tool identity, concrete resources, and non-empty risk classes. Matching rules are ranked by specificity, tied denies win, unmatched side effects deny, and reads use the configured default. `SecureToolRegistry.policy_request` derives facts, while `AgentRuntime._enforce_policy` binds the decision to the original call and fails closed. `ASK` invokes exact approval; it never overrides `DENY`. Lexical policy matching still requires execution-time containment checks.”
+“Cogentrex's `RulePolicyEngine` is a pure deterministic classifier over canonical tool identity, concrete resources, and non-empty risk classes. Matching rules are ranked by specificity, tied denies win, unmatched side effects deny, and reads use the configured default. `SecureToolRegistry.policy_request` derives facts, while `AgentRuntime._enforce_policy` binds the decision to the original call and fails closed. `ASK` invokes exact approval; it never overrides `DENY`. Lexical policy matching still requires execution-time containment checks.”
 
 ## Self-check questions
 

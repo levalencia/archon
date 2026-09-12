@@ -190,7 +190,7 @@
   });
 </script>
 
-<svelte:head><title>Recorded Run Evaluations · Archon</title></svelte:head>
+<svelte:head><title>Recorded Run Evaluations · Cogentrex</title></svelte:head>
 
 <div class="page-container">
   <header class="page-header">

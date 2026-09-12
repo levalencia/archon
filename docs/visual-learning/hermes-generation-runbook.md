@@ -1,20 +1,20 @@
 # Hermes Learning Media Runbook
 
-This runbook creates reviewed English learning artifacts without making Hermes a runtime dependency of Archon.
+This runbook creates reviewed English learning artifacts without making Hermes a runtime dependency of Cogentrex.
 
 ## 1. Prepare
 
 - Work from a feature branch with reviewed canonical sources.
 - Never include `.env`, credentials, profile memory, private course text, cookies, or session transcripts.
-- Keep generated binaries outside Git under `../archon-learning-media/`.
+- Keep generated binaries outside Git under `../cogentrex-learning-media/`.
 
 ## 2. Build the deterministic pilot
 
 ```bash
 backend/.venv/bin/python scripts/build-learning-pilot.py \
-  --output ../archon-learning-media \
-  --audio ../archon-learning-media/candidates/request-lifecycle/request-lifecycle-english.mp3 \
-  --video ../archon-learning-media/candidates/request-lifecycle/request-lifecycle-video-final.mp4
+  --output ../cogentrex-learning-media \
+  --audio ../cogentrex-learning-media/candidates/request-lifecycle/request-lifecycle-english.mp3 \
+  --video ../cogentrex-learning-media/candidates/request-lifecycle/request-lifecycle-video-final.mp4
 ```
 
 The builder validates allowlisted source paths, generates structured English artifacts, produces standalone HTML/SVG, records SHA-256 checksums, and writes `catalog.json`.
@@ -25,8 +25,8 @@ pilot so the catalog retains all six entries:
 ```bash
 cd backend
 uv run python ../scripts/build-learning-packs.py \
-  --output ../../archon-learning-media \
-  --media-root ../../archon-learning-media/generated-media
+  --output ../../cogentrex-learning-media \
+  --media-root ../../cogentrex-learning-media/generated-media
 ```
 
 The generalized builder reads `docs/visual-learning/packs/*.json`, verifies
@@ -46,7 +46,7 @@ The HyperFrames source is under `spikes/learning-media-video/`.
 cd spikes/learning-media-video
 npm run check
 npx --yes hyperframes@0.8.27 render --quality high \
-  --output ../../archon-learning-media/candidates/request-lifecycle/request-lifecycle-video-final.mp4
+  --output ../../cogentrex-learning-media/candidates/request-lifecycle/request-lifecycle-video-final.mp4
 ```
 
 Verify the final stream metadata with FFprobe and inspect representative frames. A successful render is not publication approval by itself.
@@ -61,7 +61,7 @@ python3 scripts/build-learning-video-projects.py
 cd spikes/learning-media-videos/<pack-id>
 npm run check
 npx --yes hyperframes@0.8.27 render --quality high \
-  --output ../../../archon-learning-media/generated-media/<pack-id>/<pack-id>.mp4
+  --output ../../../cogentrex-learning-media/generated-media/<pack-id>/<pack-id>.mp4
 ```
 
 Only rerun `build-learning-packs.py --media-root ...` after FFprobe confirms
@@ -78,8 +78,8 @@ Reject any artifact that invents capability, deployment, provider, benchmark, or
 Enable the read-only catalog only for an authorized local deployment:
 
 ```text
-ARCHON_LEARNING_MEDIA_ENABLED=true
-ARCHON_LEARNING_MEDIA_HOST_DIR=../archon-learning-media
+COGENTREX_LEARNING_MEDIA_ENABLED=true
+COGENTREX_LEARNING_MEDIA_HOST_DIR=../cogentrex-learning-media
 ```
 
 Use the canonical local-stack script. Do not expose another host port. Verify stack status, readiness, authenticated catalog access, byte-range playback, and browser behavior.
@@ -100,8 +100,8 @@ GitHub Release distribution. Distribution does not change artifact status to
 
 ```bash
 python3 scripts/learning-media-release.py package \
-  --library ../archon-learning-media \
-  --output dist/archon-learning-media.tar.gz \
+  --library ../cogentrex-learning-media \
+  --output dist/cogentrex-learning-media.tar.gz \
   --manifest-output docs/visual-learning/release-manifest.json
 ```
 
@@ -113,12 +113,12 @@ Recipients install with:
 
 ```bash
 python3 scripts/learning-media-release.py install \
-  --target ../archon-learning-media \
+  --target ../cogentrex-learning-media \
   --manifest docs/visual-learning/release-manifest.json
 # or offline:
 python3 scripts/learning-media-release.py install \
-  --target ../archon-learning-media \
-  --archive dist/archon-learning-media.tar.gz \
+  --target ../cogentrex-learning-media \
+  --archive dist/cogentrex-learning-media.tar.gz \
   --manifest docs/visual-learning/release-manifest.json
 ```
 

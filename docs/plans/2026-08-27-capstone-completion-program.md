@@ -1,8 +1,8 @@
-# Archon Capstone Completion Program
+# Cogentrex Capstone Completion Program
 
 > **For Hermes:** Use subagent-driven-development and the software-development-lifecycle skill. Implement one vertical slice at a time with RED → GREEN → review → commit. No push without Luis's explicit approval.
 
-**Goal:** Close the remaining high-value code and evidence gaps while keeping Archon a local-first, evidence-driven Agent Reliability Workbench.
+**Goal:** Close the remaining high-value code and evidence gaps while keeping Cogentrex a local-first, evidence-driven Agent Reliability Workbench.
 
 **Architecture:** Extend the existing typed runtime, repositories, FastAPI/Svelte surfaces, PostgreSQL ledger, Redis controls, Docker Compose target, and evaluation system. Do not add another agent framework. New autonomous behavior is bounded, opt-in, owner-scoped, budgeted, observable, and human-approved where it can change state or configuration.
 
@@ -18,7 +18,7 @@
 2. No provider capability may silently degrade; unsupported contracts fail before a model call.
 3. No chain-of-thought is persisted or exposed.
 4. No secret, raw credential, private key, token, or `.env` value enters source, logs, events, exports, or reports.
-5. External side effects receive stable idempotency identity, but Archon must not claim universal exactly-once semantics.
+5. External side effects receive stable idempotency identity, but Cogentrex must not claim universal exactly-once semantics.
 6. Reflection, optimization, exports, jobs, delegation, and sandbox calls are owner/project scoped and budgeted.
 7. Optimization produces recommendations/candidates; activation requires explicit human approval.
 8. The sandbox runner must not receive the host Docker socket.
@@ -359,8 +359,8 @@ flowchart TD
 ```bash
 ./scripts/verify.sh
 ./scripts/local-deploy-smoke.sh
-./scripts/local-dr-smoke.sh /tmp/archon-final-dr.json
-cd backend && uv run python scripts/portfolio_benchmark.py --output /tmp/archon-final-benchmark.json --iterations 10
+./scripts/local-dr-smoke.sh /tmp/cogentrex-final-dr.json
+cd backend && uv run python scripts/portfolio_benchmark.py --output /tmp/cogentrex-final-benchmark.json --iterations 10
 ```
 
 **Documentation must explicitly leave these as deferred/not necessary for this capstone:**

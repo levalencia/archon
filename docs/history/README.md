@@ -1,6 +1,6 @@
 # Documentation History
 
-> **Audience:** Maintainers researching how Archon's design and evidence model evolved.
+> **Audience:** Maintainers researching how Cogentrex's design and evidence model evolved.
 > **Purpose:** Preserve superseded plans, audits, and research without placing them in the current reading path.
 > **Status:** Historical index. These documents do not define current implementation status.
 
@@ -9,14 +9,14 @@ Use the [Documentation Index](../README.md) for current guides. Use the [Capabil
 ## Historical plans
 
 - [Original Web Application Plan](PLAN.md)
-- [Evidence-First Roadmap V2](ARCHON-EVIDENCE-FIRST-ROADMAP-V2.md)
+- [Evidence-First Roadmap V2](COGENTREX-EVIDENCE-FIRST-ROADMAP-V2.md)
 - [Implementation Status](IMPLEMENTATION-STATUS.md)
 
 ## Historical audits
 
 - [Executive Summary](EXECUTIVE_SUMMARY.md)
 - [Archived Feature Matrix](FEATURE_MATRIX.md)
-- [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md)
+- [GPT-5.6 Re-Audit](COGENTREX-GPT56-REAUDIT-2026-08-25.md)
 - [Feature and Course Audit V2](FEATURE-AND-COURSE-AUDIT-V2.md)
 
 ## Research and strategy

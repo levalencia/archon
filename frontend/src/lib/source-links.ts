@@ -9,7 +9,7 @@ export type SourceReference =
       why_relevant?: string;
     };
 
-const GITHUB_SOURCE_BASE = 'https://github.com/levalencia/archon/blob';
+const GITHUB_SOURCE_BASE = 'https://github.com/levalencia/cogentrex/blob';
 
 function sourcePath(source: SourceReference): string {
   return typeof source === 'string' ? source : source.path;

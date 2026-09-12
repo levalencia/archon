@@ -52,8 +52,8 @@ htmlcov/
 *.log
 
 # Runtime state
-archon_memory.json
-archon_sessions.json
+cogentrex_memory.json
+cogentrex_sessions.json
 *.runtime.json
 
 # Browser test artifacts
@@ -61,7 +61,7 @@ frontend/test-results/
 frontend/playwright-report/
 
 # Generated learning media belongs in the external sibling library.
-archon-learning-media/
+cogentrex-learning-media/
 *.learning-media.mp3
 *.learning-media.mp4
 spikes/learning-media-video/

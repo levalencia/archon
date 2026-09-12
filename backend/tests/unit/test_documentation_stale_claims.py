@@ -67,20 +67,19 @@ class TestNoCandidateNotPushedClaim:
 
 @pytest.mark.unit
 class TestMigrationHeadReference:
-    """Ensure current-state docs reference migration 22, not 21 as head."""
+    """Ensure current-state docs reference the current migration head."""
 
     CURRENT_STATE_DOCS = [
         ROOT / "docs" / "IMPLEMENTATION-EVIDENCE.md",
         ROOT / "docs" / "REMAINING-DEFERRED-GAPS.md",
     ]
 
-    def test_migration_head_is_22(self) -> None:
+    def test_migration_head_is_23(self) -> None:
         for path in self.CURRENT_STATE_DOCS:
             content = path.read_text(encoding="utf-8")
             relpath = str(path.relative_to(ROOT))
-            # Should mention 20260902_22 somewhere
-            assert "20260902_22" in content, (
-                f"{relpath} does not reference current migration head 20260902_22"
+            assert "20260912_23" in content, (
+                f"{relpath} does not reference current migration head 20260912_23"
             )
 
 
@@ -205,7 +204,7 @@ def test_current_observability_learning_docs_match_collector_fanout() -> None:
             assert phrase not in content, f"{path.relative_to(ROOT)} contains stale OTEL claim"
 
     studio = json.loads(
-        (ROOT / "frontend" / "static" / "learning" / "archon-studio.json").read_text(
+        (ROOT / "frontend" / "static" / "learning" / "cogentrex-studio.json").read_text(
             encoding="utf-8"
         )
     )
@@ -219,7 +218,7 @@ class TestReflectionNotClaimedAbsent:
     """Generic reflection is implemented; docs must not claim it absent."""
 
     STALE_ABSENT_CLAIMS = [
-        "not implemented in Archon",
+        "not implemented in Cogentrex",
         "Not implemented as a generic capability",
         "not a dependency backed by a generic implementation claim",
     ]
@@ -265,12 +264,12 @@ class TestNoLocalCandidatePrefix:
 class TestDatabaseSchemaHead:
     """database-schema.md must reference the current migration head."""
 
-    def test_schema_references_head_22(self) -> None:
+    def test_schema_references_head_23(self) -> None:
         schema = (ROOT / "docs" / "course" / "reference" / "database-schema.md").read_text(
             encoding="utf-8"
         )
-        assert "20260902_22" in schema, (
-            "database-schema.md does not reference current migration head 20260902_22"
+        assert "20260912_23" in schema, (
+            "database-schema.md does not reference current migration head 20260912_23"
         )
         assert "20260826_08" not in schema or "→" in schema.split("20260826_08")[1][:20], (
             "database-schema.md still references 08 as the head"

@@ -3,7 +3,7 @@
 ## Beginner explanation
 
 ReAct is an iterative action/observation pattern: the model proposes a tool action, controlled code executes it, and the resulting observation informs the model's next response.
-Archon uses provider-native `ToolCall` values rather than parsing actions from model prose.
+Cogentrex uses provider-native `ToolCall` values rather than parsing actions from model prose.
 It does not expose or require private chain-of-thought; observable progress, calls, results, and final answers are enough to run the loop.
 One configured tool-call allowance is shown to the model and enforced by the runtime; when the boundary is reached, unexecuted native calls are closed with synthetic observations before bounded final synthesis.
 
@@ -15,7 +15,7 @@ One configured tool-call allowance is shown to the model and enforced by the run
 - **Iteration:** one provider completion plus processing of its result.
 - **Progress text:** model content accompanying tool calls; not yet a final answer.
 - **Synthesis:** final tool-free response after evidence or a budget boundary.
-- **Reflection:** generic critique/revision phase; Archon implements this as an **optional bounded final-answer reflection** through `BoundedReflectionService`, disabled by default (see [generic self-reflection](generic-self-reflection.md)).
+- **Reflection:** generic critique/revision phase; Cogentrex implements this as an **optional bounded final-answer reflection** through `BoundedReflectionService`, disabled by default (see [generic self-reflection](generic-self-reflection.md)).
 
 ## Problem and mental model
 
@@ -48,7 +48,7 @@ sequenceDiagram
   M-->>R: final content or another call
 ```
 
-## Code-grounded Archon loop
+## Code-grounded Cogentrex loop
 
 [`AgentRuntime.run`](../../../backend/app/runtime/engine.py) snapshots input history, starts counters, and emits `RUN_STARTED`.
 Each iteration calls [`ModelProvider.complete`](../../../backend/app/runtime/ports.py) with a detached history and [`ToolExecutor.definitions`](../../../backend/app/runtime/ports.py).
@@ -74,7 +74,7 @@ When a model response would exceed the tool budget, `_append_unexecuted_tool_res
 
 The historical [`test_tool_error_feedback.py`](../../../backend/tests/unit/test_tool_error_feedback.py) uses “reflexion” for error feedback followed by a corrected retry. That proves only a narrow recovery path.
 
-Archon now also has optional **generic final-answer reflection** through [`BoundedReflectionService`](../../../backend/app/reflection/service.py): a tool-free structured critique and at most one bounded revision. It is invoked only after a normal unstructured final-answer draft, is disabled by default, and has no recursive loop or learned reflection memory. Deterministic grounded-claim verification, verifier delegation, and post-run evaluation remain separate mechanisms.
+Cogentrex now also has optional **generic final-answer reflection** through [`BoundedReflectionService`](../../../backend/app/reflection/service.py): a tool-free structured critique and at most one bounded revision. It is invoked only after a normal unstructured final-answer draft, is disabled by default, and has no recursive loop or learned reflection memory. Deterministic grounded-claim verification, verifier delegation, and post-run evaluation remain separate mechanisms.
 
 ## Behavior-focused tests—and their limits
 
@@ -103,7 +103,7 @@ Sketch the exact history roles after the first tool result. Label which behavior
 - Repeated or branching calls can consume budget rapidly; call and iteration limits cap this loop.
 - An exception string may leak secrets; production adapters should sanitize errors before observation/persistence.
 - Truncation can hide crucial tail data; tools should return structured bounded summaries rather than giant blobs.
-- Multi-call batches can create partial effects; Archon preauthorizes the batch but does not offer distributed transactions.
+- Multi-call batches can create partial effects; Cogentrex preauthorizes the batch but does not offer distributed transactions.
 - Correct control flow does not make the final answer factually grounded.
 
 ## Observability and evidence
@@ -118,7 +118,7 @@ A successful final answer after an error demonstrates recovery on that fixture, 
 A fixed pipeline is predictable when the tool sequence is known and easier to test exhaustively.
 Plan-then-execute can expose a reviewable plan, but plans become stale and still require per-action checks.
 Text action parsing works with more providers but is ambiguous and injection-prone compared with native calls.
-Parallel tool execution lowers latency for independent reads but complicates ordering, budgets, cancellation, and side-effect safety; Archon processes prepared calls in order.
+Parallel tool execution lowers latency for independent reads but complicates ordering, budgets, cancellation, and side-effect safety; Cogentrex processes prepared calls in order.
 
 ## Lab versus production
 
@@ -128,7 +128,7 @@ Do not label one corrected fixture as “self-healing” or “self-reflective.�
 
 ## 30-second interview answer
 
-“ReAct is the action-observation loop, not hidden chain-of-thought. Archon's custom `AgentRuntime` sends typed history and tool definitions, receives native `ToolCall`s, snapshots and authorizes them, executes through the registry, appends bounded `Role.TOOL` observations, and repeats under token, time, iteration, and call budgets. Tool errors can become retry hints, which is narrow feedback. Separately, optional final-answer reflection performs one tool-free structured critique and at most one bounded revision; it is disabled by default and is not a recursive agent or learned memory.”
+“ReAct is the action-observation loop, not hidden chain-of-thought. Cogentrex's custom `AgentRuntime` sends typed history and tool definitions, receives native `ToolCall`s, snapshots and authorizes them, executes through the registry, appends bounded `Role.TOOL` observations, and repeats under token, time, iteration, and call budgets. Tool errors can become retry hints, which is narrow feedback. Separately, optional final-answer reflection performs one tool-free structured critique and at most one bounded revision; it is disabled by default and is not a recursive agent or learned memory.”
 
 ## Self-check questions
 

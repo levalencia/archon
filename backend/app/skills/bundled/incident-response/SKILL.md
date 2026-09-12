@@ -2,7 +2,7 @@
 name: incident-response
 description: Triage and contain production incidents
 version: 1.0.0
-tags: [incident-response, archon]
+tags: [incident-response, cogentrex]
 references: [references/checklist.md]
 triggers: ['incident', 'outage', 'production failure']
 negative_triggers: ['not an incident', 'ignore outage']

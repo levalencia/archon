@@ -166,7 +166,7 @@ class TestHealthEndpoints:
     @pytest.mark.unit
     def test_app_metadata(self, client: TestClient) -> None:
         """App has correct title and version from settings."""
-        assert client.app.title == "Archon"
+        assert client.app.title == "Cogentrex"
         assert client.app.version == "0.1.0"
 
 

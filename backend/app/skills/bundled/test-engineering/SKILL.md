@@ -2,7 +2,7 @@
 name: test-engineering
 description: Design and run focused automated tests
 version: 1.0.0
-tags: [test-engineering, archon]
+tags: [test-engineering, cogentrex]
 references: [references/checklist.md]
 triggers: ['write tests', 'run tests', 'tdd']
 negative_triggers: ['do not test', 'skip tests']

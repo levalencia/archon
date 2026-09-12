@@ -11,7 +11,7 @@ A container image packages a program and its runtime files.
 Docker starts an image as an isolated process called a container.
 Compose describes several containers, their configuration, networks, volumes, health checks, and startup dependencies in one file.
 The file is a recipe; it does not prove the stack has run.
-Archon uses Compose as a reproducible local production-like target, not as proof of public deployment.
+Cogentrex uses Compose as a reproducible local production-like target, not as proof of public deployment.
 Only one gateway port is published, and it binds to the host loopback address.
 PostgreSQL, Redis, backend, frontend, and the OpenTelemetry collector remain internal to the Compose network.
 
@@ -36,7 +36,7 @@ A loopback bind reduces exposure but does not secure a compromised host or Docke
 
 ```mermaid
 flowchart TD
-    H[developer host] -->|127.0.0.1:ARCHON_LOCAL_PORT| G[unprivileged nginx gateway]
+    H[developer host] -->|127.0.0.1:COGENTREX_LOCAL_PORT| G[unprivileged nginx gateway]
     G --> F[frontend :3000]
     G --> B[backend :8000]
     B --> P[(PostgreSQL volume)]
@@ -49,7 +49,7 @@ flowchart TD
 ```
 
 [`docker-compose.local.yml`](../../../docker-compose.local.yml) defines six services: `gateway`, `backend`, `frontend`, `postgres`, `redis`, and `otel-collector`.
-The gateway is the only published service and maps `127.0.0.1:${ARCHON_LOCAL_PORT:-8080}:8080`.
+The gateway is the only published service and maps `127.0.0.1:${COGENTREX_LOCAL_PORT:-8080}:8080`.
 [`deploy/nginx.local.conf`](../../../deploy/nginx.local.conf) sends application routes to backend or frontend and disables buffering for SSE.
 Database and cache names resolve only on the Compose network.
 PostgreSQL uses `postgres-data`; Redis uses `redis-data` even though Redis is not part of the durable backup contract.
@@ -87,9 +87,9 @@ Dependency checks are bounded observations, not a global availability promise.
 
 Required values use Compose’s `${NAME:?message}` form so missing secrets fail configuration.
 The repository does not embed a default PostgreSQL password, application secret, or encryption master key.
-The backend target explicitly supports `${ARCHON_LOCAL_PLATFORM:-linux/amd64}` because the observed local path had that platform boundary.
+The backend target explicitly supports `${COGENTREX_LOCAL_PLATFORM:-linux/amd64}` because the observed local path had that platform boundary.
 External dependency images are digest-pinned.
-Application images use non-root users; the backend Dockerfile declares `USER archon`, and the frontend declares `USER node`.
+Application images use non-root users; the backend Dockerfile declares `USER cogentrex`, and the frontend declares `USER node`.
 Configured containers use `no-new-privileges`; gateway and collector use read-only roots with `/tmp` tmpfs.
 Execution tooling is disabled in this local target rather than receiving Docker authority by default.
 Host mounts for nginx and collector configuration are read-only.
@@ -146,8 +146,8 @@ cd backend
 uv run pytest -q tests/unit/test_local_deployment.py
 cd ..
 POSTGRES_PASSWORD=test-only \
-ARCHON_SECRET_KEY=test-only \
-ARCHON_ENCRYPTION_MASTER_KEY=MDAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMA \
+COGENTREX_SECRET_KEY=test-only \
+COGENTREX_ENCRYPTION_MASTER_KEY=MDAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMA \
 docker compose -f docker-compose.local.yml config --services
 ```
 
@@ -217,7 +217,7 @@ The concept is `implemented` for the hardened loopback local target and no broad
 
 ### 30-second answer
 
-> Archon Compose defines a six-service, single-host local topology. Only unprivileged nginx is published on loopback; backend, frontend, PostgreSQL, Redis, and the OTEL collector stay internal. Required secrets fail closed, images are pinned, app containers are non-root, and Alembic runs before backend readiness. Tests and a local smoke support that boundary, but it is not public ingress, orchestration, failover, or production deployment.
+> Cogentrex Compose defines a six-service, single-host local topology. Only unprivileged nginx is published on loopback; backend, frontend, PostgreSQL, Redis, and the OTEL collector stay internal. Required secrets fail closed, images are pinned, app containers are non-root, and Alembic runs before backend readiness. Tests and a local smoke support that boundary, but it is not public ingress, orchestration, failover, or production deployment.
 
 ## Self-check
 

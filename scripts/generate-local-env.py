@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Archon's protected local Compose environment.
+"""Generate Cogentrex's protected local Compose environment.
 
 The default is deterministic mock mode. An optional provider env contributes only
 an explicit LLM allowlist and is never evaluated as shell code.
@@ -19,36 +19,36 @@ from urllib.parse import urlparse
 
 EMBEDDING_PROVIDER_KEYS = frozenset(
     {
-        "ARCHON_EMBEDDING_PROVIDER",
-        "ARCHON_EMBEDDING_MODEL",
-        "ARCHON_EMBEDDING_API_KEY",
-        "ARCHON_EMBEDDING_BASE_URL",
-        "ARCHON_EMBEDDING_ALLOWED_HOSTS",
-        "ARCHON_EMBEDDING_DIMENSIONS",
-        "ARCHON_EMBEDDING_API_VERSION",
+        "COGENTREX_EMBEDDING_PROVIDER",
+        "COGENTREX_EMBEDDING_MODEL",
+        "COGENTREX_EMBEDDING_API_KEY",
+        "COGENTREX_EMBEDDING_BASE_URL",
+        "COGENTREX_EMBEDDING_ALLOWED_HOSTS",
+        "COGENTREX_EMBEDDING_DIMENSIONS",
+        "COGENTREX_EMBEDDING_API_VERSION",
     }
 )
 TELEMETRY_PROVIDER_KEYS = frozenset(
     {
-        "ARCHON_OTEL_DESTINATIONS",
-        "ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT",
+        "COGENTREX_OTEL_DESTINATIONS",
+        "COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT",
         "LOGFIRE_TOKEN",
         "LOGFIRE_BASE_URL",
         "APPLICATIONINSIGHTS_CONNECTION_STRING",
         "TEMPO_OTLP_ENDPOINT",
         "TEMPO_OTLP_INSECURE",
-        "ARCHON_OTEL_GENERIC_ENDPOINT",
-        "ARCHON_OTEL_GENERIC_INSECURE",
+        "COGENTREX_OTEL_GENERIC_ENDPOINT",
+        "COGENTREX_OTEL_GENERIC_INSECURE",
     }
 )
 ALLOWED_PROVIDER_KEYS = (
     frozenset(
         {
-            "ARCHON_LLM_PROVIDER",
-            "ARCHON_LLM_MODEL",
-            "ARCHON_LLM_API_KEY",
-            "ARCHON_LLM_BASE_URL",
-            "ARCHON_PROMPT_CACHING_ENABLED",
+            "COGENTREX_LLM_PROVIDER",
+            "COGENTREX_LLM_MODEL",
+            "COGENTREX_LLM_API_KEY",
+            "COGENTREX_LLM_BASE_URL",
+            "COGENTREX_PROMPT_CACHING_ENABLED",
             "LOGFIRE_TOKEN",
             "LOGFIRE_BASE_URL",
         }
@@ -58,17 +58,17 @@ ALLOWED_PROVIDER_KEYS = (
 )
 REQUIRED_PROVIDER_KEYS = frozenset(
     {
-        "ARCHON_LLM_PROVIDER",
-        "ARCHON_LLM_MODEL",
-        "ARCHON_LLM_API_KEY",
-        "ARCHON_LLM_BASE_URL",
+        "COGENTREX_LLM_PROVIDER",
+        "COGENTREX_LLM_MODEL",
+        "COGENTREX_LLM_API_KEY",
+        "COGENTREX_LLM_BASE_URL",
     }
 )
 MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 OTEL_DESTINATIONS = frozenset(
     {"debug", "jaeger", "logfire", "azure-monitor", "tempo", "otlp"}
 )
-LEARNING_MEDIA_MARKER = "archon.learning-library/v1\n"
+LEARNING_MEDIA_MARKER = "cogentrex.learning-library/v1\n"
 
 
 def _unquote(value: str) -> str:
@@ -109,25 +109,25 @@ def read_provider_env(path: Path) -> dict[str, str]:
     missing = sorted(key for key in REQUIRED_PROVIDER_KEYS if not values.get(key))
     if missing:
         raise ValueError("provider env is missing required keys: " + ", ".join(missing))
-    if values["ARCHON_LLM_PROVIDER"].lower() != "foundry":
+    if values["COGENTREX_LLM_PROVIDER"].lower() != "foundry":
         raise ValueError(
-            "managed live mode currently requires ARCHON_LLM_PROVIDER=foundry"
+            "managed live mode currently requires COGENTREX_LLM_PROVIDER=foundry"
         )
-    if not MODEL_PATTERN.fullmatch(values["ARCHON_LLM_MODEL"]):
+    if not MODEL_PATTERN.fullmatch(values["COGENTREX_LLM_MODEL"]):
         raise ValueError("invalid managed live model name")
-    endpoint = urlparse(values["ARCHON_LLM_BASE_URL"])
+    endpoint = urlparse(values["COGENTREX_LLM_BASE_URL"])
     if endpoint.scheme != "https" or not endpoint.hostname:
         raise ValueError("managed Foundry endpoint must be an absolute HTTPS URL")
 
     supplied_embeddings = {key for key in EMBEDDING_PROVIDER_KEYS if values.get(key)}
     if supplied_embeddings:
         required_embeddings = {
-            "ARCHON_EMBEDDING_PROVIDER",
-            "ARCHON_EMBEDDING_MODEL",
-            "ARCHON_EMBEDDING_BASE_URL",
-            "ARCHON_EMBEDDING_ALLOWED_HOSTS",
-            "ARCHON_EMBEDDING_DIMENSIONS",
-            "ARCHON_EMBEDDING_API_VERSION",
+            "COGENTREX_EMBEDDING_PROVIDER",
+            "COGENTREX_EMBEDDING_MODEL",
+            "COGENTREX_EMBEDDING_BASE_URL",
+            "COGENTREX_EMBEDDING_ALLOWED_HOSTS",
+            "COGENTREX_EMBEDDING_DIMENSIONS",
+            "COGENTREX_EMBEDDING_API_VERSION",
         }
         if missing_embeddings := sorted(
             key for key in required_embeddings if not values.get(key)
@@ -136,11 +136,11 @@ def read_provider_env(path: Path) -> dict[str, str]:
                 "embedding configuration is incomplete: "
                 + ", ".join(missing_embeddings)
             )
-        if values["ARCHON_EMBEDDING_PROVIDER"].lower() != "foundry":
+        if values["COGENTREX_EMBEDDING_PROVIDER"].lower() != "foundry":
             raise ValueError("managed embeddings currently require provider=foundry")
-        if not MODEL_PATTERN.fullmatch(values["ARCHON_EMBEDDING_MODEL"]):
+        if not MODEL_PATTERN.fullmatch(values["COGENTREX_EMBEDDING_MODEL"]):
             raise ValueError("invalid managed embedding model name")
-        embedding_endpoint = urlparse(values["ARCHON_EMBEDDING_BASE_URL"])
+        embedding_endpoint = urlparse(values["COGENTREX_EMBEDDING_BASE_URL"])
         if (
             embedding_endpoint.scheme != "https"
             or not embedding_endpoint.hostname
@@ -152,7 +152,7 @@ def read_provider_env(path: Path) -> dict[str, str]:
             raise ValueError("managed embedding endpoint must be an absolute HTTPS URL")
         allowed_hosts = {
             host.strip().lower()
-            for host in values["ARCHON_EMBEDDING_ALLOWED_HOSTS"].split(",")
+            for host in values["COGENTREX_EMBEDDING_ALLOWED_HOSTS"].split(",")
             if host.strip()
         }
         if embedding_endpoint.hostname.lower() not in allowed_hosts:
@@ -160,22 +160,22 @@ def read_provider_env(path: Path) -> dict[str, str]:
                 "managed embedding endpoint host must be explicitly allowed"
             )
         try:
-            dimensions = int(values["ARCHON_EMBEDDING_DIMENSIONS"])
+            dimensions = int(values["COGENTREX_EMBEDDING_DIMENSIONS"])
         except ValueError:
             raise ValueError("embedding dimensions must be an integer") from None
         if not 1 <= dimensions <= 4096:
             raise ValueError("embedding dimensions must be between 1 and 4096")
         if not re.fullmatch(
             r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?",
-            values["ARCHON_EMBEDDING_API_VERSION"],
+            values["COGENTREX_EMBEDDING_API_VERSION"],
         ):
             raise ValueError("invalid embedding API version")
-        values.setdefault("ARCHON_EMBEDDING_API_KEY", values["ARCHON_LLM_API_KEY"])
+        values.setdefault("COGENTREX_EMBEDDING_API_KEY", values["COGENTREX_LLM_API_KEY"])
 
-    raw_destinations = values.get("ARCHON_OTEL_DESTINATIONS")
+    raw_destinations = values.get("COGENTREX_OTEL_DESTINATIONS")
     if raw_destinations is None:
         raw_destinations = "logfire" if values.get("LOGFIRE_TOKEN") else "debug"
-        values["ARCHON_OTEL_DESTINATIONS"] = raw_destinations
+        values["COGENTREX_OTEL_DESTINATIONS"] = raw_destinations
     destinations = tuple(
         part.strip().lower() for part in raw_destinations.split(",") if part.strip()
     )
@@ -187,7 +187,7 @@ def read_provider_env(path: Path) -> dict[str, str]:
         "logfire": ("LOGFIRE_TOKEN", "LOGFIRE_BASE_URL"),
         "azure-monitor": ("APPLICATIONINSIGHTS_CONNECTION_STRING",),
         "tempo": ("TEMPO_OTLP_ENDPOINT",),
-        "otlp": ("ARCHON_OTEL_GENERIC_ENDPOINT",),
+        "otlp": ("COGENTREX_OTEL_GENERIC_ENDPOINT",),
     }
     for destination in destinations:
         missing_destination_keys = [
@@ -198,10 +198,10 @@ def read_provider_env(path: Path) -> dict[str, str]:
                 f"OTel destination {destination!r} is missing required keys: "
                 + ", ".join(missing_destination_keys)
             )
-    capture = values.get("ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT", "false").lower()
+    capture = values.get("COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT", "false").lower()
     if capture not in {"true", "false"}:
-        raise ValueError("ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT must be true or false")
-    values["ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT"] = capture
+        raise ValueError("COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT must be true or false")
+    values["COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT"] = capture
     return values
 
 
@@ -217,7 +217,7 @@ def validate_learning_media_root(path: Path | None) -> Path | None:
     if not any(candidate.iterdir()):
         return None
 
-    marker = candidate / ".archon-learning-library"
+    marker = candidate / ".cogentrex-learning-library"
     catalog = candidate / "catalog.json"
     published = candidate / "published"
     if (
@@ -235,7 +235,7 @@ def validate_learning_media_root(path: Path | None) -> Path | None:
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError("learning-media catalog is invalid") from exc
     if (
-        payload.get("schema") != "archon.learning-library"
+        payload.get("schema") != "cogentrex.learning-library"
         or payload.get("version") != 1
         or not isinstance(payload.get("packs"), list)
         or not payload["packs"]
@@ -251,38 +251,38 @@ def generate_values(
 ) -> dict[str, str]:
     values = {
         "POSTGRES_PASSWORD": secrets.token_hex(32),
-        "ARCHON_SECRET_KEY": secrets.token_urlsafe(48),
-        "ARCHON_ENCRYPTION_MASTER_KEY": base64.urlsafe_b64encode(
+        "COGENTREX_SECRET_KEY": secrets.token_urlsafe(48),
+        "COGENTREX_ENCRYPTION_MASTER_KEY": base64.urlsafe_b64encode(
             secrets.token_bytes(32)
         )
         .decode()
         .rstrip("="),
-        "ARCHON_EFFECT_IDENTITY_SECRET": secrets.token_urlsafe(48),
-        "ARCHON_DELEGATION_SIGNING_KEY": secrets.token_urlsafe(48),
-        "ARCHON_DURABLE_MONETARY_BUDGET_ENABLED": "true",
-        "ARCHON_DURABLE_EFFECT_LEDGER_ENABLED": "true",
-        "ARCHON_AGENT_DEADLINE_SECONDS": "300",
-        "ARCHON_VERIFIER_ENABLED": "false",
-        "ARCHON_OTEL_DESTINATIONS": "debug",
-        "ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT": "false",
-        "ARCHON_LEARNING_MEDIA_ENABLED": "false",
+        "COGENTREX_EFFECT_IDENTITY_SECRET": secrets.token_urlsafe(48),
+        "COGENTREX_DELEGATION_SIGNING_KEY": secrets.token_urlsafe(48),
+        "COGENTREX_DURABLE_MONETARY_BUDGET_ENABLED": "true",
+        "COGENTREX_DURABLE_EFFECT_LEDGER_ENABLED": "true",
+        "COGENTREX_AGENT_DEADLINE_SECONDS": "300",
+        "COGENTREX_VERIFIER_ENABLED": "false",
+        "COGENTREX_OTEL_DESTINATIONS": "debug",
+        "COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT": "false",
+        "COGENTREX_LEARNING_MEDIA_ENABLED": "false",
         "COMPOSE_PROFILES": "",
-        "ARCHON_JAEGER_PORT": os.environ.get("ARCHON_JAEGER_PORT") or "16686",
-        "ARCHON_LOCAL_PORT": os.environ.get("ARCHON_LOCAL_PORT")
+        "COGENTREX_JAEGER_PORT": os.environ.get("COGENTREX_JAEGER_PORT") or "16686",
+        "COGENTREX_LOCAL_PORT": os.environ.get("COGENTREX_LOCAL_PORT")
         or str(18_000 + secrets.randbelow(20_000)),
-        "ARCHON_RUNTIME_MODE": "mock",
-        "ARCHON_LLM_PROVIDER": "mock",
-        "ARCHON_LLM_MODEL": "mock-model",
+        "COGENTREX_RUNTIME_MODE": "mock",
+        "COGENTREX_LLM_PROVIDER": "mock",
+        "COGENTREX_LLM_MODEL": "mock-model",
     }
     if provider_env is not None:
         values.update(read_provider_env(provider_env))
-        values["ARCHON_RUNTIME_MODE"] = "live-foundry"
-        values["ARCHON_VERIFIER_ENABLED"] = "true"
-        values["ARCHON_VERIFIER_MODEL"] = values["ARCHON_LLM_MODEL"]
+        values["COGENTREX_RUNTIME_MODE"] = "live-foundry"
+        values["COGENTREX_VERIFIER_ENABLED"] = "true"
+        values["COGENTREX_VERIFIER_MODEL"] = values["COGENTREX_LLM_MODEL"]
     if media_root := validate_learning_media_root(learning_media_root):
-        values["ARCHON_LEARNING_MEDIA_ENABLED"] = "true"
-        values["ARCHON_LEARNING_MEDIA_HOST_DIR"] = str(media_root)
-    if "jaeger" in values["ARCHON_OTEL_DESTINATIONS"].split(","):
+        values["COGENTREX_LEARNING_MEDIA_ENABLED"] = "true"
+        values["COGENTREX_LEARNING_MEDIA_HOST_DIR"] = str(media_root)
+    if "jaeger" in values["COGENTREX_OTEL_DESTINATIONS"].split(","):
         values["COMPOSE_PROFILES"] = "jaeger"
     return values
 

@@ -1,7 +1,7 @@
-# Archon GPT-5.6 Re-Audit
+# Cogentrex GPT-5.6 Re-Audit
 
 > **Audience:** Maintainers and interviewers evaluating honest project maturity.
-> **Purpose:** Independent re-audit of Archon at revision `27952f4` — verifies test gates, identifies placeholder/mock features, and recommends honest positioning.
+> **Purpose:** Independent re-audit of Cogentrex at revision `27952f4` — verifies test gates, identifies placeholder/mock features, and recommends honest positioning.
 > **Status:** Historical snapshot — findings informed the Evidence-First Roadmap v2. Current gate results live in CI and IMPLEMENTATION-EVIDENCE.md.
 
 **Date:** 2026-08-25  
@@ -11,13 +11,13 @@
 
 ## Executive verdict
 
-Archon is a **strong agent-engineering portfolio prototype** with a genuinely valuable core: a typed, budgeted runtime; native Anthropic/Foundry tool calling; direct SSE event streaming; persistent authentication and conversation ownership; and broad deterministic backend coverage.
+Cogentrex is a **strong agent-engineering portfolio prototype** with a genuinely valuable core: a typed, budgeted runtime; native Anthropic/Foundry tool calling; direct SSE event streaming; persistent authentication and conversation ownership; and broad deterministic backend coverage.
 
 It is **not production-ready**, is not at credible `37/37 competitor parity`, and is not fully implemented/wired/tested. The newer implementation expanded topic coverage faster than it deepened the live product. Several headline capabilities are placeholders, mocks, configurable-but-inactive integrations, or unsafe approximations.
 
 Recommended positioning:
 
-> Archon is a local-first Agent Reliability Workbench prototype that makes model turns, tools, evidence, policy decisions, context, costs, and failures inspectable. Its strongest implemented core is the typed Anthropic/Foundry runtime and live SSE workbench; several RAG, memory, MCP, multi-agent, evaluation, and deployment capabilities remain experimental.
+> Cogentrex is a local-first Agent Reliability Workbench prototype that makes model turns, tools, evidence, policy decisions, context, costs, and failures inspectable. Its strongest implemented core is the typed Anthropic/Foundry runtime and live SSE workbench; several RAG, memory, MCP, multi-agent, evaluation, and deployment capabilities remain experimental.
 
 Do not market it as a production platform, secure sandbox, complete MCP implementation, encrypted multi-tenant memory system, or competitor-equivalent coding agent.
 
@@ -89,7 +89,7 @@ Call these **approval-gated host execution tools**, not secure sandboxes.
 
 ### P0 — Persistent memory is global plaintext across users
 
-`PersistentMemory` writes one `archon_memory.json` file and injects it into every user's context. The observed file existed with mode `0644`. The memory tool has no user scope or provenance. The encrypted store is merely attached to the singleton; live add/remove/replace/list continue using plaintext `_entries`.
+`PersistentMemory` writes one `cogentrex_memory.json` file and injects it into every user's context. The observed file existed with mode `0644`. The memory tool has no user scope or provenance. The encrypted store is merely attached to the singleton; live add/remove/replace/list continue using plaintext `_entries`.
 
 Evidence:
 
@@ -190,7 +190,7 @@ Every system state should distinguish `not configured`, `loading`, `healthy`, `d
 
 Reloading `/chat/{id}` restores user/assistant messages but loses reasoning, tools, latency, tokens, cost, iterations, sources, evals, and stop reason. The Inspector resets to zero while retaining decorative health labels.
 
-Archon's central differentiator requires durable owner-scoped run-event APIs and read-only trajectory replay. Do not call transcript resubmission deterministic replay.
+Cogentrex's central differentiator requires durable owner-scoped run-event APIs and read-only trajectory replay. Do not call transcript resubmission deterministic replay.
 
 ### P1 — Secondary pages are broad but shallow
 
@@ -307,7 +307,7 @@ Official references:
 - https://opencode.ai/docs/mcp-servers/
 - https://opencode.ai/docs/lsp/
 
-## What Archon should not build next
+## What Cogentrex should not build next
 
 - Another framework integration.
 - More providers before typed tool parity is real.

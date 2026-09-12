@@ -2,7 +2,7 @@
 
 > **Documentation status:** Draft
 > **Concept status:** `implemented`
-> **Status boundary:** Archon emits one OTLP stream to the local Collector. One live agent trace was observed in Jaeger and an earlier run was accepted in Logfire Agents/Tools; the newest Logfire Summary/Messages rendering, production sampling, retention, alerts, and SLOs remain unverified.
+> **Status boundary:** Cogentrex emits one OTLP stream to the local Collector. One live agent trace was observed in Jaeger and an earlier run was accepted in Logfire Agents/Tools; the newest Logfire Summary/Messages rendering, production sampling, retention, alerts, and SLOs remain unverified.
 > **Used by:** [Module 13](../modules/13-auth-ui-observability/README.md)
 
 ## Beginner explanation
@@ -13,7 +13,7 @@ A parent run span can contain model and tool spans so an operator can see where 
 Tracing differs from metrics, which aggregate many events into numbers.
 It also differs from logs, which record discrete events.
 A trace should carry useful safe attributes, not credentials, tool payloads, retrieved documents, or hidden reasoning.
-Archon maps typed runtime events to `invoke_agent`, `chat`, and `execute_tool` spans, emits once over OTLP, and lets the Collector fan out to selected destinations.
+Cogentrex maps typed runtime events to `invoke_agent`, `chat`, and `execute_tool` spans, emits once over OTLP, and lets the Collector fan out to selected destinations.
 Conversation text remains off by default. The explicit opt-in exports only redacted, bounded user and assistant text for Summary/Messages.
 
 ## Vocabulary
@@ -65,7 +65,7 @@ sequenceDiagram
     participant X as OTLPExporter
     participant C as Local collector
     R->>S: RUN_STARTED
-    S->>S: start invoke_agent Archon
+    S->>S: start invoke_agent Cogentrex
     R->>S: ITERATION_STARTED
     S->>S: start chat {model}
     R->>S: MODEL_RESPONSE with safe usage
@@ -82,7 +82,7 @@ sequenceDiagram
 `_finish` computes `duration_ms`, marks an error when supplied, appends the internal span, and attempts export.
 Exporter exceptions are caught and logged as `runtime_span_export_failed` using safe exception metadata.
 Business execution therefore continues even when telemetry delivery fails.
-`RUN_STARTED` creates `invoke_agent Archon` with agent, conversation and model attributes.
+`RUN_STARTED` creates `invoke_agent Cogentrex` with agent, conversation and model attributes.
 `ITERATION_STARTED` creates `chat {model}` with model, tool definitions and iteration.
 `MODEL_RESPONSE` adds finish reason and typed input/output/total token usage before completing the model span.
 Tool request/completion events use `execute_tool {name}`, tool identity, call ID, and success status.
@@ -112,12 +112,12 @@ The local acceptance observed one agent trace in Jaeger while the same Collector
 
 ## Data and privacy boundaries
 
-Common attributes are `archon.run.id`, `archon.conversation.id`, and `archon.correlation.id`.
+Common attributes are `cogentrex.run.id`, `cogentrex.conversation.id`, and `cogentrex.correlation.id`.
 Model spans contain model name and token counts.
 Tool spans contain tool name, call ID, success, and duration.
 Run spans contain stop reason and bounded counts.
 Before span selection, event data passes through the persistence redactor and `sanitize` in `CompositeEventSink.emit`.
-Content capture defaults off. With `ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT=true`, only the current user text and final assistant text are redacted, bounded and added using OTel message attributes. System prompts, chain-of-thought, arguments, tool results, command text, retrieved document text, authorization headers and raw exceptions remain prohibited.
+Content capture defaults off. With `COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT=true`, only the current user text and final assistant text are redacted, bounded and added using OTel message attributes. System prompts, chain-of-thought, arguments, tool results, command text, retrieved document text, authorization headers and raw exceptions remain prohibited.
 Trace backends often have broader access and longer retention than local memory.
 Attribute allowlists and limits are therefore security controls, not merely cost optimizations.
 
@@ -206,7 +206,7 @@ The current evidence includes a live Jaeger trace and earlier visual Logfire Age
 | synchronous export | simple delivery timing | adds request latency and failure coupling |
 | tail sampling | retain interesting traces | collector complexity and buffering |
 
-Archon uses typed explicit runtime mapping and batched OTLP export.
+Cogentrex uses typed explicit runtime mapping and batched OTLP export.
 This makes the semantic boundary reviewable but currently limits full distributed context propagation.
 
 ## Lab vs production
@@ -225,7 +225,7 @@ The concept is `implemented` for the typed runtime and local collector boundary 
 
 ### 30-second answer
 
-> Archon owns a standard OpenTelemetry provider and maps typed runtime events into `invoke_agent`, `chat`, and `execute_tool` spans. The app emits one OTLP stream to a local Collector, which owns credentials, retry and allowlisted fan-out to Jaeger, Logfire or another selected backend. Content is off by default; the opt-in exports only redacted, bounded user/assistant text. A live Jaeger trace and earlier Logfire Agents/Tools view are observed, while production retention, sampling, alerts and SLOs remain unverified.
+> Cogentrex owns a standard OpenTelemetry provider and maps typed runtime events into `invoke_agent`, `chat`, and `execute_tool` spans. The app emits one OTLP stream to a local Collector, which owns credentials, retry and allowlisted fan-out to Jaeger, Logfire or another selected backend. Content is off by default; the opt-in exports only redacted, bounded user/assistant text. A live Jaeger trace and earlier Logfire Agents/Tools view are observed, while production retention, sampling, alerts and SLOs remain unverified.
 
 ## Self-check
 

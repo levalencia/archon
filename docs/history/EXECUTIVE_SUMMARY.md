@@ -1,10 +1,10 @@
-# Archon — Executive Summary
+# Cogentrex — Executive Summary
 
 > **Current status:** The [canonical implementation evidence matrix](../IMPLEMENTATION-EVIDENCE.md) supersedes the completion claims previously published in this file and is the source for current audit results.
 
-## What is Archon?
+## What is Cogentrex?
 
-Archon is a local-first agent-engineering portfolio prototype: a FastAPI backend and SvelteKit Workbench built to make agent execution, tools, context, evidence, costs, and failure modes inspectable.
+Cogentrex is a local-first agent-engineering portfolio prototype: a FastAPI backend and SvelteKit Workbench built to make agent execution, tools, context, evidence, costs, and failure modes inspectable.
 
 Its best-supported core is:
 
@@ -39,7 +39,7 @@ Important current limitations include:
 - mobile and operational-state UX have known trustworthiness gaps;
 - no cloud/Kubernetes deployment has been verified.
 
-For per-capability evidence, use [Implementation Evidence](../IMPLEMENTATION-EVIDENCE.md). For findings and remediation detail, use the [GPT-5.6 Re-Audit](ARCHON-GPT56-REAUDIT-2026-08-25.md) and [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md).
+For per-capability evidence, use [Implementation Evidence](../IMPLEMENTATION-EVIDENCE.md). For findings and remediation detail, use the [GPT-5.6 Re-Audit](COGENTREX-GPT56-REAUDIT-2026-08-25.md) and [Feature and Course Concept Audit v2](FEATURE-AND-COURSE-AUDIT-V2.md).
 
 ## Archived session record
 
@@ -55,4 +55,4 @@ The old feature-count framing is intentionally not reproduced as a current score
 
 ## Current positioning
 
-> Archon is an Agent Reliability Workbench prototype with a strong typed runtime and live evidence path. It intentionally distinguishes code that exists from behavior that is wired, tested, observed, visible in the UI, and deployed.
+> Cogentrex is an Agent Reliability Workbench prototype with a strong typed runtime and live evidence path. It intentionally distinguishes code that exists from behavior that is wired, tested, observed, visible in the UI, and deployed.

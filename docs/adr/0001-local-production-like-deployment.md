@@ -2,11 +2,11 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-27
-- **Decision owners:** Archon maintainers
+- **Decision owners:** Cogentrex maintainers
 
 ## Context
 
-Archon contained several packaging artifacts—development processes, a stale production Compose file, Helm/Kubernetes examples—but none constituted verified deployment evidence. Some historical files also implied pgvector, optional Redis fallback, or cloud readiness that the live product did not prove.
+Cogentrex contained several packaging artifacts—development processes, a stale production Compose file, Helm/Kubernetes examples—but none constituted verified deployment evidence. Some historical files also implied pgvector, optional Redis fallback, or cloud readiness that the live product did not prove.
 
 The roadmap requested one explicit target rather than multiple unverified options. A public Azure deployment was considered, but Luis explicitly chose local-only verification and no cloud resource creation.
 
@@ -68,7 +68,7 @@ Rejected as the verified target because it contained stale assumptions, mutable/
 ## Verification
 
 - `./scripts/local-deploy-smoke.sh`
-- `./scripts/local-dr-smoke.sh /tmp/archon-dr-report.json`
+- `./scripts/local-dr-smoke.sh /tmp/cogentrex-dr-report.json`
 - `./scripts/verify.sh`
 - [`../evidence/local-dr-report.json`](../evidence/local-dr-report.json)
 - [`../evidence/local-portfolio-benchmark.json`](../evidence/local-portfolio-benchmark.json)

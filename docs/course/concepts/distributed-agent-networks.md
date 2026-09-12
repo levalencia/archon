@@ -1,7 +1,7 @@
 # Distributed agent networks
 
 > **Implementation status:** `deferred`
-> **Status boundary:** No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration.
+> **Status boundary:** No distributed agent network is implemented; Cogentrex intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration.
 > **Reviewed boundary:** S8.10 documentation candidate based at `440f08e`; no final gate claimed
 > **Used by module:** [Module 11-bounded-delegation](../modules/11-bounded-delegation/README.md)
 > **Catalog ID:** `distributed-agent-networks`
@@ -38,7 +38,7 @@ sequenceDiagram
     Note over Parent,Ledger: Deferred; no current implementation
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 This is an expected architecture, not a source walkthrough. No broker, discovery, leases, distributed cancellation, deduplication, cross-node auth, or deployment evidence. The diagram and sequence define the boundary a future design would need; they do not imply scheduled work.
 
@@ -46,7 +46,7 @@ This is an expected architecture, not a source walkthrough. No broker, discovery
 
 | Source symbol | Role and boundary |
 |---|---|
-| None | No Archon implementation is claimed for this concept. |
+| None | No Cogentrex implementation is claimed for this concept. |
 
 ### Tests
 
@@ -75,11 +75,11 @@ Code-reading exercise: search the repository for the missing components named in
 
 ## Lab vs production
 
-The status remains **deferred** at `6e3e13f`. No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
+The status remains **deferred** at `6e3e13f`. No distributed agent network is implemented; Cogentrex intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. Unit tests, manifests, or local observations do not prove external-provider parity, sustained load, public deployment, legal compliance, or a production SLO.
 
 ## Interview answer
 
-> A distributed agent network coordinates agents in different processes or machines through durable messages and explicit ownership. It must handle duplicates, partial failure, version skew, and network partitions. Several serial model calls inside one API request are not a distributed network. In Archon the honest status is **deferred**: No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration.
+> A distributed agent network coordinates agents in different processes or machines through durable messages and explicit ownership. It must handle duplicates, partial failure, version skew, and network partitions. Several serial model calls inside one API request are not a distributed network. In Cogentrex the honest status is **deferred**: No distributed agent network is implemented; Cogentrex intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration.
 
 ## Self-check
 

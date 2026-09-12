@@ -12,7 +12,7 @@ Recovery Time Objective, or RTO, is an agreed maximum acceptable restoration tim
 Recovery Point Objective, or RPO, is an agreed maximum acceptable data-loss window measured backward from the disruption.
 An objective is a business decision informed by risk, cost, and system capability.
 A stopwatch result from one drill is only an observation.
-Archon currently has one local measured recovery-time observation and one selected-record difference observation at the backup boundary.
+Cogentrex currently has one local measured recovery-time observation and one selected-record difference observation at the backup boundary.
 It does not have approved RTO or RPO objectives.
 It also does not have evidence of continuous writes, point-in-time recovery, failover, or representative production scale.
 
@@ -48,7 +48,7 @@ flowchart LR
     G -->|yes| E[retain scoped evidence]
 ```
 
-Archon is at the measurement stage for one local path, without the preceding business approval or production architecture.
+Cogentrex is at the measurement stage for one local path, without the preceding business approval or production architecture.
 The page status is therefore `deferred`: the local measurement capability is implemented, while adopting business objectives and building cloud/PITR failover remains postponed with public cloud deployment.
 An objective should identify service scope, outage start, recovery endpoint, data class, exclusions, workload, region, and authority that accepted it.
 Repeated tests are needed because one fast result can be luck and one slow result can be environment noise.
@@ -95,7 +95,7 @@ stateDiagram-v2
     Unapproved --> MeasuredOnly: bounded local drill
 ```
 
-Archon remains in `MeasuredOnly` for this concept.
+Cogentrex remains in `MeasuredOnly` for this concept.
 The report is useful engineering evidence but cannot move the system to `Approved`.
 Only accountable business and operations owners can select objectives and fund the design needed to meet them.
 
@@ -219,7 +219,7 @@ Status is `deferred`: measurement machinery exists, but adopting objectives and 
 
 ### 30-second answer
 
-> RTO and RPO are approved business objectives: maximum acceptable restoration time and data-loss window. Archon has neither. It has one local DR report measuring a script-defined restore-to-readiness interval and selected record differences at the backup snapshot. The drill destroys a source, restores PostgreSQL, becomes ready, authenticates, and compares IDs, counts, and hashes. That is useful evidence, but not a guarantee, PITR proof, or production objective.
+> RTO and RPO are approved business objectives: maximum acceptable restoration time and data-loss window. Cogentrex has neither. It has one local DR report measuring a script-defined restore-to-readiness interval and selected record differences at the backup snapshot. The drill destroys a source, restores PostgreSQL, becomes ready, authenticates, and compares IDs, counts, and hashes. That is useful evidence, but not a guarantee, PITR proof, or production objective.
 
 ## Self-check
 

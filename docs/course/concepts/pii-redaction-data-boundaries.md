@@ -36,7 +36,7 @@ sequenceDiagram
     Store-->>Caller: persisted safely within detector limits
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 At revision `6e3e13f`, the mapped symbols implement the bounded behavior below. Regex/optional NER can miss identifiers; provider transmission, backups, and every future sink need separate review.
 
@@ -80,7 +80,7 @@ The status remains **implemented** at `6e3e13f`. Supported message, run-event, m
 
 ## Interview answer
 
-> A data boundary is the point where information changes trust or retention scope. Persistence redaction replaces recognized personal data before bytes are written, while allowing the current model request to use the original prompt. Encryption and redaction solve different problems: encrypted PII is still PII after decryption. In Archon the honest status is **implemented**: Supported message, run-event, memory, artifact, audit, and log persistence paths redact detected PII before storage; this is not a claim that detection is exhaustive or that provider-bound prompts are redacted.
+> A data boundary is the point where information changes trust or retention scope. Persistence redaction replaces recognized personal data before bytes are written, while allowing the current model request to use the original prompt. Encryption and redaction solve different problems: encrypted PII is still PII after decryption. In Cogentrex the honest status is **implemented**: Supported message, run-event, memory, artifact, audit, and log persistence paths redact detected PII before storage; this is not a claim that detection is exhaustive or that provider-bound prompts are redacted.
 
 ## Self-check
 

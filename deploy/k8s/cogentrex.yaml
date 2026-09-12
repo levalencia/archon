@@ -1,52 +1,52 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: archon-backend
+  name: cogentrex-backend
   labels:
-    app: archon
+    app: cogentrex
     component: backend
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: archon
+      app: cogentrex
       component: backend
   template:
     metadata:
       labels:
-        app: archon
+        app: cogentrex
         component: backend
     spec:
       containers:
         - name: backend
-          image: archon-backend:latest
+          image: cogentrex-backend:latest
           ports:
             - containerPort: 8000
           env:
-            - name: ARCHON_DATABASE_URL
+            - name: COGENTREX_DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: archon-secrets
+                  name: cogentrex-secrets
                   key: database-url
-            - name: ARCHON_REDIS_URL
+            - name: COGENTREX_REDIS_URL
               valueFrom:
                 secretKeyRef:
-                  name: archon-secrets
+                  name: cogentrex-secrets
                   key: redis-url
-            - name: ARCHON_LLM_PROVIDER
+            - name: COGENTREX_LLM_PROVIDER
               valueFrom:
                 configMapKeyRef:
-                  name: archon-config
+                  name: cogentrex-config
                   key: llm-provider
-            - name: ARCHON_LLM_MODEL
+            - name: COGENTREX_LLM_MODEL
               valueFrom:
                 configMapKeyRef:
-                  name: archon-config
+                  name: cogentrex-config
                   key: llm-model
-            - name: ARCHON_JWT_SECRET
+            - name: COGENTREX_JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: archon-secrets
+                  name: cogentrex-secrets
                   key: jwt-secret
           livenessProbe:
             httpGet:
@@ -71,10 +71,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: archon-backend
+  name: cogentrex-backend
 spec:
   selector:
-    app: archon
+    app: cogentrex
     component: backend
   ports:
     - port: 8000
@@ -84,38 +84,38 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: archon-ingress
+  name: cogentrex-ingress
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   rules:
-    - host: archon.example.com
+    - host: cogentrex.example.com
       http:
         paths:
           - path: /api
             pathType: Prefix
             backend:
               service:
-                name: archon-backend
+                name: cogentrex-backend
                 port:
                   number: 8000
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: archon-frontend
+                name: cogentrex-frontend
                 port:
                   number: 3000
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: archon-backend-hpa
+  name: cogentrex-backend-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: archon-backend
+    name: cogentrex-backend
   minReplicas: 2
   maxReplicas: 10
   metrics:
@@ -129,18 +129,18 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: archon-backend-pdb
+  name: cogentrex-backend-pdb
 spec:
   minAvailable: 1
   selector:
     matchLabels:
-      app: archon
+      app: cogentrex
       component: backend
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: archon-config
+  name: cogentrex-config
 data:
   llm-provider: "ollama"
   llm-model: "llama3.1:8b"
@@ -148,9 +148,9 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: archon-secrets
+  name: cogentrex-secrets
 type: Opaque
 stringData:
-  database-url: "postgresql+asyncpg://archon:archon@postgres:5432/archon"
+  database-url: "postgresql+asyncpg://cogentrex:cogentrex@postgres:5432/cogentrex"
   redis-url: "redis://redis:6379/0"
   jwt-secret: "change-me-in-production"

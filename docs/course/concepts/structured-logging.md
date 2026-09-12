@@ -11,7 +11,7 @@ A plain log line is free-form text written by a program.
 A structured log is an event with stable fields such as event name, level, timestamp, correlation ID, and safe status.
 Machines can filter and aggregate stable fields without guessing how a sentence was formatted.
 Good structured logs describe what happened without copying everything the user or provider supplied.
-Archon prefers IDs, status, sizes, duration, short hashes, and bounded reason codes.
+Cogentrex prefers IDs, status, sizes, duration, short hashes, and bounded reason codes.
 It must not log credentials, prompts, tool payloads, hidden reasoning, or raw provider exceptions merely because they are useful during debugging.
 Logs are operational clues, not a transcript and not the durable semantic source of truth.
 
@@ -195,7 +195,7 @@ Never expose hidden chain-of-thought as observability evidence.
 | durable audit table | transactional history | different schema, retention, and authorization needs |
 | external log agent | delivery and buffering | another trusted component and failure path |
 
-Archon combines data minimization with recursive redaction before rendering.
+Cogentrex combines data minimization with recursive redaction before rendering.
 The process-local owner buffer improves the UI experience but must not be mistaken for an audit log.
 
 ## Lab vs production
@@ -214,7 +214,7 @@ The concept is `implemented` within supported code paths, with redaction explici
 
 ### 30-second answer
 
-> Archon uses structlog with stable event fields and correlation IDs. Typed runtime events are independently minimized and redacted before logging, buffering, and persistence, and `redact_event` runs recursively as the last processor before rendering. `OwnerLogBuffer` is bounded and owner-filtered. Tests cover nested secrets, PII, and command privacy, but redaction is defense in depth—not proof every future field is safe or durable audit storage.
+> Cogentrex uses structlog with stable event fields and correlation IDs. Typed runtime events are independently minimized and redacted before logging, buffering, and persistence, and `redact_event` runs recursively as the last processor before rendering. `OwnerLogBuffer` is bounded and owner-filtered. Tests cover nested secrets, PII, and command privacy, but redaction is defense in depth—not proof every future field is safe or durable audit storage.
 
 ## Self-check
 

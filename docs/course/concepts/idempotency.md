@@ -48,7 +48,7 @@ flowchart TD
   Result -->|no| Explicit[reject duplicate or reconcile]
 ```
 
-## Archon: what is actually implemented
+## Cogentrex: what is actually implemented
 
 - [`RunRepository.ensure_run`](../../../backend/app/services/run_ledger.py) uses `run_id` and dialect-specific `ON CONFLICT DO NOTHING` for PostgreSQL/SQLite.
 - [`RunRepository.ensure_child_run`](../../../backend/app/services/run_ledger.py) accepts a repeated matching child identity but rejects changed owner/project/parent lineage.
@@ -61,7 +61,7 @@ flowchart TD
 - [`DurableEffectToolExecutor`](../../../backend/app/runtime/effect_executor.py) wraps effectful tools after policy/approval, commits safe output evidence, and blocks reserved, committed, failed, or indeterminate duplicates.
 - [`SecureToolRegistry.execute_effect`](../../../backend/app/tools/registry.py) passes the stable effect ID only to handlers that explicitly declare a hidden idempotency-key parameter.
 
-This is durable **at-most-once orchestration**, not universal exactly-once execution. A downstream service may apply an effect before Archon loses contact; that state becomes `indeterminate` and requires explicit review. Exactly-once can only be strengthened where the downstream system honors the handed-off idempotency key.
+This is durable **at-most-once orchestration**, not universal exactly-once execution. A downstream service may apply an effect before Cogentrex loses contact; that state becomes `indeterminate` and requires explicit review. Exactly-once can only be strengthened where the downstream system honors the handed-off idempotency key.
 
 ## Behavior-focused tests—and their limits
 
@@ -113,11 +113,11 @@ Returning a stored prior result improves retry ergonomics but requires result re
 
 The managed deployment acceptance now races duplicate effect reservations against PostgreSQL and proves exactly one local reservation winner while cleaning its test rows.
 Production still needs downstream idempotency-key support, retention policy, external reconciliation playbooks, and public deployment evidence.
-Archon's guarantee remains durable at-most-once orchestration—not end-to-end exactly once.
+Cogentrex's guarantee remains durable at-most-once orchestration—not end-to-end exactly once.
 
 ## 30-second interview answer
 
-“Idempotency starts with stable logical identity and an atomic guard at each effect. Archon HMAC-binds owner, project, run, tool, arguments, resources, and schema, then stores a permanent metadata-only tombstone. Only the reservation winner dispatches; all duplicate terminal states are blocked. Ambiguous post-dispatch failures become indeterminate and require review. A declared handler may receive the same ID as a downstream idempotency key. This is at-most-once orchestration, not a universal exactly-once guarantee.”
+“Idempotency starts with stable logical identity and an atomic guard at each effect. Cogentrex HMAC-binds owner, project, run, tool, arguments, resources, and schema, then stores a permanent metadata-only tombstone. Only the reservation winner dispatches; all duplicate terminal states are blocked. Ambiguous post-dispatch failures become indeterminate and require review. A declared handler may receive the same ID as a downstream idempotency key. This is at-most-once orchestration, not a universal exactly-once guarantee.”
 
 ## Self-check questions
 
@@ -126,7 +126,7 @@ Archon's guarantee remains durable at-most-once orchestration—not end-to-end e
 3. **Is effect duplicate blocking durable?** Yes when the effect ledger is enabled: a metadata-only tombstone survives runtime restart. The older `seen_calls` guard remains only an in-run optimization.
 4. **Why bind key to payload?** To prevent one key authorizing or suppressing different operations.
 5. **Does one approval winner imply one tool effect?** No; approval and effect reservation are separate boundaries.
-6. **What is Archon's honest status?** Durable at-most-once orchestration with live PostgreSQL first-writer evidence; downstream exactly-once, reconciliation, and public deployment remain outside the claim.
+6. **What is Cogentrex's honest status?** Durable at-most-once orchestration with live PostgreSQL first-writer evidence; downstream exactly-once, reconciliation, and public deployment remain outside the claim.
 
 ## Related modules and concepts
 

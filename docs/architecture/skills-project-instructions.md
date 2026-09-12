@@ -8,7 +8,7 @@ in `docs/evidence/skills-project-instructions-implementation.md`.
 
 ## Problem
 
-Archon now keeps skills, project instructions, and executable capabilities as
+Cogentrex now keeps skills, project instructions, and executable capabilities as
 separate contracts. Skills and instruction snapshots are durable and versioned;
 native and MCP tools participate in metadata-first discovery but remain subject
 to independent policy and approval.
@@ -63,10 +63,10 @@ flowchart TD
 
 ## Instruction sources
 
-Archon's canonical project format is:
+Cogentrex's canonical project format is:
 
 ```text
-.archon/instructions.md
+.cogentrex/instructions.md
 ```
 
 Compatibility families may be enabled per project:
@@ -100,7 +100,7 @@ External policy and permissions
 > current user objective
 ```
 
-This ordering is structural. Archon does not claim perfect semantic contradiction detection. If the user objective materially conflicts with an explicit project constraint, the agent stops and asks.
+This ordering is structural. Cogentrex does not claim perfect semantic contradiction detection. If the user objective materially conflicts with an explicit project constraint, the agent stops and asks.
 
 Tools, network, secrets, execution, deployment and external effects remain governed by code. No instruction or skill can grant them through prose.
 
@@ -175,12 +175,12 @@ Outside the candidate claim:
 - arbitrary package/server execution;
 - generic OAuth platform;
 - MCP sampling, elicitation, resources and prompts;
-- Archon acting as an MCP server;
+- Cogentrex acting as an MCP server;
 - shared multi-region MCP gateway.
 
 ## Initial skill inventory
 
-Archon begins with ten owned skills:
+Cogentrex begins with ten owned skills:
 
 1. API design;
 2. code review;

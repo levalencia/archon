@@ -1,4 +1,4 @@
-import { ARCHON_THEME } from '$lib/archon-theme';
+import { COGENTREX_THEME } from '$lib/cogentrex-theme';
 
 export type ConceptStatus = 'implemented' | 'partial' | 'deferred';
 
@@ -92,7 +92,7 @@ export interface LearningPackRecipe {
 }
 
 export interface VisualLearningStudio {
-  schema: 'archon.visual-learning-studio';
+  schema: 'cogentrex.visual-learning-studio';
   version: 3;
   generated_from: string[];
   stats: {
@@ -122,36 +122,36 @@ export interface VisualLearningStudio {
 }
 
 export const STATUS_META: Record<ConceptStatus, { label: string; color: string }> = {
-  implemented: { label: 'Implemented', color: ARCHON_THEME.green },
+  implemented: { label: 'Implemented', color: COGENTREX_THEME.green },
   partial: { label: 'Partial', color: '#f0bd62' },
   deferred: { label: 'Deferred', color: '#7f8b9b' },
 };
 
 export const RELATION_META: Record<string, { label: string; color: string }> = {
-  CALLS: { label: 'Calls', color: ARCHON_THEME.blue },
-  ROUTES: { label: 'Routes', color: ARCHON_THEME.blue },
-  AUTHORIZES: { label: 'Authorizes', color: ARCHON_THEME.green },
-  BUILDS_CONTEXT_FOR: { label: 'Builds context for', color: ARCHON_THEME.purple },
-  PROPOSES: { label: 'Proposes', color: ARCHON_THEME.orange },
-  GATES: { label: 'Gates', color: ARCHON_THEME.coral },
-  PERSISTS_TO: { label: 'Persists to', color: ARCHON_THEME.purple },
-  READS: { label: 'Reads', color: ARCHON_THEME.blue },
-  EMITS: { label: 'Emits', color: ARCHON_THEME.purple },
-  SUPPLIES_RUNS_TO: { label: 'Supplies runs to', color: ARCHON_THEME.orange },
-  CONSTRAINS: { label: 'Constrains', color: ARCHON_THEME.coral },
-  PROVES_READY: { label: 'Proves ready', color: ARCHON_THEME.green },
+  CALLS: { label: 'Calls', color: COGENTREX_THEME.blue },
+  ROUTES: { label: 'Routes', color: COGENTREX_THEME.blue },
+  AUTHORIZES: { label: 'Authorizes', color: COGENTREX_THEME.green },
+  BUILDS_CONTEXT_FOR: { label: 'Builds context for', color: COGENTREX_THEME.purple },
+  PROPOSES: { label: 'Proposes', color: COGENTREX_THEME.orange },
+  GATES: { label: 'Gates', color: COGENTREX_THEME.coral },
+  PERSISTS_TO: { label: 'Persists to', color: COGENTREX_THEME.purple },
+  READS: { label: 'Reads', color: COGENTREX_THEME.blue },
+  EMITS: { label: 'Emits', color: COGENTREX_THEME.purple },
+  SUPPLIES_RUNS_TO: { label: 'Supplies runs to', color: COGENTREX_THEME.orange },
+  CONSTRAINS: { label: 'Constrains', color: COGENTREX_THEME.coral },
+  PROVES_READY: { label: 'Proves ready', color: COGENTREX_THEME.green },
 };
 
 export async function loadVisualLearningStudio(
   fetcher: typeof fetch = fetch,
 ): Promise<VisualLearningStudio> {
-  const response = await fetcher('/learning/archon-studio.json');
+  const response = await fetcher('/learning/cogentrex-studio.json');
   if (!response.ok) throw new Error(`Visual Learning Studio request failed (${response.status})`);
   const studio = (await response.json()) as VisualLearningStudio;
   if (
-    studio.schema !== 'archon.visual-learning-studio'
+    studio.schema !== 'cogentrex.visual-learning-studio'
     || studio.version !== 3
-    || studio.stats.concepts !== 66
+    || studio.stats.concepts !== 67
     || studio.stats.modules !== 16
   ) {
     throw new Error('Visual Learning Studio schema or canonical counts are invalid');

@@ -3,7 +3,7 @@
 > **Track status:** draft; validate against the current branch before using it for career preparation
 > **Rule:** every claim needs a source symbol, behavior test, evidence scope, and limitation
 
-This page helps learners practice explaining Archon's architecture, trade-offs,
+This page helps learners practice explaining Cogentrex's architecture, trade-offs,
 evidence, and limitations in technical interviews. Definitions remain canonical
 in the [concept pages](../concept-map.md); exact implementation anchors live in
 [code bookmarks](../reference/code-bookmarks.md).
@@ -14,7 +14,7 @@ Use **problem → design → request trace → evidence → trade-off → bounda
 
 ## 2-minute walkthrough
 
-1. **Problem (15s):** Archon is a local Agent Reliability Workbench for inspecting and governing agent behavior.
+1. **Problem (15s):** Cogentrex is a local Agent Reliability Workbench for inspecting and governing agent behavior.
 2. **Architecture (25s):** `create_app` constructs scoped persistence, tools, policy, approvals, resilience, and observability; `create_chat_runtime` injects them into `AgentRuntime`.
 3. **Request (40s):** `AgentRuntime.run` loops over model responses and native tool calls under iteration, token, tool, and wall-clock budgets. Policy evaluates a detached exact binding; `ASK` requires a durable authorization; events record inspectable outcomes.
 4. **Evidence (20s):** the Run Ledger persists ordered events; recorded-run evaluation measures fixtures; RAG returns citations and deterministic claim checks.

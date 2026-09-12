@@ -38,7 +38,7 @@ sequenceDiagram
     Note over Owner,Deploy: Deferred; no current code
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 This is an expected architecture, not a source walkthrough. No dataset consent pipeline, trainer, checkpoints, registry, offline/online gate, or deployment rollback. The diagram and sequence define the boundary a future design would need; they do not imply scheduled work.
 
@@ -46,7 +46,7 @@ This is an expected architecture, not a source walkthrough. No dataset consent p
 
 | Source symbol | Role and boundary |
 |---|---|
-| None | No Archon implementation is claimed for this concept. |
+| None | No Cogentrex implementation is claimed for this concept. |
 
 ### Tests
 
@@ -79,7 +79,7 @@ The status remains **deferred** at `6e3e13f`. No training, fine-tuning, adapter-
 
 ## Interview answer
 
-> Fine-tuning changes model weights using a curated dataset. Vertical adaptation specializes a system for a domain and may instead use retrieval, tools, rules, or prompts. RAG changes context, not weights. A safe pipeline needs data lineage, privacy review, evaluation, and rollback. In Archon the honest status is **deferred**: No training, fine-tuning, adapter-weight, model-registry, or promotion pipeline exists; current skills, RAG, and prompts are runtime adaptation and must not be called fine-tuning.
+> Fine-tuning changes model weights using a curated dataset. Vertical adaptation specializes a system for a domain and may instead use retrieval, tools, rules, or prompts. RAG changes context, not weights. A safe pipeline needs data lineage, privacy review, evaluation, and rollback. In Cogentrex the honest status is **deferred**: No training, fine-tuning, adapter-weight, model-registry, or promotion pipeline exists; current skills, RAG, and prompts are runtime adaptation and must not be called fine-tuning.
 
 ## Self-check
 

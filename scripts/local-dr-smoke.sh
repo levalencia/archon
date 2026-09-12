@@ -3,13 +3,13 @@ set -Eeuo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 COMPOSE_FILE="$ROOT/docker-compose.local.yml"
-REPORT_PATH=${1:-$(mktemp "${TMPDIR:-/tmp}/archon-local-dr-report.XXXXXX")}
-ENV_FILE=$(mktemp "${TMPDIR:-/tmp}/archon-local-dr-env.XXXXXX")
-DUMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/archon-local-dr.XXXXXX")
+REPORT_PATH=${1:-$(mktemp "${TMPDIR:-/tmp}/cogentrex-local-dr-report.XXXXXX")}
+ENV_FILE=$(mktemp "${TMPDIR:-/tmp}/cogentrex-local-dr-env.XXXXXX")
+DUMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cogentrex-local-dr.XXXXXX")
 DUMP_PATH="$DUMP_DIR/backup.dump"
 SUFFIX=$(python3 -c 'import secrets; print(secrets.token_hex(5))')
-SOURCE_PROJECT="archon-dr-source-$SUFFIX"
-DEST_PROJECT="archon-dr-dest-$SUFFIX"
+SOURCE_PROJECT="cogentrex-dr-source-$SUFFIX"
+DEST_PROJECT="cogentrex-dr-dest-$SUFFIX"
 read -r SOURCE_PORT DEST_PORT < <(python3 - <<'PY'
 import socket
 ports = []
@@ -31,25 +31,25 @@ import secrets
 path = os.environ["ENV_FILE"]
 values = {
     "POSTGRES_PASSWORD": secrets.token_hex(32),
-    "ARCHON_SECRET_KEY": secrets.token_urlsafe(48),
-    "ARCHON_ENCRYPTION_MASTER_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="),
+    "COGENTREX_SECRET_KEY": secrets.token_urlsafe(48),
+    "COGENTREX_ENCRYPTION_MASTER_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="),
 }
 with open(path, "w", encoding="utf-8") as stream:
     for key, value in values.items():
         stream.write(f"{key}={value}\n")
 PY
 
-if [[ -z "${ARCHON_SANDBOX_PLATFORM:-}" ]]; then
+if [[ -z "${COGENTREX_SANDBOX_PLATFORM:-}" ]]; then
   daemon_arch="$(docker info --format '{{.Architecture}}')"
   case "$daemon_arch" in
-    aarch64 | arm64) ARCHON_SANDBOX_PLATFORM="linux/arm64" ;;
-    x86_64 | amd64) ARCHON_SANDBOX_PLATFORM="linux/amd64" ;;
+    aarch64 | arm64) COGENTREX_SANDBOX_PLATFORM="linux/arm64" ;;
+    x86_64 | amd64) COGENTREX_SANDBOX_PLATFORM="linux/amd64" ;;
     *)
       printf 'Unsupported Docker daemon architecture: %s\n' "$daemon_arch" >&2
       exit 1
       ;;
   esac
-  export ARCHON_SANDBOX_PLATFORM
+  export COGENTREX_SANDBOX_PLATFORM
 fi
 
 source_compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$SOURCE_PROJECT")
@@ -64,8 +64,8 @@ cleanup() {
     printf 'KEEP=1: retained projects %s and %s plus protected artifacts under %s\n' \
       "$SOURCE_PROJECT" "$DEST_PROJECT" "$(dirname "$ENV_FILE")"
   else
-    ARCHON_LOCAL_PORT=$SOURCE_PORT "${source_compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
-    ARCHON_LOCAL_PORT=$DEST_PORT "${dest_compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+    COGENTREX_LOCAL_PORT=$SOURCE_PORT "${source_compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+    COGENTREX_LOCAL_PORT=$DEST_PORT "${dest_compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
     rm -f "$ENV_FILE" "$DUMP_PATH" "${DUMP_PATH}.sha256" "${DUMP_PATH}.metadata.json"
     rmdir "$DUMP_DIR" >/dev/null 2>&1 || true
   fi
@@ -102,15 +102,15 @@ wait_ready() {
   return 1
 }
 psql_source() {
-  "${source_compose[@]}" exec -T postgres psql -U archon -d archon -v ON_ERROR_STOP=1 "$@"
+  "${source_compose[@]}" exec -T postgres psql -U cogentrex -d cogentrex -v ON_ERROR_STOP=1 "$@"
 }
 psql_dest() {
-  "${dest_compose[@]}" exec -T postgres psql -U archon -d archon -v ON_ERROR_STOP=1 "$@"
+  "${dest_compose[@]}" exec -T postgres psql -U cogentrex -d cogentrex -v ON_ERROR_STOP=1 "$@"
 }
 
 printf 'Starting isolated DR source deployment...\n'
 stage="source_startup"
-ARCHON_LOCAL_PORT=$SOURCE_PORT "${source_compose[@]}" up --build -d --wait
+COGENTREX_LOCAL_PORT=$SOURCE_PORT "${source_compose[@]}" up --build -d --wait
 SOURCE_URL="http://127.0.0.1:$SOURCE_PORT"
 wait_ready "$SOURCE_URL"
 
@@ -139,7 +139,7 @@ RUN_EVENT_COUNT=$(api "$SOURCE_URL/api/runs/$RUN_ID/events" -H "$AUTH_HEADER_NAM
 [[ "$RUN_EVENT_COUNT" -gt 0 ]]
 
 stage="document_ingest"
-document_payload=$(python3 -c 'import json; print(json.dumps({"title":"DR evidence document","source":"local-dr-smoke","content":"Archon disaster recovery evidence survives a clean PostgreSQL restore."}))')
+document_payload=$(python3 -c 'import json; print(json.dumps({"title":"DR evidence document","source":"local-dr-smoke","content":"Cogentrex disaster recovery evidence survives a clean PostgreSQL restore."}))')
 document_response=$(api -X POST "$SOURCE_URL/api/documents/upload" -H 'Content-Type: application/json' \
   -H "$AUTH_HEADER_NAME: Bearer $ACCESS_TOKEN" --data "$document_payload")
 DOCUMENT_ID=$(printf '%s' "$document_response" | json_field id)
@@ -150,7 +150,7 @@ read -r APPROVAL_ID TOOL_CALL_ID < <(python3 -c 'import uuid; print(uuid.uuid4()
 APPROVAL_HASH=$(python3 - "$TOOL_CALL_ID" <<'PY'
 import hashlib
 import sys
-print(hashlib.sha256(("archon-local-dr:" + sys.argv[1]).encode()).hexdigest())
+print(hashlib.sha256(("cogentrex-local-dr:" + sys.argv[1]).encode()).hexdigest())
 PY
 )
 psql_source -v approval_id="$APPROVAL_ID" -v user_id="$USER_ID" -v conversation_id="$CONVERSATION_ID" \
@@ -188,12 +188,12 @@ BACKUP_SECONDS=$(elapsed_seconds "$backup_start" "$backup_end")
 SNAPSHOT_UTC=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["created_at_utc"])' "$DUMP_PATH.metadata.json")
 DUMP_SHA256=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$DUMP_PATH.metadata.json")
 
-ARCHON_LOCAL_PORT=$SOURCE_PORT "${source_compose[@]}" down --volumes --remove-orphans >/dev/null
+COGENTREX_LOCAL_PORT=$SOURCE_PORT "${source_compose[@]}" down --volumes --remove-orphans >/dev/null
 rto_start=$(now_ns)
 stage="destination_startup"
-ARCHON_LOCAL_PORT=$DEST_PORT "${dest_compose[@]}" up -d --wait postgres redis otel-collector
+COGENTREX_LOCAL_PORT=$DEST_PORT "${dest_compose[@]}" up -d --wait postgres redis otel-collector
 "$ROOT/scripts/local-restore.sh" "$DEST_PROJECT" "$ENV_FILE" "$DUMP_PATH" >/dev/null
-ARCHON_LOCAL_PORT=$DEST_PORT "${dest_compose[@]}" up --build -d --wait
+COGENTREX_LOCAL_PORT=$DEST_PORT "${dest_compose[@]}" up --build -d --wait
 DEST_URL="http://127.0.0.1:$DEST_PORT"
 wait_ready "$DEST_URL"
 rto_end=$(now_ns)

@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the current provider-neutral artifact catalog and offline Hermes publishing boundary. Upgrade artifact contracts from thin strings and box lists to semantic teaching content. Render diagrams and mind maps with one reusable Svelte 5 graph layer, while rendering the infographic as a purpose-built responsive HTML/SVG composition. Resolve every repository source into a commit-pinned GitHub URL in one trusted frontend utility.
 
-**Recommended graph engine:** `@xyflow/svelte`, subject to an isolated compatibility spike. Do not adopt `svelte-mindmap` as the production dependency without that spike: its current npm package is version 1.0.4, was last modified in 2022, and its README targets Svelte 3, while Archon uses Svelte 5.56.1. `@xyflow/svelte` 1.6.6 declares Svelte `^5.25.0`, provides labeled edges, custom nodes, controls, minimap, pan/zoom, and keyboard-friendly selection.
+**Recommended graph engine:** `@xyflow/svelte`, subject to an isolated compatibility spike. Do not adopt `svelte-mindmap` as the production dependency without that spike: its current npm package is version 1.0.4, was last modified in 2022, and its README targets Svelte 3, while Cogentrex uses Svelte 5.56.1. `@xyflow/svelte` 1.6.6 declares Svelte `^5.25.0`, provides labeled edges, custom nodes, controls, minimap, pan/zoom, and keyboard-friendly selection.
 
 **Infographic recommendation:** Build the primary technical infographic with deterministic HTML/CSS/inline SVG. Use GPT Image 2 only as an optional decorative illustration layer after a separate cost approval. Never ask an image model to render authoritative labels, source citations, architecture arrows, or technical claims.
 
@@ -51,7 +51,7 @@ Each slide should work in two modes:
 The script must not merely repeat the slide. It should answer:
 
 - What is this?
-- Why does Archon need it?
+- Why does Cogentrex need it?
 - What happens before and after it?
 - What common misconception should the learner avoid?
 - What evidence supports the explanation?
@@ -92,7 +92,7 @@ A selected node explains responsibility, inputs, outputs, failure behavior, and 
 
 ```mermaid
 mindmap
-  root((Archon Request Lifecycle))
+  root((Cogentrex Request Lifecycle))
     Entry and identity
       Gateway
       Authentication
@@ -155,7 +155,7 @@ Risks:
 
 - npm 1.0.4 was last modified in 2022.
 - README explicitly targets Svelte 3.
-- Archon uses Svelte 5.56.1.
+- Cogentrex uses Svelte 5.56.1.
 - Its data model uses node text as connection identity, which is weaker than stable IDs.
 - It is specialized for mind maps and would not solve the process-diagram renderer.
 - Accessibility, SSR, and keyboard behavior need independent proof.
@@ -211,7 +211,7 @@ type SourceReference = {
 Generate hyperlinks rather than accepting arbitrary URLs:
 
 ```text
-https://github.com/levalencia/archon/blob/{source_commit}/{encoded_path}#L{start}-L{end}
+https://github.com/levalencia/cogentrex/blob/{source_commit}/{encoded_path}#L{start}-L{end}
 ```
 
 Security constraints:

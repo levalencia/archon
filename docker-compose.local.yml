@@ -1,10 +1,10 @@
-name: archon-local
+name: cogentrex-local
 
 services:
   gateway:
     image: nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
     ports:
-      - "127.0.0.1:${ARCHON_LOCAL_PORT:-8080}:8080"
+      - "127.0.0.1:${COGENTREX_LOCAL_PORT:-8080}:8080"
     volumes:
       - ./deploy/nginx.local.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -20,47 +20,47 @@ services:
       - no-new-privileges:true
 
   backend:
-    platform: ${ARCHON_LOCAL_PLATFORM:-linux/amd64}
+    platform: ${COGENTREX_LOCAL_PLATFORM:-linux/amd64}
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      ARCHON_DATABASE_URL: postgresql+asyncpg://archon:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/archon
-      ARCHON_REDIS_URL: redis://redis:6379/0
-      ARCHON_SECRET_KEY: ${ARCHON_SECRET_KEY:?ARCHON_SECRET_KEY is required}
-      ARCHON_ENCRYPTION_MASTER_KEY: ${ARCHON_ENCRYPTION_MASTER_KEY:?ARCHON_ENCRYPTION_MASTER_KEY is required}
-      ARCHON_MEMORY_ENCRYPTION_ENABLED: "true"
-      ARCHON_LLM_PROVIDER: ${ARCHON_LLM_PROVIDER:-mock}
-      ARCHON_LLM_MODEL: ${ARCHON_LLM_MODEL:-mock-model}
-      ARCHON_LLM_API_KEY: ${ARCHON_LLM_API_KEY:-}
-      ARCHON_LLM_BASE_URL: ${ARCHON_LLM_BASE_URL:-}
-      ARCHON_PROMPT_CACHING_ENABLED: ${ARCHON_PROMPT_CACHING_ENABLED:-true}
-      ARCHON_DURABLE_MONETARY_BUDGET_ENABLED: "true"
-      ARCHON_DURABLE_EFFECT_LEDGER_ENABLED: "true"
-      ARCHON_EFFECT_IDENTITY_SECRET: ${ARCHON_EFFECT_IDENTITY_SECRET:?ARCHON_EFFECT_IDENTITY_SECRET is required}
-      ARCHON_AGENT_DEADLINE_SECONDS: ${ARCHON_AGENT_DEADLINE_SECONDS:-300}
-      ARCHON_VERIFIER_ENABLED: ${ARCHON_VERIFIER_ENABLED:-false}
-      ARCHON_VERIFIER_MODEL: ${ARCHON_VERIFIER_MODEL:-verifier-model}
-      ARCHON_VERIFIER_RETRIES: ${ARCHON_VERIFIER_RETRIES:-1}
-      ARCHON_DELEGATION_SIGNING_KEY: ${ARCHON_DELEGATION_SIGNING_KEY:?ARCHON_DELEGATION_SIGNING_KEY is required}
-      ARCHON_HYBRID_ORCHESTRATION_ENABLED: ${ARCHON_HYBRID_ORCHESTRATION_ENABLED:-false}
-      ARCHON_EMBEDDING_PROVIDER: ${ARCHON_EMBEDDING_PROVIDER:-mock}
-      ARCHON_EMBEDDING_MODEL: ${ARCHON_EMBEDDING_MODEL:-mock-embedding}
-      ARCHON_EMBEDDING_API_KEY: ${ARCHON_EMBEDDING_API_KEY:-}
-      ARCHON_EMBEDDING_BASE_URL: ${ARCHON_EMBEDDING_BASE_URL:-https://api.openai.com/v1}
-      ARCHON_EMBEDDING_ALLOWED_HOSTS: ${ARCHON_EMBEDDING_ALLOWED_HOSTS:-api.openai.com}
-      ARCHON_EMBEDDING_DIMENSIONS: ${ARCHON_EMBEDDING_DIMENSIONS:-256}
-      ARCHON_EMBEDDING_API_VERSION: ${ARCHON_EMBEDDING_API_VERSION:-2024-05-01-preview}
-      ARCHON_EXECUTION_ENABLED: "true"
-      ARCHON_EXECUTION_RUNNER_SOCKET: /run/archon-sandbox/runner.sock
-      ARCHON_RATE_LIMIT_BACKEND: redis
-      ARCHON_OTEL_ENDPOINT: http://otel-collector:4317
-      ARCHON_OTEL_SERVICE_NAME: archon-local
-      ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT: ${ARCHON_OTEL_CAPTURE_MESSAGE_CONTENT:-false}
-      ARCHON_LEARNING_MEDIA_ENABLED: ${ARCHON_LEARNING_MEDIA_ENABLED:-false}
-      ARCHON_LEARNING_MEDIA_LIBRARY_ROOT: /var/lib/archon-learning
+      COGENTREX_DATABASE_URL: postgresql+asyncpg://cogentrex:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cogentrex
+      COGENTREX_REDIS_URL: redis://redis:6379/0
+      COGENTREX_SECRET_KEY: ${COGENTREX_SECRET_KEY:?COGENTREX_SECRET_KEY is required}
+      COGENTREX_ENCRYPTION_MASTER_KEY: ${COGENTREX_ENCRYPTION_MASTER_KEY:?COGENTREX_ENCRYPTION_MASTER_KEY is required}
+      COGENTREX_MEMORY_ENCRYPTION_ENABLED: "true"
+      COGENTREX_LLM_PROVIDER: ${COGENTREX_LLM_PROVIDER:-mock}
+      COGENTREX_LLM_MODEL: ${COGENTREX_LLM_MODEL:-mock-model}
+      COGENTREX_LLM_API_KEY: ${COGENTREX_LLM_API_KEY:-}
+      COGENTREX_LLM_BASE_URL: ${COGENTREX_LLM_BASE_URL:-}
+      COGENTREX_PROMPT_CACHING_ENABLED: ${COGENTREX_PROMPT_CACHING_ENABLED:-true}
+      COGENTREX_DURABLE_MONETARY_BUDGET_ENABLED: "true"
+      COGENTREX_DURABLE_EFFECT_LEDGER_ENABLED: "true"
+      COGENTREX_EFFECT_IDENTITY_SECRET: ${COGENTREX_EFFECT_IDENTITY_SECRET:?COGENTREX_EFFECT_IDENTITY_SECRET is required}
+      COGENTREX_AGENT_DEADLINE_SECONDS: ${COGENTREX_AGENT_DEADLINE_SECONDS:-300}
+      COGENTREX_VERIFIER_ENABLED: ${COGENTREX_VERIFIER_ENABLED:-false}
+      COGENTREX_VERIFIER_MODEL: ${COGENTREX_VERIFIER_MODEL:-verifier-model}
+      COGENTREX_VERIFIER_RETRIES: ${COGENTREX_VERIFIER_RETRIES:-1}
+      COGENTREX_DELEGATION_SIGNING_KEY: ${COGENTREX_DELEGATION_SIGNING_KEY:?COGENTREX_DELEGATION_SIGNING_KEY is required}
+      COGENTREX_HYBRID_ORCHESTRATION_ENABLED: ${COGENTREX_HYBRID_ORCHESTRATION_ENABLED:-false}
+      COGENTREX_EMBEDDING_PROVIDER: ${COGENTREX_EMBEDDING_PROVIDER:-mock}
+      COGENTREX_EMBEDDING_MODEL: ${COGENTREX_EMBEDDING_MODEL:-mock-embedding}
+      COGENTREX_EMBEDDING_API_KEY: ${COGENTREX_EMBEDDING_API_KEY:-}
+      COGENTREX_EMBEDDING_BASE_URL: ${COGENTREX_EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+      COGENTREX_EMBEDDING_ALLOWED_HOSTS: ${COGENTREX_EMBEDDING_ALLOWED_HOSTS:-api.openai.com}
+      COGENTREX_EMBEDDING_DIMENSIONS: ${COGENTREX_EMBEDDING_DIMENSIONS:-256}
+      COGENTREX_EMBEDDING_API_VERSION: ${COGENTREX_EMBEDDING_API_VERSION:-2024-05-01-preview}
+      COGENTREX_EXECUTION_ENABLED: "true"
+      COGENTREX_EXECUTION_RUNNER_SOCKET: /run/cogentrex-sandbox/runner.sock
+      COGENTREX_RATE_LIMIT_BACKEND: redis
+      COGENTREX_OTEL_ENDPOINT: http://otel-collector:4317
+      COGENTREX_OTEL_SERVICE_NAME: cogentrex-local
+      COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT: ${COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT:-false}
+      COGENTREX_LEARNING_MEDIA_ENABLED: ${COGENTREX_LEARNING_MEDIA_ENABLED:-false}
+      COGENTREX_LEARNING_MEDIA_LIBRARY_ROOT: /var/lib/cogentrex-learning
       OTEL_BSP_SCHEDULE_DELAY: "200"
-      ARCHON_DEBUG: "false"
+      COGENTREX_DEBUG: "false"
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,8 +71,8 @@ services:
       sandbox-runner:
         condition: service_healthy
     volumes:
-      - sandbox-socket:/run/archon-sandbox
-      - ${ARCHON_LEARNING_MEDIA_HOST_DIR:-../archon-learning-media}:/var/lib/archon-learning:ro
+      - sandbox-socket:/run/cogentrex-sandbox
+      - ${COGENTREX_LEARNING_MEDIA_HOST_DIR:-../cogentrex-learning-media}:/var/lib/cogentrex-learning:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
       interval: 5s
@@ -88,12 +88,12 @@ services:
 
   sandbox-runner:
     # Keep the security runner native so nested child seccomp is not attempted under QEMU.
-    platform: ${ARCHON_SANDBOX_PLATFORM:-linux/amd64}
+    platform: ${COGENTREX_SANDBOX_PLATFORM:-linux/amd64}
     build:
       context: .
       dockerfile: sandbox_runner/Dockerfile
     environment:
-      SANDBOX_SOCKET_PATH: /run/archon-sandbox/runner.sock
+      SANDBOX_SOCKET_PATH: /run/cogentrex-sandbox/runner.sock
     init: true
     user: "10001:10001"
     network_mode: none
@@ -112,9 +112,9 @@ services:
       - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=10001,gid=10001
       - /work:rw,nosuid,nodev,size=16m,uid=10001,gid=10001
     volumes:
-      - sandbox-socket:/run/archon-sandbox
+      - sandbox-socket:/run/cogentrex-sandbox
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket;s=socket.socket(socket.AF_UNIX);s.connect('/run/archon-sandbox/runner.sock');s.sendall(b'{\"version\":1,\"operation\":\"health\"}\\n');assert b'\"status\":\"ok\"' in s.recv(256)"]
+      test: ["CMD", "python", "-c", "import socket;s=socket.socket(socket.AF_UNIX);s.connect('/run/cogentrex-sandbox/runner.sock');s.sendall(b'{\"version\":1,\"operation\":\"health\"}\\n');assert b'\"status\":\"ok\"' in s.recv(256)"]
       interval: 2s
       timeout: 2s
       retries: 20
@@ -127,7 +127,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "3000"
-      ORIGIN: http://localhost:${ARCHON_LOCAL_PORT:-8080}
+      ORIGIN: http://localhost:${COGENTREX_LOCAL_PORT:-8080}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 5s
@@ -144,13 +144,13 @@ services:
   postgres:
     image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     environment:
-      POSTGRES_USER: archon
+      POSTGRES_USER: cogentrex
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: archon
+      POSTGRES_DB: cogentrex
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U archon -d archon"]
+      test: ["CMD-SHELL", "pg_isready -U cogentrex -d cogentrex"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -179,7 +179,7 @@ services:
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
       APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
     volumes:
-      - ${ARCHON_OTEL_COLLECTOR_CONFIG_FILE:-./deploy/otel-collector.local.yml}:/etc/otelcol-contrib/config.yaml:ro
+      - ${COGENTREX_OTEL_COLLECTOR_CONFIG_FILE:-./deploy/otel-collector.local.yml}:/etc/otelcol-contrib/config.yaml:ro
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -193,7 +193,7 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "127.0.0.1:${ARCHON_JAEGER_PORT:-16686}:16686"
+      - "127.0.0.1:${COGENTREX_JAEGER_PORT:-16686}:16686"
     restart: unless-stopped
     read_only: true
     tmpfs:

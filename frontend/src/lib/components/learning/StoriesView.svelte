@@ -1,12 +1,14 @@
 <script lang="ts">
   import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-svelte';
+  import type { LearningTutorContext } from '$lib/learning-tutor';
   import type { VisualLearningStudio } from '$lib/visual-learning';
 
-  let { studio }: { studio: VisualLearningStudio } = $props();
+  let { studio, onContextChange = () => {} }: { studio: VisualLearningStudio; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
   let storyId = $state('request-lifecycle');
   let stepIndex = $state(0);
   let story = $derived(studio.stories.find(item => item.id === storyId) ?? studio.stories[0]);
   let step = $derived(story?.steps[stepIndex]);
+  $effect(() => { if (story && step) onContextChange({ view: 'stories', story_id: story.id, step_index: stepIndex, concept_id: step.concept_ids[0] }, `${story.title} — ${step.title}`); });
 
   function chooseStory(id: string) {
     storyId = id;
@@ -28,7 +30,7 @@
 
   <div class="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5" aria-label="Available guided stories">
     {#each studio.stories as item}
-      <button onclick={() => chooseStory(item.id)} aria-pressed={storyId === item.id} class="min-h-16 rounded-xl border p-3 text-left transition {storyId === item.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'border-[var(--border)] bg-[var(--panel)] hover:border-[var(--accent)]'}">
+      <button onclick={() => chooseStory(item.id)} aria-pressed={storyId === item.id} class="min-h-16 rounded-xl border p-3 text-left transition {storyId === item.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--cogentrex-orange-glow)]' : 'border-[var(--border)] bg-[var(--panel)] hover:border-[var(--accent)]'}">
         <strong class="block text-sm">{item.title}</strong>
         <span class="mt-1 block text-xs text-[var(--muted)]">{item.steps.length} explicit steps</span>
       </button>
@@ -67,7 +69,7 @@
               <ArrowRight class="hidden md:block" size={34}/><ArrowDown class="md:hidden" size={34}/>
               <span class="max-w-40 rounded-full border border-[rgba(240,189,98,.35)] bg-[rgba(240,189,98,.08)] px-3 py-1 text-center font-mono text-[10px] font-bold uppercase tracking-wider">{step.relationship}</span>
             </div>
-            <div class="flex min-h-36 flex-1 items-center justify-center rounded-2xl border border-[var(--accent)] bg-[var(--accent-glow)] p-5 text-center shadow-[0_0_18px_var(--archon-orange-glow)]">
+            <div class="flex min-h-36 flex-1 items-center justify-center rounded-2xl border border-[var(--accent)] bg-[var(--accent-glow)] p-5 text-center shadow-[0_0_18px_var(--cogentrex-orange-glow)]">
               <div><span class="font-mono text-[10px] uppercase tracking-wider text-[var(--accent)]">To</span><strong class="mt-2 block text-lg">{step.to}</strong></div>
             </div>
           </div>

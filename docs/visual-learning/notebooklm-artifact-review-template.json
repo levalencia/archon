@@ -1,5 +1,5 @@
 {
-  "schema": "archon.notebooklm-artifact-review",
+  "schema": "cogentrex.notebooklm-artifact-review",
   "version": 1,
   "source_commit": "<40-character git commit>",
   "notebook_id": "<notebook recipe id>",

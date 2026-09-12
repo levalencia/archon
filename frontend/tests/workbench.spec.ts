@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   const authorized = (headers: Record<string, string>) => headers.authorization === 'Bearer playwright-token';
-  await page.addInitScript(() => localStorage.setItem('archon_token', 'playwright-token'));
+  await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'playwright-token'));
   await page.route('**/api/conversations', route => {
     if (!authorized(route.request().headers())) return route.fulfill({ status: 401 });
     return route.request().method() === 'POST'
@@ -109,7 +109,7 @@ test('mock provider is disclosed before the user sends a message', async ({ page
 });
 
 test('desktop workbench streams an answer and exposes inspector tabs', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('archon.active-project', 'project-a'));
+  await page.addInitScript(() => localStorage.setItem('cogentrex.active-project', 'project-a'));
   await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('/');
   const requestPromise = page.waitForRequest('**/api/chat/stream');
   await expect(page.getByRole('heading', { name: /Make every answer/ })).toBeVisible();
@@ -473,7 +473,7 @@ test('run API 401 clears authentication and redirects to login', async ({ page }
   await page.route('**/api/runs?**', route => route.fulfill({ status: 401, body: '' }));
   await page.goto('/chat/persisted-conversation');
   await expect(page).toHaveURL('/login');
-  await expect(page.getByRole('heading', { name: 'Archon' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cogentrex' })).toBeVisible();
 });
 
 test('run API 404 failure is visible', async ({ page }) => {
@@ -523,7 +523,7 @@ test('all top-level routes and a refreshed chat deep link render without browser
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const routes: Array<[string, RegExp]> = [
-    ['/login', /^Archon$/], ['/dashboard', /^Dashboard$/], ['/documents', /Documents & RAG/],
+    ['/login', /^Cogentrex$/], ['/dashboard', /^Dashboard$/], ['/documents', /Documents & RAG/],
     ['/eval', /Recorded Run Evaluations/], ['/memory', /Memory Inspector/], ['/settings', /^Settings$/],
     ['/learn', /Choose the view that matches your question/],
   ];

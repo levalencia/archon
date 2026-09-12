@@ -38,7 +38,7 @@ sequenceDiagram
     Note over Owner,Share: Implemented locally; anonymous redemption excluded
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 `RunExportService` builds immutable versioned evidence bundles, scans disclosures, verifies integrity on download/redemption, and stores only a domain-separated HMAC token digest. Grants bind an authenticated recipient, purpose, expiry, owner, and export; redemption rechecks active state. No public anonymous URL or external token-delivery service exists.
 
@@ -81,7 +81,7 @@ Authenticated recipient-bound export and sharing are **implemented locally**. [P
 
 ## Interview answer
 
-> Archon builds immutable, disclosure-scanned run-evidence bundles and shares them through expiring, revocable grants bound to one authenticated recipient and purpose. Only a token digest is stored and integrity/disclosure checks repeat at redemption. That is implemented local authenticated sharing—not an anonymous public link, hosting claim, or legal-compliance claim.
+> Cogentrex builds immutable, disclosure-scanned run-evidence bundles and shares them through expiring, revocable grants bound to one authenticated recipient and purpose. Only a token digest is stored and integrity/disclosure checks repeat at redemption. That is implemented local authenticated sharing—not an anonymous public link, hosting claim, or legal-compliance claim.
 
 ## Self-check
 

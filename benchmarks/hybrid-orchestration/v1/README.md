@@ -2,7 +2,7 @@
 
 Status: versioned and executed locally against Foundry `claude-opus-4-6` on 2026-09-06.
 
-This benchmark measures when Archon's bounded two-child Team mode provides enough answer-quality benefit to justify its additional latency, cost, and failure surface. It does not assume that Team is better.
+This benchmark measures when Cogentrex's bounded two-child Team mode provides enough answer-quality benefit to justify its additional latency, cost, and failure surface. It does not assume that Team is better.
 
 ## Design
 
@@ -68,7 +68,7 @@ Prerequisites:
 
 ```text
 - merged pilot on main
-- retained local stack ready at http://archon
+- retained local stack ready at http://cogentrex
 - live Foundry provider configured
 - hybrid orchestration enabled
 - PostgreSQL and Redis preserved
@@ -79,7 +79,7 @@ Calibration:
 ```bash
 python3 scripts/run-hybrid-benchmark.py \
   --phase calibration \
-  --output /tmp/archon-hybrid-benchmark-v1-results.json \
+  --output /tmp/cogentrex-hybrid-benchmark-v1-results.json \
   --cost-cap-usd 60
 ```
 
@@ -90,7 +90,7 @@ Remaining cases after a valid calibration:
 ```bash
 python3 scripts/run-hybrid-benchmark.py \
   --phase remainder \
-  --output /tmp/archon-hybrid-benchmark-v1-results.json \
+  --output /tmp/cogentrex-hybrid-benchmark-v1-results.json \
   --cost-cap-usd 60
 ```
 
@@ -163,4 +163,4 @@ Do not add profiles based on intuition. Investigate a specialist only when at le
 
 ## Claim boundary
 
-This is a local, provider-backed evaluation of one Archon revision, one provider/model revision, and one bounded Team topology. It does not prove universal multi-agent superiority, production SLOs, public deployment, or the value of additional agents.
+This is a local, provider-backed evaluation of one Cogentrex revision, one provider/model revision, and one bounded Team topology. It does not prove universal multi-agent superiority, production SLOs, public deployment, or the value of additional agents.

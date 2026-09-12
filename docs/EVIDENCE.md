@@ -1,4 +1,4 @@
-# Archon Evidence Guide
+# Cogentrex Evidence Guide
 
 > **Audience:** Learners who want to distinguish working capabilities from examples, tests, and unverified claims.
 > **Purpose:** Explain the evidence model and route readers to the supporting records.
@@ -6,7 +6,7 @@
 
 ## Short version
 
-Archon has deterministic tests, local runtime observations, and selected live-provider evidence. It has not been publicly deployed and makes no production-traffic or service-level claims.
+Cogentrex has deterministic tests, local runtime observations, and selected live-provider evidence. It has not been publicly deployed and makes no production-traffic or service-level claims.
 
 The project treats these as different levels of proof. Code, tests, local execution, provider execution, and public deployment are never presented as equivalent.
 
@@ -57,9 +57,9 @@ Use the detailed records according to the question you are asking:
 - **Deferred scope:** [Remaining Deferred Gaps](REMAINING-DEFERRED-GAPS.md)
 - **Recorded evidence artifacts:** [`docs/evidence/`](evidence/)
 
-## What Archon does not claim
+## What Cogentrex does not claim
 
-Archon does not claim:
+Cogentrex does not claim:
 
 - a public or cloud deployment;
 - production traffic, service-level objectives, or on-call operation;

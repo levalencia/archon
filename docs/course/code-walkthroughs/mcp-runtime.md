@@ -2,7 +2,7 @@
 
 ## Claim and boundary
 
-Archon verifies local MCP 2.1.1 **stdio** discovery and invocation. Deployment code injects allowlisted `ServerProfile` objects; the API exposes only safe profile labels. Durable owner/project inventory does not contain commands, environment, call arguments, or results. HTTP/OAuth transports are not claimed.
+Cogentrex verifies local MCP 2.1.1 **stdio** discovery and invocation. Deployment code injects allowlisted `ServerProfile` objects; the API exposes only safe profile labels. Durable owner/project inventory does not contain commands, environment, call arguments, or results. HTTP/OAuth transports are not claimed.
 
 ## Four boundaries
 
@@ -54,4 +54,4 @@ The fixture server in `backend/tests/fixtures/mcp_test_server.py` is a real loca
 
 ## Interview anchors
 
-“Protocol compatibility is only the first layer. Archon separates deployment-owned stdio profiles, bounded discovery, durable scoped inventory, immutable runtime binding, and policy-governed invocation. Official local SDK tests prove stdio behavior; they do not prove HTTP/OAuth, arbitrary servers, or production multi-tenancy.”
+“Protocol compatibility is only the first layer. Cogentrex separates deployment-owned stdio profiles, bounded discovery, durable scoped inventory, immutable runtime binding, and policy-governed invocation. Official local SDK tests prove stdio behavior; they do not prove HTTP/OAuth, arbitrary servers, or production multi-tenancy.”

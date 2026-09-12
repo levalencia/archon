@@ -9,8 +9,8 @@ source_priority:
 
 notebooks:
   - id: system-overview
-    title: Archon — System Overview
-    purpose: Understand Archon's mission, architecture, evidence posture, and explicit boundaries.
+    title: Cogentrex — System Overview
+    purpose: Understand Cogentrex's mission, architecture, evidence posture, and explicit boundaries.
     sources:
       - README.md
       - docs/ARCHITECTURE-DIAGRAMS.md
@@ -24,7 +24,7 @@ notebooks:
     artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: request-lifecycle
-    title: Archon — Request Lifecycle and Governed Tools
+    title: Cogentrex — Request Lifecycle and Governed Tools
     purpose: Follow one request through runtime, model, policy, approval, execution, and evidence.
     sources:
       - docs/ARCHITECTURE-DIAGRAMS.md
@@ -46,7 +46,7 @@ notebooks:
     artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: memory-rag-evaluation
-    title: Archon — Memory, RAG, and Evaluation
+    title: Cogentrex — Memory, RAG, and Evaluation
     purpose: Distinguish transient context, durable memory, retrieval, grounding, citations, and evaluation.
     sources:
       - docs/IMPLEMENTATION-EVIDENCE.md
@@ -67,7 +67,7 @@ notebooks:
     artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: reliability-operations
-    title: Archon — Reliability, Security, and Operations
+    title: Cogentrex — Reliability, Security, and Operations
     purpose: Understand failure containment, delegation, MCP, observability, and local operations.
     sources:
       - docs/ARCHITECTURE-DIAGRAMS.md
@@ -85,7 +85,7 @@ notebooks:
     artifacts: [audio, video, slide-deck, infographic, mind-map, flashcards, quiz, report]
 
   - id: interview-demo
-    title: Archon — Interview and Demo Preparation
+    title: Cogentrex — Interview and Demo Preparation
     purpose: Practice concise, credible explanations without overstating implementation evidence.
     sources:
       - README.md

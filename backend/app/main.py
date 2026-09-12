@@ -1,4 +1,4 @@
-"""Archon: Production AI Agent Webapp — FastAPI application."""
+"""Cogentrex: Production AI Agent Webapp — FastAPI application."""
 
 # ruff: noqa: E402 -- environment must be loaded before importing app configuration/routes.
 
@@ -8,6 +8,7 @@ import asyncio
 import uuid
 from collections.abc import AsyncGenerator, Callable, Mapping
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -32,6 +33,10 @@ from app.eval.candidates import OptimizationCandidateService
 from app.eval.drift import DriftService
 from app.eval.persistence import EvaluationRepository
 from app.eval.service import EvaluationService
+from app.learning_tutor.context import LearningContextResolver
+from app.learning_tutor.repository import LearningKnowledgeRepository, LearningTutorRepository
+from app.learning_tutor.service import LearningTutorService
+from app.learning_tutor.workflow import LearningTutorWorkflow
 from app.mcp.client import CredentialProvider, create_mcp_client
 from app.mcp.config import load_mcp_profiles
 from app.mcp.inventory import MCPInventoryService
@@ -57,6 +62,7 @@ from app.routes.documents import router as documents_router
 from app.routes.evaluations import router as evaluations_router
 from app.routes.images import router as images_router
 from app.routes.learning_media import router as learning_media_router
+from app.routes.learning_tutor import router as learning_tutor_router
 from app.routes.log_stream import router as log_router
 from app.routes.mcp import router as mcp_router
 from app.routes.memory import router as memory_router
@@ -153,7 +159,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging(json_format=not settings.debug, log_level="DEBUG" if settings.debug else "INFO")
 
     logger.info(
-        "archon_starting",
+        "cogentrex_starting",
         app=settings.app_name,
         version=settings.app_version,
         llm_provider=settings.llm_provider,
@@ -212,7 +218,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     skill_descriptors = tuple(
         CapabilityDescriptor(
-            id=f"archon.{item.parsed.name}",
+            id=f"cogentrex.{item.parsed.name}",
             kind="skill",
             name=item.parsed.name,
             description=item.parsed.description,
@@ -368,6 +374,47 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if settings.verifier_enabled
         else None
     )
+    app.state.learning_tutor = None
+    if settings.learning_tutor_enabled:
+        learning_knowledge = LearningKnowledgeRepository(
+            auth_store.session_factory,
+            app.state.embedding_service,
+            redactor,
+            candidate_limit=settings.vector_search_candidate_limit,
+        )
+        learning_sessions = LearningTutorRepository(auth_store.session_factory, redactor)
+        packaged_studio = Path("/app/learning/cogentrex-studio.json")
+        repository_studio = (
+            Path(__file__).parents[2] / "frontend" / "static" / "learning" / "cogentrex-studio.json"
+        )
+        learning_resolver = LearningContextResolver(
+            studio_path=packaged_studio if packaged_studio.is_file() else repository_studio,
+            media_catalog=app.state.learning_media_catalog,
+        )
+        learning_workflow = LearningTutorWorkflow(
+            knowledge=learning_knowledge,
+            sessions=learning_sessions,
+            runs=repository.runs,
+            provider=app.state.model_provider,
+            provider_name=settings.llm_provider,
+            model=settings.llm_model,
+            top_k=settings.learning_tutor_top_k,
+            provider_factory=lambda owner_id, project_id, run_id: budget_model_provider(
+                app.state.model_provider,
+                settings=settings,
+                repository=repository,
+                user_id=owner_id,
+                project_id=project_id,
+                run_id=run_id,
+            ),
+        )
+        app.state.learning_knowledge = learning_knowledge
+        app.state.learning_tutor_sessions = learning_sessions
+        app.state.learning_tutor = LearningTutorService(
+            resolver=learning_resolver,
+            workflow=learning_workflow,
+            sessions=learning_sessions,
+        )
     exporter = app.state.otel_exporter
     job_worker_task = asyncio.create_task(job_worker.run_forever())
     app.state.job_worker = job_worker
@@ -385,7 +432,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await app.state.embedding_service.close()
         if exporter:
             exporter.shutdown()
-        logger.info("archon_shutdown")
+        logger.info("cogentrex_shutdown")
 
 
 def create_app(
@@ -460,6 +507,7 @@ def create_app(
     app.include_router(images_router)
     if settings.learning_media_enabled:
         app.include_router(learning_media_router)
+    app.include_router(learning_tutor_router)
     app.include_router(research_router)
     if settings.memory_encryption_enabled:
         app.include_router(memory_router)

@@ -8,7 +8,7 @@
 
 ## Beginner explanation
 
-Structured output is a contract: the model response must parse as strict JSON and satisfy an application validator before Archon treats it as a successful answer. A provider's JSON hint or native schema improves generation but does not replace local validation.
+Structured output is a contract: the model response must parse as strict JSON and satisfy an application validator before Cogentrex treats it as a successful answer. A provider's JSON hint or native schema improves generation but does not replace local validation.
 
 Prompt caching is separately observable accounting. A cache marker merely requests reuse; only provider-reported cache-read or cache-write counters prove what the provider reported for that call. Local tests prove normalization and arithmetic, not a real cache hit.
 
@@ -72,7 +72,7 @@ sequenceDiagram
     end
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 ### Structured-output boundary
 
@@ -150,7 +150,7 @@ Structured validation, corrective retry, invalid-text suppression, cache account
 
 ## 30-second interview answer
 
-> Archon treats provider JSON features as generation aids, not trust. Foundry receives an explicit JSON instruction, and the response must pass bounded parsing, duplicate-key checks, Draft 2020-12 validation, and the application decoder before emission or persistence; one corrective retry is allowed. Prompt-cache accounting separately preserves absent versus zero counters. The live Foundry probe passed structured output but observed zero cache tokens, so the implementation is proven while savings and native provider schema are not claimed.
+> Cogentrex treats provider JSON features as generation aids, not trust. Foundry receives an explicit JSON instruction, and the response must pass bounded parsing, duplicate-key checks, Draft 2020-12 validation, and the application decoder before emission or persistence; one corrective retry is allowed. Prompt-cache accounting separately preserves absent versus zero counters. The live Foundry probe passed structured output but observed zero cache tokens, so the implementation is proven while savings and native provider schema are not claimed.
 
 ## Self-check
 

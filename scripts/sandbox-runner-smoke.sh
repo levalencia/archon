@@ -34,7 +34,7 @@ import asyncio
 from app.tools.sandbox_client import SandboxClientConfig, SandboxRunnerClient
 
 async def main():
-    client = SandboxRunnerClient(SandboxClientConfig('/run/archon-sandbox/runner.sock', 2, 65536))
+    client = SandboxRunnerClient(SandboxClientConfig('/run/cogentrex-sandbox/runner.sock', 2, 65536))
     await client.preflight()
     ok = await client.execute("print('sandbox-runner-ok')", kind='python')
     assert ok.stdout.strip() == 'sandbox-runner-ok'
@@ -46,10 +46,10 @@ async def main():
     assert network.stdout.strip() == 'network-isolated'
     reentry = await client.execute(
         "import socket\n"
-        "try:\n s=socket.socket(socket.AF_UNIX);s.connect('/run/archon-sandbox/runner.sock');"
+        "try:\n s=socket.socket(socket.AF_UNIX);s.connect('/run/cogentrex-sandbox/runner.sock');"
         "raise SystemExit('control socket reachable')\n"
         "except OSError:print('control-socket-blocked')\n"
-        "try:\n open('/run/archon-sandbox/payload.bin','wb').write(b'x');"
+        "try:\n open('/run/cogentrex-sandbox/payload.bin','wb').write(b'x');"
         "raise SystemExit('control volume writable')\n"
         "except OSError:print('control-volume-blocked')", kind='python')
     assert reentry.stdout.strip().splitlines() == [
@@ -70,7 +70,7 @@ async def main():
     capped = await client.execute("print('x'*100000)", kind='python')
     assert capped.truncated and len(capped.stdout.encode()) + len(capped.stderr.encode()) <= 65536
     large = SandboxRunnerClient(
-        SandboxClientConfig('/run/archon-sandbox/runner.sock', 2, 1048576))
+        SandboxClientConfig('/run/cogentrex-sandbox/runner.sock', 2, 1048576))
     escaped = await large.execute(
         "import sys;sys.stdout.buffer.write(b'\\0'*1048576)", kind='python')
     assert escaped.truncated

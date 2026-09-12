@@ -53,7 +53,7 @@ async def test_web_search_logs_safe_query_and_exception_metadata(monkeypatch) ->
 
     monkeypatch.setattr(web_search, "_searxng_search", fail)
     monkeypatch.setattr(web_search, "_duckduckgo_search", fail)
-    monkeypatch.delenv("ARCHON_BRAVE_API_KEY", raising=False)
+    monkeypatch.delenv("COGENTREX_BRAVE_API_KEY", raising=False)
     with capture_logs() as logs:
         monkeypatch.setattr(web_search, "logger", structlog.get_logger())
         result = await web_search.web_search_tool(PII)

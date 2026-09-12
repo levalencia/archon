@@ -3,8 +3,8 @@
 </script>
 
 <svelte:head>
-  <title>Visual Learning Studio · Archon</title>
-  <meta name="description" content="Learn Archon through stable roadmaps, guided stories, layered architecture, evidence, and Hermes-authored English learning media." />
+  <title>Visual Learning Studio · Cogentrex</title>
+  <meta name="description" content="Learn Cogentrex through stable roadmaps, guided stories, layered architecture, evidence, and Hermes-authored English learning media." />
 </svelte:head>
 
 <VisualLearningStudio />

@@ -1,8 +1,8 @@
-# Archon Capstone Course Documentation Implementation Plan
+# Cogentrex Capstone Course Documentation Implementation Plan
 
 > **For Hermes:** Use subagent-driven-development to implement this plan task-by-task. No push without Luis's explicit approval.
 
-**Goal:** Transform Archon's existing portfolio/operations documentation into one canonical Markdown knowledge system that supports zero-to-capstone learning, company workshops, interview preparation, and technical reference without duplicating concept explanations.
+**Goal:** Transform Cogentrex's existing portfolio/operations documentation into one canonical Markdown knowledge system that supports zero-to-capstone learning, company workshops, interview preparation, and technical reference without duplicating concept explanations.
 
 **Architecture:** Use one source of truth per concept and multiple audience tracks that link to canonical concept/module pages. Every implemented claim maps to source symbols, tests, runtime evidence, diagrams, limitations, an interview explanation, and a practical exercise. Historical planning/audit documents remain clearly separated from current learning navigation.
 

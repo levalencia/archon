@@ -113,7 +113,7 @@ Tool registration should be treated like exposing a privileged API, not adding a
 
 ## 30-second interview answer
 
-“Archon splits each tool into trusted `tools.registry.ToolDefinition` metadata and a reduced provider-facing `runtime.models.ToolDefinition`. `SecureToolRegistry` canonicalizes and freezes registration, validates each call, derives a policy request from risks/resources, checks permissions, bounds execution, and audits. The model can propose only; descriptions and schemas never authorize. Schema support is partial, path policy identity is not containment, and a timeout cannot roll back an external effect.”
+“Cogentrex splits each tool into trusted `tools.registry.ToolDefinition` metadata and a reduced provider-facing `runtime.models.ToolDefinition`. `SecureToolRegistry` canonicalizes and freezes registration, validates each call, derives a policy request from risks/resources, checks permissions, bounds execution, and audits. The model can propose only; descriptions and schemas never authorize. Schema support is partial, path policy identity is not containment, and a timeout cannot roll back an external effect.”
 
 ## Self-check questions
 

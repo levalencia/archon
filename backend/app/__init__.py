@@ -1,1 +1,1 @@
-"""Archon: Production AI Agent Webapp."""
+"""Cogentrex: Production AI Agent Webapp."""

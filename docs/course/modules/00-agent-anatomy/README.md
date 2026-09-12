@@ -9,7 +9,7 @@ By the end you can name an agent's boundaries, trace startup and one request, an
 
 ## Problem and mental model
 
-A chatbot maps text to text. An agent may ask a model what to do, invoke effects, feed observations back, and stop. Therefore the model is an untrusted planner inside a deterministic control plane—not the application. Archon is a **custom typed runtime**; it does not use an agent framework.
+A chatbot maps text to text. An agent may ask a model what to do, invoke effects, feed observations back, and stop. Therefore the model is an untrusted planner inside a deterministic control plane—not the application. Cogentrex is a **custom typed runtime**; it does not use an agent framework.
 
 ```mermaid
 flowchart LR
@@ -70,11 +70,11 @@ Provider output cannot directly execute an effect: the runtime snapshots calls, 
 
 ## Lab versus production
 
-Archon is verified locally with mock providers and Docker Compose, not under public traffic or production SLOs. Local tests establish contracts, not model quality or universal sandbox safety.
+Cogentrex is verified locally with mock providers and Docker Compose, not under public traffic or production SLOs. Local tests establish contracts, not model quality or universal sandbox safety.
 
 ## Interview answer
 
-> Archon is not an LLM wrapped in an endpoint. It is a provider-neutral, typed control loop. FastAPI constructs request-scoped dependencies; `AgentRuntime` owns budgets and transitions; policy and exact-bound approvals gate tools; an event sink records evidence. The model proposes, while deterministic code authorizes and executes.
+> Cogentrex is not an LLM wrapped in an endpoint. It is a provider-neutral, typed control loop. FastAPI constructs request-scoped dependencies; `AgentRuntime` owns budgets and transitions; policy and exact-bound approvals gate tools; an event sink records evidence. The model proposes, while deterministic code authorizes and executes.
 
 ## Self-check
 
@@ -86,6 +86,6 @@ Archon is verified locally with mock providers and Docker Compose, not under pub
 
 ## Done criteria
 
-- You can trace startup and both chat transports without calling Archon an agent framework.
+- You can trace startup and both chat transports without calling Cogentrex an agent framework.
 - You can locate every named symbol and test.
 - You can explain the trust boundary and one failure path.

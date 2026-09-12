@@ -45,7 +45,7 @@ flowchart TD
   Stop --> Warning[external effect may still exist]
 ```
 
-## Code-grounded Archon tour
+## Code-grounded Cogentrex tour
 
 - [`ModelProvider.complete`, `ToolExecutor.execute`, and `ToolAuthorizer.authorize`](../../../backend/app/runtime/ports.py) are async ports.
 - [`EventSink.emit`](../../../backend/app/runtime/events.py) is async, so observability is also a collaborator and failure boundary.
@@ -78,7 +78,7 @@ Then read `AgentRuntime._within_deadline` and identify: deadline calculation, ta
 - Holding an `asyncio.Lock` across slow I/O can serialize unrelated callers and create denial of service.
 - Swallowing `CancelledError` can leave reservations, tasks, or resources alive; clean up and re-raise.
 - A timeout can race with completion. External writes require idempotency and reconciliation, not confidence in local cancellation.
-- Mutable provider arguments can change while awaiting; Archon deep-snapshots policy-bound calls before yielding to collaborators.
+- Mutable provider arguments can change while awaiting; Cogentrex deep-snapshots policy-bound calls before yielding to collaborators.
 - Unbounded task creation exhausts memory, sockets, pools, or provider quotas; async is not backpressure.
 - Blocking CPU or synchronous I/O on the event-loop thread stalls all coroutines.
 
@@ -94,7 +94,7 @@ A passing timeout test proves the caller returned in time, not that the downstre
 Threads fit blocking libraries but add locking and still cannot forcibly stop a running Python function safely.
 Processes provide CPU parallelism and stronger isolation at serialization/startup cost.
 A job queue makes long work durable and decoupled, but changes request/response semantics.
-Structured-concurrency libraries can make task lifetime clearer; Archon currently uses `asyncio` primitives directly.
+Structured-concurrency libraries can make task lifetime clearer; Cogentrex currently uses `asyncio` primitives directly.
 
 ## Lab versus production
 
@@ -104,7 +104,7 @@ Never convert a synchronous effectful handler to “safe async” merely by plac
 
 ## 30-second interview answer
 
-“Async Python provides cooperative concurrency: an Archon runtime task yields while waiting on providers, tools, events, approvals, or the database. `AgentRuntime._within_deadline` bounds the whole run with a monotonic deadline, and `SecureToolRegistry.execute` bounds each handler. Cancellation is a control signal, not rollback—especially for executor threads or remote side effects—so production correctness also needs idempotency, cleanup, and observability.”
+“Async Python provides cooperative concurrency: an Cogentrex runtime task yields while waiting on providers, tools, events, approvals, or the database. `AgentRuntime._within_deadline` bounds the whole run with a monotonic deadline, and `SecureToolRegistry.execute` bounds each handler. Cancellation is a control signal, not rollback—especially for executor threads or remote side effects—so production correctness also needs idempotency, cleanup, and observability.”
 
 ## Self-check questions
 

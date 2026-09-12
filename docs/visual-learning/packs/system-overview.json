@@ -1,17 +1,17 @@
 {
   "pack_id": "system-overview",
-  "title": "Archon — System Overview",
-  "purpose": "Understand Archon's mission, architecture, evidence posture, and explicit boundaries.",
+  "title": "Cogentrex — System Overview",
+  "purpose": "Understand Cogentrex's mission, architecture, evidence posture, and explicit boundaries.",
   "language": "en",
   "limitations": [
     "This is derivative learning material, not canonical implementation evidence.",
-    "Archon is verified as a local base seven-service system with an optional eighth Jaeger service; no public or cloud deployment is claimed.",
+    "Cogentrex is verified as a local base seven-service system with an optional eighth Jaeger service; no public or cloud deployment is claimed.",
     "Counts and acceptance status must be rechecked against the source commit and canonical evidence documents."
   ],
   "concepts": [
     {
       "id": "workbench", "label": "Reliability Workbench", "kind": "frontend",
-      "summary": "Archon is a local control plane for governing and inspecting agent runs, not merely a chat screen.",
+      "summary": "Cogentrex is a local control plane for governing and inspecting agent runs, not merely a chat screen.",
       "teaching": {
         "definition": "The Agent Reliability Workbench is the product boundary that joins an authenticated SvelteKit interface to a FastAPI control plane and an evidence-producing runtime.",
         "receives": ["Authenticated user goals", "Project-scoped configuration", "Inspectable run and evaluation records"],
@@ -23,8 +23,8 @@
       },
       "boundary": "A local workbench does not establish public deployment, production traffic, or an SLO.",
       "sources": ["README.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
-      "narration": "Archon is a local Agent Reliability Workbench. Its interface starts and inspects runs, but reliability comes from the typed control plane, deterministic governance, and durable evidence behind the screen.",
-      "scenario": "A reviewer sees a polished chat interface and asks what makes Archon more than an LLM wrapper.",
+      "narration": "Cogentrex is a local Agent Reliability Workbench. Its interface starts and inspects runs, but reliability comes from the typed control plane, deterministic governance, and durable evidence behind the screen.",
+      "scenario": "A reviewer sees a polished chat interface and asks what makes Cogentrex more than an LLM wrapper.",
       "options": ["The visual design alone", "The governed runtime, evidence, and evaluation lifecycle", "A hidden agent framework", "A public production endpoint"],
       "correct_index": 1,
       "scenario_explanation": "The differentiator is the explicit control and evidence lifecycle, not presentation or an unclaimed deployment."
@@ -167,7 +167,7 @@
       "scenario": "A demo reloads a completed conversation and calls the result a replay.",
       "options": ["Replay the external effect", "Explain that stored-only replay reconstructs events", "Delete the original run", "Claim arbitrary workspace restoration"],
       "correct_index": 1,
-      "scenario_explanation": "Archon's replay is historical reconstruction, not re-execution."
+      "scenario_explanation": "Cogentrex's replay is historical reconstruction, not re-execution."
     },
     {
       "id": "knowledge", "label": "RAG and Evaluation", "kind": "database",
@@ -183,7 +183,7 @@
       },
       "boundary": "Deterministic fixtures and one live sentinel do not establish broad model or retrieval quality.",
       "sources": ["README.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
-      "narration": "Archon stores embeddings as SQL JSON and computes cosine in Python. Grounding filters claims; recorded-run evaluation measures completed trajectories later. Neither should be renamed pgvector or general model-quality proof.",
+      "narration": "Cogentrex stores embeddings as SQL JSON and computes cosine in Python. Grounding filters claims; recorded-run evaluation measures completed trajectories later. Neither should be renamed pgvector or general model-quality proof.",
       "scenario": "A report has citations but no claim-level support check.",
       "options": ["Call it fully grounded", "Treat citation presence and correctness as separate", "Assume the source is true", "Convert similarity to confidence"],
       "correct_index": 1,
@@ -193,7 +193,7 @@
       "id": "operations", "label": "Local Operations", "kind": "external",
       "summary": "Seven retained services, readiness checks, CI, and recovery provide revision-scoped local operational evidence.",
       "teaching": {
-        "definition": "Local operations is the reproducible target for building, migrating, checking dependencies, observing telemetry, and recovering Archon's durable state.",
+        "definition": "Local operations is the reproducible target for building, migrating, checking dependencies, observing telemetry, and recovering Cogentrex's durable state.",
         "receives": ["Pinned images and source revision", "Protected generated configuration", "PostgreSQL, Redis, and OTEL dependencies"],
         "responsibility": "Start and verify the base seven-service stack plus optional Jaeger profile, expose health versus readiness, and preserve or restore evidence safely.",
         "produces": ["Local readiness observation", "CI and smoke results", "Checksummed backup and recovery evidence"],

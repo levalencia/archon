@@ -2,7 +2,7 @@
 name: debugging
 description: Diagnose failures using evidence and minimal hypotheses
 version: 1.0.0
-tags: [debugging, archon]
+tags: [debugging, cogentrex]
 references: [references/checklist.md]
 triggers: ['debug', 'traceback', 'failing']
 negative_triggers: ['do not debug', 'ignore failure']

@@ -160,46 +160,46 @@ def get_metrics_snapshot() -> dict:
 def get_prometheus_text() -> str:
     """Generate Prometheus text format metrics."""
     lines = [
-        "# HELP archon_agent_runs_total Total typed runtime runs",
-        "# TYPE archon_agent_runs_total counter",
-        f"archon_agent_runs_total {_metrics['agent_runs_total']}",
-        "# HELP archon_agent_errors_total Total failed typed runtime runs",
-        "# TYPE archon_agent_errors_total counter",
-        f"archon_agent_errors_total {_metrics['agent_errors_total']}",
-        "# HELP archon_agent_iterations_total Total runtime iterations",
-        "# TYPE archon_agent_iterations_total counter",
-        f"archon_agent_iterations_total {_metrics['agent_iterations_total']}",
-        "# HELP archon_agent_tokens_total Total runtime tokens",
-        "# TYPE archon_agent_tokens_total counter",
-        f"archon_agent_tokens_total {_metrics['agent_tokens_total']}",
-        "# HELP archon_agent_run_duration_milliseconds_sum Runtime duration in milliseconds",
-        "# TYPE archon_agent_run_duration_milliseconds_sum counter",
-        f"archon_agent_run_duration_milliseconds_sum {_metrics['agent_run_duration_sum']}",
-        "# HELP archon_llm_calls_total Total LLM API calls",
-        "# TYPE archon_llm_calls_total counter",
-        f"archon_llm_calls_total {_metrics['llm_calls_total']}",
-        "# HELP archon_llm_tokens_total Total tokens used",
-        "# TYPE archon_llm_tokens_total counter",
-        f"archon_llm_tokens_total {_metrics['llm_tokens_total']}",
-        "# HELP archon_tool_calls_total Total tool calls",
-        "# TYPE archon_tool_calls_total counter",
-        f"archon_tool_calls_total {_metrics['tool_calls_total']}",
-        "# HELP archon_chat_requests_total Total chat requests",
-        "# TYPE archon_chat_requests_total counter",
-        f"archon_chat_requests_total {_metrics['chat_requests_total']}",
-        "# HELP archon_guardrail_blocks_total Total guardrail blocks",
-        "# TYPE archon_guardrail_blocks_total counter",
-        f"archon_guardrail_blocks_total {_metrics['guardrail_blocks_total']}",
-        "# HELP archon_pii_detections_total Total PII detections",
-        "# TYPE archon_pii_detections_total counter",
-        f"archon_pii_detections_total {_metrics['pii_detections_total']}",
+        "# HELP cogentrex_agent_runs_total Total typed runtime runs",
+        "# TYPE cogentrex_agent_runs_total counter",
+        f"cogentrex_agent_runs_total {_metrics['agent_runs_total']}",
+        "# HELP cogentrex_agent_errors_total Total failed typed runtime runs",
+        "# TYPE cogentrex_agent_errors_total counter",
+        f"cogentrex_agent_errors_total {_metrics['agent_errors_total']}",
+        "# HELP cogentrex_agent_iterations_total Total runtime iterations",
+        "# TYPE cogentrex_agent_iterations_total counter",
+        f"cogentrex_agent_iterations_total {_metrics['agent_iterations_total']}",
+        "# HELP cogentrex_agent_tokens_total Total runtime tokens",
+        "# TYPE cogentrex_agent_tokens_total counter",
+        f"cogentrex_agent_tokens_total {_metrics['agent_tokens_total']}",
+        "# HELP cogentrex_agent_run_duration_milliseconds_sum Runtime duration in milliseconds",
+        "# TYPE cogentrex_agent_run_duration_milliseconds_sum counter",
+        f"cogentrex_agent_run_duration_milliseconds_sum {_metrics['agent_run_duration_sum']}",
+        "# HELP cogentrex_llm_calls_total Total LLM API calls",
+        "# TYPE cogentrex_llm_calls_total counter",
+        f"cogentrex_llm_calls_total {_metrics['llm_calls_total']}",
+        "# HELP cogentrex_llm_tokens_total Total tokens used",
+        "# TYPE cogentrex_llm_tokens_total counter",
+        f"cogentrex_llm_tokens_total {_metrics['llm_tokens_total']}",
+        "# HELP cogentrex_tool_calls_total Total tool calls",
+        "# TYPE cogentrex_tool_calls_total counter",
+        f"cogentrex_tool_calls_total {_metrics['tool_calls_total']}",
+        "# HELP cogentrex_chat_requests_total Total chat requests",
+        "# TYPE cogentrex_chat_requests_total counter",
+        f"cogentrex_chat_requests_total {_metrics['chat_requests_total']}",
+        "# HELP cogentrex_guardrail_blocks_total Total guardrail blocks",
+        "# TYPE cogentrex_guardrail_blocks_total counter",
+        f"cogentrex_guardrail_blocks_total {_metrics['guardrail_blocks_total']}",
+        "# HELP cogentrex_pii_detections_total Total PII detections",
+        "# TYPE cogentrex_pii_detections_total counter",
+        f"cogentrex_pii_detections_total {_metrics['pii_detections_total']}",
     ]
 
     for model, data in _metrics["by_model"].items():
-        lines.append(f'archon_llm_calls_by_model{{model="{model}"}} {data["calls"]}')
-        lines.append(f'archon_llm_tokens_by_model{{model="{model}"}} {data["tokens"]}')
+        lines.append(f'cogentrex_llm_calls_by_model{{model="{model}"}} {data["calls"]}')
+        lines.append(f'cogentrex_llm_tokens_by_model{{model="{model}"}} {data["tokens"]}')
 
     for reason, count in _metrics["agent_stop_reasons"].items():
-        lines.append(f'archon_agent_stops_total{{reason="{reason}"}} {count}')
+        lines.append(f'cogentrex_agent_stops_total{{reason="{reason}"}} {count}')
 
     return "\n".join(lines) + "\n"

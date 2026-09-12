@@ -6,6 +6,10 @@ Object-oriented design groups behavior with the state and invariants it owns.
 A Python `Protocol` states which methods a collaborator must provide without requiring inheritance.
 Dependency injection (DI) supplies collaborators from outside, making control flow explicit and allowing small test doubles.
 
+## Visual walkthrough
+
+In a running Cogentrex application, open `/learn?view=present`, choose **Cogentrex From the Code**, and select **Video 4 — Protocols, Adapters, and Dependency Injection**. The video is a source-grounded teaching layer; this page and its linked source/tests remain canonical.
+
 ## Prerequisites and vocabulary
 
 - **Class/object:** blueprint and one runtime instance.
@@ -56,7 +60,7 @@ flowchart TD
   Factory --> Runtime[AgentRuntime]
 ```
 
-## Code-grounded Archon tour
+## Code-grounded Cogentrex tour
 
 - [`ModelProvider`, `ToolExecutor`, `PolicyAwareToolExecutor`, `ToolAuthorizer`, and `PreparatoryToolAuthorizer`](../../../backend/app/runtime/ports.py) are runtime ports.
 - [`EventSink`](../../../backend/app/runtime/events.py) decouples execution from SSE, persistence, logging, and tracing adapters.
@@ -94,7 +98,7 @@ pytest -q tests/unit/test_runtime_v2.py::test_typed_tool_round_trip_and_events
 - Duck-typed malicious collaborators can retain references or mutate nested objects; snapshot untrusted boundary data.
 - Hidden service locators and module globals obscure ownership and make tenant leakage easier.
 - Mis-scoped dependencies can share request state across users or recreate expensive clients per call.
-- An optional adapter silently omitted at composition can weaken behavior; Archon's live factory installs policy and fails `ASK` closed without an authorizer.
+- An optional adapter silently omitted at composition can weaken behavior; Cogentrex's live factory installs policy and fails `ASK` closed without an authorizer.
 - Dependency cycles often signal confused responsibility and make shutdown ordering unsafe.
 
 ## Observability and evidence
@@ -119,7 +123,7 @@ Direct construction is useful in tests but becomes a risk if application paths b
 
 ## 30-second interview answer
 
-“Archon applies dependency inversion around a custom runtime. `AgentRuntime` depends on structural Protocols such as `ModelProvider`, `ToolExecutor`, `EventSink`, and `ToolAuthorizer`; adapters implement those behaviors without inheritance. Frozen value objects carry validated boundary data, while deeper snapshots handle nested mutation. `create_chat_runtime` is the request composition root and `lifespan` owns process resources. This improves substitutability and tests, but Protocols do not provide security or prevent wiring mistakes.”
+“Cogentrex applies dependency inversion around a custom runtime. `AgentRuntime` depends on structural Protocols such as `ModelProvider`, `ToolExecutor`, `EventSink`, and `ToolAuthorizer`; adapters implement those behaviors without inheritance. Frozen value objects carry validated boundary data, while deeper snapshots handle nested mutation. `create_chat_runtime` is the request composition root and `lifespan` owns process resources. This improves substitutability and tests, but Protocols do not provide security or prevent wiring mistakes.”
 
 ## Self-check questions
 

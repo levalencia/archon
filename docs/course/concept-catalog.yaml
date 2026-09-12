@@ -15,6 +15,23 @@
     - docs/IMPLEMENTATION-EVIDENCE.md
   limitations: Custom local runtime; no agent framework and no public production evidence.
 
+- id: application-composition
+  title: Application factory, middleware, routers, and application state
+  status: implemented
+  module: docs/course/modules/01-python-architecture/README.md
+  sources:
+    - backend/app/main.py
+    - backend/app/middleware/security.py
+    - backend/app/middleware/correlation.py
+    - backend/app/routes/chat.py
+  tests:
+    - backend/tests/unit/test_health.py
+    - backend/tests/unit/test_chat.py
+    - backend/tests/unit/test_memory_startup.py
+  evidence:
+    - docs/IMPLEMENTATION-EVIDENCE.md
+  limitations: Application composition and local probe contracts are implemented; readiness is point-in-time and does not actively call every reported capability or prove public availability.
+
 - id: python-protocols-di
   title: Python OOP, Protocols, and dependency injection
   status: implemented
@@ -233,7 +250,7 @@
     - backend/tests/unit/test_run_lineage.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Archon checkpoints restore durable safe conversation/run state for replay and fork; arbitrary filesystem workspace, process, tool, and external-side-effect restoration is explicitly outside this server-product boundary."
+  limitations: "Cogentrex checkpoints restore durable safe conversation/run state for replay and fork; arbitrary filesystem workspace, process, tool, and external-side-effect restoration is explicitly outside this server-product boundary."
 
 - id: run-ledger
   title: "Durable Run Ledger"
@@ -434,7 +451,7 @@
     - backend/tests/unit/test_runtime_provider_contracts.py
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Typed fallback preserves the complete capability/response contract or fails before dispatch; the managed Archon deployment intentionally configures Foundry only and does not claim live cross-provider failover or silent fallback to mock."
+  limitations: "Typed fallback preserves the complete capability/response contract or fails before dispatch; the managed Cogentrex deployment intentionally configures Foundry only and does not claim live cross-provider failover or silent fallback to mock."
 
 - id: rate-limiting
   title: "Rate limiting"
@@ -882,7 +899,7 @@
     - frontend/src/lib/components/DriftOptimizationPanel.test.ts
   evidence:
     - docs/IMPLEMENTATION-EVIDENCE.md
-  limitations: "Archon records deterministic descriptive drift warnings and human-approved revision recommendations. Promotion is a durable evidence record only; it does not mutate runtime configuration, train a model, claim statistical significance, or prove live-provider quality. Autonomous unapproved production optimization is deliberately deferred."
+  limitations: "Cogentrex records deterministic descriptive drift warnings and human-approved revision recommendations. Promotion is a durable evidence record only; it does not mutate runtime configuration, train a model, claim statistical significance, or prove live-provider quality. Autonomous unapproved production optimization is deliberately deferred."
 
 - id: distributed-agent-networks
   title: "Distributed agent networks"
@@ -892,7 +909,7 @@
   tests: []
   evidence:
     - docs/REMAINING-DEFERRED-GAPS.md
-  limitations: "No distributed agent network is implemented; Archon intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. No broker, discovery, leases, distributed cancellation, deduplication, cross-node auth, or deployment evidence."
+  limitations: "No distributed agent network is implemented; Cogentrex intentionally focuses on one bounded local verifier child rather than claiming a swarm, broker, consensus layer, or cross-node orchestration. No broker, discovery, leases, distributed cancellation, deduplication, cross-node auth, or deployment evidence."
 
 - id: high-throughput-serving
   title: "High-throughput model serving"
@@ -902,7 +919,7 @@
   tests: []
   evidence:
     - docs/REMAINING-DEFERRED-GAPS.md
-  limitations: "Archon does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. No serving engine, batching scheduler, queue policy, GPU topology, load test, or measured capacity."
+  limitations: "Cogentrex does not implement or benchmark a model-serving plane with dynamic batching, admission control, autoscaling evidence, or latency/throughput SLOs; API replicas and an HPA manifest do not establish this capability. No serving engine, batching scheduler, queue policy, GPU topology, load test, or measured capacity."
 
 - id: fine-tuning-vertical-adaptation
   title: "Fine-tuning and vertical adaptation"
@@ -919,8 +936,8 @@
   status: deferred
   module: docs/course/modules/14-local-operations/README.md
   sources:
-    - deploy/k8s/archon.yaml
-    - deploy/helm/archon/Chart.yaml
+    - deploy/k8s/cogentrex.yaml
+    - deploy/helm/cogentrex/Chart.yaml
   tests: []
   evidence:
     - docs/REMAINING-DEFERRED-GAPS.md

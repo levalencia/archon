@@ -50,7 +50,7 @@ class LearningMediaCatalog:
             payload = json.loads(catalog_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise ValueError("learning-media catalog is missing or invalid") from error
-        if payload.get("schema") != "archon.learning-library" or payload.get("version") != 1:
+        if payload.get("schema") != "cogentrex.learning-library" or payload.get("version") != 1:
             raise ValueError("unsupported learning-media catalog schema")
         packs = payload.get("packs")
         if not isinstance(packs, list):

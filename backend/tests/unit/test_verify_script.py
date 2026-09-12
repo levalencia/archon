@@ -15,9 +15,9 @@ def test_docker_smoke_uses_ephemeral_validated_memory_key() -> None:
 
     assert "secrets.token_urlsafe(32)" in smoke
     assert "decode_memory_master_key(key)" in smoke
-    assert 'ARCHON_ENCRYPTION_MASTER_KEY="$memory_master_key" docker run' in smoke
-    assert "-e ARCHON_MEMORY_ENCRYPTION_ENABLED=true" in smoke
-    assert "-e ARCHON_ENCRYPTION_MASTER_KEY" in smoke
+    assert 'COGENTREX_ENCRYPTION_MASTER_KEY="$memory_master_key" docker run' in smoke
+    assert "-e COGENTREX_MEMORY_ENCRYPTION_ENABLED=true" in smoke
+    assert "-e COGENTREX_ENCRYPTION_MASTER_KEY" in smoke
     assert "<replace-with-at-least-32-byte-secret>" not in smoke
     assert "unset memory_master_key" in smoke
 
@@ -27,9 +27,9 @@ def test_ci_backend_smoke_supplies_ephemeral_memory_key_without_literal_value() 
     smoke = workflow.partition("- name: Smoke test backend image")[2]
 
     assert "secrets.token_urlsafe(32)" in smoke
-    assert "memory_env_name='ARCHON_ENCRYPTION_MASTER_'\"KEY\"" in smoke
+    assert "memory_env_name='COGENTREX_ENCRYPTION_MASTER_'\"KEY\"" in smoke
     assert 'export "${memory_env_name}=${memory_material}"' in smoke
-    assert "-e ARCHON_MEMORY_ENCRYPTION_ENABLED=true" in smoke
+    assert "-e COGENTREX_MEMORY_ENCRYPTION_ENABLED=true" in smoke
     assert '-e "$memory_env_name"' in smoke
     assert 'unset "$memory_env_name" memory_material' in smoke
     assert "<replace-with-at-least-32-byte-secret>" not in smoke
@@ -39,7 +39,7 @@ def test_docker_smoke_uses_configurable_reproducible_platform() -> None:
     script = _verify_script()
     smoke = script.partition("== Backend container smoke test ==")[2]
 
-    assert 'PLATFORM="${ARCHON_VERIFY_PLATFORM:-linux/amd64}"' in script
+    assert 'PLATFORM="${COGENTREX_VERIFY_PLATFORM:-linux/amd64}"' in script
     assert 'docker build --platform "$PLATFORM"' in smoke
     assert "docker run -d \\" in smoke
     assert '  --platform "$PLATFORM" \\' in smoke
@@ -54,7 +54,7 @@ def test_sandbox_smoke_runs_exact_built_image_id() -> None:
     assert "docker image inspect --format '{{.Id}}'" in build_script
     assert "^sha256:[0-9a-f]{64}$" in build_script
     assert 'SANDBOX_IMAGE_ID="$("$ROOT/scripts/build-sandbox.sh")"' in verify_script
-    assert 'ARCHON_SANDBOX_IMAGE="$SANDBOX_IMAGE_ID"' in verify_script
+    assert 'COGENTREX_SANDBOX_IMAGE="$SANDBOX_IMAGE_ID"' in verify_script
 
 
 def test_integrated_gate_orders_offline_acceptance_before_existing_and_benchmark_gates() -> None:
@@ -102,9 +102,9 @@ def test_integrated_gate_cleans_artifacts_and_has_no_or_true_bypass() -> None:
     assert "local status=$?" in script
     assert "local cleanup_failed=0" in script
     assert 'docker rm -f "$CONTAINER_ID"' in script
-    assert 'CONTAINER_ID="$(ARCHON_ENCRYPTION_MASTER_KEY=' in script
+    assert 'CONTAINER_ID="$(COGENTREX_ENCRYPTION_MASTER_KEY=' in script
     assert "Refusing to remove pre-existing container" in script
-    assert 'CONTAINER="${ARCHON_VERIFY_CONTAINER:-archon-backend-verify-$$}"' in script
+    assert 'CONTAINER="${COGENTREX_VERIFY_CONTAINER:-cogentrex-backend-verify-$$}"' in script
     assert "status=1" in script
     assert 'exit "$status"' in script
     assert script.count("assert_clean_tree") >= 3  # definition plus preflight and final check

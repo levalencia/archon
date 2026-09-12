@@ -77,10 +77,10 @@ def test_budget_settings_fail_fast_on_fractional_nusd() -> None:
 
 
 @pytest.mark.unit
-def test_budget_environment_uses_archon_prefix(monkeypatch) -> None:
-    monkeypatch.setenv("ARCHON_DURABLE_MONETARY_BUDGET_ENABLED", "true")
-    monkeypatch.setenv("ARCHON_AGENT_RUN_BUDGET_USD", "0.25")
-    monkeypatch.setenv("ARCHON_AGENT_MAX_TOOL_CALLS", "12")
+def test_budget_environment_uses_cogentrex_prefix(monkeypatch) -> None:
+    monkeypatch.setenv("COGENTREX_DURABLE_MONETARY_BUDGET_ENABLED", "true")
+    monkeypatch.setenv("COGENTREX_AGENT_RUN_BUDGET_USD", "0.25")
+    monkeypatch.setenv("COGENTREX_AGENT_MAX_TOOL_CALLS", "12")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     assert settings.durable_monetary_budget_enabled is True
     assert settings.agent_run_budget_usd == Decimal("0.25")
@@ -89,9 +89,9 @@ def test_budget_environment_uses_archon_prefix(monkeypatch) -> None:
 
 @pytest.mark.unit
 def test_legacy_input_reservation_environment_fails_with_migration_message(monkeypatch) -> None:
-    monkeypatch.setenv("ARCHON_AGENT_MODEL_INPUT_RESERVATION_TOKENS", "64000")
+    monkeypatch.setenv("COGENTREX_AGENT_MODEL_INPUT_RESERVATION_TOKENS", "64000")
 
-    with pytest.raises(ValidationError, match="ARCHON_AGENT_MODEL_INPUT_QUOTE_HEADROOM_TOKENS"):
+    with pytest.raises(ValidationError, match="COGENTREX_AGENT_MODEL_INPUT_QUOTE_HEADROOM_TOKENS"):
         Settings(_env_file=None)  # type: ignore[call-arg]
 
 

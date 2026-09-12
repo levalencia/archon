@@ -1,8 +1,8 @@
-# Learning Explanations and Archon Evidence Dark Theme Implementation Plan
+# Learning Explanations and Cogentrex Evidence Dark Theme Implementation Plan
 
 > **For Hermes:** Execute only after Luis explicitly approves this plan. Use small vertical slices, preserve `review-ready`, and do not commit, push, merge, publish, or spend provider budget without authorization.
 
-**Goal:** Make every non-obvious diagram node and transition genuinely educational, make selected infographic modules explain themselves, and unify the learning experience, HyperFrames video, and selected application surfaces under the infographic’s dark palette with orange as Archon’s primary brand accent.
+**Goal:** Make every non-obvious diagram node and transition genuinely educational, make selected infographic modules explain themselves, and unify the learning experience, HyperFrames video, and selected application surfaces under the infographic’s dark palette with orange as Cogentrex’s primary brand accent.
 
 **Architecture:** Educational meaning will live in structured source data, not hardcoded Svelte prose. A shared semantic design-token layer will define the palette once and feed app components, learning diagrams, infographic interactions, generated standalone assets, and HyperFrames. The migration will be staged: establish contracts and tokens, enrich one complete request-lifecycle path, adopt the theme in learning media, then roll it into the wider app without confusing brand color with success, warning, or danger semantics.
 
@@ -14,17 +14,17 @@
 
 ### Recommendation
 
-Adopt the infographic palette as a real design system named **Archon Evidence Dark**, not as scattered copied hex values.
+Adopt the infographic palette as a real design system named **Cogentrex Evidence Dark**, not as scattered copied hex values.
 
 - Black/navy remains the canvas.
-- Orange becomes the primary Archon identity, selected-state, focus, and emphasis color.
+- Orange becomes the primary Cogentrex identity, selected-state, focus, and emphasis color.
 - Green remains success/verified/allowed.
 - Coral remains danger/denied/destructive.
 - Blue remains runtime/information.
 - Purple remains evidence/evaluation.
 - Neutral gray remains inactive structure.
 
-This lets orange appear much more prominently across Archon while preserving operational meaning. Making every state orange would look attractive initially but would erase the distinction between “selected,” “successful,” “warning,” and “denied.”
+This lets orange appear much more prominently across Cogentrex while preserving operational meaning. Making every state orange would look attractive initially but would erase the distinction between “selected,” “successful,” “warning,” and “denied.”
 
 ### Root cause of the shallow explanations
 
@@ -68,7 +68,7 @@ This plan covers four coordinated workstreams:
 | Explanations are too short | “Educational explanation contract” and Phases 1–3 |
 | Policy, context, Run Ledger, result event, run evidence need depth | “Required concept coverage” |
 | Infographic boxes should explain themselves | “Infographic interaction model” and Phase 4 |
-| Use infographic colors everywhere | “Archon Evidence Dark palette” and Phases 5–6 |
+| Use infographic colors everywhere | “Cogentrex Evidence Dark palette” and Phases 5–6 |
 | Orange glow should become an app motif | “Orange usage rules” and Phase 6 |
 | Video and diagrams should share the theme | Phases 5 and 7 |
 | Preserve what is already good | “Non-goals” and regression gates |
@@ -81,7 +81,7 @@ Read only these sections for product approval:
 2. Educational explanation contract
 3. Required concept coverage
 4. Infographic interaction model
-5. Archon Evidence Dark palette
+5. Cogentrex Evidence Dark palette
 6. Phased delivery and approval gates
 
 You may skip exact file lists, test commands, migration mechanics, and risk tables unless you want engineering detail.
@@ -372,29 +372,29 @@ Move educational module descriptions out of hardcoded Svelte arrays and into the
 
 ---
 
-## Archon Evidence Dark palette
+## Cogentrex Evidence Dark palette
 
 ### Canonical token proposal
 
 ```css
 :root {
-  --archon-canvas: #050b16;
-  --archon-surface: #0f172a;
-  --archon-surface-raised: #111c2e;
-  --archon-border: #334155;
-  --archon-text: #f8fafc;
-  --archon-text-secondary: #cbd5e1;
-  --archon-text-muted: #94a3b8;
+  --cogentrex-canvas: #050b16;
+  --cogentrex-surface: #0f172a;
+  --cogentrex-surface-raised: #111c2e;
+  --cogentrex-border: #334155;
+  --cogentrex-text: #f8fafc;
+  --cogentrex-text-secondary: #cbd5e1;
+  --cogentrex-text-muted: #94a3b8;
 
-  --archon-orange: #f59e0b;
-  --archon-orange-strong: #d97706;
-  --archon-orange-glow: rgba(245, 158, 11, 0.22);
-  --archon-orange-glow-strong: rgba(245, 158, 11, 0.34);
+  --cogentrex-orange: #f59e0b;
+  --cogentrex-orange-strong: #d97706;
+  --cogentrex-orange-glow: rgba(245, 158, 11, 0.22);
+  --cogentrex-orange-glow-strong: rgba(245, 158, 11, 0.34);
 
-  --archon-green: #22c55e;
-  --archon-blue: #3b82f6;
-  --archon-purple: #a78bfa;
-  --archon-coral: #fb7185;
+  --cogentrex-green: #22c55e;
+  --cogentrex-blue: #3b82f6;
+  --cogentrex-purple: #a78bfa;
+  --cogentrex-coral: #fb7185;
 }
 ```
 
@@ -451,7 +451,7 @@ The approved orange box glow becomes a reusable elevation/state token:
 ```css
 box-shadow:
   0 0 0 1px rgba(245, 158, 11, 0.42),
-  0 0 24px var(--archon-orange-glow),
+  0 0 24px var(--cogentrex-orange-glow),
   0 12px 30px rgba(0, 0, 0, 0.32);
 ```
 
@@ -489,7 +489,7 @@ flowchart TB
 ### Source-of-truth decision
 
 - App runtime: CSS custom properties in `frontend/src/app.css`.
-- TypeScript/Svelte consumers that need literal values: a small exported palette object in `frontend/src/lib/archon-theme.ts` with tests that match the CSS token values.
+- TypeScript/Svelte consumers that need literal values: a small exported palette object in `frontend/src/lib/cogentrex-theme.ts` with tests that match the CSS token values.
 - Python generator: a corresponding immutable palette dictionary in `scripts/build-learning-pilot.py`, tested against the documented palette contract.
 - HyperFrames: values in `spikes/learning-media-video/index.html` and documented in `DESIGN.md`.
 
@@ -636,15 +636,15 @@ A later improvement could generate all formats from one JSON file, but that adds
 
 ---
 
-### Phase 5: Create shared Archon Evidence Dark tokens
+### Phase 5: Create shared Cogentrex Evidence Dark tokens
 
 **Objective:** Convert the approved infographic palette into reusable semantics.
 
 **Files:**
 
 - Modify: `frontend/src/app.css:38-98`
-- Create: `frontend/src/lib/archon-theme.ts`
-- Create: `frontend/src/lib/archon-theme.test.ts`
+- Create: `frontend/src/lib/cogentrex-theme.ts`
+- Create: `frontend/src/lib/cogentrex-theme.test.ts`
 - Modify: learning component styles that currently hardcode palette values
 - Modify: `scripts/build-learning-pilot.py:52-110`
 
@@ -705,7 +705,7 @@ A later improvement could generate all formats from one JSON file, but that adds
 **Acceptance criteria:**
 
 - The app visibly belongs to the same family as the infographic.
-- Orange is recognizable as Archon’s identity.
+- Orange is recognizable as Cogentrex’s identity.
 - Operational statuses remain unambiguous.
 - No route becomes an orange monochrome interface.
 
@@ -724,11 +724,11 @@ A later improvement could generate all formats from one JSON file, but that adds
 - Modify: `spikes/learning-media-video/index.html`
 - Modify: `spikes/learning-media-video/DESIGN.md`
 - Modify: `spikes/learning-media-video/STORYBOARD.md` only if scene visuals change materially
-- Regenerate external MP4 under `/Users/luisvalencia/Documents/archon-learning-media/`
+- Regenerate external MP4 under `/Users/luisvalencia/Documents/cogentrex-learning-media/`
 
 **Visual mapping:**
 
-- Canvas: `--archon-canvas`.
+- Canvas: `--cogentrex-canvas`.
 - Default node: dark surface + neutral border.
 - Selected/current node: orange border and restrained orange glow.
 - Runtime/context: blue.
@@ -765,7 +765,7 @@ A later improvement could generate all formats from one JSON file, but that adds
 
 **Files/artifacts:**
 
-- Regenerate: `/Users/luisvalencia/Documents/archon-learning-media/catalog.json`
+- Regenerate: `/Users/luisvalencia/Documents/cogentrex-learning-media/catalog.json`
 - Regenerate: diagram JSON/SVG artifacts
 - Regenerate: deck HTML/JSON if palette is shared there
 - Preserve/regenerate external audio and video as authorized
@@ -773,11 +773,11 @@ A later improvement could generate all formats from one JSON file, but that adds
 **Commands:**
 
 ```bash
-cd /Users/luisvalencia/Documents/archon
+cd /Users/luisvalencia/Documents/cogentrex
 uv run python scripts/build-learning-pilot.py \
-  --output /Users/luisvalencia/Documents/archon-learning-media \
-  --audio /Users/luisvalencia/Documents/archon-learning-media/published/request-lifecycle/request-audio/request-lifecycle.mp3 \
-  --video /Users/luisvalencia/Documents/archon-learning-media/published/request-lifecycle/request-video/request-lifecycle.mp4
+  --output /Users/luisvalencia/Documents/cogentrex-learning-media \
+  --audio /Users/luisvalencia/Documents/cogentrex-learning-media/published/request-lifecycle/request-audio/request-lifecycle.mp3 \
+  --video /Users/luisvalencia/Documents/cogentrex-learning-media/published/request-lifecycle/request-video/request-lifecycle.mp4
 ```
 
 Then run:
@@ -812,7 +812,7 @@ npm run build
 2. Reload gateway routing only if recreated service addresses require it.
 3. Run `./scripts/local-stack.sh status`.
 4. Verify `/healthz` and `/readyz` return HTTP 200.
-5. Authenticate and inspect `http://archon/learn?view=present`.
+5. Authenticate and inspect `http://cogentrex/learn?view=present`.
 6. Click every node and arrow in both diagrams.
 7. Click every interactive infographic module.
 8. Inspect mind map, deck, and video at desktop and mobile sizes.
@@ -910,7 +910,7 @@ Test:
 ### Theme/application
 
 - `frontend/src/app.css`
-- `frontend/src/lib/archon-theme.ts`
+- `frontend/src/lib/cogentrex-theme.ts`
 - selected route/components discovered in the token inventory
 - theme/unit/browser tests
 
@@ -1012,7 +1012,7 @@ This initiative is complete only when:
 - [ ] No generic generated explanation remains.
 - [ ] Selected infographic modules reveal persistent, keyboard-accessible explanations.
 - [ ] The infographic composition and approved colors remain unchanged except for interaction states.
-- [ ] Learning artifacts use Archon Evidence Dark tokens.
+- [ ] Learning artifacts use Cogentrex Evidence Dark tokens.
 - [ ] App first-wave brand/selection/focus surfaces use orange consistently.
 - [ ] Semantic green/red/blue/purple meanings remain intact.
 - [ ] HyperFrames video is re-themed, rendered, probed, and visually reviewed.

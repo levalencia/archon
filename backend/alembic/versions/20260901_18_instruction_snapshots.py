@@ -57,7 +57,7 @@ def _replace_revision_guard(*, strict: bool) -> None:
             "CREATE TRIGGER trg_project_instruction_revisions_immutable "
             f"BEFORE UPDATE OF {columns} "
             "OR DELETE ON project_instruction_revisions FOR EACH ROW "
-            "EXECUTE FUNCTION archon_spi_reject_revision_mutation()"
+            "EXECUTE FUNCTION cogentrex_spi_reject_revision_mutation()"
         )
 
 
@@ -92,7 +92,7 @@ def upgrade() -> None:
             "byte_count >= 0 AND byte_count <= 262144", name="ck_instruction_source_bytes"
         ),
         sa.CheckConstraint(
-            "family IN ('archon','agents','claude','manual')",
+            "family IN ('cogentrex','agents','claude','manual')",
             name="ck_instruction_source_family",
         ),
     )
@@ -106,14 +106,14 @@ def upgrade() -> None:
         "INSERT INTO project_instruction_sources "
         "(id,revision_id,owner_id,project_id,ordinal,relative_path,scope_path,family,"
         "is_override,byte_count,content_hash,content) "
-        "SELECT id,id,owner_id,project_id,0,'.archon/instructions.md','.',"
+        "SELECT id,id,owner_id,project_id,0,'.cogentrex/instructions.md','.',"
         "'manual',0,length(CAST(content AS BLOB)),content_hash,content "
         "FROM project_instruction_revisions"
         if op.get_bind().dialect.name == "sqlite"
         else "INSERT INTO project_instruction_sources "
         "(id,revision_id,owner_id,project_id,ordinal,relative_path,scope_path,family,"
         "is_override,byte_count,content_hash,content) "
-        "SELECT id,id,owner_id,project_id,0,'.archon/instructions.md','.',"
+        "SELECT id,id,owner_id,project_id,0,'.cogentrex/instructions.md','.',"
         "'manual',false,octet_length(content),content_hash,content "
         "FROM project_instruction_revisions"
     )
@@ -154,7 +154,7 @@ def upgrade() -> None:
         op.execute(
             "CREATE TRIGGER trg_project_instruction_sources_immutable BEFORE UPDATE OR DELETE "
             "ON project_instruction_sources FOR EACH ROW "
-            "EXECUTE FUNCTION archon_spi_reject_revision_mutation()"
+            "EXECUTE FUNCTION cogentrex_spi_reject_revision_mutation()"
         )
 
 
@@ -170,7 +170,7 @@ def downgrade() -> None:
                 "WHERE source.revision_id=revision.id) != 1 OR NOT EXISTS "
                 "(SELECT 1 FROM project_instruction_sources AS source WHERE "
                 "source.revision_id=revision.id AND source.id=revision.id AND source.ordinal=0 "
-                "AND source.relative_path='.archon/instructions.md' AND source.scope_path='.' "
+                "AND source.relative_path='.cogentrex/instructions.md' AND source.scope_path='.' "
                 "AND source.family='manual' AND source.is_override="
                 f"{boolean_false} AND source.content=revision.content) LIMIT 1"
             )

@@ -1,4 +1,4 @@
-# Archon Implementation Status — Superseded
+# Cogentrex Implementation Status — Superseded
 
 > **Archived on 2026-08-25.** The [canonical implementation evidence matrix](../IMPLEMENTATION-EVIDENCE.md) replaces this document as the source of truth.
 

@@ -125,7 +125,7 @@ class DockerSandboxExecutor:
             "--name",
             name,
             "--label",
-            "com.archon.sandbox=true",
+            "com.cogentrex.sandbox=true",
             "--platform",
             self.config.platform,
             "--network",
@@ -203,7 +203,7 @@ class DockerSandboxExecutor:
         )
         loop = asyncio.get_running_loop()
         deadline = loop.time() + wall_timeout
-        name = f"archon-sandbox-{secrets.token_hex(12)}"
+        name = f"cogentrex-sandbox-{secrets.token_hex(12)}"
         proc: asyncio.subprocess.Process | None = None
         stdout = bytearray()
         stderr = bytearray()

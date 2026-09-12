@@ -8,7 +8,7 @@
 
 ## Beginner explanation
 
-Archon does not execute optional Python or shell snippets inside the backend process. Policy and approvals run first; accepted code travels as a bounded JSON frame over a private Unix socket to a dedicated runner. The runner accepts only fixed `python` and `shell` commands and sends code through stdin.
+Cogentrex does not execute optional Python or shell snippets inside the backend process. Policy and approvals run first; accepted code travels as a bounded JSON frame over a private Unix socket to a dedicated runner. The runner accepts only fixed `python` and `shell` commands and sends code through stdin.
 
 ## Architecture
 
@@ -82,7 +82,7 @@ Only one execution is active per runner. Additional requests fail with the close
 
 ## Interview answer
 
-> Archon separates control and execution. The backend authorizes work and sends a strict bounded request over a private Unix socket. A dedicated non-root container runs fixed commands with no network, no project or Docker mount, cgroup limits, child seccomp, and unconditional process-group cleanup. Startup fails closed if the runner is unavailable. Tests and a real Compose smoke prove the local boundary, but I do not claim VM-grade multi-tenant isolation.
+> Cogentrex separates control and execution. The backend authorizes work and sends a strict bounded request over a private Unix socket. A dedicated non-root container runs fixed commands with no network, no project or Docker mount, cgroup limits, child seccomp, and unconditional process-group cleanup. Startup fails closed if the runner is unavailable. Tests and a real Compose smoke prove the local boundary, but I do not claim VM-grade multi-tenant isolation.
 
 ## Self-check
 

@@ -10,7 +10,7 @@ Agents:
 - ValidatorAgent: checks for PII, fact consistency, guardrails
 - SynthesizerAgent: produces final answer with citations
 
-See: https://github.com/levalencia/production-ai-agents/
+See: https://github.com/levalencia/cogentrex/
 Concept: Multi-agent orchestration (Phase 4)
 Course reference: Advanced Architectures L46-L57
 """

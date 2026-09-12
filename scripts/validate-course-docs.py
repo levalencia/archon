@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Archon's course documentation contracts with the Python standard library."""
+"""Validate Cogentrex's course documentation contracts with the Python standard library."""
 
 from __future__ import annotations
 

@@ -21,7 +21,7 @@ from app.workers.jobs import JobWorker
 
 
 def test_migration_12_to_13(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     backend = Path(__file__).parents[2]
     database = tmp_path / "jobs-migration.db"
     config = Config(str(backend / "alembic.ini"))

@@ -24,7 +24,7 @@ from app.runtime.models import ToolDefinition
 from app.security.persistence_redactor import PersistenceRedactor
 
 Clock = Callable[[], float]
-_AGENT_NAME = "Archon"
+_AGENT_NAME = "Cogentrex"
 _SECRET_KEY = re.compile(
     r"(?:authorization|api[-_]?key|token|secret|password|cookie|credential)", re.IGNORECASE
 )
@@ -161,9 +161,9 @@ class CompositeEventSink:
     @property
     def common_attributes(self) -> dict[str, str]:
         return {
-            "archon.run.id": self.run_id,
-            "archon.conversation.id": self.conversation_id,
-            "archon.correlation.id": self.correlation_id,
+            "cogentrex.run.id": self.run_id,
+            "cogentrex.conversation.id": self.conversation_id,
+            "cogentrex.correlation.id": self.correlation_id,
         }
 
     def _start(self, name: str, attributes: dict[str, Any] | None = None) -> Span:
@@ -240,7 +240,7 @@ class CompositeEventSink:
             "gen_ai.request.model": self.model,
             "gen_ai.output.type": "text",
             "logfire.msg": f"{_AGENT_NAME} run",
-            "archon.provider": self.provider,
+            "cogentrex.provider": self.provider,
             **self._tool_definition_attributes(),
         }
         self._attach_input_content(attributes)
@@ -279,7 +279,7 @@ class CompositeEventSink:
                     "gen_ai.agent.call.id": self.run_id,
                     "gen_ai.conversation.id": self.conversation_id,
                     "gen_ai.request.model": self.model,
-                    "archon.iteration": event.iteration,
+                    "cogentrex.iteration": event.iteration,
                     **self._tool_definition_attributes(),
                 },
             )
@@ -373,9 +373,9 @@ class CompositeEventSink:
                 self._begin_agent_export(self._run)
             self._run.attributes.update(
                 {
-                    "archon.stop_reason": reason,
-                    "archon.iteration_count": event.iteration,
-                    "archon.tool_call_count": self._tool_count,
+                    "cogentrex.stop_reason": reason,
+                    "cogentrex.iteration_count": event.iteration,
+                    "cogentrex.tool_call_count": self._tool_count,
                     "gen_ai.usage.input_tokens": event.usage.input_tokens,
                     "gen_ai.usage.output_tokens": event.usage.output_tokens,
                     "gen_ai.usage.total_tokens": event.usage.total_tokens,

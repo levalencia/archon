@@ -30,7 +30,7 @@ flowchart LR
   M --> C
 ```
 
-## The shipped Archon fixture
+## The shipped Cogentrex fixture
 
 The concrete fixture is `backend/app/eval/datasets/grounded-v1.json`.
 It declares `schema_version: 1`, `dataset_id: grounded-v1`, and `version: 1.0.0`.
@@ -201,7 +201,7 @@ A mature program combines these methods rather than choosing one universal datas
 
 ## 30-second interview answer
 
-“An evaluation dataset is a versioned, reviewable sample of behavior with explicit expectations. Archon strictly loads an allowlisted JSON fixture, rejects duplicate or unknown fields and bounds violations, and verifies a canonical SHA-256 hash. The recorded evaluator maps every case exactly once to a unique completed owner/project-scoped run. That gives reproducible regression evidence, but the shipped two-case deterministic fixture is not representative evidence of model quality; production needs provenance, holdouts, subgroup analysis, privacy controls, and broader coverage.”
+“An evaluation dataset is a versioned, reviewable sample of behavior with explicit expectations. Cogentrex strictly loads an allowlisted JSON fixture, rejects duplicate or unknown fields and bounds violations, and verifies a canonical SHA-256 hash. The recorded evaluator maps every case exactly once to a unique completed owner/project-scoped run. That gives reproducible regression evidence, but the shipped two-case deterministic fixture is not representative evidence of model quality; production needs provenance, holdouts, subgroup analysis, privacy controls, and broader coverage.”
 
 ## Self-checks
 

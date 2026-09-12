@@ -1,12 +1,12 @@
 # Online encrypted-memory key rotation
 
-This procedure rotates Archon's scoped-memory encryption key without exporting plaintext.
+This procedure rotates Cogentrex's scoped-memory encryption key without exporting plaintext.
 Key material must come from the deployment secret store and must never be committed, logged,
 or included in API requests.
 
 ## Hard safety boundary
 
-The durable `memory_key_state` fence is enforced only by key-generation-aware Archon binaries.
+The durable `memory_key_state` fence is enforced only by key-generation-aware Cogentrex binaries.
 **Drain every pre-`20260827_11` writer before activating a new key version.** A binary that predates
 the fence cannot inspect `memory_key_state` and can otherwise create old-version ciphertext after a
 retirement check.
@@ -21,9 +21,9 @@ attestation. The attestation is invalid unless the drain and inventory checks be
    current keyring. Do not change the active version yet.
 3. Drain and terminate every older writer. Verify the process/container inventory contains no
    pre-fence build. Prevent autoscaling from an old image.
-4. Add the new key to `ARCHON_MEMORY_KEYRING_JSON` on every new worker, keeping the old active
+4. Add the new key to `COGENTREX_MEMORY_KEYRING_JSON` on every new worker, keeping the old active
    version. Restart and verify startup succeeds.
-5. Set `ARCHON_MEMORY_ACTIVE_KEY_VERSION` to the new, monotonically higher version. The first new
+5. Set `COGENTREX_MEMORY_ACTIVE_KEY_VERSION` to the new, monotonically higher version. The first new
    worker atomically advances `memory_key_state`; stale generation-aware writers then fail closed on
    mutations with `memory_key_generation_mismatch`.
 6. Repeatedly call `POST /api/memory/rotation?project_id=...` for each owner/project scope until the

@@ -1,4 +1,4 @@
-# Archon Implementation Evidence
+# Cogentrex Implementation Evidence
 
 > **Audience:** Maintainers and auditors reviewing technical proof.
 > **Purpose:** Detailed evidence ledger for implementation, wiring, tests, direct observation, UI, and deployment. Start with the [Evidence Guide](EVIDENCE.md) for a human-readable overview.
@@ -14,6 +14,24 @@
 - **Deployment:** the verified target is local only. No public or cloud deployment is claimed.
 
 This ledger separates code presence, wiring, tests, direct observation, UI, and deployment. Historical acceptance records remain below for traceability; they do not override the current capability manifest.
+
+## Contextual Visual Learning tutor
+
+The current repository head adds Alembic revision `20260912_23` and four
+application-owned tables for a curated learning corpus and owner-scoped tutor
+threads. The authenticated `/api/learning-tutor` path resolves browser context
+against the server-owned Visual Learning manifest, retrieves from the dedicated
+SQL-JSON corpus, requires evidence IDs for atomic claims, appends exact code
+excerpts, validates optional diagrams, and persists redacted turns and run-ledger
+events. The right-side tutor panel is wired into Roadmap, Stories, Architecture,
+Evidence, Present, Listen, and Study, including authored video timestamps.
+
+Deterministic unit, migration, route, workflow, Svelte, and browser tests are the
+implementation evidence. Corpus collection has also been exercised against the
+local reviewed media library for Videos 1 and 2. This does **not** claim live
+provider answer quality, a semantic retrieval benchmark, public deployment, or
+unbounded scale: retrieval remains the repository's bounded SQL-JSON cosine plus
+lexical/context ranking, not pgvector.
 
 ### Historical candidate baseline (superseded)
 
@@ -35,8 +53,8 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 
 ## Skills + Project Instructions (merged to main)
 
-The merged main implements migrations `20260901_15` through `20260902_22`, 41
-ORM tables, ten owned bundled skills, immutable skill revisions and exact
+The repository implements migrations `20260901_15` through `20260912_23`, ten
+owned bundled skills, immutable skill revisions and exact
 owner/project/revision bindings, approved project-instruction snapshots,
 metadata-first capability discovery, and one request-context preparation path
 shared by sync and SSE. Effective-context persistence records exact instruction
@@ -186,7 +204,7 @@ Evidence files:
 | Governed MCP stdio + HTTP | Yes | Yes | Yes | Yes | Yes | No | Allowlisted stdio and bounded Streamable HTTP profiles, durable inventory, protected credential references, project enablement, per-tool policy/approval, schema-hash/TOCTOU checks, and UI. No generic OAuth platform or public gateway claim. |
 | Skills, project instructions, and capability discovery | Yes | Yes | Yes | Yes | Partial | No | Ten bundled skills, immutable exact project bindings, approved instruction snapshots, shared sync/SSE preparation, metadata-first discovery, and exact Run Ledger provenance. One Foundry run observed 1 skill, 1 instruction and 9 capability refs. GodMode is optional metadata-only; UI code exists but this evidence packet does not claim a completed browser acceptance; no deployment or broad selection-quality claim. |
 | Evidence-first Workbench | Yes | Yes | Yes | Yes | Yes | No | Full-width responsive shell, contextual inspector, safe inline Team lifecycle evidence with latest-parent replay, mobile/tablet focus containment, route coverage. |
-| OpenTelemetry | Yes | Yes | Yes | Yes | Yes | No | Archon owns a standard OpenTelemetry provider and emits one OTLP stream to the local Collector; an allowlisted selector generates fan-out for `debug`, Jaeger, Logfire, Azure Monitor, Tempo and generic OTLP without Python changes. Real Collector 0.118 configuration validation passed for every destination. Live run `b875ce4a-0760-42e5-9011-14815ff7b005` was observed in loopback-only Jaeger trace `7cd598cc71ef958a2ad2738405903cca` with `invoke_agent Archon`, two `chat claude-opus-4-6` spans and `execute_tool calculator`; the same Collector pipeline included Logfire and reported no Logfire export error. A prior live run was visually accepted in Logfire Agents/Tools. The new opt-in Summary/Messages attributes are present in Jaeger, but their new Logfire UI rendering remains pending visual acceptance. Content capture defaults off; when enabled it exports only redacted, bounded user/assistant text and excludes system prompts, chain-of-thought, RAG content and tool payloads. Azure Monitor, Tempo and generic OTLP are configuration-validated, not live-observed. |
+| OpenTelemetry | Yes | Yes | Yes | Yes | Yes | No | Cogentrex owns a standard OpenTelemetry provider and emits one OTLP stream to the local Collector; an allowlisted selector generates fan-out for `debug`, Jaeger, Logfire, Azure Monitor, Tempo and generic OTLP without Python changes. Real Collector 0.118 configuration validation passed for every destination. Live run `b875ce4a-0760-42e5-9011-14815ff7b005` was observed in loopback-only Jaeger trace `7cd598cc71ef958a2ad2738405903cca` with `invoke_agent Cogentrex`, two `chat claude-opus-4-6` spans and `execute_tool calculator`; the same Collector pipeline included Logfire and reported no Logfire export error. A prior live run was visually accepted in Logfire Agents/Tools. The new opt-in Summary/Messages attributes are present in Jaeger, but their new Logfire UI rendering remains pending visual acceptance. Content capture defaults off; when enabled it exports only redacted, bounded user/assistant text and excludes system prompts, chain-of-thought, RAG content and tool payloads. Azure Monitor, Tempo and generic OTLP are configuration-validated, not live-observed. |
 | Local container target | Yes | Yes | Yes | Yes | N/A | No | Digest-pinned, loopback-only gateway, non-root/read-only app containers, internal PostgreSQL/Redis/OTEL. Local evidence is not deployment. |
 | Backup/restore | Yes | Yes | Yes | Yes | No | No | SHA-256 verified custom dump, clean-target guard, full restore and exact record/hash checks with an observed restore-to-ready measurement and selected-record snapshot comparison. |
 | Portfolio benchmark | Yes | Yes | Yes | Yes | No | No | Deterministic local control-plane benchmark; not model quality, load, cost, or production latency evidence. |
@@ -197,7 +215,7 @@ Evidence files:
 
 ### Local deployment
 
-The retained target reports ready through the loopback gateway with digest-pinned dependencies, PostgreSQL, Redis, backend, frontend, sandbox and Collector. The optional loopback-only Jaeger profile was added without recreating PostgreSQL or Redis. Live run `b875ce4a-0760-42e5-9011-14815ff7b005` produced trace `7cd598cc71ef958a2ad2738405903cca`, containing `invoke_agent Archon`, two model spans and `execute_tool calculator`. Collector fan-out simultaneously selected Logfire and emitted no Logfire export error; newest Logfire Summary/Messages UI rendering remains pending visual acceptance. Apple ARM previously hit a native `cryptography` SIGILL; the backend target remains explicitly `linux/amd64`.
+The retained target reports ready through the loopback gateway with digest-pinned dependencies, PostgreSQL, Redis, backend, frontend, sandbox and Collector. The optional loopback-only Jaeger profile was added without recreating PostgreSQL or Redis. Live run `b875ce4a-0760-42e5-9011-14815ff7b005` produced trace `7cd598cc71ef958a2ad2738405903cca`, containing `invoke_agent Cogentrex`, two model spans and `execute_tool calculator`. Collector fan-out simultaneously selected Logfire and emitted no Logfire export error; newest Logfire Summary/Messages UI rendering remains pending visual acceptance. Apple ARM previously hit a native `cryptography` SIGILL; the backend target remains explicitly `linux/amd64`.
 
 ### Disaster recovery
 
@@ -245,7 +263,7 @@ The versioned `benchmarks/hybrid-orchestration/v1/` evaluation executed 100 pair
 
 An additional unisolated `pytest` run exercised 1,632 collected tests and initially returned 1,617 passed, 7 skipped, and 8 failed. Two failures were stale six-pack Visual Learning expectations and passed after updating the manifest tests and generated Studio. The other six are not pilot regressions: four load retained Foundry embedding values from the local environment instead of test defaults, and two portfolio-benchmark tests deliberately require a clean Git worktree while this feature branch is dirty. They remain disclosed rather than relabeled as passes.
 
-The retained seven-service local stack was hot-swapped with the candidate backend and frontend while preserving the existing PostgreSQL and Redis container identities. `local-stack.sh status` then returned `STATUS=ready`; gateway `/healthz` and `/readyz` returned HTTP 200, and health reported `hybrid_orchestration=enabled`. Authenticated browser QA at `http://archon` observed the Auto/Single/Team selector and Agents tab, all six learning packs, the hybrid Present diagram, Study mind map and flashcards, an audio element at ready state 4, and the 112-second video at ready state 4. That browser pass established the local control surface and media path; the later 100-case benchmark above supplies the separate live multi-agent quality and cost evidence.
+The retained seven-service local stack was hot-swapped with the candidate backend and frontend while preserving the existing PostgreSQL and Redis container identities. `local-stack.sh status` then returned `STATUS=ready`; gateway `/healthz` and `/readyz` returned HTTP 200, and health reported `hybrid_orchestration=enabled`. Authenticated browser QA at `http://cogentrex` observed the Auto/Single/Team selector and Agents tab, all six learning packs, the hybrid Present diagram, Study mind map and flashcards, an audio element at ready state 4, and the 112-second video at ready state 4. That browser pass established the local control surface and media path; the later 100-case benchmark above supplies the separate live multi-agent quality and cost evidence.
 
 Background work uses migration `20260828_13`, atomic SQL claims, monotonic lease generations independent of retry counters, heartbeats, expiry recovery, bounded exponential retries, dead-letter, cancellation, manual retry, concurrent idempotency, owner/project-scoped APIs, readiness, and an owner-scoped dashboard inspector. Production job kinds are closed to effect-free `echo` and database-idempotent `run_export`; payloads reject PII/secrets and result metadata is disclosure-redacted.
 
@@ -261,7 +279,7 @@ Linux acceptance executed 1,360 backend tests before the final focused lifecycle
 
 ### Governed drift reports and reviewed optimization candidates
 
-Archon now compares owner/project-scoped, immutable evaluation cohorts using deterministic descriptive summaries for pass rate, score distribution, latency, token/cost, abstention, citation coverage, unsupported claims, and safety failures. Minimum sample checks and fixed warning thresholds are operational rules only; no p-value or statistical-significance claim is made.
+Cogentrex now compares owner/project-scoped, immutable evaluation cohorts using deterministic descriptive summaries for pass rate, score distribution, latency, token/cost, abstention, citation coverage, unsupported claims, and safety failures. Minimum sample checks and fixed warning thresholds are operational rules only; no p-value or statistical-significance claim is made.
 
 Recorded evaluation identities derive model/provider from the completed source-run ledger and an internal evaluator config revision; the public API cannot override them. Migration 14 backfills historical cohorts with deterministic legacy identity when source rows exist and explicit `legacy-*-unresolved` markers otherwise. Unresolved cohorts are rejected from drift comparison.
 
@@ -273,7 +291,7 @@ Limits: no autonomous optimization, no runtime mutation, no model training, no s
 
 ## Defensible summary
 
-Archon is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.
+Cogentrex is an evidence-rich **local Agent Reliability Workbench**. Its strongest claims are policy/approval enforcement, durable run evidence, privacy boundaries, isolated optional execution, grounded evaluation, one constrained verifier child, governed MCP stdio integration, responsive inspection UI, and reproducible local operations/DR.
 
 It is **not** a publicly deployed production platform. Real external-provider behavior, indexed vector serving, production traffic, SLOs, multi-host scaling, and cloud operations remain unverified or deliberately deferred.
 

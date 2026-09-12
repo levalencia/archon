@@ -635,7 +635,7 @@ class RunRepository:
             checkpoint_id = str(
                 uuid.uuid5(
                     uuid.NAMESPACE_URL,
-                    f"archon:checkpoint:{user_id}:{run_id}:{source_sequence}",
+                    f"cogentrex:checkpoint:{user_id}:{run_id}:{source_sequence}",
                 )
             )
             checkpoint_values = {

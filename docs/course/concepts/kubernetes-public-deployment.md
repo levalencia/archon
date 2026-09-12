@@ -39,7 +39,7 @@ sequenceDiagram
     Note over CI,CD: Expected; not observed in this repository
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
 The mapped files are historical design artifacts, not an implemented deployment target. No schema/render test, cluster smoke, TLS/DNS, external secret manager, immutable production image, migration job, or public URL evidence exists.
 
@@ -47,8 +47,8 @@ The mapped files are historical design artifacts, not an implemented deployment 
 
 | Source symbol | Role and boundary |
 |---|---|
-| [`deploy/k8s/archon.yaml:Kubernetes resources`](../../../deploy/k8s/archon.yaml) | Contains a deployment, service, ingress, HPA, PDB, config, and placeholder secret. |
-| [`deploy/helm/archon/Chart.yaml:Helm chart`](../../../deploy/helm/archon/Chart.yaml) | Packages a deployment/service configuration. |
+| [`deploy/k8s/cogentrex.yaml:Kubernetes resources`](../../../deploy/k8s/cogentrex.yaml) | Contains a deployment, service, ingress, HPA, PDB, config, and placeholder secret. |
+| [`deploy/helm/cogentrex/Chart.yaml:Helm chart`](../../../deploy/helm/cogentrex/Chart.yaml) | Packages a deployment/service configuration. |
 
 ### Tests
 
@@ -81,7 +81,7 @@ Public/cloud/Kubernetes operation remains **deferred**. The manifests do not pro
 
 ## Interview answer
 
-> Kubernetes declares how containers run, scale, receive traffic, and recover. A public deployment also needs real image provenance, TLS/DNS, secret management, migrations, monitoring, and observed rollout behavior. A YAML manifest in Git is an artifact, not evidence that a cluster works. In Archon public/cloud/Kubernetes operation is deliberately deferred; the sole observed deployment target remains local Compose.
+> Kubernetes declares how containers run, scale, receive traffic, and recover. A public deployment also needs real image provenance, TLS/DNS, secret management, migrations, monitoring, and observed rollout behavior. A YAML manifest in Git is an artifact, not evidence that a cluster works. In Cogentrex public/cloud/Kubernetes operation is deliberately deferred; the sole observed deployment target remains local Compose.
 
 ## Self-check
 

@@ -4,9 +4,9 @@
 
 **Goal:** Replace the NotebookLM-dependent `Present`, `Listen`, and `Study` recipes with an evidence-governed, entirely English, Hermes-generated learning library containing visual HTML presentations, diagrams, English podcasts, structured mind maps, interactive flashcards, scenario quizzes, study guides, and—after a feasibility gate—rendered explainer videos.
 
-**Architecture:** Hermes runs as an offline, supervised publishing system, not as a hidden runtime dependency of Archon. It reads sanitized, allowlisted canonical sources, generates structured intermediate documents, invokes specialist renderers, validates the outputs, and publishes only accepted artifacts into an external local media library. Archon reads a deterministic catalog, serves approved media through authenticated endpoints, and renders it in the existing `/learn` views without treating generated content as canonical evidence.
+**Architecture:** Hermes runs as an offline, supervised publishing system, not as a hidden runtime dependency of Cogentrex. It reads sanitized, allowlisted canonical sources, generates structured intermediate documents, invokes specialist renderers, validates the outputs, and publishes only accepted artifacts into an external local media library. Cogentrex reads a deterministic catalog, serves approved media through authenticated endpoints, and renders it in the existing `/learn` views without treating generated content as canonical evidence.
 
-**Tech Stack:** Existing Python 3.11 build scripts and pytest; SvelteKit 5, TypeScript, Tailwind v4, Vitest, Playwright; Hermes Agent `archon-learning` profile; Mermaid/SVG and deterministic HTML renderers; Hermes TTS provider selected by an English voice bake-off; FFmpeg/ffprobe; HyperFrames for optional HTML-to-video rendering.
+**Tech Stack:** Existing Python 3.11 build scripts and pytest; SvelteKit 5, TypeScript, Tailwind v4, Vitest, Playwright; Hermes Agent `cogentrex-learning` profile; Mermaid/SVG and deterministic HTML renderers; Hermes TTS provider selected by an English voice bake-off; FFmpeg/ffprobe; HyperFrames for optional HTML-to-video rendering.
 
 ---
 
@@ -55,7 +55,7 @@ The plan is grounded in the current source tree, not only in the visible tabs:
 3. **Human acceptance before publication.** “Generated” is not “accepted,” and “accepted” is not “canonical evidence.”
 4. **Visual-first learning.** Every deck, guide, and video should use progressive diagrams, labeled relationships, and one idea per scene.
 5. **One source pack at a time.** Avoid mixing unrelated domains into a giant graph or presentation.
-6. **No invisible coupling.** Archon must continue to run when Hermes, the TTS provider, and HyperFrames are unavailable.
+6. **No invisible coupling.** Cogentrex must continue to run when Hermes, the TTS provider, and HyperFrames are unavailable.
 7. **No secret leakage.** Only allowlisted public repository files enter generation prompts.
 8. **Reproducibility over magic.** Record source checksums, prompt/template versions, generator identity, output checksums, and review status.
 9. **Accessibility is part of correctness.** Captions, transcripts, keyboard operation, contrast, reduced-motion behavior, and screen-reader labels are required.
@@ -78,7 +78,7 @@ The plan is grounded in the current source tree, not only in the visible tabs:
 
 ```mermaid
 flowchart LR
-    A[Canonical Archon docs] --> B[Sanitized source-pack builder]
+    A[Canonical Cogentrex docs] --> B[Sanitized source-pack builder]
     B --> C[Five NotebookLM source packs]
     C --> D[Manual Google upload]
     D --> E[NotebookLM generation]
@@ -86,7 +86,7 @@ flowchart LR
     F --> G[Manual artifact review]
 
     A --> H[build-visual-learning.py]
-    H --> I[archon-studio.json]
+    H --> I[cogentrex-studio.json]
     I --> J[Present Listen Study]
     J --> K[Recipes and instructions only]
 
@@ -115,7 +115,7 @@ flowchart TB
     subgraph Publisher[Hermes offline publishing plane]
         SP[Sanitized source-pack builder]
         OR[Generation orchestrator]
-        HS[archon-learning profile]
+        HS[cogentrex-learning profile]
         IR[Structured artifact specifications]
         RV[Deterministic renderers]
         QA[Automated and human quality gates]
@@ -129,7 +129,7 @@ flowchart TB
         ST[Flashcards quizzes guides]
     end
 
-    subgraph Runtime[Archon runtime plane]
+    subgraph Runtime[Cogentrex runtime plane]
         API[Authenticated learning-media API]
         UI[Present Listen Study views]
         PR[Local learner progress]
@@ -172,7 +172,7 @@ flowchart TB
 
 ### Key boundary
 
-Hermes is a **development-time publisher**. Archon runtime only consumes accepted files and metadata. If Hermes is stopped, the accepted learning library remains usable. If generation fails, the currently published catalog remains intact.
+Hermes is a **development-time publisher**. Cogentrex runtime only consumes accepted files and metadata. If Hermes is stopped, the accepted learning library remains usable. If generation fails, the currently published catalog remains intact.
 
 ## 6. Artifact model
 
@@ -323,8 +323,8 @@ Exact names may change during implementation only if repository inspection revea
 Use a sibling directory, not Git and not the frontend image:
 
 ```text
-../archon-learning-media/
-├── .archon-learning-library
+../cogentrex-learning-media/
+├── .cogentrex-learning-library
 ├── candidates/
 │   └── <generation-id>/...
 ├── published/
@@ -354,12 +354,12 @@ sequenceDiagram
     actor Luis
     participant CLI as Publish CLI
     participant Pack as Source pack builder
-    participant Hermes as Hermes archon-learning
+    participant Hermes as Hermes cogentrex-learning
     participant Schema as Schema validator
     participant Render as Artifact renderer
     participant QA as Quality gates
     participant Library as Published library
-    participant Archon as Archon Learn UI
+    participant Cogentrex as Cogentrex Learn UI
 
     Luis->>CLI: Generate one artifact candidate
     CLI->>Pack: Build allowlisted pack with checksums
@@ -374,8 +374,8 @@ sequenceDiagram
     QA-->>Luis: Review package and scorecard
     Luis->>CLI: Accept publication
     CLI->>Library: Atomic publish
-    Archon->>Library: Read published catalog
-    Library-->>Archon: Accepted metadata and media
+    Cogentrex->>Library: Read published catalog
+    Library-->>Cogentrex: Accepted metadata and media
 ```
 
 ## 9. Content-generation contract
@@ -414,7 +414,7 @@ Do not embed secrets, profile memory, private course text, raw session transcrip
 
 ## 10. Visual identity and learning design
 
-Create a project-level learning-media design contract before rendering the first deck or video. Reuse Archon's existing dark palette and typography rather than introducing a generic purple-gradient AI aesthetic.
+Create a project-level learning-media design contract before rendering the first deck or video. Reuse Cogentrex's existing dark palette and typography rather than introducing a generic purple-gradient AI aesthetic.
 
 Required principles:
 
@@ -458,7 +458,7 @@ Deck acceptance:
 - at least one visual on most technical slides;
 - speaker notes and source references per slide;
 - fullscreen and keyboard navigation;
-- no generated scripts executed in the Archon origin;
+- no generated scripts executed in the Cogentrex origin;
 - standalone HTML works offline;
 - printable to PDF without clipped content;
 - deck can resume at a slide using URL state.
@@ -668,7 +668,7 @@ Render structured Markdown with:
 
 ```mermaid
 flowchart LR
-    B[Browser at http://archon] --> G[Gateway]
+    B[Browser at http://cogentrex] --> G[Gateway]
     G --> F[SvelteKit frontend]
     G --> A[Backend API]
     A --> C[Validated catalog]
@@ -691,7 +691,7 @@ flowchart LR
 
 ### Authentication caveat
 
-Native `<audio>` and `<video>` elements cannot attach Archon's Bearer token header directly. Before implementation, choose and test one of these:
+Native `<audio>` and `<video>` elements cannot attach Cogentrex's Bearer token header directly. Before implementation, choose and test one of these:
 
 - short-lived, user-bound signed media URLs generated by an authenticated API call; or
 - authenticated fetch to Blob URLs for small audio only.
@@ -797,7 +797,7 @@ Reject automatically if an artifact:
 
 #### Task 0.1: Confirm the offline-publisher boundary
 
-**Objective:** Document that Hermes generates artifacts outside request handling and Archon consumes only accepted outputs.
+**Objective:** Document that Hermes generates artifacts outside request handling and Cogentrex consumes only accepted outputs.
 
 **Files:**
 - Create: `docs/visual-learning/hermes-native-learning-spec.md`
@@ -818,10 +818,10 @@ Reject automatically if an artifact:
 **Files:**
 - Create: `spikes/learning-media-tts/README.md`
 - Create: `spikes/learning-media-tts/script-en.txt`
-- Create outside Git: `../archon-learning-media/spikes/tts/*`
+- Create outside Git: `../cogentrex-learning-media/spikes/tts/*`
 
 **Steps:**
-1. Use one technical script containing Archon, RAG, SQL, JSON, API, numbers, and English model names.
+1. Use one technical script containing Cogentrex, RAG, SQL, JSON, API, numbers, and English model names.
 2. Render 60–90 seconds with the free baseline and any premium provider Luis authorizes.
 3. Measure duration and inspect audio streams with FFprobe.
 4. Record provider, exact voice ID, settings, cost, and redistribution terms.
@@ -832,17 +832,17 @@ Reject automatically if an artifact:
 
 #### Task 0.3: Run the HyperFrames feasibility spike
 
-**Objective:** Prove that one short Archon explainer can be rendered and verified on the current Mac toolchain.
+**Objective:** Prove that one short Cogentrex explainer can be rendered and verified on the current Mac toolchain.
 
 **Files:**
 - Create: `spikes/learning-media-video/DESIGN.md`
 - Create: `spikes/learning-media-video/SCRIPT.md`
 - Create: `spikes/learning-media-video/STORYBOARD.md`
 - Create: `spikes/learning-media-video/index.html`
-- Output outside Git: `../archon-learning-media/spikes/video/request-lifecycle.mp4`
+- Output outside Git: `../cogentrex-learning-media/spikes/video/request-lifecycle.mp4`
 
 **Steps:**
-1. Use the accepted Archon visual identity.
+1. Use the accepted Cogentrex visual identity.
 2. Build static hero frames before animations.
 3. Add deterministic GSAP timelines and transitions.
 4. Add English narration and captions.
@@ -959,8 +959,8 @@ Reject automatically if an artifact:
 python scripts/generate-learning-artifact.py \
   --pack request-lifecycle \
   --type deck \
-  --profile archon-learning \
-  --output ../archon-learning-media/candidates/<generation-id>
+  --profile cogentrex-learning \
+  --output ../cogentrex-learning-media/candidates/<generation-id>
 ```
 
 **TDD steps:**
@@ -1039,7 +1039,7 @@ python scripts/generate-learning-artifact.py \
 - Test: backend renderer tests and frontend component tests.
 
 **Steps:**
-1. Reuse Archon's semantic palette.
+1. Reuse Cogentrex's semantic palette.
 2. Render arrows before boxes so connections stay behind components.
 3. Include an accessible text description and relation list.
 4. Add pan/zoom only if it can be keyboard accessible; otherwise provide fit/reset controls.
@@ -1090,7 +1090,7 @@ python scripts/generate-learning-artifact.py \
 3. Test keyboard labels and focus.
 4. Test signed URL expiry recovery without losing the chapter position.
 
-**Acceptance:** A published pilot audio plays, seeks, and exposes the complete transcript at `http://archon/learn?view=listen` after deployment verification.
+**Acceptance:** A published pilot audio plays, seeks, and exposes the complete transcript at `http://cogentrex/learn?view=listen` after deployment verification.
 
 ### Phase 5 — Build Study artifacts
 
@@ -1270,7 +1270,7 @@ python scripts/generate-learning-artifact.py \
 
 #### Task 8.2: Add the HyperFrames renderer adapter
 
-**Objective:** Render accepted storyboard data without coupling the Archon runtime to Node/Chrome/FFmpeg.
+**Objective:** Render accepted storyboard data without coupling the Cogentrex runtime to Node/Chrome/FFmpeg.
 
 **Files:**
 - Create: `scripts/learning_renderers/hyperframes.py`
@@ -1400,7 +1400,7 @@ Only after Luis authorizes deployment:
 2. Verify `./scripts/local-stack.sh status`.
 3. Verify HTTP readiness.
 4. Authenticate and test `/learn?view=present`, `/learn?view=listen`, and `/learn?view=study` in the browser.
-5. Verify range requests through `http://archon`.
+5. Verify range requests through `http://cogentrex`.
 6. Verify the backend mount is read-only.
 7. Verify no extra host ports were introduced.
 8. Verify stopped Hermes does not break playback.
@@ -1539,7 +1539,7 @@ These do not block writing the implementation spec, but they must be resolved be
 The NotebookLM replacement is complete only when:
 
 - the provider-neutral source-pack and artifact schemas are committed and tested;
-- Hermes can generate a real candidate through the `archon-learning` profile under explicit authorization;
+- Hermes can generate a real candidate through the `cogentrex-learning` profile under explicit authorization;
 - one complete pilot pack is accepted and published;
 - `Present` displays a real deck and visual artifact;
 - `Listen` plays real accepted English audio with transcript and chapters;
@@ -1598,4 +1598,4 @@ flowchart LR
     P --> I
 ```
 
-This sequence intentionally validates uncertain media capabilities early, builds the highest-value visual/study experience before expensive video, and preserves Archon's evidence-first posture throughout.
+This sequence intentionally validates uncertain media capabilities early, builds the highest-value visual/study experience before expensive video, and preserves Cogentrex's evidence-first posture throughout.

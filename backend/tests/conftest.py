@@ -10,15 +10,15 @@ import pytest
 from app.config import Settings
 
 TEST_MEMORY_ENCRYPTION_KEY = base64.urlsafe_b64encode(b"0" * 32).decode().rstrip("=")
-os.environ["ARCHON_ENCRYPTION_MASTER_KEY"] = TEST_MEMORY_ENCRYPTION_KEY
+os.environ["COGENTREX_ENCRYPTION_MASTER_KEY"] = TEST_MEMORY_ENCRYPTION_KEY
 
 
 @pytest.fixture(autouse=True)
 def isolated_test_database(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep every test process-local and independent of developer database settings."""
     monkeypatch.setenv(
-        "ARCHON_DATABASE_URL",
-        f"sqlite+aiosqlite:///{tmp_path / 'archon-test.db'}",
+        "COGENTREX_DATABASE_URL",
+        f"sqlite+aiosqlite:///{tmp_path / 'cogentrex-test.db'}",
     )
 
 

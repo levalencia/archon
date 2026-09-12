@@ -35,20 +35,20 @@ PY
 
 output_dir=$(dirname "$OUTPUT_DUMP")
 mkdir -p "$output_dir"
-tmp_dump=$(mktemp "$output_dir/.archon-backup.dump.XXXXXX")
-tmp_checksum=$(mktemp "$output_dir/.archon-backup.sha256.XXXXXX")
-tmp_metadata=$(mktemp "$output_dir/.archon-backup.metadata.XXXXXX")
+tmp_dump=$(mktemp "$output_dir/.cogentrex-backup.dump.XXXXXX")
+tmp_checksum=$(mktemp "$output_dir/.cogentrex-backup.sha256.XXXXXX")
+tmp_metadata=$(mktemp "$output_dir/.cogentrex-backup.metadata.XXXXXX")
 cleanup() { rm -f "$tmp_dump" "$tmp_checksum" "$tmp_metadata"; }
 trap cleanup EXIT INT TERM
 chmod 600 "$tmp_dump" "$tmp_checksum" "$tmp_metadata"
 compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT")
 
-revision=$("${compose[@]}" exec -T postgres psql -U archon -d archon -Atqc \
+revision=$("${compose[@]}" exec -T postgres psql -U cogentrex -d cogentrex -Atqc \
   'SELECT version_num FROM alembic_version')
 [[ -n "$revision" ]] || { printf 'Unable to read Alembic revision\n' >&2; exit 70; }
 created_at=$(python3 -c 'from datetime import UTC,datetime; print(datetime.now(UTC).isoformat().replace("+00:00","Z"))')
 
-"${compose[@]}" exec -T postgres pg_dump -U archon -d archon \
+"${compose[@]}" exec -T postgres pg_dump -U cogentrex -d cogentrex \
   -Fc --no-owner --no-acl >"$tmp_dump"
 [[ -s "$tmp_dump" ]] || { printf 'Backup dump is empty\n' >&2; exit 70; }
 
@@ -70,7 +70,7 @@ path, created_at, revision, digest = sys.argv[1:]
 metadata = {
     "alembic_revision": revision,
     "created_at_utc": created_at,
-    "database": "archon",
+    "database": "cogentrex",
     "dump_format": "postgresql-custom",
     "format_version": 1,
     "sha256": digest,

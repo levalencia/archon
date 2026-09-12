@@ -2,7 +2,7 @@
 
 > **For Hermes:** Execute in coherent TDD batches, verify each batch on the canonical Mac worktree, and do not upgrade evidence status without runtime proof.
 
-**Goal:** Make Archon's live Foundry path enforce durable budgets, token-aware context lineage, hard deadlines, strict structured output, real document embeddings, live faithfulness verification, and durable at-most-once effect orchestration.
+**Goal:** Make Cogentrex's live Foundry path enforce durable budgets, token-aware context lineage, hard deadlines, strict structured output, real document embeddings, live faithfulness verification, and durable at-most-once effect orchestration.
 
 **Architecture:** Preserve the existing typed runtime, repositories, run ledger, and acceptance harnesses. Close integration gaps by enabling proven controls in the managed stack, sharing hard deadline semantics with direct RAG and verifier calls, charging every provider call through one run-scoped budget factory, extending the existing embedding adapter for Foundry model-inference endpoints, and validating the complete upload→embed→retrieve→answer→verify path. Keep universal exactly-once, provider-wide parity, public deployment, and unsupported native JSON Schema claims explicitly out of scope.
 
@@ -154,7 +154,7 @@
 - `docs/visual-learning/notebooklm-*`
 - generated Studio/source-pack manifests
 - Evidence UI only if required to show live/conditional dimensions clearly
-- `ARCHON_CONTEXT.md`, operational skill, external handoff after merge
+- `COGENTREX_CONTEXT.md`, operational skill, external handoff after merge
 
 **Rules**
 - Upgrade only individually proven dimensions.

@@ -5,10 +5,10 @@ COPY sandbox_runner /runner/sandbox_runner
 RUN apt-get update \
  && apt-get install --yes --no-install-recommends libseccomp2 \
  && rm -rf /var/lib/apt/lists/* \
- && groupadd --system --gid 10001 archon \
- && useradd --system --uid 10001 --gid archon --home-dir /nonexistent archon \
- && mkdir -p /run/archon-sandbox \
- && chown archon:archon /run/archon-sandbox
-USER archon
+ && groupadd --system --gid 10001 cogentrex \
+ && useradd --system --uid 10001 --gid cogentrex --home-dir /nonexistent cogentrex \
+ && mkdir -p /run/cogentrex-sandbox \
+ && chown cogentrex:cogentrex /run/cogentrex-sandbox
+USER cogentrex
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/runner
 ENTRYPOINT ["python", "-m", "sandbox_runner.server"]

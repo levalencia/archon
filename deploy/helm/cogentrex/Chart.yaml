@@ -1,5 +1,5 @@
 apiVersion: v2
-name: archon
+name: cogentrex
 description: Production AI Agent Webapp
 type: application
 version: 0.1.0
@@ -9,4 +9,4 @@ keywords:
   - llm
   - rag
   - multi-agent
-home: https://github.com/levalencia/archon
+home: https://github.com/levalencia/cogentrex

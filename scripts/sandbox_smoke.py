@@ -14,16 +14,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from app.tools.sandbox import DockerSandboxConfig, DockerSandboxExecutor  # noqa: E402
 
-SANDBOX_LABEL: Final = "com.archon.sandbox=true"
+SANDBOX_LABEL: Final = "com.cogentrex.sandbox=true"
 DOCKER: Final = (
     shutil.which("docker", path="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin") or "docker"
 )
 
 
 async def sandbox_container_ids() -> set[str]:
-    """Return all running or stopped containers identifiable as Archon sandboxes."""
+    """Return all running or stopped containers identifiable as Cogentrex sandboxes."""
     identifiers: set[str] = set()
-    for filter_value in ("name=archon-sandbox-", f"label={SANDBOX_LABEL}"):
+    for filter_value in ("name=cogentrex-sandbox-", f"label={SANDBOX_LABEL}"):
         check = await asyncio.create_subprocess_exec(
             DOCKER,
             "ps",
@@ -50,12 +50,12 @@ async def assert_sandboxes_removed() -> None:
 
 
 async def main() -> None:
-    assert not await sandbox_container_ids(), "pre-existing Archon sandbox containers found"
+    assert not await sandbox_container_ids(), "pre-existing Cogentrex sandbox containers found"
     executor = DockerSandboxExecutor(
         DockerSandboxConfig(
             binary=DOCKER,
-            image=os.environ["ARCHON_SANDBOX_IMAGE"],
-            platform=os.environ.get("ARCHON_VERIFY_PLATFORM", "linux/amd64"),
+            image=os.environ["COGENTREX_SANDBOX_IMAGE"],
+            platform=os.environ.get("COGENTREX_VERIFY_PLATFORM", "linux/amd64"),
             timeout_seconds=2,
             cpus=0.5,
             memory_mb=128,
@@ -69,7 +69,7 @@ async def main() -> None:
     shell = await executor.execute("printf terminal-ok", kind="shell")
     assert shell.exit_code == 0 and shell.stdout == "terminal-ok"
 
-    with tempfile.NamedTemporaryFile(prefix="archon-host-sentinel-", delete=False) as sentinel:
+    with tempfile.NamedTemporaryFile(prefix="cogentrex-host-sentinel-", delete=False) as sentinel:
         sentinel.write(b"host-secret")
         sentinel_path = sentinel.name
     try:
@@ -84,9 +84,9 @@ async def main() -> None:
     finally:
         Path(sentinel_path).unlink(missing_ok=True)
 
-    os.environ["ARCHON_HOST_SENTINEL"] = "must-not-cross"
+    os.environ["COGENTREX_HOST_SENTINEL"] = "must-not-cross"
     env = await executor.execute(
-        "import os\nassert 'ARCHON_HOST_SENTINEL' not in os.environ\nprint('env-isolated')",
+        "import os\nassert 'COGENTREX_HOST_SENTINEL' not in os.environ\nprint('env-isolated')",
         kind="python",
     )
     assert env.exit_code == 0 and "env-isolated" in env.stdout

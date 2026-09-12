@@ -50,7 +50,7 @@ flowchart TD
   C -->|no| W[Grounded context use but citation-incorrect]
 ```
 
-## Archon implementation
+## Cogentrex implementation
 
 `backend/app/services/grounded_rag.py::GroundedDocumentWorkflow` owns the grounded answer path.
 `_prompt` requests one factual claim per item and one or more listed evidence IDs.
@@ -165,7 +165,7 @@ Finally ask an unrelated question and show that a supported claim can still fail
 
 ## 30-second interview answer
 
-“Groundedness is claim support relative to supplied evidence, not global truth. Archon's grounded workflow parses atomic claims, requires known citations, rechecks content hashes, and conservatively checks 90% substantive-token coverage, numbers, and polarity before reconstructing an answer. It abstains if nothing survives. Those deterministic checks are auditable regression controls, not semantic entailment, so production needs labeled semantic evaluation too.”
+“Groundedness is claim support relative to supplied evidence, not global truth. Cogentrex's grounded workflow parses atomic claims, requires known citations, rechecks content hashes, and conservatively checks 90% substantive-token coverage, numbers, and polarity before reconstructing an answer. It abstains if nothing survives. Those deterministic checks are auditable regression controls, not semantic entailment, so production needs labeled semantic evaluation too.”
 
 ## Self-checks
 

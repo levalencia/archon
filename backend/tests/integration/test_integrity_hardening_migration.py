@@ -44,7 +44,7 @@ def _revision_sql(revision: str, owner: str, package: str) -> tuple[str, dict[st
 def test_revision_owner_fences_defaults_and_complete_immutability(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "integrity-20.db"
     config = _config(database)
     command.upgrade(config, "head")

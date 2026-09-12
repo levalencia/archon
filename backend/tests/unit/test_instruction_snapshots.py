@@ -17,14 +17,14 @@ pytestmark = pytest.mark.unit
 @pytest.mark.asyncio
 async def test_scan_snapshot_is_exact_ordered_restart_safe_and_owner_scoped(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
-    (workspace / ".archon").mkdir(parents=True)
-    (workspace / "service" / ".archon").mkdir(parents=True)
-    (workspace / ".archon" / "instructions.md").write_text("root policy" + chr(10))
-    (workspace / "service" / ".archon" / "instructions.md").write_text("leaf policy" + chr(10))
+    (workspace / ".cogentrex").mkdir(parents=True)
+    (workspace / "service" / ".cogentrex").mkdir(parents=True)
+    (workspace / ".cogentrex" / "instructions.md").write_text("root policy" + chr(10))
+    (workspace / "service" / ".cogentrex" / "instructions.md").write_text("leaf policy" + chr(10))
     loaded = load_project_instructions(workspace, "service")
     assert [source.relative_path for source in loaded] == [
-        ".archon/instructions.md",
-        "service/.archon/instructions.md",
+        ".cogentrex/instructions.md",
+        "service/.cogentrex/instructions.md",
     ]
 
     database_url = f"sqlite+aiosqlite:///{tmp_path / 'snapshots.db'}"
@@ -56,8 +56,8 @@ async def test_scan_snapshot_is_exact_ordered_restart_safe_and_owner_scoped(tmp_
     current = await restarted_repository.current_snapshot(owner_id="alice", project_id="project")
     assert current is not None
     assert [source.relative_path for source in current.sources] == [
-        ".archon/instructions.md",
-        "service/.archon/instructions.md",
+        ".cogentrex/instructions.md",
+        "service/.cogentrex/instructions.md",
     ]
     assert [source.content for source in current.sources] == ["root policy", "leaf policy"]
 
@@ -71,8 +71,8 @@ async def test_scan_snapshot_is_exact_ordered_restart_safe_and_owner_scoped(tmp_
         max_context_bytes=1000,
     )
     assert [block.identifier for block in enriched.blocks] == [
-        ".archon/instructions.md",
-        "service/.archon/instructions.md",
+        ".cogentrex/instructions.md",
+        "service/.cogentrex/instructions.md",
     ]
     refs = enriched.manifest.instruction_revisions
     assert [ref.order for ref in refs] == [0, 1]

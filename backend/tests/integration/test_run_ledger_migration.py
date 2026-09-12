@@ -33,7 +33,7 @@ def test_postgresql_collision_objects_are_renamed_before_replacement_table() -> 
 
 
 def test_run_ledger_migrates_legacy_events_and_roundtrips(tmp_path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "run-ledger-migration.db"
     alembic = _config(database)
     command.upgrade(alembic, "20260826_02")

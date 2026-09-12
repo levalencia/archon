@@ -25,13 +25,13 @@ def test_notebooklm_packs_are_external_sanitized_and_traceable(tmp_path: Path) -
     manifest = builder.build_packs(output, require_clean=False)
 
     assert not (output / "stale-notebook").exists()
-    assert manifest["schema"] == "archon.notebooklm-source-packs"
+    assert manifest["schema"] == "cogentrex.notebooklm-source-packs"
     assert len(manifest["source_commit"]) == 40
     assert len(manifest["notebooks"]) == 5
     for notebook in manifest["notebooks"]:
         directory = output / notebook["directory"]
         assert directory.is_dir()
-        assert (directory / "00-ARCHON-TRUTH-BOUNDARIES.md").is_file()
+        assert (directory / "00-COGENTREX-TRUTH-BOUNDARIES.md").is_file()
         assert (directory / "UPLOAD-README.md").is_file()
         assert len(notebook["files"]) >= 9
         for item in notebook["files"]:

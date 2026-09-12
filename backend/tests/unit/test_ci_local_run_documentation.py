@@ -75,7 +75,7 @@ def test_ci_guide_matches_compose_and_run_commands() -> None:
         "./scripts/local-stack.sh stop",
         "./scripts/local-deploy-smoke.sh",
         "KEEP=1 ./scripts/local-deploy-smoke.sh",
-        "./scripts/local-dr-smoke.sh /tmp/archon-dr-report.json",
+        "./scripts/local-dr-smoke.sh /tmp/cogentrex-dr-report.json",
         "uv run python scripts/portfolio_benchmark.py",
         "uv run uvicorn app.main:app",
         "npm run dev",

@@ -1,8 +1,9 @@
 <script lang="ts">
   import { ArrowDown, ExternalLink } from 'lucide-svelte';
+  import type { LearningTutorContext } from '$lib/learning-tutor';
   import { RELATION_META, type VisualLearningStudio } from '$lib/visual-learning';
 
-  let { studio }: { studio: VisualLearningStudio } = $props();
+  let { studio, onContextChange = () => {} }: { studio: VisualLearningStudio; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
   let selectedId = $state('browser-workbench');
   let selected = $derived(
     studio.architecture.layers.flatMap(layer => layer.components).find(item => item.id === selectedId),
@@ -10,6 +11,7 @@
   let relations = $derived(
     studio.architecture.relations.filter(item => item.source === selectedId || item.target === selectedId),
   );
+  $effect(() => { if (selected) onContextChange({ view: 'architecture', selected_node_id: selected.id, concept_id: selected.concept_ids[0] }, selected.title); });
 
   function componentTitle(id: string): string {
     return studio.architecture.layers
@@ -36,7 +38,7 @@
           </div>
           <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             {#each layer.components as component}
-              <button onclick={() => selectedId = component.id} aria-pressed={selectedId === component.id} class="min-h-28 rounded-xl border p-3 text-left transition {selectedId === component.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'border-[var(--border)] bg-[var(--bg)] hover:border-[var(--accent)]'}">
+              <button onclick={() => selectedId = component.id} aria-pressed={selectedId === component.id} class="min-h-28 rounded-xl border p-3 text-left transition {selectedId === component.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--cogentrex-orange-glow)]' : 'border-[var(--border)] bg-[var(--bg)] hover:border-[var(--accent)]'}">
                 <strong class="block text-sm">{component.title}</strong>
                 <span class="mt-2 block text-xs leading-5 text-[var(--muted)]">{component.responsibility}</span>
               </button>

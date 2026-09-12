@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.security.auth import get_current_user, require_admin
 from app.security.dependencies import enforce_rate_limit
-from app.skills.bundled import ARCHON_OWNER_ID
+from app.skills.bundled import COGENTREX_OWNER_ID
 from app.skills.catalog import SkillCatalogProvider
 from app.skills.installer import PinnedSkillSource, SkillInstallationService, SkillSourceError
 from app.skills.parser import parse_skill_markdown
@@ -98,7 +98,7 @@ async def _items(
 ) -> list[CatalogItem]:
     catalogs = [
         *(await _repo(request).list_catalog(owner_id=owner_id, query=query)),
-        *(await _repo(request).list_catalog(owner_id=ARCHON_OWNER_ID, query=query)),
+        *(await _repo(request).list_catalog(owner_id=COGENTREX_OWNER_ID, query=query)),
     ]
     selected_revision_ids = (
         set()
@@ -342,7 +342,7 @@ async def bind(
 ) -> CatalogItem:
     await _limit(request, user, "write")
     revision_owner_id = body.revision_owner_id or user["user_id"]
-    if revision_owner_id not in {user["user_id"], ARCHON_OWNER_ID}:
+    if revision_owner_id not in {user["user_id"], COGENTREX_OWNER_ID}:
         raise HTTPException(403, detail={"code": "skill_owner_forbidden"})
     try:
         revision = await _repo(request).get_revision(
@@ -352,7 +352,7 @@ async def bind(
         )
         if revision.review_state != "approved" and body.enabled:
             raise HTTPException(409, detail={"code": "skill_not_approved"})
-        if revision_owner_id == ARCHON_OWNER_ID and revision.trust_state != "verified":
+        if revision_owner_id == COGENTREX_OWNER_ID and revision.trust_state != "verified":
             raise HTTPException(409, detail={"code": "bundled_skill_not_verified"})
         await _repo(request).bind(
             owner_id=user["user_id"],

@@ -14,7 +14,7 @@ This page is the single canonical explanation of the concept. Modules, tracks, w
 
 ## Beginner explanation
 
-Explain the concept in plain English before using Archon-specific names. Give one concrete example and state what the concept is not.
+Explain the concept in plain English before using Cogentrex-specific names. Give one concrete example and state what the concept is not.
 
 ## Prerequisites and vocabulary
 
@@ -109,9 +109,9 @@ stateDiagram-v2
     Failed --> [*]
 ```
 
-## Archon implementation and source walkthrough
+## Cogentrex implementation and source walkthrough
 
-Explain how Archon applies the general concept and why the selected catalog status is honest. Do not turn a historical, mock, fixture, manifest, class, or route into a live claim.
+Explain how Cogentrex applies the general concept and why the selected catalog status is honest. Do not turn a historical, mock, fixture, manifest, class, or route into a live claim.
 
 ### Source symbols
 
@@ -195,7 +195,7 @@ Restate the concept implementation status and its limiting boundary. Local Compo
 
 ### 30-second answer
 
-> `<definition → Archon use → evidence → limitation>`
+> `<definition → Cogentrex use → evidence → limitation>`
 
 ### Follow-up prompts
 

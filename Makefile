@@ -58,20 +58,20 @@ docker-logs:
 	$(DOCKER) logs -f
 
 ## Package rich learning media into a deterministic archive
-## Requires: MEDIA_LIBRARY=/path/to/archon-learning-media
-MEDIA_LIBRARY ?= ../archon-learning-media
-MEDIA_TARGET ?= ../archon-learning-media
+## Requires: MEDIA_LIBRARY=/path/to/cogentrex-learning-media
+MEDIA_LIBRARY ?= ../cogentrex-learning-media
+MEDIA_TARGET ?= ../cogentrex-learning-media
 media-package:
 	$(PYTHON) scripts/learning-media-release.py package \
 		--library $(MEDIA_LIBRARY) \
-		--output dist/archon-learning-media.tar.gz \
+		--output dist/cogentrex-learning-media.tar.gz \
 		--manifest-output docs/visual-learning/release-manifest.json
 
 ## Install rich learning media from local archive (offline)
 ## Requires: ARCHIVE=/path/to/archive.tar.gz
 media-install-local:
 ifndef ARCHIVE
-	$(error ARCHIVE is required for offline install, e.g. make media-install-local ARCHIVE=dist/archon-learning-media.tar.gz)
+	$(error ARCHIVE is required for offline install, e.g. make media-install-local ARCHIVE=dist/cogentrex-learning-media.tar.gz)
 endif
 	$(PYTHON) scripts/learning-media-release.py install \
 		--target $(MEDIA_TARGET) \

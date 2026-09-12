@@ -22,7 +22,7 @@ def _config(database: Path) -> Config:
 
 
 def test_mcp_migration_round_trip_and_postgresql_safe(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     config = _config(tmp_path / "migration.db")
     command.upgrade(config, "20260826_07")
     command.upgrade(config, "20260826_08")

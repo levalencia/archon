@@ -2,9 +2,9 @@
 
 > **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task. Do not deploy, spend provider budget, push, or open a PR without Luis's explicit authorization.
 
-**Goal:** Make Archon emit OpenTelemetry exactly once to its local Collector and allow operators to select one or more downstream destinations through environment configuration, without changing application code.
+**Goal:** Make Cogentrex emit OpenTelemetry exactly once to its local Collector and allow operators to select one or more downstream destinations through environment configuration, without changing application code.
 
-**Architecture:** Archon will own a standard OpenTelemetry `TracerProvider` and export OTLP/gRPC only to the local OpenTelemetry Collector. A validated, generated Collector configuration will implement destination selection and fan-out for `debug`, `logfire`, `azure-monitor`, `tempo`, and a bounded generic `otlp` destination. Logfire-specific display metadata may remain as optional span attributes, but the Logfire SDK will no longer own the provider or transport telemetry directly.
+**Architecture:** Cogentrex will own a standard OpenTelemetry `TracerProvider` and export OTLP/gRPC only to the local OpenTelemetry Collector. A validated, generated Collector configuration will implement destination selection and fan-out for `debug`, `logfire`, `azure-monitor`, `tempo`, and a bounded generic `otlp` destination. Logfire-specific display metadata may remain as optional span attributes, but the Logfire SDK will no longer own the provider or transport telemetry directly.
 
 **Tech Stack:** Python 3.11, OpenTelemetry SDK 1.44, OTLP/gRPC, OpenTelemetry Collector Contrib, FastAPI instrumentation, Docker Compose, pytest, YAML, Logfire OTLP, Azure Monitor/Application Insights, Grafana Tempo.
 
@@ -17,7 +17,7 @@
 Use one selector variable:
 
 ```dotenv
-ARCHON_OTEL_DESTINATIONS=logfire
+COGENTREX_OTEL_DESTINATIONS=logfire
 ```
 
 It accepts a strict comma-separated allowlist:
@@ -34,28 +34,28 @@ Examples:
 
 ```dotenv
 # Local development
-ARCHON_OTEL_DESTINATIONS=debug
+COGENTREX_OTEL_DESTINATIONS=debug
 
 # Current hosted trace destination
-ARCHON_OTEL_DESTINATIONS=logfire
+COGENTREX_OTEL_DESTINATIONS=logfire
 
 # Future Azure-only operation
-ARCHON_OTEL_DESTINATIONS=azure-monitor
+COGENTREX_OTEL_DESTINATIONS=azure-monitor
 
 # Future Tempo-only operation
-ARCHON_OTEL_DESTINATIONS=tempo
+COGENTREX_OTEL_DESTINATIONS=tempo
 
 # Explicit fan-out
-ARCHON_OTEL_DESTINATIONS=logfire,azure-monitor
+COGENTREX_OTEL_DESTINATIONS=logfire,azure-monitor
 ```
 
-Changing destination-specific credentials is separate from selecting a destination. Once those credentials are present in the protected environment, switching destinations requires changing only `ARCHON_OTEL_DESTINATIONS` and restarting the managed stack. No Python code or Compose edits are required.
+Changing destination-specific credentials is separate from selecting a destination. Once those credentials are present in the protected environment, switching destinations requires changing only `COGENTREX_OTEL_DESTINATIONS` and restarting the managed stack. No Python code or Compose edits are required.
 
 ### Final data path
 
 ```mermaid
 flowchart LR
-    A[Archon Backend] -->|OTLP gRPC| C[OpenTelemetry Collector]
+    A[Cogentrex Backend] -->|OTLP gRPC| C[OpenTelemetry Collector]
     C -->|selected: debug| D[Local debug exporter]
     C -->|selected: logfire| L[Pydantic Logfire]
     C -->|selected: azure-monitor| Z[Azure Monitor / Application Insights]
@@ -90,7 +90,7 @@ A Collector configuration cannot safely turn arbitrary YAML exporters on and off
 | Luis's concern | Read this section |
 |---|---|
 | “One env variable should switch destinations” | Operator contract and Task 2 |
-| “Do not couple Archon to Logfire” | Target ownership model and Task 3 |
+| “Do not couple Cogentrex to Logfire” | Target ownership model and Task 3 |
 | “Support Log Analytics” | Destination adapter matrix and Task 5 |
 | “Support Jaeger/Tempo/other” | Destination adapter matrix and Task 5 |
 | “Do not leak credentials” | Trust boundaries and Task 2 |
@@ -116,7 +116,7 @@ You may skip the bite-sized implementation mechanics unless reviewing the engine
 
 ```mermaid
 flowchart LR
-    A[Archon Backend] --> P[Logfire-owned TracerProvider]
+    A[Cogentrex Backend] --> P[Logfire-owned TracerProvider]
     P --> L[Logfire Cloud]
     P --> B[Additional BatchSpanProcessor]
     B -->|OTLP gRPC| C[Local OTel Collector]
@@ -133,11 +133,11 @@ flowchart LR
 Observed implementation facts:
 
 - `backend/app/observability/otel_exporter.py` calls `logfire.configure()` and obtains the provider from Logfire.
-- The same class constructs an OTLP/gRPC processor using `ARCHON_OTEL_ENDPOINT`.
+- The same class constructs an OTLP/gRPC processor using `COGENTREX_OTEL_ENDPOINT`.
 - Names and comments call that processor “Jaeger”, but the endpoint is `otel-collector:4317`.
 - `deploy/otel-collector.local.yml` exports only to `debug`; no Jaeger backend exists in the seven-service local stack.
 - `LOGFIRE_TOKEN` and `LOGFIRE_BASE_URL` currently enter the backend container.
-- Archon emits standard GenAI spans plus optional Logfire rendering attributes.
+- Cogentrex emits standard GenAI spans plus optional Logfire rendering attributes.
 
 ### Naming debt to remove
 
@@ -154,7 +154,7 @@ Observed implementation facts:
 
 ```mermaid
 flowchart TB
-    subgraph Application[Archon process]
+    subgraph Application[Cogentrex process]
         I[FastAPI instrumentation]
         R[Runtime GenAI spans]
         P[Application-owned TracerProvider]
@@ -202,7 +202,7 @@ Principles:
 ### Primary selector
 
 ```dotenv
-ARCHON_OTEL_DESTINATIONS=debug
+COGENTREX_OTEL_DESTINATIONS=debug
 ```
 
 Rules:
@@ -217,10 +217,10 @@ Rules:
 ### Application-to-Collector variables
 
 ```dotenv
-ARCHON_OTEL_ENABLED=true
-ARCHON_OTEL_SERVICE_NAME=archon-local
-ARCHON_OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4317
-ARCHON_OTEL_COLLECTOR_INSECURE=true
+COGENTREX_OTEL_ENABLED=true
+COGENTREX_OTEL_SERVICE_NAME=cogentrex-local
+COGENTREX_OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4317
+COGENTREX_OTEL_COLLECTOR_INSECURE=true
 ```
 
 These configure only the internal hop. They do not select cloud vendors.
@@ -228,7 +228,7 @@ These configure only the internal hop. They do not select cloud vendors.
 ### Logfire destination
 
 ```dotenv
-ARCHON_OTEL_DESTINATIONS=logfire
+COGENTREX_OTEL_DESTINATIONS=logfire
 LOGFIRE_OTLP_ENDPOINT=<official regional OTLP endpoint>
 LOGFIRE_TOKEN=<protected write token>
 ```
@@ -238,7 +238,7 @@ Implementation prerequisite: confirm the exact official OTLP endpoint suffix and
 ### Azure Monitor destination
 
 ```dotenv
-ARCHON_OTEL_DESTINATIONS=azure-monitor
+COGENTREX_OTEL_DESTINATIONS=azure-monitor
 APPLICATIONINSIGHTS_CONNECTION_STRING=<protected connection string>
 ```
 
@@ -247,7 +247,7 @@ Implementation prerequisite: run `otelcol-contrib components` against the reposi
 ### Tempo destination
 
 ```dotenv
-ARCHON_OTEL_DESTINATIONS=tempo
+COGENTREX_OTEL_DESTINATIONS=tempo
 TEMPO_OTLP_ENDPOINT=tempo:4317
 TEMPO_OTLP_INSECURE=true
 ```
@@ -257,11 +257,11 @@ For a hosted Tempo endpoint, TLS must default to enabled and authentication must
 ### Generic OTLP destination
 
 ```dotenv
-ARCHON_OTEL_DESTINATIONS=otlp
-ARCHON_OTEL_GENERIC_ENDPOINT=https://otel.example.com:4317
-ARCHON_OTEL_GENERIC_PROTOCOL=grpc
-ARCHON_OTEL_GENERIC_AUTHORIZATION=<protected complete authorization header>
-ARCHON_OTEL_GENERIC_INSECURE=false
+COGENTREX_OTEL_DESTINATIONS=otlp
+COGENTREX_OTEL_GENERIC_ENDPOINT=https://otel.example.com:4317
+COGENTREX_OTEL_GENERIC_PROTOCOL=grpc
+COGENTREX_OTEL_GENERIC_AUTHORIZATION=<protected complete authorization header>
+COGENTREX_OTEL_GENERIC_INSECURE=false
 ```
 
 Security rules:
@@ -278,7 +278,7 @@ Security rules:
 | Destination | Collector exporter | Required configuration | Deterministic proof | Live proof |
 |---|---|---|---|---|
 | `debug` | `debug` | none | generated config + collector startup | new trace batch in logs |
-| `logfire` | official OTLP HTTP/gRPC path | endpoint + write token | config validation with fake token, no network | Archon run and tool visible in Logfire Agents |
+| `logfire` | official OTLP HTTP/gRPC path | endpoint + write token | config validation with fake token, no network | Cogentrex run and tool visible in Logfire Agents |
 | `azure-monitor` | `azuremonitor` if supported by pinned contrib image | Application Insights connection string | component/config validation without transmission | trace visible in Application Insights/Log Analytics |
 | `tempo` | `otlp/tempo` | endpoint, TLS, optional auth | config validation + local fake OTLP receiver | trace queryable in Tempo |
 | `otlp` | `otlp/generic` or `otlphttp/generic` | endpoint, protocol, TLS, bounded auth | generated config + fake receiver | destination-specific observation |
@@ -293,17 +293,17 @@ sequenceDiagram
     participant Env as Protected env
     participant Generator as Collector config generator
     participant Compose
-    participant Archon
+    participant Cogentrex
     participant Collector
     participant Destination
 
-    Operator->>Env: Set ARCHON_OTEL_DESTINATIONS
+    Operator->>Env: Set COGENTREX_OTEL_DESTINATIONS
     Operator->>Compose: local-stack start
     Compose->>Generator: Validate selector + required variables
     Generator-->>Compose: Protected collector YAML
     Compose->>Collector: Start selected exporters
-    Compose->>Archon: Set one internal OTLP endpoint
-    Archon->>Collector: Export standard OTel spans
+    Compose->>Cogentrex: Set one internal OTLP endpoint
+    Cogentrex->>Collector: Export standard OTel spans
     Collector->>Destination: Batch/retry/authenticate/export
     Destination-->>Operator: Trace available for inspection
 ```
@@ -359,7 +359,7 @@ Never place token values in:
 **Objective:** Prove the exact Collector components and configuration keys supported by the pinned image.
 
 **Files:**
-- Create temporary files only under `/tmp/archon-otel-spike/`
+- Create temporary files only under `/tmp/cogentrex-otel-spike/`
 - Read: `deploy/otel-collector.local.yml`
 - Read: `docker-compose.local.yml`
 
@@ -418,7 +418,7 @@ uv run pytest -q \
 
 ### Task 2: Build the allowlisted Collector config generator
 
-**Objective:** Convert `ARCHON_OTEL_DESTINATIONS` into a deterministic, secret-free Collector YAML.
+**Objective:** Convert `COGENTREX_OTEL_DESTINATIONS` into a deterministic, secret-free Collector YAML.
 
 **Files:**
 - Create: `scripts/generate-otel-collector-config.py`
@@ -435,7 +435,7 @@ uv run pytest -q \
 4. Use `${env:VARIABLE}` references for credentials; never interpolate secret values into YAML.
 5. Write atomically with mode `0600`.
 6. Return only sanitized destination names and output path.
-7. Store `ARCHON_OTEL_COLLECTOR_CONFIG_FILE` in the managed runtime state.
+7. Store `COGENTREX_OTEL_COLLECTOR_CONFIG_FILE` in the managed runtime state.
 8. Remove the generated config during canonical `stop` cleanup.
 
 **Recommended processor pipeline:**
@@ -464,7 +464,7 @@ otlp receiver → memory_limiter → batch → selected exporters
 **RED tests:**
 
 1. Application creates its own `TracerProvider` with `service.name`.
-2. Exactly one OTLP processor targets `ARCHON_OTEL_COLLECTOR_ENDPOINT`.
+2. Exactly one OTLP processor targets `COGENTREX_OTEL_COLLECTOR_ENDPOINT`.
 3. No application code imports `logfire`.
 4. No application code reads `LOGFIRE_TOKEN`, Azure connection strings, or Tempo credentials.
 5. Disabling OTel produces a safe in-memory/no-op fallback.
@@ -500,7 +500,7 @@ otlp receiver → memory_limiter → batch → selected exporters
 
 ```mermaid
 flowchart TB
-    R[invoke_agent Archon]
+    R[invoke_agent Cogentrex]
     M1[chat model — iteration 1]
     T1[execute_tool calculator]
     M2[chat model — iteration 2]
@@ -547,7 +547,7 @@ flowchart TB
 
 - Use the officially verified OTLP protocol and regional endpoint.
 - Pass write token to the Collector only.
-- Preserve Logfire Agents acceptance for `Archon`, tool definitions, and real calls.
+- Preserve Logfire Agents acceptance for `Cogentrex`, tool definitions, and real calls.
 - Remove `LOGFIRE_TOKEN` and `LOGFIRE_BASE_URL` from backend service environment.
 
 #### Azure Monitor
@@ -648,7 +648,7 @@ uv run pytest -q \
 ```
 
 ```bash
-cd /Users/luisvalencia/Documents/archon
+cd /Users/luisvalencia/Documents/cogentrex
 make test
 make lint
 git diff --check
@@ -690,7 +690,7 @@ flowchart TD
     C --> D[Select logfire via env]
     D --> E[Restart managed stack]
     E --> F[Run real calculator scenario]
-    F --> G{Archon + calculator visible?}
+    F --> G{Cogentrex + calculator visible?}
     G -->|Yes| H[Remove embedded Logfire path/dependency]
     G -->|No| I[Rollback to embedded Logfire provider]
     I --> J[Retain generated collector work disabled]
@@ -704,7 +704,7 @@ flowchart TD
 
 1. `./scripts/local-stack.sh status` reports ready.
 2. Run a real prompt that must invoke `calculator`.
-3. Confirm the run appears under Agents → Archon.
+3. Confirm the run appears under Agents → Cogentrex.
 4. Confirm Tools shows the actual tool definition and one call.
 5. Confirm Trace shows `invoke_agent` with sibling `chat` and `execute_tool` children.
 6. Confirm prompts, responses, tool arguments/results and RAG content remain absent.
@@ -716,7 +716,7 @@ flowchart TD
 1. Select `azure-monitor`.
 2. Start with a protected connection string or approved managed identity.
 3. Emit a deterministic trace without provider spend.
-4. Query Application Insights/Log Analytics for `service.name=archon-local`.
+4. Query Application Insights/Log Analytics for `service.name=cogentrex-local`.
 5. Record exact trace evidence and limitations.
 
 **Tempo acceptance, only when explicitly authorized and available:**
@@ -841,11 +841,11 @@ Do not implement Azure and Tempo live delivery before the collector-first Logfir
 
 ## Approval decisions before implementation
 
-1. **Selector format:** approve `ARCHON_OTEL_DESTINATIONS` as a comma-separated allowlist, supporting both one destination and fan-out.
+1. **Selector format:** approve `COGENTREX_OTEL_DESTINATIONS` as a comma-separated allowlist, supporting both one destination and fan-out.
 2. **Default:** approve `debug` as the no-cloud default.
 3. **Application decoupling:** approve removing the Logfire SDK from backend dependencies only after collector-to-Logfire live acceptance.
 4. **Azure scope:** approve configuration support now, but defer actual Azure resource provisioning and live ingestion until credentials/resources are explicitly authorized.
-5. **Privacy:** keep content capture disabled; only schemas, operation names, IDs, status, duration and usage metadata leave Archon.
+5. **Privacy:** keep content capture disabled; only schemas, operation names, IDs, status, duration and usage metadata leave Cogentrex.
 6. **Restart semantics:** accept that changing the protected destination selector requires canonical stop/start, not live mutation.
 
 ---
@@ -854,9 +854,9 @@ Do not implement Azure and Tempo live delivery before the collector-first Logfir
 
 The change is complete only when:
 
-- Archon application code depends on standard OTel, not a destination SDK, for provider ownership.
+- Cogentrex application code depends on standard OTel, not a destination SDK, for provider ownership.
 - The backend emits to exactly one internal Collector endpoint.
-- `ARCHON_OTEL_DESTINATIONS` controls generated Collector exporters.
+- `COGENTREX_OTEL_DESTINATIONS` controls generated Collector exporters.
 - Invalid selection and missing credentials fail before container mutation.
 - Backend receives no destination credentials.
 - Current Logfire Agents and Tools behavior still passes live.

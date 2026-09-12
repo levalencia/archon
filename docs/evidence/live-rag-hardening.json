@@ -1,5 +1,5 @@
 {
-  "schema": "archon.live-rag-hardening.v1",
+  "schema": "cogentrex.live-rag-hardening.v1",
   "generated_at": "2026-08-31T19:43:42Z",
   "base_commit": "a48737634c8022e32aeed0c7b4b5b1f670c1766b",
   "candidate_commit": "86dbca1deb68637f9daa548a74660c696e98725f",

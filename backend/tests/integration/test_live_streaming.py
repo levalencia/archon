@@ -1,10 +1,10 @@
 """Live-provider integration tests for SSE streaming bugs.
 
-These tests hit the running Archon stack with real LLM calls. They cost money
+These tests hit the running Cogentrex stack with real LLM calls. They cost money
 and are non-deterministic (the model decides which tools to call).
 
 Run explicitly:
-    ARCHON_LIVE_TESTS=1 uv run pytest tests/integration/test_live_streaming.py -v
+    COGENTREX_LIVE_TESTS=1 uv run pytest tests/integration/test_live_streaming.py -v
 
 Prerequisites:
     - Stack running: ./scripts/local-stack.sh start --live-provider
@@ -19,11 +19,11 @@ import os
 import pytest
 import requests
 
-LIVE = os.environ.get("ARCHON_LIVE_TESTS", "") == "1"
-BASE_URL = os.environ.get("ARCHON_BASE_URL", "http://127.0.0.1:80")
+LIVE = os.environ.get("COGENTREX_LIVE_TESTS", "") == "1"
+BASE_URL = os.environ.get("COGENTREX_BASE_URL", "http://127.0.0.1:80")
 
 pytestmark = [
-    pytest.mark.skipif(not LIVE, reason="Set ARCHON_LIVE_TESTS=1 to run live tests"),
+    pytest.mark.skipif(not LIVE, reason="Set COGENTREX_LIVE_TESTS=1 to run live tests"),
     pytest.mark.live,
 ]
 

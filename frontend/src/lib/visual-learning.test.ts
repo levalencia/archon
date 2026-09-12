@@ -27,9 +27,9 @@ const concepts: LearningConcept[] = [
 ];
 
 const studio = {
-  schema: 'archon.visual-learning-studio', version: 3, generated_from: [],
+  schema: 'cogentrex.visual-learning-studio', version: 3, generated_from: [],
   stats: {
-    concepts: 66, modules: 16, stories: 5, architecture_layers: 5, learning_packs: 5,
+    concepts: 67, modules: 16, stories: 5, architecture_layers: 5, learning_packs: 5,
     statuses: { implemented: 46, partial: 14, deferred: 6 },
   },
   roadmap: [], modules: [], concepts, stories: [],
@@ -50,7 +50,7 @@ describe('Visual Learning Studio helpers', () => {
   it('loads and validates the multi-view schema', async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(studio), { status: 200 }));
     await expect(loadVisualLearningStudio(fetcher)).resolves.toEqual(studio);
-    expect(fetcher).toHaveBeenCalledWith('/learning/archon-studio.json');
+    expect(fetcher).toHaveBeenCalledWith('/learning/cogentrex-studio.json');
   });
 
   it('rejects stale counts or schema versions', async () => {

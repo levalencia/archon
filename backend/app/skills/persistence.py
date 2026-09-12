@@ -353,14 +353,14 @@ class SkillRepository:
 
     async def list_discoverable(self, *, owner_id: str) -> list[SkillRevisionRow]:
         """Return the approved catalog for administrative/search use, never runtime scope."""
-        from app.skills.bundled import ARCHON_OWNER_ID
+        from app.skills.bundled import COGENTREX_OWNER_ID
 
         async with self._sessions() as session:
             rows = list(
                 await session.scalars(
                     select(SkillRevisionRow)
                     .where(
-                        SkillRevisionRow.owner_id.in_((owner_id, ARCHON_OWNER_ID)),
+                        SkillRevisionRow.owner_id.in_((owner_id, COGENTREX_OWNER_ID)),
                         SkillRevisionRow.review_state == "approved",
                         SkillRevisionRow.trust_state.in_(("allowlisted", "verified")),
                     )
@@ -407,13 +407,13 @@ class SkillRepository:
 
     async def get_visible_revision(self, *, owner_id: str, revision_id: str) -> SkillRevisionRow:
         """Catalog visibility lookup; runtime callers use get_project_visible_revision."""
-        from app.skills.bundled import ARCHON_OWNER_ID
+        from app.skills.bundled import COGENTREX_OWNER_ID
 
         async with self._sessions() as session:
             row = await session.scalar(
                 select(SkillRevisionRow).where(
                     SkillRevisionRow.id == revision_id,
-                    SkillRevisionRow.owner_id.in_((owner_id, ARCHON_OWNER_ID)),
+                    SkillRevisionRow.owner_id.in_((owner_id, COGENTREX_OWNER_ID)),
                     SkillRevisionRow.review_state == "approved",
                     SkillRevisionRow.trust_state.in_(("allowlisted", "verified")),
                 )
@@ -580,7 +580,7 @@ class ProjectInstructionRepository:
         if not content.strip():
             raise ValueError("project instructions must not be empty")
         source = InstructionSource.from_content(
-            content, ".archon/instructions.md", ".", InstructionFamily.MANUAL
+            content, ".cogentrex/instructions.md", ".", InstructionFamily.MANUAL
         )
         snapshot = await self.append_sources(
             owner_id=owner_id,

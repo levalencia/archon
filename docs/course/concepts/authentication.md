@@ -40,7 +40,7 @@ It checks the HMAC signature, a non-empty subject, and an expiry later than curr
 That reload means a signed username or admin bit is not the final source of current user state.
 The default JWT lifetime in this implementation is 24 hours.
 
-`AuthRepository.register_api_key` returns one random `archon_...` secret to the caller.
+`AuthRepository.register_api_key` returns one random `cogentrex_...` secret to the caller.
 The database receives only its SHA-256 digest plus key name and user ID.
 `resolve_api_key` hashes the presented key, finds its record, and reloads its user.
 The API-key path is tried before Bearer/cookie JWT resolution.
@@ -53,7 +53,7 @@ flowchart TD
   R[protected request] --> K{X-API-Key present?}
   K -->|yes| KH[hash and resolve key]
   KH -->|valid user| A[authenticated context]
-  KH -->|miss| T{Bearer or archon_token?}
+  KH -->|miss| T{Bearer or cogentrex_token?}
   K -->|no| T
   T -->|yes| J[verify exact HS256 header, signature, sub, exp]
   J -->|valid| U[reload user by subject]
@@ -142,7 +142,7 @@ Expected reasoning: signature and expiry establish token validity, while the dur
 
 ## 30-second answer
 
-“Archon authenticates local users through one `get_current_user` dependency. Passwords use salted scrypt hashes, API keys are stored as SHA-256 hashes, and JWTs require the exact HS256 header, signature, subject, and expiry. JWT and API-key paths reload the current durable user. That proves identity on tested local paths; ownership, policy, CSRF, rotation, and production IdP concerns remain separate.”
+“Cogentrex authenticates local users through one `get_current_user` dependency. Passwords use salted scrypt hashes, API keys are stored as SHA-256 hashes, and JWTs require the exact HS256 header, signature, subject, and expiry. JWT and API-key paths reload the current durable user. That proves identity on tested local paths; ownership, policy, CSRF, rotation, and production IdP concerns remain separate.”
 
 ## Self-check
 

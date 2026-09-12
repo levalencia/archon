@@ -2,7 +2,7 @@
 name: security-review
 description: Threat-model and review security boundaries
 version: 1.0.0
-tags: [security-review, archon]
+tags: [security-review, cogentrex]
 references: [references/checklist.md]
 triggers: ['security review', 'threat model', 'vulnerability']
 negative_triggers: ['skip security', 'do not audit']

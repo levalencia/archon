@@ -1,11 +1,11 @@
-# JSON Schema for Archon tools
+# JSON Schema for Cogentrex tools
 
 > **Implementation status:** `implemented` for the documented tool-input subset
 
 ## Beginner explanation
 
 JSON Schema is a vocabulary for describing the shape of JSON data.
-Archon uses a deliberately small, custom-validated subset to reject malformed tool arguments before permissions or handler code run.
+Cogentrex uses a deliberately small, custom-validated subset to reject malformed tool arguments before permissions or handler code run.
 It is an intentionally bounded contract—not a claim of compliance with the full JSON Schema specification.
 
 ## Prerequisites and vocabulary
@@ -47,7 +47,7 @@ flowchart TD
   Enum -->|yes| Copy[detached deep copy]
 ```
 
-## Supported Archon subset
+## Supported Cogentrex subset
 
 A typical contract is:
 
@@ -71,7 +71,7 @@ Unknown fields fail unless `additionalProperties` is exactly `true`.
 
 ## Explicit non-support
 
-Archon does not claim recursive validation of nested object properties or array items.
+Cogentrex does not claim recursive validation of nested object properties or array items.
 It does not implement `$ref`, `$defs`, `oneOf`, `allOf`, `anyOf`, `not`, formats, regex patterns, lengths, numeric ranges, or the complete standard's meta-schema behavior.
 Any unrecognized root/property keyword is rejected during tool registration, so unsupported constraints cannot masquerade as enforced policy.
 
@@ -113,7 +113,7 @@ Schema failures should be distinguishable from permission, policy, timeout, and 
 A standards-compliant JSON Schema library offers more keywords and interoperability but adds dependency/version complexity.
 Pydantic models provide rich Python validation and typed outputs but need translation to provider tool schemas.
 Handwritten validators fit domain semantics but can drift from advertised definitions.
-Archon's compact subset is auditable and sufficient for simple tools, but nested contracts should not pretend to be enforced.
+Cogentrex's compact subset is auditable and sufficient for simple tools, but nested contracts should not pretend to be enforced.
 
 ## Lab versus production
 
@@ -123,11 +123,11 @@ Treat unsupported keywords as design errors rather than documentation decoration
 
 ## 30-second interview answer
 
-“Archon advertises and enforces a compact JSON Schema subset for tool arguments: object roots, required fields, properties, a Boolean additional-properties policy, six basic property types, and type-sensitive enums. Registration validates and freezes metadata; each call is validated and deep-copied before permissions or execution. Nested schemas, `$ref`, composition, formats, and ranges are not claimed. Schema checks shape—not authorization, sanitization, containment, or business semantics.”
+“Cogentrex advertises and enforces a compact JSON Schema subset for tool arguments: object roots, required fields, properties, a Boolean additional-properties policy, six basic property types, and type-sensitive enums. Registration validates and freezes metadata; each call is validated and deep-copied before permissions or execution. Nested schemas, `$ref`, composition, formats, and ranges are not claimed. Schema checks shape—not authorization, sanitization, containment, or business semantics.”
 
 ## Self-check questions
 
-1. **Is Archon a full JSON Schema validator?** No; it implements and tests an intentionally bounded fail-closed subset for tool arguments.
+1. **Is Cogentrex a full JSON Schema validator?** No; it implements and tests an intentionally bounded fail-closed subset for tool arguments.
 2. **Are booleans valid integers?** No, despite Python's `bool` subclassing `int`.
 3. **What is the default unknown-field behavior?** Fail closed unless `additionalProperties` is true.
 4. **Are nested object properties recursively checked?** No.

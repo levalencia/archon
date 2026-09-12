@@ -56,9 +56,9 @@ class InstructionRevisionRef:
     revision_id: str
     content_hash: str
     order: int
-    relative_path: str = ".archon/instructions.md"
+    relative_path: str = ".cogentrex/instructions.md"
     scope_path: str = "."
-    family: str = "archon"
+    family: str = "cogentrex"
     is_override: bool = False
     byte_count: int = 0
 
@@ -67,7 +67,7 @@ class InstructionRevisionRef:
         _hash(self.content_hash, "instruction content_hash")
         _text(self.relative_path, "instruction relative_path", 1024)
         _text(self.scope_path, "instruction scope_path", 1024)
-        if self.family not in {"archon", "agents", "claude", "manual"}:
+        if self.family not in {"cogentrex", "agents", "claude", "manual"}:
             raise ValueError("invalid instruction family")
         if type(self.is_override) is not bool:
             raise ValueError("instruction is_override must be boolean")

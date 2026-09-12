@@ -18,7 +18,7 @@ from app.observability.logging import safe_value_metadata
 
 logger = structlog.get_logger()
 
-MEMORY_FILE = "archon_memory.json"
+MEMORY_FILE = "cogentrex_memory.json"
 MAX_MEMORY_CHARS = 2000
 
 
@@ -116,7 +116,7 @@ class SessionStore:
     Like Hermes session_search tool.
     """
 
-    def __init__(self, path: str = "archon_sessions.json") -> None:
+    def __init__(self, path: str = "cogentrex_sessions.json") -> None:
         self._path = Path(path)
         self._sessions: list[dict] = []
         self._load()

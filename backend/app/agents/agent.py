@@ -7,7 +7,7 @@ The agent follows a Think → Act → Observe cycle:
 4. If final answer → return it
 5. Max iterations prevent infinite loops; token budget prevents cost overruns
 
-See: https://github.com/levalencia/production-ai-agents/articles/day-02-reasoning-loops/
+See: https://github.com/levalencia/cogentrex/articles/day-02-reasoning-loops/
 Concept: ReAct (Reason + Act) loop with iteration caps and cost controls
 """
 
@@ -23,7 +23,7 @@ from app.observability.logging import get_correlation_id
 
 logger = structlog.get_logger()
 
-SYSTEM_PROMPT = """You are Archon, a production AI research assistant.
+SYSTEM_PROMPT = """You are Cogentrex, a production AI research assistant.
 
 TODAY'S DATE: {current_date}
 IMPORTANT: The current year is 2026.
@@ -140,7 +140,7 @@ class ProductionAgent:
         tools: ToolExecutor | None = None,
         audit: AuditLog | None = None,
         permissions: PermissionChecker | None = None,
-        agent_id: str = "archon",
+        agent_id: str = "cogentrex",
         max_iterations: int | None = None,
         token_budget: int | None = None,
         system_prompt_extra: str = "",
@@ -292,7 +292,7 @@ class ProductionAgent:
             self._steps.append(
                 {
                     "type": "tool_call",
-                    "agent": "archon",
+                    "agent": "cogentrex",
                     "detail": f"Called tool: {tool_name}",
                     "content": f"Tool {tool_name} returned result",
                 }

@@ -1,9 +1,9 @@
-"""OpenTelemetry tracing for Archon.
+"""OpenTelemetry tracing for Cogentrex.
 
 Creates spans for: LLM calls, tool executions, agent steps, RAG queries.
 Exports to Jaeger via OTLP when configured, or no-op in testing.
 
-See: https://github.com/levalencia/production-ai-agents/
+See: https://github.com/levalencia/cogentrex/
 Concept: Layer 6 - Observability (distributed tracing)
 """
 
@@ -73,7 +73,7 @@ class Tracer:
     In testing, it collects spans in memory for assertions.
     """
 
-    def __init__(self, service_name: str = "archon") -> None:
+    def __init__(self, service_name: str = "cogentrex") -> None:
         self.service_name = service_name
         self.spans: list[Span] = []
         self._current_span: Span | None = None

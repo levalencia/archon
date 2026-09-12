@@ -1,4 +1,4 @@
-# Archon Architecture Diagrams
+# Cogentrex Architecture Diagrams
 
 These diagrams describe the current evidence-backed system. Historical diagrams that implied pgvector, Azure Blob, unbounded dynamic swarms, or host-process sandboxing were removed because those paths were not the verified product. Jaeger now exists as an optional loopback-only local trace destination behind the OpenTelemetry Collector.
 

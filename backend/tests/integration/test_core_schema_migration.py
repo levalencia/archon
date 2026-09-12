@@ -22,7 +22,7 @@ CORE_TABLES = (
     "artifacts",
 )
 CORE_METADATA = [Base.metadata.tables[name] for name in CORE_TABLES]
-EXPECTED_HEAD = "20260902_22"
+EXPECTED_HEAD = "20260912_23"
 
 
 def _config(database: Path) -> Config:
@@ -78,7 +78,7 @@ def test_every_sqlalchemy_table_has_an_alembic_create_table_owner() -> None:
 
 
 def test_core_reconciliation_fresh_roundtrip_matches_models(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "fresh-core.db"
     config = _config(database)
     assert ScriptDirectory.from_config(config).get_heads() == [EXPECTED_HEAD]
@@ -118,7 +118,7 @@ def test_core_reconciliation_fresh_roundtrip_matches_models(tmp_path: Path, monk
 def test_stamped_historical_database_missing_core_is_reconciled(
     tmp_path: Path, monkeypatch, starting_revision: str
 ) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / f"missing-{starting_revision}.db"
     config = _config(database)
     command.upgrade(config, starting_revision)
@@ -148,7 +148,7 @@ def test_stamped_historical_database_missing_core_is_reconciled(
 def test_core_reconciliation_adopts_legacy_schema_without_losing_rows(
     tmp_path: Path, monkeypatch
 ) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "legacy-core.db"
     engine = create_engine(f"sqlite:///{database}")
     Base.metadata.create_all(engine, tables=CORE_METADATA)
@@ -239,7 +239,7 @@ def _malformed_users_sql(change: str) -> str:
 def test_core_reconciliation_rejects_incompatible_legacy_contract(
     tmp_path: Path, monkeypatch, change: str
 ) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "incompatible-core.db"
     config = _config(database)
     command.upgrade(config, "20260901_21")
@@ -251,7 +251,7 @@ def test_core_reconciliation_rejects_incompatible_legacy_contract(
 
 
 def test_core_reconciliation_rejects_partial_legacy_table(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "partial-core.db"
     config = _config(database)
     command.upgrade(config, "20260901_21")
@@ -262,7 +262,7 @@ def test_core_reconciliation_rejects_partial_legacy_table(tmp_path: Path, monkey
 
 
 def test_core_reconciliation_offline_sql_fails_closed(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     output = io.StringIO()
     config = _config(tmp_path / "offline.db")
     config.output_buffer = output
@@ -312,7 +312,7 @@ def _patch_inspector_columns_with_pg_defaults(engine, monkeypatch):
 
 def test_known_pg_legacy_defaults_accepted(tmp_path: Path, monkeypatch) -> None:
     """Known historical PG server defaults must be accepted during adoption."""
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "pg-defaults.db"
     engine = create_engine(f"sqlite:///{database}")
     Base.metadata.create_all(engine, tables=[Base.metadata.tables[t] for t in CORE_TABLES])
@@ -327,7 +327,7 @@ def test_known_pg_legacy_defaults_accepted(tmp_path: Path, monkeypatch) -> None:
 
 def test_unknown_pg_server_default_rejected(tmp_path: Path, monkeypatch) -> None:
     """An unexpected server default must still trigger fail-closed RuntimeError."""
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "bad-pg-defaults.db"
     engine = create_engine(f"sqlite:///{database}")
     Base.metadata.create_all(engine, tables=[Base.metadata.tables[t] for t in CORE_TABLES])
@@ -354,7 +354,7 @@ def test_unknown_pg_server_default_rejected(tmp_path: Path, monkeypatch) -> None
 
 def test_known_pg_defaults_with_data_preserved(tmp_path: Path, monkeypatch) -> None:
     """Adoption with known PG defaults must preserve existing row data."""
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "pg-defaults-data.db"
     engine = create_engine(f"sqlite:///{database}")
     tables = Base.metadata.tables

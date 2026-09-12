@@ -4,7 +4,7 @@
       "browser": {
         "summary": "The user-facing client that starts an authenticated request and renders streamed progress and the final answer.",
         "teaching": {
-          "definition": "The Browser is Archon's user-facing client. It collects the user's message and project context, sends them to the application boundary, and renders the response and observable run state.",
+          "definition": "The Browser is Cogentrex's user-facing client. It collects the user's message and project context, sends them to the application boundary, and renders the response and observable run state.",
           "receives": ["User input", "Conversation and project selection", "Authenticated session state"],
           "responsibility": "Construct an HTTP request for the selected operation and present returned events without making authorization or execution decisions.",
           "produces": ["An authenticated API request", "Client-side interaction state"],
@@ -17,7 +17,7 @@
       "gateway": {
         "summary": "The single exposed ingress that routes browser traffic to internal services while keeping application services off host ports.",
         "teaching": {
-          "definition": "The Gateway is Archon's public application boundary in the local stack. It receives browser traffic and forwards each route to the correct internal service.",
+          "definition": "The Gateway is Cogentrex's public application boundary in the local stack. It receives browser traffic and forwards each route to the correct internal service.",
           "receives": ["HTTP method, path, headers, cookies or authorization header", "Request body"],
           "responsibility": "Route frontend and API requests while preserving the single-ingress topology; it does not decide tool policy or agent behavior.",
           "produces": ["A routed request to the frontend or backend", "An HTTP error when no upstream is available"],
@@ -95,7 +95,7 @@
       "run-ledger": {
         "summary": "The durable, append-oriented chronology used to reconstruct what the run did, decided, consumed, and why it stopped.",
         "teaching": {
-          "definition": "The Run Ledger is Archon's durable, append-oriented record of run lifecycle events; it is not model memory and it is not hidden chain-of-thought. It stores safe control-flow evidence needed to inspect and reconstruct a run.",
+          "definition": "The Run Ledger is Cogentrex's durable, append-oriented record of run lifecycle events; it is not model memory and it is not hidden chain-of-thought. It stores safe control-flow evidence needed to inspect and reconstruct a run.",
           "receives": ["Run-start and model-call events", "Policy and approval decisions", "Tool result events", "Usage, status, correlation, and stop metadata", "Safe effective-context provenance such as revision IDs and schema hashes"],
           "responsibility": "Preserve ordered evidence of what the runtime observed without changing a failed event into a successful one or storing unrestricted hidden reasoning.",
           "produces": ["Queryable run chronology", "Evidence records for debugging, exports, and evaluation", "Stable correlation between decisions and outcomes"],
@@ -124,7 +124,7 @@
         "teaching": {
           "payload": "An authenticated HTTP request containing the selected route, request headers, and user-provided payload.",
           "transformation": "The browser serializes local interaction state into the API contract.",
-          "trust_boundary": "The request leaves the user-facing client and enters Archon's gateway boundary.",
+          "trust_boundary": "The request leaves the user-facing client and enters Cogentrex's gateway boundary.",
           "precondition": "The client has a request to submit; server-side authorization is still required.",
           "failure_behavior": "Network or routing failure returns an HTTP error and no backend execution should be inferred.",
           "why_it_matters": "This separates an untrusted client request from the internal services responsible for identity, governance, and execution."
@@ -160,7 +160,7 @@
           "trust_boundary": "Deterministically assembled application state crosses into a probabilistic external or local model provider.",
           "precondition": "Caller and project scope are valid, mandatory context fits, and the run still has time, token, iteration, and monetary budget.",
           "failure_behavior": "Missing mandatory context, context overflow, provider failure, or exhausted budget produces an explicit stop/error event rather than an invented model answer.",
-          "why_it_matters": "The model cannot remember Archon state magically. This handoff makes the exact inputs and constraints of each provider call inspectable."
+          "why_it_matters": "The model cannot remember Cogentrex state magically. This handoff makes the exact inputs and constraints of each provider call inspectable."
         },
         "sources": ["backend/app/runtime/context.py", "backend/app/instructions/resolver.py", "backend/app/runtime/engine.py"]
       },
@@ -391,7 +391,7 @@
       "local-runtime": {
         "summary": "The real local multi-service stack is running, ready, and observed through its public gateway.",
         "teaching": {
-          "definition": "Local-runtime evidence exercises the integrated Archon services, storage, routing, and browser experience on the retained local stack.",
+          "definition": "Local-runtime evidence exercises the integrated Cogentrex services, storage, routing, and browser experience on the retained local stack.",
           "receives": ["Built service images", "Real PostgreSQL and Redis", "Configured local runtime"],
           "responsibility": "Prove that components are wired and operational together rather than only in isolated tests.",
           "produces": ["Health/readiness results", "HTTP and browser observations", "Runtime logs and persisted state"],
@@ -404,7 +404,7 @@
       "live-provider": {
         "summary": "A real configured model provider completed the scenario without a mock fallback.",
         "teaching": {
-          "definition": "Live-provider evidence observes Archon interacting with the configured external model service under real provider behavior and usage accounting.",
+          "definition": "Live-provider evidence observes Cogentrex interacting with the configured external model service under real provider behavior and usage accounting.",
           "receives": ["A realistic prompt", "Live credentials/configuration", "Runtime budgets and tools"],
           "responsibility": "Demonstrate behavior that mocks cannot prove, including provider formatting, limits, latency, and tool-call choices.",
           "produces": ["Provider-backed run evidence", "Usage and stop metadata"],
@@ -415,7 +415,7 @@
         "sources": ["docs/IMPLEMENTATION-EVIDENCE.md"]
       },
       "public-deployment": {
-        "summary": "A publicly reachable deployment is independently verified; Archon does not currently claim this level.",
+        "summary": "A publicly reachable deployment is independently verified; Cogentrex does not currently claim this level.",
         "teaching": {
           "definition": "Public-deployment evidence requires an externally reachable environment with verified deployment, readiness, security, and operational ownership.",
           "receives": ["Deployed application and infrastructure", "Public endpoint and deployment evidence"],
@@ -478,7 +478,7 @@
       {"id":"evidence-before-confidence","label":"Evidence before confidence","category":"principle","summary":"Start with observation, then size the claim.","details":"A capability claim must follow the strongest evidence actually collected. Source code supports an implementation claim; deterministic tests support repeatability under controlled inputs; local observation supports integrated local behavior. None of those alone proves public production operation.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
       {"id":"bound-the-environment","label":"Bound the environment","category":"principle","summary":"Always name where and how the behavior was observed.","details":"The same feature may have different evidence states in a unit test, retained local stack, live-provider run, and public deployment. Naming the environment prevents a true local result from being presented as a broader production guarantee.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
       {"id":"expose-limitations","label":"Expose limitations","category":"principle","summary":"State the missing proof next to the evidence you have.","details":"A trustworthy artifact says what remains untested, mocked, unavailable, or out of scope. Limitations are part of the result, not a footnote added after a confident claim.","sources":["docs/implementation/CAPABILITY-ACCEPTANCE.yaml"]},
-      {"id":"capability-claim","label":"Capability claim","category":"architecture","summary":"The exact statement being evaluated.","details":"A useful claim names the behavior, environment, dependencies, and boundary. “Archon supports governed tools locally” is testable; “Archon is production ready” is too broad unless deployment and operational evidence also exist.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
+      {"id":"capability-claim","label":"Capability claim","category":"architecture","summary":"The exact statement being evaluated.","details":"A useful claim names the behavior, environment, dependencies, and boundary. “Cogentrex supports governed tools locally” is testable; “Cogentrex is production ready” is too broad unless deployment and operational evidence also exist.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
       {"id":"code-proof","label":"Code","category":"architecture","summary":"Implementation and wiring exist.","details":"Code evidence identifies concrete implementation, configuration, and call paths. It proves more than a roadmap or manifest, but dead code, incomplete wiring, and unexercised branches remain possible.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
       {"id":"test-proof","label":"Tests","category":"architecture","summary":"Controlled behavior repeats under assertions.","details":"Deterministic tests verify specified success and failure behavior with repeatable inputs. A mock isolates contracts but cannot be presented as evidence that a live provider or public deployment worked.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},
       {"id":"observation-proof","label":"Observation","category":"architecture","summary":"The integrated runtime was actually exercised.","details":"Observation records what happened in the real retained environment: service readiness, HTTP behavior, browser interaction, ledger records, and provider identity where relevant. A timeout, partial startup, or screenshot without underlying readiness is not PASS.","sources":["docs/IMPLEMENTATION-EVIDENCE.md"]},

@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "const": "archon.learning.flashcards"
+      "const": "cogentrex.learning.flashcards"
     },
     "version": {
       "const": 1

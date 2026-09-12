@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in, bounded acceptance checks through Archon's configured model adapter."""
+"""Opt-in, bounded acceptance checks through Cogentrex's configured model adapter."""
 # ruff: noqa: E402 -- direct script execution bootstraps the backend import root.
 
 from __future__ import annotations
@@ -243,7 +243,9 @@ async def run_acceptance(
             )
         else:
             try:
-                repeated_prefix = " ".join(["Archon bounded prompt-cache acceptance prefix"] * 320)
+                repeated_prefix = " ".join(
+                    ["Cogentrex bounded prompt-cache acceptance prefix"] * 320
+                )
                 cache_responses = []
                 for marker in ("first", "second"):
                     cache_responses.append(
@@ -329,7 +331,7 @@ async def main() -> int:
                 operation_count=5,
             )
         except ValueError:
-            print(json.dumps({"schema": "archon.provider-acceptance", "status": "fail"}))
+            print(json.dumps({"schema": "cogentrex.provider-acceptance", "status": "fail"}))
             return 2
         print(json.dumps({"schema": report["schema"], "status": report["status"]}, sort_keys=True))
         return code

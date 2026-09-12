@@ -82,7 +82,7 @@ Durability and cross-process polling are tested on supported databases and obser
 
 ## Interview answer
 
-> Policy is deterministic classification and matching; approval is a durable human decision for one exact request. Archon hashes canonical arguments and binds the receipt to owner/run/call/tool. Atomic terminal transitions, TTL, cancellation, and revalidation prevent broad or replayed consent, while unknown side effects fail closed.
+> Policy is deterministic classification and matching; approval is a durable human decision for one exact request. Cogentrex hashes canonical arguments and binds the receipt to owner/run/call/tool. Atomic terminal transitions, TTL, cancellation, and revalidation prevent broad or replayed consent, while unknown side effects fail closed.
 
 ## Self-check
 

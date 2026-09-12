@@ -1,13 +1,15 @@
 <script lang="ts">
   import { Check, ExternalLink, Minus, Search } from 'lucide-svelte';
+  import type { LearningTutorContext } from '$lib/learning-tutor';
   import { STATUS_META, evidenceFilter, type ConceptStatus, type VisualLearningStudio } from '$lib/visual-learning';
 
-  let { studio }: { studio: VisualLearningStudio } = $props();
+  let { studio, onContextChange = () => {} }: { studio: VisualLearningStudio; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
   let query = $state('');
   let status = $state<ConceptStatus | 'all'>('all');
   let selectedId = $state('agent-anatomy');
   let rows = $derived(evidenceFilter(studio.concepts, query, status));
   let selected = $derived(rows.find(item => item.id === selectedId));
+  $effect(() => { if (selected) onContextChange({ view: 'evidence', concept_id: selected.id }, selected.title); });
 
   $effect(() => {
     const visibleRows = rows;
@@ -33,7 +35,7 @@
 
   <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
     <div class="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--panel)]">
-      <div class="border-b border-[var(--border)] px-4 py-3 text-xs text-[var(--muted)]"><strong class="text-[var(--text)]">{rows.length}</strong> of 66 capabilities</div>
+      <div class="border-b border-[var(--border)] px-4 py-3 text-xs text-[var(--muted)]"><strong class="text-[var(--text)]">{rows.length}</strong> of {studio.stats.concepts} capabilities</div>
       <div class="hidden overflow-x-auto md:block">
         <table class="w-full border-collapse text-left text-xs">
           <thead class="bg-[var(--bg)] text-[10px] uppercase tracking-wider text-[var(--muted)]"><tr><th class="p-3">Capability</th><th class="p-3">Status</th><th class="p-3 text-center">Code</th><th class="p-3 text-center">Tests</th><th class="p-3 text-center">Evidence</th></tr></thead>
@@ -54,7 +56,7 @@
       <div class="space-y-2 p-3 md:hidden">
         {#if !rows.length}<p class="p-3 text-center text-sm text-[var(--muted)]">No capabilities match the current filters.</p>{/if}
         {#each rows as concept}
-          <button onclick={() => selectedId = concept.id} class="min-h-20 w-full rounded-xl border p-3 text-left {selectedId === concept.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--archon-orange-glow)]' : 'border-[var(--border)] bg-[var(--bg)]'}">
+          <button onclick={() => selectedId = concept.id} class="min-h-20 w-full rounded-xl border p-3 text-left {selectedId === concept.id ? 'border-[var(--accent)] bg-[var(--accent-glow)] shadow-[0_0_18px_var(--cogentrex-orange-glow)]' : 'border-[var(--border)] bg-[var(--bg)]'}">
             <div class="flex items-start justify-between gap-2"><strong class="text-sm">{concept.title}</strong><span class="rounded-full px-2 py-1 font-mono text-[9px] uppercase" style={`color:${STATUS_META[concept.status].color};background:${STATUS_META[concept.status].color}14`}>{STATUS_META[concept.status].label}</span></div>
             <span class="mt-2 block text-[10px] text-[var(--muted)]">Code {concept.proof.code ? '✓' : '—'} · Tests {concept.proof.tests ? '✓' : '—'} · Evidence {concept.proof.evidence ? '✓' : '—'}</span>
           </button>

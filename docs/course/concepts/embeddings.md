@@ -50,7 +50,7 @@ flowchart TD
   I -->|yes| A[Accept normalized floats]
 ```
 
-## Archon implementation
+## Cogentrex implementation
 
 The source of truth is `backend/app/services/chunker.py`.
 `EmbeddingCapability` reports provider, model, dimensions, mock status, and readiness.
@@ -150,7 +150,7 @@ Record provider, model, dimensions, dataset version, recall, latency, and cost.
 
 ## 30-second interview answer
 
-“Embeddings map text into a shared vector space so a retriever can rank similarity. Archon validates dimensions and finite numeric values, hardens provider endpoint access, and keeps its deterministic mock explicitly non-production. The managed development target also passed Azure Foundry `text-embedding-3-small` vector and persisted ingest/query acceptance. Cosine similarity remains a ranking signal, not truth or entailment; broad production quality still requires labeled retrieval benchmarks and versioned re-indexing.”
+“Embeddings map text into a shared vector space so a retriever can rank similarity. Cogentrex validates dimensions and finite numeric values, hardens provider endpoint access, and keeps its deterministic mock explicitly non-production. The managed development target also passed Azure Foundry `text-embedding-3-small` vector and persisted ingest/query acceptance. Cosine similarity remains a ranking signal, not truth or entailment; broad production quality still requires labeled retrieval benchmarks and versioned re-indexing.”
 
 ## Self-checks
 

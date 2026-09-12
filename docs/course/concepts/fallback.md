@@ -11,7 +11,7 @@ A fallback may preserve availability while reducing quality.
 It may also convert a clear failure into a plausible but unsafe success.
 The key design question is not “did another endpoint answer?” but “which guarantees remain true?”
 
-## Two fallback forms in Archon
+## Two fallback forms in Cogentrex
 
 `backend/app/agents/fallback_chain.py::FallbackLLMChain` now supports the typed `ModelProvider.complete` boundary and the legacy text-only `chat` API.
 `backend/app/agents/resilient_coordinator.py::ResilientCoordinator` separately supplies fixed stage-specific degraded text.
@@ -190,7 +190,7 @@ Use hedging only for safe idempotent requests because parallel providers increas
 
 ## 30-second interview answer
 
-“Fallback is a semantic substitution, not just another endpoint. Archon's typed `FallbackLLMChain` derives tools, image, and JSON requirements, skips incompatible candidates, and preserves the winning `ModelResponse`, usage, cache counters, stop reason, and provider identity. No single provider means a typed capability error; total outage means typed exhaustion, never an exception-bearing assistant string. The remaining production questions are end-to-end deadlines, live parity, cost, geography, and safety-policy equivalence.”
+“Fallback is a semantic substitution, not just another endpoint. Cogentrex's typed `FallbackLLMChain` derives tools, image, and JSON requirements, skips incompatible candidates, and preserves the winning `ModelResponse`, usage, cache counters, stop reason, and provider identity. No single provider means a typed capability error; total outage means typed exhaustion, never an exception-bearing assistant string. The remaining production questions are end-to-end deadlines, live parity, cost, geography, and safety-policy equivalence.”
 
 ## Self-checks
 

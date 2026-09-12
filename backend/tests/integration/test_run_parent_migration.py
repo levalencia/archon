@@ -34,7 +34,7 @@ def _insert_run(connection: object, run_id: str, parent_run_id: str | None) -> N
 
 
 def test_run_parent_fk_migrates_valid_rows_and_roundtrips(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "run-parent-fk.db"
     config = _config(database)
     command.upgrade(config, "20260826_06")

@@ -37,51 +37,51 @@
 
 /* ─── Dark theme design tokens (always-dark app) ─── */
 :root {
-  /* Archon Evidence Dark — shared brand and learning-media palette */
-  --archon-canvas: #050b16;
-  --archon-surface: #0f172a;
-  --archon-surface-raised: #111c2e;
-  --archon-border: #334155;
-  --archon-text: #f8fafc;
-  --archon-text-secondary: #cbd5e1;
-  --archon-text-muted: #94a3b8;
-  --archon-orange: #f59e0b;
-  --archon-orange-strong: #d97706;
-  --archon-orange-glow: rgba(245, 158, 11, 0.22);
-  --archon-orange-glow-strong: rgba(245, 158, 11, 0.34);
-  --archon-green: #22c55e;
-  --archon-blue: #3b82f6;
-  --archon-purple: #a78bfa;
-  --archon-coral: #fb7185;
+  /* Cogentrex Evidence Dark — shared brand and learning-media palette */
+  --cogentrex-canvas: #050712;
+  --cogentrex-surface: #0a1022;
+  --cogentrex-surface-raised: #11182d;
+  --cogentrex-border: #26324d;
+  --cogentrex-text: #f4f7fb;
+  --cogentrex-text-secondary: #d2d9e6;
+  --cogentrex-text-muted: #a9b4cc;
+  --cogentrex-orange: #f6b44b;
+  --cogentrex-orange-strong: #dc8b18;
+  --cogentrex-orange-glow: rgba(246, 180, 75, 0.22);
+  --cogentrex-orange-glow-strong: rgba(246, 180, 75, 0.34);
+  --cogentrex-green: #5ef2a0;
+  --cogentrex-blue: #6ee7ff;
+  --cogentrex-purple: #8b5cf6;
+  --cogentrex-coral: #ff6b6b;
 
   /* System A — original short tokens */
-  --bg: #080b10;
-  --panel: #10151d;
-  --panel-2: #161d27;
-  --raised: #1b2430;
-  --border: #283342;
-  --text: #f3f7fb;
-  --secondary: #a9b5c4;
-  --muted: #7f8b9b;
-  --accent: var(--archon-orange);
-  --accent-2: var(--archon-orange-strong);
-  --danger: #ff6b72;
-  --warning: #f0bd62;
+  --bg: var(--cogentrex-canvas);
+  --panel: var(--cogentrex-surface);
+  --panel-2: var(--cogentrex-surface-raised);
+  --raised: var(--cogentrex-surface-raised);
+  --border: var(--cogentrex-border);
+  --text: var(--cogentrex-text);
+  --secondary: var(--cogentrex-text-secondary);
+  --muted: var(--cogentrex-text-muted);
+  --accent: var(--cogentrex-orange);
+  --accent-2: var(--cogentrex-orange-strong);
+  --danger: var(--cogentrex-coral);
+  --warning: var(--cogentrex-orange);
   --font-mono: 'SFMono-Regular', Consolas, monospace;
 
   /* System B — semantic aliases used by all page components */
-  --text-primary: #f3f7fb;
-  --text-secondary: #a9b5c4;
-  --text-muted: #7f8b9b;
-  --bg-primary: #080b10;
-  --bg-secondary: #10151d;
-  --bg-tertiary: #1b2430;
-  --bg-hover: #1e2a38;
-  --accent-glow: var(--archon-orange-glow);
+  --text-primary: var(--cogentrex-text);
+  --text-secondary: var(--cogentrex-text-secondary);
+  --text-muted: var(--cogentrex-text-muted);
+  --bg-primary: var(--cogentrex-canvas);
+  --bg-secondary: var(--cogentrex-surface);
+  --bg-tertiary: var(--cogentrex-surface-raised);
+  --bg-hover: #172139;
+  --accent-glow: var(--cogentrex-orange-glow);
   --accent-hover: #fbbf24;
-  --error: #ff6b72;
-  --success: #3fb950;
-  --purple: #7fa7ff;
+  --error: var(--cogentrex-coral);
+  --success: var(--cogentrex-green);
+  --purple: var(--cogentrex-purple);
 
   /* shadcn semantic tokens (dark theme) — prefixed to avoid System A conflicts */
   --radius: 0.625rem;
@@ -91,7 +91,7 @@
   --card-foreground: #f3f7fb;
   --popover: #10151d;
   --popover-foreground: #f3f7fb;
-  --sc-primary: var(--archon-orange);
+  --sc-primary: var(--cogentrex-orange);
   --primary-foreground: #07110f;
   --sc-secondary: #1b2430;
   --secondary-foreground: #a9b5c4;
@@ -103,15 +103,15 @@
   --destructive-foreground: #f3f7fb;
   --sc-border: #283342;
   --input: #283342;
-  --ring: var(--archon-orange);
+  --ring: var(--cogentrex-orange);
   --sidebar: #10151d;
   --sidebar-foreground: #a9b5c4;
-  --sidebar-primary: var(--archon-orange);
+  --sidebar-primary: var(--cogentrex-orange);
   --sidebar-primary-foreground: #07110f;
-  --sidebar-accent: var(--archon-orange-glow);
+  --sidebar-accent: var(--cogentrex-orange-glow);
   --sidebar-accent-foreground: #f3f7fb;
   --sidebar-border: #283342;
-  --sidebar-ring: var(--archon-orange);
+  --sidebar-ring: var(--cogentrex-orange);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -203,7 +203,7 @@ button {
 .avatar {
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--archon-orange), #fb923c);
+  background: linear-gradient(135deg, var(--cogentrex-orange), #fb923c);
   color: #07100f;
   font-weight: 800;
 }
@@ -281,7 +281,7 @@ button {
 }
 
 .conversation-row.active {
-  background: var(--archon-orange-glow);
+  background: var(--cogentrex-orange-glow);
 }
 
 .conversation-select {
@@ -314,7 +314,7 @@ button {
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 3px var(--archon-orange-glow);
+  box-shadow: 0 0 0 3px var(--cogentrex-orange-glow);
   flex: 0 0 auto;
 }
 
@@ -540,7 +540,7 @@ button {
 
 .composer:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--archon-orange-glow);
+  box-shadow: 0 0 0 3px var(--cogentrex-orange-glow);
 }
 
 .composer textarea {
@@ -764,7 +764,7 @@ button {
 .artifact-chips span {
   display: inline-block;
   padding: 7px 10px;
-  border: 1px solid color-mix(in srgb, var(--archon-orange) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cogentrex-orange) 30%, transparent);
   border-radius: 8px;
   color: var(--accent);
   font-size: 12px;

@@ -36,10 +36,10 @@ def _names(items: list[dict[str, object]]) -> set[str]:
 def test_effect_budget_migration_is_single_head_and_round_trips(
     tmp_path: Path, monkeypatch
 ) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "effect-budget.db"
     config = _config(database)
-    assert ScriptDirectory.from_config(config).get_heads() == ["20260902_22"]
+    assert ScriptDirectory.from_config(config).get_heads() == ["20260912_23"]
 
     command.upgrade(config, "20260826_08")
     engine = create_engine(f"sqlite:///{database}")

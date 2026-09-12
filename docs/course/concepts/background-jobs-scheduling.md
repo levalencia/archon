@@ -92,7 +92,7 @@ The integrated Mac candidate passed the full backend suite, Svelte diagnostics, 
 
 ## Interview answer
 
-> Archon replaced its volatile task placeholder with a SQL-backed queue. Claims are conditional and leased; heartbeats retain ownership; a monotonic lease generation prevents stale-worker ABA commits even after manual retry resets the attempt counter. Jobs are owner/project scoped, payloads reject secrets, results are redacted, and retries terminate in dead-letter. The honest semantic is at-least-once. Because an in-process coroutine cannot be forcibly killed, only effect-free or repository-idempotent handlers are enabled until the isolated S8.7 runner provides a process boundary.
+> Cogentrex replaced its volatile task placeholder with a SQL-backed queue. Claims are conditional and leased; heartbeats retain ownership; a monotonic lease generation prevents stale-worker ABA commits even after manual retry resets the attempt counter. Jobs are owner/project scoped, payloads reject secrets, results are redacted, and retries terminate in dead-letter. The honest semantic is at-least-once. Because an in-process coroutine cannot be forcibly killed, only effect-free or repository-idempotent handlers are enabled until the isolated S8.7 runner provides a process boundary.
 
 ## Self-check
 

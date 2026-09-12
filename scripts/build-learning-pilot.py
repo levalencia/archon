@@ -17,14 +17,14 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = ROOT / "docs/visual-learning/pilot/request-lifecycle.json"
 TEACHING = ROOT / "docs/visual-learning/pilot/diagram-teaching.json"
-DEFAULT_OUTPUT = ROOT.parent / "archon-learning-media"
-OWNER = ".archon-learning-library"
+DEFAULT_OUTPUT = ROOT.parent / "cogentrex-learning-media"
+OWNER = ".cogentrex-learning-library"
 PALETTE = {
-    "frontend": ("#3a2608", "#f59e0b"),
-    "backend": ("#0b2447", "#3b82f6"),
+    "frontend": ("#3a2608", "#f6b44b"),
+    "backend": ("#0b2447", "#6ee7ff"),
     "database": ("#21163b", "#a78bfa"),
     "security": ("#2b1420", "#fb7185"),
-    "external": ("#1e293b", "#94a3b8"),
+    "external": ("#1e293b", "#a9b4cc"),
 }
 
 
@@ -134,7 +134,7 @@ def _svg(diagram: dict[str, Any]) -> str:
         centers[label] = (x + box_w / 2, y + box_h / 2)
         wrapped = label.replace(" and ", "\nand ").split("\n")
         text = "".join(
-            f'<text x="{x + box_w / 2}" y="{y + 37 + line_index * 18}" text-anchor="middle" fill="#f8fafc" font-size="13">{html.escape(line)}</text>'
+            f'<text x="{x + box_w / 2}" y="{y + 37 + line_index * 18}" text-anchor="middle" fill="#f4f7fb" font-size="13">{html.escape(line)}</text>'
             for line_index, line in enumerate(wrapped)
         )
         boxes.append(
@@ -145,17 +145,17 @@ def _svg(diagram: dict[str, Any]) -> str:
         sx, sy = centers[source]
         tx, ty = centers[target]
         arrows.append(
-            f'<path d="M {sx + box_w / 2} {sy} L {tx - box_w / 2} {ty}" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow)"/>'
+            f'<path d="M {sx + box_w / 2} {sy} L {tx - box_w / 2} {ty}" stroke="#f6b44b" stroke-width="2" marker-end="url(#arrow)"/>'
             f'<text x="{(sx + tx) / 2}" y="{sy - 14}" text-anchor="middle" fill="#cbd5e1" font-size="10">{html.escape(label)}</text>'
         )
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} 430" role="img" aria-labelledby="title desc">
-<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b"/></marker><pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#334155" stroke-width="0.5"/></pattern></defs>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f6b44b"/></marker><pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#26324d" stroke-width="0.5"/></pattern></defs>
 <title id="title">{html.escape(diagram["title"])}</title><desc id="desc">{html.escape(diagram["description"])}</desc>
-<rect width="100%" height="100%" rx="18" fill="#050b16"/><rect width="100%" height="100%" fill="url(#grid)"/>
-<text x="32" y="52" fill="#f8fafc" font-size="26" font-family="system-ui" font-weight="700">{html.escape(diagram["title"])}</text>
-<text x="32" y="82" fill="#94a3b8" font-size="14" font-family="system-ui">{html.escape(diagram["description"])}</text>
+<rect width="100%" height="100%" rx="18" fill="#050712"/><rect width="100%" height="100%" fill="url(#grid)"/>
+<text x="32" y="52" fill="#f4f7fb" font-size="26" font-family="system-ui" font-weight="700">{html.escape(diagram["title"])}</text>
+<text x="32" y="82" fill="#a9b4cc" font-size="14" font-family="system-ui">{html.escape(diagram["description"])}</text>
 {"".join(arrows)}{"".join(boxes)}
-<text x="32" y="385" fill="#94a3b8" font-size="12" font-family="system-ui">Generated from reviewed Archon sources · Derived learning material</text>
+<text x="32" y="385" fill="#a9b4cc" font-size="12" font-family="system-ui">Generated from reviewed Cogentrex sources · Derived learning material</text>
 </svg>"""
 
 
@@ -165,7 +165,7 @@ def _deck_html(spec: dict[str, Any], diagrams: dict[str, str]) -> str:
     for index, slide in enumerate(spec["slides"], start=1):
         visual = diagrams.get(slide["visual"], "")
         sources = "".join(
-            f'<li><a href="https://github.com/levalencia/archon/blob/{source_commit}/{html.escape(source)}" target="_blank" rel="noopener noreferrer">{html.escape(source)}</a></li>'
+            f'<li><a href="https://github.com/levalencia/cogentrex/blob/{source_commit}/{html.escape(source)}" target="_blank" rel="noopener noreferrer">{html.escape(source)}</a></li>'
             for source in slide["sources"]
         )
         terms = "".join(
@@ -173,14 +173,14 @@ def _deck_html(spec: dict[str, Any], diagrams: dict[str, str]) -> str:
             for item in slide["key_terms"]
         )
         slides.append(f"""<section class="slide" id="slide-{index}" aria-label="Slide {index} of {len(spec["slides"])}">
-<div class="counter">{index:02d} / {len(spec["slides"]):02d}</div><p class="eyebrow">ARCHON REQUEST LIFECYCLE</p>
+<div class="counter">{index:02d} / {len(spec["slides"]):02d}</div><p class="eyebrow">COGENTREX REQUEST LIFECYCLE</p>
 <h2>{html.escape(slide["title"])}</h2><p class="message">{html.escape(slide["message"])}</p>
 <div class="visual">{visual or f'<div class="concept">{html.escape(slide["visual"].replace("-", " ").title())}</div>'}</div>
 <details><summary>Teach this slide</summary><h3>Presenter script</h3><p>{html.escape(slide["presenter_script"])}</p><h3>Key terms</h3><dl>{terms}</dl><h3>Common misconception</h3><p>{html.escape(slide["common_misconception"])}</p><h3>Transition</h3><p>{html.escape(slide["transition"])}</p><h3>Supporting documentation</h3><ul>{sources}</ul></details>
 <nav><a href="#slide-{max(1, index - 1)}" aria-label="Previous slide">←</a><a href="#slide-{min(len(spec["slides"]), index + 1)}" aria-label="Next slide">→</a></nav></section>""")
     limitations = "".join(f"<li>{html.escape(item)}</li>" for item in spec["limitations"])
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(spec["title"])}</title><style>
-:root{{--bg:#050b16;--panel:#0f172a;--text:#f8fafc;--muted:#94a3b8;--accent:#f59e0b;--border:#334155}}*{{box-sizing:border-box}}html{{scroll-behavior:smooth;scroll-snap-type:y mandatory}}body{{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}}.slide{{position:relative;min-height:100vh;padding:6vh 7vw;scroll-snap-align:start;display:grid;grid-template-rows:auto auto auto 1fr auto;gap:1rem;border-bottom:1px solid var(--border)}}.eyebrow,.counter{{font:700 .72rem ui-monospace;letter-spacing:.16em;color:var(--accent)}}.counter{{position:absolute;right:3vw;top:3vh;color:var(--muted)}}h2{{font-size:clamp(2rem,5vw,4.6rem);line-height:1;margin:0;max-width:18ch}}.message{{font-size:clamp(1rem,2vw,1.45rem);line-height:1.5;color:#cbd5e1;max-width:70ch}}.visual{{display:grid;place-items:center;min-height:300px;border:1px solid var(--border);border-radius:18px;background:#07101f;overflow:auto}}.visual svg{{width:100%;height:auto}}.concept{{font-size:clamp(2rem,6vw,5rem);font-weight:800;color:var(--accent);text-align:center;text-transform:uppercase}}details{{color:var(--muted);font-size:.82rem;line-height:1.65}}details h3{{color:var(--accent);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;margin:1rem 0 .35rem}}details dl{{display:grid;grid-template-columns:auto 1fr;gap:.35rem .75rem}}details dt{{color:var(--text);font-weight:700}}details dd{{margin:0}}details a{{color:var(--accent)}}summary{{cursor:pointer;color:#cbd5e1;font-weight:700}}nav{{position:absolute;right:3vw;bottom:3vh;display:flex;gap:.5rem}}nav a{{display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--border);border-radius:50%;color:var(--text);text-decoration:none}}.limits{{padding:2rem;max-width:900px;margin:auto;color:var(--muted)}}@media(prefers-reduced-motion:reduce){{html{{scroll-behavior:auto}}}}@media print{{html{{scroll-snap-type:none}}.slide{{break-after:page;min-height:95vh}}nav{{display:none}}}}</style></head><body>{"".join(slides)}<footer class="limits"><h2>What this does not prove</h2><ul>{limitations}</ul></footer></body></html>"""
+:root{{--bg:#050712;--panel:#0a1022;--text:#f4f7fb;--muted:#a9b4cc;--accent:#f6b44b;--border:#26324d}}*{{box-sizing:border-box}}html{{scroll-behavior:smooth;scroll-snap-type:y mandatory}}body{{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}}.slide{{position:relative;min-height:100vh;padding:6vh 7vw;scroll-snap-align:start;display:grid;grid-template-rows:auto auto auto 1fr auto;gap:1rem;border-bottom:1px solid var(--border)}}.eyebrow,.counter{{font:700 .72rem ui-monospace;letter-spacing:.16em;color:var(--accent)}}.counter{{position:absolute;right:3vw;top:3vh;color:var(--muted)}}h2{{font-size:clamp(2rem,5vw,4.6rem);line-height:1;margin:0;max-width:18ch}}.message{{font-size:clamp(1rem,2vw,1.45rem);line-height:1.5;color:#cbd5e1;max-width:70ch}}.visual{{display:grid;place-items:center;min-height:300px;border:1px solid var(--border);border-radius:18px;background:#07101f;overflow:auto}}.visual svg{{width:100%;height:auto}}.concept{{font-size:clamp(2rem,6vw,5rem);font-weight:800;color:var(--accent);text-align:center;text-transform:uppercase}}details{{color:var(--muted);font-size:.82rem;line-height:1.65}}details h3{{color:var(--accent);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;margin:1rem 0 .35rem}}details dl{{display:grid;grid-template-columns:auto 1fr;gap:.35rem .75rem}}details dt{{color:var(--text);font-weight:700}}details dd{{margin:0}}details a{{color:var(--accent)}}summary{{cursor:pointer;color:#cbd5e1;font-weight:700}}nav{{position:absolute;right:3vw;bottom:3vh;display:flex;gap:.5rem}}nav a{{display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--border);border-radius:50%;color:var(--text);text-decoration:none}}.limits{{padding:2rem;max-width:900px;margin:auto;color:var(--muted)}}@media(prefers-reduced-motion:reduce){{html{{scroll-behavior:auto}}}}@media print{{html{{scroll-snap-type:none}}.slide{{break-after:page;min-height:95vh}}nav{{display:none}}}}</style></head><body>{"".join(slides)}<footer class="limits"><h2>What this does not prove</h2><ul>{limitations}</ul></footer></body></html>"""
 
 
 def _artifact_payload(spec: dict[str, Any], kind: str, content: Any, schema: str) -> dict[str, Any]:
@@ -212,7 +212,7 @@ def build(output: Path, *, audio: Path | None = None, video: Path | None = None)
     if output.exists() and any(output.iterdir()) and not (output / OWNER).is_file():
         raise ValueError("refusing non-empty unowned learning-media directory")
     output.mkdir(parents=True, exist_ok=True)
-    _write(output / OWNER, "archon.learning-library/v1\n")
+    _write(output / OWNER, "cogentrex.learning-library/v1\n")
     published = output / "published" / spec["pack_id"]
     published.mkdir(parents=True, exist_ok=True)
 
@@ -253,7 +253,7 @@ def build(output: Path, *, audio: Path | None = None, video: Path | None = None)
         artifacts.append(item)
 
     deck_dir = published / "request-deck"
-    deck_data = _artifact_payload(spec, "deck", {"slides": spec["slides"]}, "archon.learning.deck")
+    deck_data = _artifact_payload(spec, "deck", {"slides": spec["slides"]}, "cogentrex.learning.deck")
     _json(deck_dir / "deck.json", deck_data)
     _write(deck_dir / "deck.html", _deck_html(spec, diagram_svgs))
     add(
@@ -270,7 +270,7 @@ def build(output: Path, *, audio: Path | None = None, video: Path | None = None)
             spec,
             f"diagram-{index + 1}",
             _diagram_content(diagram, teaching_specs[diagram["id"]]),
-            "archon.learning.diagram",
+            "cogentrex.learning.diagram",
         )
         _json(directory / "diagram.json", diagram_data)
         _write(directory / "diagram.svg", diagram_svgs[diagram["id"]])
@@ -283,7 +283,7 @@ def build(output: Path, *, audio: Path | None = None, video: Path | None = None)
         )
 
     mind = _artifact_payload(
-        spec, "mind-map", {"root": spec["mind_map"]}, "archon.learning.mind-map"
+        spec, "mind-map", {"root": spec["mind_map"]}, "cogentrex.learning.mind-map"
     )
     mind_path = published / "request-mind-map" / "mind-map.json"
     _json(mind_path, mind)
@@ -302,7 +302,7 @@ def build(output: Path, *, audio: Path | None = None, video: Path | None = None)
             }
         )
     flashcards = _artifact_payload(
-        spec, "flashcards", {"cards": cards}, "archon.learning.flashcards"
+        spec, "flashcards", {"cards": cards}, "cogentrex.learning.flashcards"
     )
     cards_path = published / "request-flashcards" / "flashcards.json"
     _json(cards_path, flashcards)
@@ -311,14 +311,14 @@ def build(output: Path, *, audio: Path | None = None, video: Path | None = None)
     questions = []
     for index, question in enumerate(spec["quiz"], 1):
         questions.append({"id": f"question-{index}", **question, "sources": spec["sources"][:2]})
-    quiz = _artifact_payload(spec, "quiz", {"questions": questions}, "archon.learning.quiz")
+    quiz = _artifact_payload(spec, "quiz", {"questions": questions}, "cogentrex.learning.quiz")
     quiz_path = published / "request-quiz" / "quiz.json"
     _json(quiz_path, quiz)
     add("request-quiz", "quiz", "Request Lifecycle Scenario Quiz", quiz_path)
 
     sections = [{**section, "sources": spec["sources"][:2]} for section in spec["study_guide"]]
     guide = _artifact_payload(
-        spec, "study-guide", {"sections": sections}, "archon.learning.study-guide"
+        spec, "study-guide", {"sections": sections}, "cogentrex.learning.study-guide"
     )
     guide_path = published / "request-study-guide" / "study-guide.json"
     _json(guide_path, guide)
@@ -334,7 +334,7 @@ def build(output: Path, *, audio: Path | None = None, video: Path | None = None)
                 for segment in spec["audio_script"]
             ],
         },
-        "archon.learning.audio-script",
+        "cogentrex.learning.audio-script",
     )
     audio_script_path = published / "request-audio" / "audio-script.json"
     _json(audio_script_path, audio_script)
@@ -397,7 +397,7 @@ def build(output: Path, *, audio: Path | None = None, video: Path | None = None)
         )
 
     catalog = {
-        "schema": "archon.learning-library",
+        "schema": "cogentrex.learning-library",
         "version": 1,
         "generated_at": datetime.now(UTC).isoformat(),
         "source_commit": _source_commit(),

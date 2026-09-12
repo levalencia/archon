@@ -81,7 +81,7 @@ The child cannot mint its own authorization. `EvidenceVerifierSpecialist.verify(
 
 ## Interview answer
 
-> Archon treats delegation as an authorization boundary, not a normal function call. The parent canonicalizes the exact bounded request and issues a versioned HMAC envelope. The child requires that envelope, verifies it in constant time, checks exact owner/project/run/content/budget scope and freshness, then atomically consumes a durable nonce before calling the provider. Replays and content mutations fail before execution. The design authenticates local metadata but does not claim encryption or remote PKI.
+> Cogentrex treats delegation as an authorization boundary, not a normal function call. The parent canonicalizes the exact bounded request and issues a versioned HMAC envelope. The child requires that envelope, verifies it in constant time, checks exact owner/project/run/content/budget scope and freshness, then atomically consumes a durable nonce before calling the provider. Replays and content mutations fail before execution. The design authenticates local metadata but does not claim encryption or remote PKI.
 
 ## Self-check
 

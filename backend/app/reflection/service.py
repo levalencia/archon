@@ -93,7 +93,7 @@ def _verdict_validator(value: Any) -> ReflectionVerdict:
 
 
 REFLECTION_VERDICT_CONTRACT = ResponseContract(
-    schema_id="archon.reflection-verdict",
+    schema_id="cogentrex.reflection-verdict",
     schema_version="1",
     json_schema={
         "type": "object",
@@ -149,7 +149,7 @@ def derive_reflection_hmac_key(application_secret: str) -> bytes:
         raise ValueError("reflection fingerprint key is unavailable")
     return hmac.new(
         application_secret.encode("utf-8"),
-        b"archon/reflection-fingerprint-key/v1",
+        b"cogentrex/reflection-fingerprint-key/v1",
         hashlib.sha256,
     ).digest()
 
@@ -157,7 +157,7 @@ def derive_reflection_hmac_key(application_secret: str) -> bytes:
 def _digest(key: bytes, scope: str, label: str, text: str) -> str:
     return hmac.new(
         key,
-        b"archon/reflection/v1\0"
+        b"cogentrex/reflection/v1\0"
         + scope.encode("utf-8")
         + b"\0"
         + label.encode("ascii")

@@ -2,7 +2,7 @@
 
 > **For Hermes:** Use `subagent-driven-development` to implement this plan task-by-task only after Luis approves the open decisions. Planning only: do not implement other Deferred capabilities.
 
-**Goal:** Turn Archon's current in-memory keyword skills into a durable, scoped, versioned, progressively disclosed Skills + Project Instructions system with deterministic assembly, supply-chain controls, capability discovery across native tools/MCP, and observable provenance.
+**Goal:** Turn Cogentrex's current in-memory keyword skills into a durable, scoped, versioned, progressively disclosed Skills + Project Instructions system with deterministic assembly, supply-chain controls, capability discovery across native tools/MCP, and observable provenance.
 
 **Architecture:** Introduce four separate contracts: trusted project workspace/instruction sources, durable versioned skill packages, a deterministic effective-context resolver, and a metadata-first capability index. Project instructions remain durable project context; skills remain task-specific guidance; native tools and MCP remain executable capabilities governed by the existing policy/approval layer. Large catalogs are searched, not injected.
 
@@ -31,7 +31,7 @@ The other seven Deferred capabilities remain out of scope.
 - No new distributed-agent system.
 - No new model-serving, fine-tuning, Kubernetes/public deployment, anonymous sharing, or autonomous production optimization work.
 - No arbitrary host filesystem access chosen by the model.
-- No public MCP marketplace, arbitrary unreviewed servers, generic OAuth platform, sampling, elicitation, or Archon-as-MCP-server mode in this epic. The approved expansion is stdio plus remote Streamable HTTP with governed discovery, protected credential references, health/reconnect, lazy schema loading, permissions and provenance.
+- No public MCP marketplace, arbitrary unreviewed servers, generic OAuth platform, sampling, elicitation, or Cogentrex-as-MCP-server mode in this epic. The approved expansion is stdio plus remote Streamable HTTP with governed discovery, protected credential references, health/reconnect, lazy schema loading, permissions and provenance.
 - No claim that textual contradiction detection is solved semantically. The runtime proves structural precedence and external policy enforcement, not perfect natural-language conflict understanding.
 
 ---
@@ -41,7 +41,7 @@ The other seven Deferred capabilities remain out of scope.
 Repository inspected read-only:
 
 ```text
-Repo: /Users/luisvalencia/Documents/archon
+Repo: /Users/luisvalencia/Documents/cogentrex
 Branch: main
 HEAD: 63215bfad588753d689e91d33eda815fb1cf208a
 Worktree: clean
@@ -117,7 +117,7 @@ No runtime implementation exists. There is no workspace registry, instruction re
 | OpenCode | Discover/select/authorize separation; `allow/ask/deny`; skill compatibility adapters; tool filtering | Enabling all MCP servers/schemas in every prompt |
 | Agent God Mode | Large searchable catalog and metadata index | Hard dependency on Luis's `/home/luis/repos/agent-god-mode` path or importing the whole vault |
 
-Archon writes its own contracts and content. External formats are compatibility adapters, not the internal canonical model.
+Cogentrex writes its own contracts and content. External formats are compatibility adapters, not the internal canonical model.
 
 ---
 
@@ -139,10 +139,10 @@ Every resolved instruction becomes an immutable DB revision before use.
 
 ### D2. Internal canonical instruction format
 
-Canonical Archon file:
+Canonical Cogentrex file:
 
 ```text
-.archon/instructions.md
+.cogentrex/instructions.md
 ```
 
 Compatibility readers:
@@ -218,7 +218,7 @@ Skill scripts/assets are stored as inert metadata in v1. They are not executable
 
 Implement a generic `SkillCatalogProvider` protocol with adapters:
 
-- installed Archon catalog;
+- installed Cogentrex catalog;
 - allowlisted GitHub catalog/manifest;
 - optional Agent God Mode index adapter.
 
@@ -230,7 +230,7 @@ The God Mode adapter is disabled unless explicitly configured and must return me
 
 Do not begin with hundreds of packages.
 
-### Initial Archon-owned skills: 10
+### Initial Cogentrex-owned skills: 10
 
 1. `technical-research`
 2. `code-analysis`
@@ -280,7 +280,7 @@ Extend the existing governed inventory without turning it into a marketplace. Ad
 - lazy schema materialization;
 - source/profile/schema-hash provenance and execution-time TOCTOU revalidation.
 
-No generic public MCP marketplace, arbitrary package execution, generic OAuth platform, sampling, elicitation, resources/prompts support, or Archon-as-MCP-server mode in v1.
+No generic public MCP marketplace, arbitrary package execution, generic OAuth platform, sampling, elicitation, resources/prompts support, or Cogentrex-as-MCP-server mode in v1.
 
 ---
 
@@ -327,7 +327,7 @@ flowchart TD
 - `repository_url`
 - `pinned_commit`
 - `trust_state`: `untrusted | pending | trusted | revoked`
-- `instruction_family`: `archon | agents | claude`
+- `instruction_family`: `cogentrex | agents | claude`
 - timestamps
 
 Unique: `(owner_id, project_id)`.
@@ -353,7 +353,7 @@ Unique: `(workspace_id, relative_path, revision)` and `(workspace_id, content_ha
 
 - stable `id`
 - canonical `name`
-- owner scope: `archon | managed | external`
+- owner scope: `cogentrex | managed | external`
 - description/triggers/negative triggers/tags
 - risk metadata
 - lifecycle state
@@ -568,7 +568,7 @@ Validate YAML frontmatter strictly; cap bytes/files/references; reject traversal
 
 Require allowlisted owner/repository plus commit SHA. Store source URL, commit, path, hash, license metadata and review state. Any hash change creates a disabled new revision.
 
-#### Task 1.4: Migrate the initial ten Archon-owned skills
+#### Task 1.4: Migrate the initial ten Cogentrex-owned skills
 
 **Files:**
 - Create: `backend/app/skills/bundled/<skill>/SKILL.md` for ten curated skills
@@ -603,7 +603,7 @@ Use configured mount keys and canonical container paths. Reject arbitrary paths,
 - Create: `backend/app/instructions/loaders.py`
 - Test: `backend/tests/unit/test_instruction_loaders.py`
 
-Support canonical `.archon/instructions.md` and explicitly configured AGENTS/Claude compatibility. Enforce one family per directory, root-to-leaf traversal, overrides, byte/file/depth limits and cycle detection.
+Support canonical `.cogentrex/instructions.md` and explicitly configured AGENTS/Claude compatibility. Enforce one family per directory, root-to-leaf traversal, overrides, byte/file/depth limits and cycle detection.
 
 #### Task 2.4: Snapshot scanned content before runtime use
 
@@ -822,7 +822,7 @@ Against retained live deployment:
 
 #### Task 6.4: Documentation and generated evidence
 
-Update canonical concept source, implementation evidence, capability acceptance, course coverage and Visual Learning generated manifest. Regenerate NotebookLM source packs from the final merged commit. Update the `archon-learning` handoff.
+Update canonical concept source, implementation evidence, capability acceptance, course coverage and Visual Learning generated manifest. Regenerate NotebookLM source packs from the final merged commit. Update the `cogentrex-learning` handoff.
 
 Only then change `skills-project-instructions` from `Deferred` to `Implemented`.
 
@@ -911,7 +911,7 @@ All must be true:
 
 Target demo narrative:
 
-> Archon loads project instructions from a trusted, owner-scoped workspace, snapshots immutable revisions, resolves root-to-leaf context, selects versioned skills and governed tools through metadata-first discovery, filters capabilities before exposing schemas, and records the exact effective context and permissions in the Run Ledger. External catalogs such as Agent God Mode are searchable adapters, not bulk prompt content or implicit trust sources.
+> Cogentrex loads project instructions from a trusted, owner-scoped workspace, snapshots immutable revisions, resolves root-to-leaf context, selects versioned skills and governed tools through metadata-first discovery, filters capabilities before exposing schemas, and records the exact effective context and permissions in the Run Ledger. External catalogs such as Agent God Mode are searchable adapters, not bulk prompt content or implicit trust sources.
 
 Demo sequence:
 
@@ -942,12 +942,12 @@ Confirmed on 2026-09-01:
    - Projects enable/pin approved revisions.
 
 3. **Instruction format compatibility — confirmed.**
-   - Canonical `.archon/instructions.md`.
+   - Canonical `.cogentrex/instructions.md`.
    - Explicitly configured AGENTS or Claude compatibility per project.
    - Equivalent formats are never merged automatically.
 
 4. **Initial inventory — confirmed.**
-   - Ten Archon-owned coding/reliability skills listed in this plan.
+   - Ten Cogentrex-owned coding/reliability skills listed in this plan.
 
 5. **Agent God Mode — confirmed.**
    - Optional metadata/search adapter.
@@ -958,13 +958,13 @@ Confirmed on 2026-09-01:
 
 7. **Text conflict behavior — confirmed.**
    - Project constraints remain visible.
-   - On material conflict, Archon stops and asks rather than silently overriding.
+   - On material conflict, Cogentrex stops and asks rather than silently overriding.
    - Permissions are always enforced externally regardless of instruction text.
 
 8. **MCP scope — confirmed with practical expansion.**
    - Governed stdio plus remote Streamable HTTP.
    - Deployment profile bootstrap, protected credential references, health/reconnect, discovery, project enablement, lazy schema materialization, permissions, provenance and execution-time TOCTOU checks.
-   - Public marketplace, arbitrary unreviewed servers, generic OAuth platform, sampling, elicitation, resources/prompts and Archon-as-MCP-server remain outside this epic.
+   - Public marketplace, arbitrary unreviewed servers, generic OAuth platform, sampling, elicitation, resources/prompts and Cogentrex-as-MCP-server remain outside this epic.
 
 All product decisions are confirmed. The plan is implementation-ready without expanding the other Deferred capabilities.
 
@@ -974,8 +974,8 @@ All product decisions are confirmed. The plan is implementation-ready without ex
 
 Consider these only after the current Skills + Project Instructions + governed MCP release is deployed and measured:
 
-1. **Archon as an MCP server**
-   - Expose a small allowlisted subset of Archon capabilities to external agents.
+1. **Cogentrex as an MCP server**
+   - Expose a small allowlisted subset of Cogentrex capabilities to external agents.
    - Requires separate authentication, tenancy, rate limits and disclosure policy.
 
 2. **OAuth and enterprise identity**

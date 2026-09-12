@@ -19,8 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.db_store import DelegationNonceRow
 
-_DOMAIN = b"archon.delegation-envelope.v1\x00"
-_KEY_DOMAIN = b"archon.delegation-key.v1\x00"
+_DOMAIN = b"cogentrex.delegation-envelope.v1\x00"
+_KEY_DOMAIN = b"cogentrex.delegation-key.v1\x00"
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,254}$")
 _NONCE = re.compile(r"^[A-Za-z0-9_-]{8,255}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")

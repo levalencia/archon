@@ -14,7 +14,7 @@ Latency observations help summarize how long work takes.
 Metrics are compact because they discard most event detail.
 That makes them useful for trends and alerts but poor for explaining one specific request.
 Use [Structured logging](structured-logging.md) for event records and [Tracing](tracing-opentelemetry.md) for a timed request path.
-Archon’s current registry lives in one Python process and resets when that process restarts.
+Cogentrex’s current registry lives in one Python process and resets when that process restarts.
 
 ## Vocabulary and safe dimensions
 
@@ -82,8 +82,8 @@ The mapping occurs from typed events, not by parsing log text.
 ## Exact exported shape
 
 `get_prometheus_text` emits HELP and TYPE lines plus samples for selected totals.
-Examples include `archon_agent_runs_total`, `archon_agent_errors_total`, `archon_agent_iterations_total`, and `archon_agent_tokens_total`.
-It also emits `archon_agent_run_duration_milliseconds_sum`, model/tool/chat totals, guardrail blocks, and PII detections where defined.
+Examples include `cogentrex_agent_runs_total`, `cogentrex_agent_errors_total`, `cogentrex_agent_iterations_total`, and `cogentrex_agent_tokens_total`.
+It also emits `cogentrex_agent_run_duration_milliseconds_sum`, model/tool/chat totals, guardrail blocks, and PII detections where defined.
 Per-model samples use the `model` label.
 Stop counts use the `reason` label.
 The current implementation does not use the Prometheus client library’s durable multiprocess mode.
@@ -145,7 +145,7 @@ uv run python -c "from app.observability.metrics import reset_metrics,record_run
 ### Done criteria
 
 - [ ] Both tests pass or the blocker is recorded.
-- [ ] Output contains `archon_agent_runs_total 1`.
+- [ ] Output contains `cogentrex_agent_runs_total 1`.
 - [ ] You can identify one bounded label and one forbidden high-cardinality label.
 - [ ] You explain why a restart loses current registry values.
 - [ ] No external telemetry service or real user data was used.
@@ -171,7 +171,7 @@ uv run python -c "from app.observability.metrics import reset_metrics,record_run
 typed event → selected bounded update → process registry → Prometheus text → optional scraper/query/alert
 ```
 
-Archon implements the path only through Prometheus text.
+Cogentrex implements the path only through Prometheus text.
 Logs retain per-event context and traces retain request timing; metrics should not duplicate sensitive detail.
 A useful investigation starts with a metric trend, narrows by safe log fields, and follows a correlation ID into a trace or durable run evidence.
 The metric itself is not durable evidence of semantic correctness.
@@ -206,7 +206,7 @@ The concept is `implemented` for process-local instrumentation only.
 
 ### 30-second answer
 
-> Archon maps typed runtime events through `CompositeEventSink.emit` into low-cardinality counters and duration sums, then exposes selected samples with `get_prometheus_text` at `/metrics`. Tests verify start, stop, token, error, span, and correlation mappings. The registry is process-local and resets, so it proves instrumentation shape—not durable fleet aggregation, alerting, production histograms, or an SLO.
+> Cogentrex maps typed runtime events through `CompositeEventSink.emit` into low-cardinality counters and duration sums, then exposes selected samples with `get_prometheus_text` at `/metrics`. Tests verify start, stop, token, error, span, and correlation mappings. The registry is process-local and resets, so it proves instrumentation shape—not durable fleet aggregation, alerting, production histograms, or an SLO.
 
 ## Self-check
 

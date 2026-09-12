@@ -1,12 +1,12 @@
-# Archon Feature and Course Concept Audit v2
+# Cogentrex Feature and Course Concept Audit v2
 
 > **Audience:** Maintainers and auditors assessing feature coverage against competitors and course curriculum.
-> **Purpose:** Capability audit at revision `27952f4` — compares Archon feature-by-feature with Hermes Agent, Codex, Claude Code, OpenCode, and AIAMastery.
+> **Purpose:** Capability audit at revision `27952f4` — compares Cogentrex feature-by-feature with Hermes Agent, Codex, Claude Code, OpenCode, and AIAMastery.
 > **Status:** Historical snapshot — superseded by CAPABILITY-ACCEPTANCE.yaml and the generated Studio manifest for current status. Labels below describe only the audited revision.
 
 **Date:** 2026-08-25  
 **Audited revision:** `27952f4`  
-**Purpose:** compare Archon feature-by-feature with Hermes Agent, OpenAI Codex, Claude Code, OpenCode, and the AIAMastery curriculum. This is a capability audit, not a production-readiness audit.
+**Purpose:** compare Cogentrex feature-by-feature with Hermes Agent, OpenAI Codex, Claude Code, OpenCode, and the AIAMastery curriculum. This is a capability audit, not a production-readiness audit.
 
 > **Historical snapshot — superseded:** These labels describe revision `27952f4` only. Current status lives in `docs/course/concept-catalog.yaml`, `docs/implementation/CAPABILITY-ACCEPTANCE.yaml`, and the generated Studio manifest. Former `Partial` labels are rendered below as `Historical gap` so they cannot be mistaken for current status.
 
@@ -21,7 +21,7 @@ The prior `FEATURE_MATRIX.md` is not a defensible audit:
 - It compares unlike product categories without explaining scope.
 - It collapses implementation depth, runtime evidence, and UI exposure into a single checkmark.
 
-This audit uses six Archon states:
+This audit uses six Cogentrex states:
 
 | State | Meaning |
 |---|---|
@@ -30,7 +30,7 @@ This audit uses six Archon states:
 | **Scaffold** | Interface/route/class exists, but behavior is mock, stub, placeholder, or test-only |
 | **Missing** | No meaningful implementation |
 | **Configurable** | Code can activate it, but the audited demo/runtime was not configured to use it |
-| **Do not copy** | Competitor capability is not useful for Archon's portfolio thesis right now |
+| **Do not copy** | Competitor capability is not useful for Cogentrex's portfolio thesis right now |
 
 Competitor cells mean **officially documented product capability**, not implementation equivalence.
 
@@ -42,7 +42,7 @@ Legend: `●` documented capability, `◐` limited/scope-specific, `—` not a c
 
 ## 1.1 Runtime and provider layer
 
-| Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
+| Feature | Hermes | Codex | Claude Code | OpenCode | Cogentrex | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Agent execution loop | ● | ● | ● | ● | **Strong** | Typed loop with explicit stop reasons and budgets |
 | Native structured tool calls | ● | ● | ● | ● | **Historical gap** | Native for Anthropic/Foundry; OpenAI/Ollama degrade to text-only adapter |
@@ -61,7 +61,7 @@ Do not add providers. First implement a provider capability matrix and typed fal
 
 ## 1.2 Sessions, context, instructions, and memory
 
-| Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
+| Feature | Hermes | Codex | Claude Code | OpenCode | Cogentrex | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Persistent session history | ● | ● | ● | ● | **Strong** | Conversation messages survive restart |
 | Resume a session | ● | ● | ● | ● | **Historical gap** | Messages reload; run evidence does not |
@@ -76,11 +76,11 @@ Do not add providers. First implement a provider capability matrix and typed fal
 
 ### Recommendation
 
-Archon's unique opportunity is stronger than competitors: expose exact instructions, memory, evidence, compaction summary, token contribution, and provenance for every turn.
+Cogentrex's unique opportunity is stronger than competitors: expose exact instructions, memory, evidence, compaction summary, token contribution, and provenance for every turn.
 
 ## 1.3 Permissions, approvals, and isolation
 
-| Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
+| Feature | Hermes | Codex | Claude Code | OpenCode | Cogentrex | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | `allow / ask / deny` policy | ● | ● | ● | ● | **Historical gap** | `requires_approval` boolean, not a full policy engine |
 | Pattern/path-specific rules | ● | ● | ● | ● | **Missing** | Workspace read boundary exists, but no general pattern policy |
@@ -97,11 +97,11 @@ Archon's unique opportunity is stronger than competitors: expose exact instructi
 
 ### Recommendation
 
-This is the highest-value gap for employment: model Archon after explicit competitor trust ladders, but make policy decisions more observable than competitors.
+This is the highest-value gap for employment: model Cogentrex after explicit competitor trust ladders, but make policy decisions more observable than competitors.
 
 ## 1.4 Tools, skills, MCP, and execution
 
-| Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
+| Feature | Hermes | Codex | Claude Code | OpenCode | Cogentrex | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Tool registry/contracts | ● | ● | ● | ● | **Strong** | Typed definitions, schemas, execution records |
 | Skills/reusable procedures | ● | ● | ● | ● | **Historical gap/strong** | Search/injection/admin exist; provenance/version/permissions are weak |
@@ -119,7 +119,7 @@ This is the highest-value gap for employment: model Archon after explicit compet
 
 ## 1.5 Delegation, multi-agent, and orchestration
 
-| Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
+| Feature | Hermes | Codex | Claude Code | OpenCode | Cogentrex | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Specialist/subagent delegation | ● | ● | ● | ● | **Historical gap** | Four specialist classes and route exist |
 | Independent child context | ● | ● | ● | ● | **Missing** | Specialists are serial calls in one request context |
@@ -138,7 +138,7 @@ Do not add dynamic spawning yet. First make one specialist run measurable: indep
 
 ## 1.6 Run evidence, observability, evaluation, and recovery
 
-| Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
+| Feature | Hermes | Codex | Claude Code | OpenCode | Cogentrex | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Live ordered event timeline | ◐ | ● hooks/events | ● hooks | ● plugins/events | **Strong live / weak durable** | Excellent during run; disappears on reload |
 | Durable owner-scoped run ledger | ◐ sessions | ● history | ● sessions/checkpoints | ● sessions | **Historical gap** | Runtime events persisted, but no owner-scoped API/UI trajectory |
@@ -155,7 +155,7 @@ Do not add dynamic spawning yet. First make one specialist run measurable: indep
 
 ## 1.7 UX and product surface
 
-| Feature | Hermes | Codex | Claude Code | OpenCode | Archon | Evidence-based verdict |
+| Feature | Hermes | Codex | Claude Code | OpenCode | Cogentrex | Evidence-based verdict |
 |---|:---:|:---:|:---:|:---:|---|---|
 | Multi-session navigation | ● | ● | ● | ● | **Strong/historical gap** | Conversations exist; run identity is missing |
 | Permission inbox/dialog | ● | ● | ● | ● | **Historical gap** | Modal exists only for current SSE run |
@@ -165,14 +165,14 @@ Do not add dynamic spawning yet. First make one specialist run measurable: indep
 | Health/readiness UX | ◐ | ◐ | ◐ | ◐ | **Misleading** | `403` appears as `Down`; hardcoded Healthy states |
 | Context/memory inspector | ● usage/search | ◐ | ● context | ◐ | **Historical gap/fake** | Hardcoded Memory page and incomplete live context provenance |
 | Evaluation dashboard | — | ◐ | — | — | **Scaffold** | Two action cards, no real run configuration/history/comparison |
-| Keyboard-first operation | ● TUI | ● | ● | ● | **Missing / optional** | Not necessary unless Archon becomes a coding-agent UI |
+| Keyboard-first operation | ● TUI | ● | ● | ● | **Missing / optional** | Not necessary unless Cogentrex becomes a coding-agent UI |
 | Accessibility and responsive tests | ◐ | ● product | ● product | ● product | **Historical gap** | Basic semantics; no broad a11y/visual regression coverage |
 
 ---
 
 # 2. Competitor gap summary
 
-## Archon is already competitive in
+## Cogentrex is already competitive in
 
 1. Typed budgeted runtime.
 2. Native Anthropic/Foundry tool calls.
@@ -201,7 +201,7 @@ Do not add dynamic spawning yet. First make one specialist run measurable: indep
 1. Checkpoint code/conversation separately.
 2. Redacted run export/share.
 3. Provider capability negotiation and typed fallback.
-4. LSP/test/lint evidence integration if Archon adds a coding-agent workflow.
+4. LSP/test/lint evidence integration if Cogentrex adds a coding-agent workflow.
 5. Session/run queue with pause/cancel/resume.
 
 ### Do not copy now
@@ -224,7 +224,7 @@ Status columns:
 - **Code:** meaningful implementation exists.
 - **Live:** the default/product request path genuinely uses the concept.
 - **Tests:** tests prove behavior, not merely imports/attributes.
-- **UI:** the behavior is visible or operable in Archon.
+- **UI:** the behavior is visible or operable in Cogentrex.
 
 | Day | Course concept | Code | Live | Tests | UI | Honest verdict / gap |
 |---:|---|:---:|:---:|:---:|:---:|---|
@@ -270,7 +270,7 @@ Status columns:
 
 This is not `26/30 complete`. A defensible statement is:
 
-> Archon contains code or an artifact for 29 of 30 course days, but only 3 days are currently demonstrated as deep, end-to-end product capabilities. Sixteen are meaningful partial implementations and ten are scaffolds or deployment artifacts.
+> Cogentrex contains code or an artifact for 29 of 30 course days, but only 3 days are currently demonstrated as deep, end-to-end product capabilities. Sixteen are meaningful partial implementations and ten are scaffolds or deployment artifacts.
 
 That is still a strong learning portfolio; it is simply a different claim.
 
@@ -302,7 +302,7 @@ That is still a strong learning portfolio; it is simply a different claim.
 
 ---
 
-# 5. What is actually missing from Archon
+# 5. What is actually missing from Cogentrex
 
 ## Missing because competitors demonstrate it well
 
@@ -406,11 +406,11 @@ That is still a strong learning portfolio; it is simply a different claim.
 
 # 7. Recommended positioning for employment
 
-Do not claim that Archon beats or matches Hermes, Codex, Claude Code, and OpenCode feature for feature.
+Do not claim that Cogentrex beats or matches Hermes, Codex, Claude Code, and OpenCode feature for feature.
 
 Use this instead:
 
-> Archon consolidates the most important reliability patterns from modern agent harnesses into a visual learning workbench: typed model/tool contracts, bounded execution, live evidence, approvals, context inspection, grounded evaluation, and provider portability. The project deliberately exposes which capabilities are production-wired versus experimental course prototypes.
+> Cogentrex consolidates the most important reliability patterns from modern agent harnesses into a visual learning workbench: typed model/tool contracts, bounded execution, live evidence, approvals, context inspection, grounded evaluation, and provider portability. The project deliberately exposes which capabilities are production-wired versus experimental course prototypes.
 
 The strongest future differentiator is not another tool or agent. It is an **evidence-first reliability workflow** that competitors expose only partially:
 
@@ -430,7 +430,7 @@ The strongest future differentiator is not another tool or agent. It is an **evi
 ## Course sources
 
 - Private AIAMastery Day 1–30 repositories under `ai-agent-mastery-p/day1` through `day30`.
-- Archon `docs/PLAN.md` course mapping.
-- Archon source and tests at revision `27952f4`.
+- Cogentrex `docs/PLAN.md` course mapping.
+- Cogentrex source and tests at revision `27952f4`.
 
 No paid lesson text is reproduced here; this document contains only a derived concept/status index.

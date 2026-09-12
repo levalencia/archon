@@ -1,7 +1,7 @@
 # WEBAPP-PLAN.md — Production AI Agent Webapp
 
 > **Audience:** Contributors and interviewers wanting to understand original design intent.
-> **Purpose:** Original scope and architecture plan for Archon. The 142 checklist items record design goals, not completion claims.
+> **Purpose:** Original scope and architecture plan for Cogentrex. The 142 checklist items record design goals, not completion claims.
 > **Status:** Historical planning document — current implementation truth lives in [../IMPLEMENTATION-EVIDENCE.md](../IMPLEMENTATION-EVIDENCE.md).
 
 ## For Startup Interviews ($150K+ AI Agent Engineer Roles)
@@ -9,7 +9,7 @@
 **Author:** Luis Valencia Munoz
 **Created:** 2026-08-21
 **Original status:** Active at authoring time; current capability status is tracked in [../IMPLEMENTATION-EVIDENCE.md](../IMPLEMENTATION-EVIDENCE.md)
-**Repo:** `github.com/levalencia/production-ai-agents`
+**Repo:** `github.com/levalencia/cogentrex`
 
 ---
 
@@ -17,7 +17,7 @@
 
 ## 1. What We're Building
 
-### The App: **Archon** — Enterprise AI Research & Operations Assistant
+### The App: **Cogentrex** — Enterprise AI Research & Operations Assistant
 
 A production-grade, multi-agent AI assistant that helps knowledge workers research topics, analyze documents, manage tasks, and get answers — with **full enterprise security, observability, and compliance** visible in a professional UI.
 
@@ -904,7 +904,7 @@ The webapp is "done" when:
 
 # God Mode Skill Additions (from 2,404-skill vault analysis)
 
-The following additions were extracted from 8 specialized skills in the agent-god-mode vault and cross-referenced with the Archon plan. Full details in GOD-MODE-ADDITIONS.md.
+The following additions were extracted from 8 specialized skills in the agent-god-mode vault and cross-referenced with the Cogentrex plan. Full details in GOD-MODE-ADDITIONS.md.
 
 ## Skills Analyzed
 
@@ -913,7 +913,7 @@ The following additions were extracted from 8 specialized skills in the agent-go
 | agent-creator | Uniform Tool Interface, DAG-based planning, evaluator registry |
 | architecture-patterns | Hexagonal/Ports+Adapters, modular monolith, ADRs |
 | tdd-guide | RED-GREEN-REFACTOR with pytest, mutation testing, coverage gates |
-| senior-security | STRIDE threat model for Archon, OWASP+LLM Top 10 mapping |
+| senior-security | STRIDE threat model for Cogentrex, OWASP+LLM Top 10 mapping |
 | python-observability | structlog with OTel trace correlation, processor chains |
 | opentelemetry | Full OTel Collector config, auto-instrumentation, PII scrubbing |
 | promptfoo-evaluation | Quality gates in CI, golden test sets, echo provider |

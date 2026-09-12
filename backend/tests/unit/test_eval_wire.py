@@ -19,7 +19,7 @@ def reset_chat_state(tmp_path, monkeypatch):
 
     chat._tools_singleton = None
     chat._db_store = None
-    monkeypatch.setenv("ARCHON_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/eval.db")
+    monkeypatch.setenv("COGENTREX_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/eval.db")
     yield
     chat._tools_singleton = None
     chat._db_store = None

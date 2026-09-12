@@ -1,1 +1,1 @@
-"""Archon isolated sandbox runner."""
+"""Cogentrex isolated sandbox runner."""

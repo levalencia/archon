@@ -13,7 +13,7 @@ Readiness asks a different question: “should this instance receive traffic rig
 A database outage should normally make an instance unready, not dead.
 If liveness also depended on the database, an orchestrator might restart every healthy application process while the shared database remains down.
 That restart loop adds load and hides the real cause.
-Archon therefore keeps `/healthz` shallow and makes `/readyz` dependency-aware.
+Cogentrex therefore keeps `/healthz` shallow and makes `/readyz` dependency-aware.
 Neither endpoint is an authenticated agent job, a historical uptime record, or an end-to-end user transaction.
 
 ## Vocabulary
@@ -192,7 +192,7 @@ A production monitor should record revision, instance, region, probe latency, an
 | synthetic user flow | stronger end-to-end signal | expensive, stateful, and requires test identities |
 | startup probe | protects slow initialization | additional orchestration configuration |
 
-Archon chooses shallow liveness and dependency-aware readiness for the local target.
+Cogentrex chooses shallow liveness and dependency-aware readiness for the local target.
 Synthetic transactions and historical availability remain separate operational work.
 
 ## Lab vs production
@@ -211,7 +211,7 @@ The concept is `implemented` within the local configured-dependency boundary.
 
 ### 30-second answer
 
-> Liveness asks whether the process should be restarted; readiness asks whether it should receive traffic. Archon keeps `/healthz` shallow and makes `/readyz` check the conversation repository, rate limiter, and configured OTLP exporter, while reporting safe capability metadata. Dependency failure returns `503 degraded` without raw exceptions. Tests prove those contracts, not historical uptime, an SLA, or every external-provider workflow.
+> Liveness asks whether the process should be restarted; readiness asks whether it should receive traffic. Cogentrex keeps `/healthz` shallow and makes `/readyz` check the conversation repository, rate limiter, and configured OTLP exporter, while reporting safe capability metadata. Dependency failure returns `503 degraded` without raw exceptions. Tests prove those contracts, not historical uptime, an SLA, or every external-provider workflow.
 
 ## Self-check
 

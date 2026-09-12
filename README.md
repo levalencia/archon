@@ -1,8 +1,14 @@
 <div align="center">
 
-# Archon
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="frontend/static/brand/cogentrex-logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="frontend/static/brand/cogentrex-logo-light.svg">
+  <img alt="Cogentrex" src="frontend/static/brand/cogentrex-logo-light.svg" width="360">
+</picture>
 
-### Learn to build reliable AI agents
+# Cogentrex
+
+### Build agents you can explain.
 
 A hands-on capstone for learning how to build, govern, inspect, and evaluate advanced AI agents.
 
@@ -12,9 +18,9 @@ A hands-on capstone for learning how to build, govern, inspect, and evaluate adv
 
 ---
 
-## What Archon is
+## What Cogentrex is
 
-Archon is a working agent control plane that you can run, study, and extend — not
+Cogentrex is a working agent control plane that you can run, study, and extend — not
 a toy chat wrapper around an LLM. It teaches one auditable lifecycle:
 
 ```
@@ -28,7 +34,7 @@ against documents, and evaluated later.
 
 The goal is practical mastery: understand the architecture, trace it into real
 code, exercise its failure modes, and prepare for advanced agentic AI engineering
-roles. Archon is a local learning project, not a public production service.
+roles. Cogentrex is a local learning project, not a public production service.
 
 ## Architecture
 
@@ -83,7 +89,7 @@ preflight. No live-provider calls.
 ### Start the local application
 
 ```bash
-ARCHON_LOCAL_PORT=80 ./scripts/local-stack.sh start
+COGENTREX_LOCAL_PORT=80 ./scripts/local-stack.sh start
 ./scripts/local-stack.sh status
 ./scripts/local-stack.sh url
 ```
@@ -97,17 +103,17 @@ decks, diagrams, audio, video, and study activities used by Present, Listen, and
 
 ```bash
 make media-install
-ARCHON_LOCAL_PORT=80 ./scripts/local-stack.sh start
+COGENTREX_LOCAL_PORT=80 ./scripts/local-stack.sh start
 ```
 
 To study real-provider behavior:
 
 ```bash
 ./scripts/local-stack.sh stop
-ARCHON_LOCAL_PORT=80 ./scripts/local-stack.sh start --live-provider
+COGENTREX_LOCAL_PORT=80 ./scripts/local-stack.sh start --live-provider
 ```
 
-Live mode imports only an allowlist of `ARCHON_LLM_*` settings from
+Live mode imports only an allowlist of `COGENTREX_LLM_*` settings from
 `backend/.env`. Switching modes always requires an explicit `stop`.
 
 Stop and clean up:
@@ -148,20 +154,20 @@ Start with the [human evidence summary](docs/EVIDENCE.md). Exact technical statu
 
 ### Deliberate limits
 
-Archon does **not** claim:
+Cogentrex does **not** claim:
 
 - public or cloud deployment
 - production traffic, SLOs, or on-call operations
 - GPU or high-throughput model serving
 - fine-tuning or training
-- pgvector-backed retrieval (Archon explicitly does not use pgvector)
+- pgvector-backed retrieval (Cogentrex explicitly does not use pgvector)
 - autonomous unapproved production optimization
 
 These gaps are documented in [Remaining Deferred Gaps](docs/REMAINING-DEFERRED-GAPS.md).
 
 ## Security boundary
 
-Archon treats the user, model, MCP output, documents, and tool arguments as
+Cogentrex treats the user, model, MCP output, documents, and tool arguments as
 untrusted input. The local host, Docker daemon, and encryption master key remain
 trusted boundaries. Local acceptance does not replace an independent security
 audit.

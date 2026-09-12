@@ -21,7 +21,7 @@ def config_for(database: Path) -> Config:
 
 
 def test_drift_candidate_migration_round_trips(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "drift-candidates.db"
     config = config_for(database)
     tables = {

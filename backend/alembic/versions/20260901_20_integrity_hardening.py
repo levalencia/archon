@@ -63,7 +63,7 @@ def _replace_guards(*, hardened: bool) -> None:
         op.execute(
             "CREATE TRIGGER trg_skill_revisions_immutable BEFORE UPDATE OF "
             f"{columns} OR DELETE ON skill_revisions FOR EACH ROW "
-            "EXECUTE FUNCTION archon_spi_reject_revision_mutation()"
+            "EXECUTE FUNCTION cogentrex_spi_reject_revision_mutation()"
         )
         op.execute("DROP TRIGGER IF EXISTS trg_skill_references_immutable ON skill_references")
         op.execute("DROP TRIGGER IF EXISTS trg_skill_references_insert ON skill_references")
@@ -71,10 +71,10 @@ def _replace_guards(*, hardened: bool) -> None:
             op.execute(
                 "CREATE TRIGGER trg_skill_references_immutable BEFORE UPDATE OR DELETE "
                 "ON skill_references FOR EACH ROW "
-                "EXECUTE FUNCTION archon_spi_reject_revision_mutation()"
+                "EXECUTE FUNCTION cogentrex_spi_reject_revision_mutation()"
             )
             op.execute(
-                "CREATE OR REPLACE FUNCTION archon_spi_reject_approved_reference_insert() "
+                "CREATE OR REPLACE FUNCTION cogentrex_spi_reject_approved_reference_insert() "
                 "RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
                 "IF EXISTS (SELECT 1 FROM skill_revisions AS revision "
                 "WHERE revision.id=NEW.revision_id AND revision.owner_id=NEW.owner_id "
@@ -84,10 +84,10 @@ def _replace_guards(*, hardened: bool) -> None:
             )
             op.execute(
                 "CREATE TRIGGER trg_skill_references_insert BEFORE INSERT ON skill_references "
-                "FOR EACH ROW EXECUTE FUNCTION archon_spi_reject_approved_reference_insert()"
+                "FOR EACH ROW EXECUTE FUNCTION cogentrex_spi_reject_approved_reference_insert()"
             )
         else:
-            op.execute("DROP FUNCTION IF EXISTS archon_spi_reject_approved_reference_insert()")
+            op.execute("DROP FUNCTION IF EXISTS cogentrex_spi_reject_approved_reference_insert()")
 
 
 def upgrade() -> None:

@@ -1,4 +1,4 @@
-# Archon Course Concept Map
+# Cogentrex Course Concept Map
 
 This map shows learning dependencies, not runtime call order. Follow the [course home](README.md) for routes and the [syllabus](syllabus.md) for pacing. Canonical explanations live in one `concepts/` page each; modules and tracks link to them.
 

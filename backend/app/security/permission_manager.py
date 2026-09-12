@@ -4,7 +4,7 @@ Fixes the sibling-prefix bypass bug found in AIAMastery Day 3:
 - "/tmp/user/documents-evil" would match "/tmp/user/documents" with naive startswith
 - Fix: append "/" before startswith check AND use Path.resolve() for symlink resolution
 
-See: https://github.com/levalencia/production-ai-agents/articles/day-01-anatomy-of-production-agent/
+See: https://github.com/levalencia/cogentrex/articles/day-01-anatomy-of-production-agent/
 Concept: Layer 5 - Guardrails (path validation, action allowlists)
 """
 

@@ -25,7 +25,7 @@ def reset_chat_state(tmp_path, monkeypatch):
     from app.routes import chat
 
     chat._tools_singleton = None
-    monkeypatch.setenv("ARCHON_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/live.db")
+    monkeypatch.setenv("COGENTREX_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/live.db")
     yield
     chat._tools_singleton = None
 

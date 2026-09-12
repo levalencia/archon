@@ -4,7 +4,7 @@
 
 An agent is a program that lets a language model propose the next step, including a typed tool call, while ordinary code decides what is permitted and when the run must stop.
 A chatbot can return text only; an agent may affect files, networks, or databases, so its control plane matters as much as its prompt.
-In Archon, the model is an untrusted planner. The custom runtime—not a framework such as LangChain or LangGraph—owns authority, execution, budgets, and evidence.
+In Cogentrex, the model is an untrusted planner. The custom runtime—not a framework such as LangChain or LangGraph—owns authority, execution, budgets, and evidence.
 
 ## Prerequisites and vocabulary
 
@@ -55,7 +55,7 @@ sequenceDiagram
   R-->>C: AgentResult + StopReason
 ```
 
-## Code-grounded Archon tour
+## Code-grounded Cogentrex tour
 
 - [`AgentRuntime.__init__` and `AgentRuntime.run`](../../../backend/app/runtime/engine.py) inject collaborators and implement the bounded loop.
 - [`RuntimeBudget`](../../../backend/app/runtime/engine.py) validates limits; [`StopReason`](../../../backend/app/runtime/engine.py) makes terminal outcomes explicit.
@@ -103,7 +103,7 @@ A log line alone is not proof of non-execution; pair an ordered denial event wit
 
 A fixed workflow is easier to reason about when steps are known; an agent loop offers flexibility at the cost of a larger state space.
 Text-parsed “tool calls” are portable but ambiguous; provider-native `ToolCall` values preserve IDs and structure.
-A third-party orchestration framework may add integrations and visual graphs; Archon's custom typed runtime keeps control semantics explicit but must maintain adapters and scheduling itself.
+A third-party orchestration framework may add integrations and visual graphs; Cogentrex's custom typed runtime keeps control semantics explicit but must maintain adapters and scheduling itself.
 
 ## Lab versus production
 
@@ -113,7 +113,7 @@ A demo that successfully calls one tool does not establish safe multi-user opera
 
 ## 30-second interview answer
 
-“An agent is a bounded interpreter around a probabilistic planner. In Archon, `ModelProvider` proposes native `ToolCall`s, while `AgentRuntime` snapshots them, enforces budgets and policy/approval, dispatches through `SecureToolRegistry`, feeds bounded observations back, emits typed events, and returns an explicit `StopReason`. The model never owns authority. This is a custom typed runtime, and generic critique/revision self-reflection is not implemented.”
+“An agent is a bounded interpreter around a probabilistic planner. In Cogentrex, `ModelProvider` proposes native `ToolCall`s, while `AgentRuntime` snapshots them, enforces budgets and policy/approval, dispatches through `SecureToolRegistry`, feeds bounded observations back, emits typed events, and returns an explicit `StopReason`. The model never owns authority. This is a custom typed runtime, and generic critique/revision self-reflection is not implemented.”
 
 ## Self-check questions
 

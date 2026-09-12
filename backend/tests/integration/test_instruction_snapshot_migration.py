@@ -21,7 +21,7 @@ def _config(database: Path) -> Config:
 def test_instruction_snapshot_migration_roundtrip_scope_and_immutability(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("ARCHON_DATABASE_URL", raising=False)
+    monkeypatch.delenv("COGENTREX_DATABASE_URL", raising=False)
     database = tmp_path / "instruction-snapshot.db"
     config = _config(database)
     command.upgrade(config, "20260901_17")
@@ -67,8 +67,8 @@ def test_instruction_snapshot_migration_roundtrip_scope_and_immutability(
             )
         ).all()
         assert rows == [
-            ("a", ".archon/instructions.md", ".", "manual", 0),
-            ("b", ".archon/instructions.md", ".", "manual", 0),
+            ("a", ".cogentrex/instructions.md", ".", "manual", 0),
+            ("b", ".cogentrex/instructions.md", ".", "manual", 0),
         ]
         pointers = connection.execute(
             text(

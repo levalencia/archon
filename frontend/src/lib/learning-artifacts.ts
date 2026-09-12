@@ -27,7 +27,7 @@ export interface LearningPack {
 }
 
 export interface LearningLibraryCatalog {
-  schema: 'archon.learning-library';
+  schema: 'cogentrex.learning-library';
   version: 1;
   generated_at: string;
   source_commit: string;
@@ -47,7 +47,7 @@ type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respons
 
 function validateCatalog(value: unknown): LearningLibraryCatalog {
   const catalog = value as LearningLibraryCatalog;
-  if (catalog?.schema !== 'archon.learning-library' || catalog.version !== 1 || !Array.isArray(catalog.packs)) {
+  if (catalog?.schema !== 'cogentrex.learning-library' || catalog.version !== 1 || !Array.isArray(catalog.packs)) {
     throw new Error('Learning library catalog is invalid');
   }
   for (const pack of catalog.packs) {

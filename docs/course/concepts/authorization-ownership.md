@@ -137,7 +137,7 @@ Role-based access control is compact but can become too coarse for per-object ow
 Attribute-based access control handles richer context but is harder to inspect and test.
 Relationship-based access control models shared resources well but adds graph semantics and operational machinery.
 Capability tokens can carry narrow rights but require careful audience, expiry, replay, and delegation rules.
-Archon's tested owner/project predicates are intentionally direct; policy handles action risk separately.
+Cogentrex's tested owner/project predicates are intentionally direct; policy handles action risk separately.
 
 ## Exercise: audit a resource path
 
@@ -152,7 +152,7 @@ Expected reasoning: an untrusted object ID is safe only when resolved inside a q
 
 ## 30-second answer
 
-“Archon separates identity, data scope, and action policy. `get_current_user` supplies server-resolved identity; routes and repositories include owner and project in resource operations; policy and exact one-time approval govern side effects. Foreign objects look missing on tested paths. That is route-specific evidence, not a claim that every future query is automatically safe.”
+“Cogentrex separates identity, data scope, and action policy. `get_current_user` supplies server-resolved identity; routes and repositories include owner and project in resource operations; policy and exact one-time approval govern side effects. Foreign objects look missing on tested paths. That is route-specific evidence, not a claim that every future query is automatically safe.”
 
 ## Self-check
 

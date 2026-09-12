@@ -123,7 +123,7 @@ SQLite and PostgreSQL transaction paths are implemented/tested; local evidence d
 
 ## Interview answer
 
-“Archon’s Run Ledger is an owner-scoped append-only event repository. A guarded row update allocates contiguous sequence numbers and the terminal event atomically freezes status and usage. Payloads are event-specific allowlists plus redaction, so replay does not expose prompts or tool results. Replay is read-only, fork snapshots safe conversation state and records lineage, and compare deterministically contrasts stored trajectories. It does not rerun side effects or restore workspaces.”
+“Cogentrex’s Run Ledger is an owner-scoped append-only event repository. A guarded row update allocates contiguous sequence numbers and the terminal event atomically freezes status and usage. Payloads are event-specific allowlists plus redaction, so replay does not expose prompts or tool results. Replay is read-only, fork snapshots safe conversation state and records lineage, and compare deterministically contrasts stored trajectories. It does not rerun side effects or restore workspaces.”
 
 ## Self-check
 

@@ -2,7 +2,7 @@
 
 ## Claim and boundary
 
-Archon wires **one** evidence-only verifier specialist into the grounded-document workflow. It receives no tools and finite token, timeout, and retry budgets. This is not a dynamic swarm, recursive delegation, or generic self-reflection.
+Cogentrex wires **one** evidence-only verifier specialist into the grounded-document workflow. It receives no tools and finite token, timeout, and retry budgets. This is not a dynamic swarm, recursive delegation, or generic self-reflection.
 
 ## Construction path
 
