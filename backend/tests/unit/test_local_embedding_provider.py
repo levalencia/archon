@@ -72,7 +72,7 @@ class TestLocalProviderConstruction:
         """Local provider with BAAI/bge-small-en-v1.5 must use 384 dimensions."""
         svc = EmbeddingService(provider="local", dimensions=128)
         with pytest.raises(ValueError, match="384"):
-            asyncio.get_event_loop().run_until_complete(svc.embed("hello"))
+            svc.validate_configuration()
 
     def test_local_capability(self, _patch_fastembed) -> None:
         svc = EmbeddingService(provider="local", dimensions=DIMENSIONS)
