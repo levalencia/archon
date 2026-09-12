@@ -18,6 +18,7 @@ import re
 import socket
 import uuid
 from dataclasses import dataclass, field
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 import structlog
@@ -258,39 +259,66 @@ class EmbeddingService:
         allowed_hosts: str = "api.openai.com",
         allow_private_endpoint: bool = False,
         api_version: str = "2024-05-01-preview",
+        cache_path: str = "",
     ) -> None:
-        if provider not in {"mock", "openai", "foundry"}:
+        if provider not in {"mock", "openai", "foundry", "local"}:
             raise ValueError(f"Unsupported embedding provider: {provider}")
         if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?", api_version):
             raise ValueError("Invalid embedding API version")
         if not 1 <= dimensions <= 4096:
             raise ValueError("Embedding dimensions must be between 1 and 4096")
         self.provider = provider
+        if provider == "local" and model in {"text-embedding-3-small", "mock-embedding"}:
+            model = self._LOCAL_MODEL_NAME
         self.model = model
         self.api_key = api_key
         self.dimensions = dimensions
         self.allow_private_endpoint = allow_private_endpoint
         self.api_version = api_version
-        self.base_url = validate_embedding_endpoint(
-            base_url,
-            allowed_hosts={host.strip() for host in allowed_hosts.split(",")},
-            allow_private=allow_private_endpoint,
-        )
+        self.cache_path = cache_path or ""
+        # Local provider: lazy model reference and thread lock for init.
+        self._local_model: object | None = None
+        self._local_model_lock: asyncio.Lock | None = None
+        if provider == "local":
+            self.base_url = ""  # No remote endpoint needed.
+        else:
+            self.base_url = validate_embedding_endpoint(
+                base_url,
+                allowed_hosts={host.strip() for host in allowed_hosts.split(",")},
+                allow_private=allow_private_endpoint,
+            )
 
     def validate_configuration(self) -> None:
         """Fail startup for a configured real provider without credentials."""
+        if self.provider == "local":
+            if self.model != self._LOCAL_MODEL_NAME:
+                raise ValueError(
+                    f"Local embedding provider requires model={self._LOCAL_MODEL_NAME}"
+                )
+            if self.dimensions != self._LOCAL_DIMENSIONS:
+                raise ValueError(
+                    f"Local embedding provider ({self._LOCAL_MODEL_NAME}) requires "
+                    f"exactly {self._LOCAL_DIMENSIONS} dimensions, got {self.dimensions}"
+                )
+            return  # No API key needed for local models.
         if self.provider != "mock" and not self.api_key:
             raise ValueError("Configured embedding provider requires an API key")
 
     @property
     def capability(self) -> EmbeddingCapability:
         is_mock = self.provider == "mock"
+        if self.provider == "local":
+            readiness = "ready"
+        elif is_mock:
+            readiness = "non-production"
+        else:
+            readiness = "ready"
         return EmbeddingCapability(
             provider=self.provider,
             model=self.model,
             dimensions=self.dimensions,
             mock=is_mock,
-            readiness="non-production" if is_mock else "ready",
+            readiness=readiness,
         )
 
     async def close(self) -> None:
@@ -300,6 +328,9 @@ class EmbeddingService:
         """Generate embedding vector for text."""
         if self.provider == "mock":
             return self._mock_embed(text)
+        if self.provider == "local":
+            results = await self._local_embed([text])
+            return results[0]
         if self.provider in {"openai", "foundry"}:
             results = await self._openai_embed([text])
             return results[0]
@@ -311,7 +342,54 @@ class EmbeddingService:
         """Generate embeddings for multiple texts."""
         if self.provider in {"openai", "foundry"}:
             return await self._openai_embed(texts)
+        if self.provider == "local":
+            return await self._local_embed(texts)
         return [await self.embed(text) for text in texts]
+
+    # ------------------------------------------------------------------
+    # Local fastembed provider
+    # ------------------------------------------------------------------
+
+    _LOCAL_MODEL_NAME = "BAAI/bge-small-en-v1.5"
+    _LOCAL_DIMENSIONS = 384
+
+    async def _ensure_local_model(self) -> object:
+        """Lazy, async-safe initialization of the fastembed model."""
+        if self._local_model is not None:
+            return self._local_model
+        if self._local_model_lock is None:
+            self._local_model_lock = asyncio.Lock()
+        async with self._local_model_lock:
+            if self._local_model is not None:
+                return self._local_model  # Another coroutine loaded it.
+            import fastembed
+
+            kwargs: dict[str, object] = {"model_name": self._LOCAL_MODEL_NAME}
+            if self.cache_path:
+                kwargs["cache_dir"] = self.cache_path
+            self._local_model = await asyncio.to_thread(lambda: fastembed.TextEmbedding(**kwargs))
+            return self._local_model
+
+    async def _local_embed(self, texts: list[str]) -> list[list[float]]:
+        """Embed texts using the local fastembed model off the event loop."""
+        if self.dimensions != self._LOCAL_DIMENSIONS:
+            raise ValueError(
+                f"Local embedding provider ({self._LOCAL_MODEL_NAME}) requires "
+                f"exactly {self._LOCAL_DIMENSIONS} dimensions, got {self.dimensions}"
+            )
+        model = cast(Any, await self._ensure_local_model())
+
+        def encode() -> list[list[float]]:
+            return [[float(value) for value in vector] for vector in model.embed(texts)]
+
+        raw_vectors = await asyncio.to_thread(encode)
+        embeddings: list[list[float]] = []
+        for vec in raw_vectors:
+            validated = validate_embedding(vec, self.dimensions, source="local embedding")
+            embeddings.append(validated)
+        if len(embeddings) != len(texts):
+            raise ValueError("Local embedding provider returned unexpected count")
+        return embeddings
 
     async def _openai_embed(self, texts: list[str]) -> list[list[float]]:
         """Call OpenAI embeddings API via httpx."""

@@ -53,14 +53,23 @@ const details: Record<string, Record<string, unknown>> = {
 
 async function mockLibrary(page: Page) {
   await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'playwright-token'));
-  await page.route('**/api/learning-tutor/answer', async (route: Route) => {
-    return route.fulfill({ json: {
+  await page.route('**/api/learning-tutor/answer/stream', async (route: Route) => {
+    const result = {
       run_id: 'run-tutor-1', session_id: 'session-tutor-1',
       answer_markdown: '## Direct answer\nA service slot reserves an application-owned location. [E1]\n\n## Code excerpts\n```python\napp.state.sandbox_executor = None\n```',
       citations: [{ ...base, id: 'E1', kind: 'code', title: 'main.py — create_app', excerpt: 'app.state.sandbox_executor = None', score: 1, source_commit: 'a'.repeat(40), locator: { path: 'backend/app/main.py', line_start: 418, line_end: 420 } }],
       related_questions: ['When does lifespan populate the slot?'], diagram: null,
       grounded: true, unsupported: [], metrics: { faithfulness_score: 1 },
-    } });
+    };
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: [
+        'event: status\ndata: {"run_id":"run-tutor-1","phase":"started","message":"Retrieving evidence…"}\n\n',
+        `event: answer_delta\ndata: ${JSON.stringify({ run_id: 'run-tutor-1', index: 0, delta: result.answer_markdown })}\n\n`,
+        `event: result\ndata: ${JSON.stringify(result)}\n\n`,
+        'event: done\ndata: {"run_id":"run-tutor-1"}\n\n',
+      ].join(''),
+    });
   });
   await page.route('**/api/learning-media/**', async (route: Route) => {
     const url = new URL(route.request().url());
@@ -145,7 +154,7 @@ test('every learning page exposes a tutor and Video 2 sends its timestamp', asyn
   await page.getByRole('button', { name: 'Ask about this topic' }).click();
   await expect(page.getByRole('complementary', { name: 'Learning tutor' })).toContainText('Video 2');
   await page.getByLabel('Question about this topic').fill('What is a service slot?');
-  const requestPromise = page.waitForRequest('**/api/learning-tutor/answer');
+  const requestPromise = page.waitForRequest('**/api/learning-tutor/answer/stream');
   await page.getByRole('button', { name: 'Ask Cogentrex tutor' }).click();
   const request = await requestPromise;
   expect(request.postDataJSON().context).toMatchObject({

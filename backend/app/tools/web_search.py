@@ -23,6 +23,7 @@ async def web_search_tool(
     num_results: int = 5,
     *,
     max_results: int | None = None,
+    enrich_content: bool = True,
 ) -> dict:
     """Search the web and extract content from top results."""
     import os
@@ -37,7 +38,7 @@ async def web_search_tool(
         try:
             results = await _brave_search(query, brave_key, num_results)
             if results:
-                enriched = await _extract_content(results)
+                enriched = await _extract_content(results) if enrich_content else results
                 return {
                     "query": query,
                     "results": enriched,
@@ -55,7 +56,7 @@ async def web_search_tool(
     try:
         results = await _searxng_search(query, num_results)
         if results:
-            enriched = await _extract_content(results)
+            enriched = await _extract_content(results) if enrich_content else results
             return {
                 "query": query,
                 "results": enriched,
@@ -73,7 +74,7 @@ async def web_search_tool(
     try:
         results = await _duckduckgo_search(query, num_results)
         if results:
-            enriched = await _extract_content(results)
+            enriched = await _extract_content(results) if enrich_content else results
             return {
                 "query": query,
                 "results": enriched,

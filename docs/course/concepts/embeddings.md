@@ -1,6 +1,6 @@
 # Embeddings
 
-**Status:** implemented for the Azure Foundry development boundary
+**Status:** implemented for mock, Azure Foundry, and local fastembed providers
 
 ## Beginner definition
 
@@ -54,7 +54,8 @@ flowchart TD
 
 The source of truth is `backend/app/services/chunker.py`.
 `EmbeddingCapability` reports provider, model, dimensions, mock status, and readiness.
-`EmbeddingService` accepts `mock`, `openai`, and `foundry` providers at construction. Foundry uses the Azure AI model-inference `/embeddings` shape with explicit API version and `api-key` authentication while retaining the same endpoint allowlist, DNS pinning, redirect, timeout, dimension, finite-number, and index checks.
+`EmbeddingService` accepts `mock`, `openai`, `foundry`, and `local` providers at construction. Foundry uses the Azure AI model-inference `/embeddings` shape with explicit API version and `api-key` authentication while retaining the same endpoint allowlist, DNS pinning, redirect, timeout, dimension, finite-number, and index checks.
+The `local` provider uses [fastembed](https://github.com/qdrant/fastembed) with the `BAAI/bge-small-en-v1.5` model (384 dimensions). It requires no API key, runs entirely in-process, and avoids Foundry 429 rate-limit errors. Model initialization is lazy and async-safe (deferred until first embed call). Batch encoding runs off the event loop via `asyncio.to_thread`. An explicit `cache_path` can be set via `COGENTREX_EMBEDDING_CACHE_PATH` so the Docker runtime works read-only with a pre-downloaded model volume.
 Dimensions must be between 1 and 4,096.
 `EmbeddingService.embed` embeds one string.
 `EmbeddingService.embed_batch` embeds a list and preserves provider response order.
@@ -135,6 +136,8 @@ Production evaluation still requires a representative labeled corpus, recall/pre
 - `backend/app/services/chunker.py::EmbeddingService`
 - `backend/app/services/chunker.py::EmbeddingService.capability`
 - `backend/app/services/chunker.py::EmbeddingService._foundry_embed`
+- `backend/app/services/chunker.py::EmbeddingService._local_embed`
+- `backend/tests/unit/test_local_embedding_provider.py`
 - `backend/scripts/embedding_smoke.py`
 - `docs/evidence/live-rag-hardening.json` records sanitized live vector and ingest/query results.
 - The older `docs/evidence/local-portfolio-benchmark.json` remains deterministic mock evidence only.

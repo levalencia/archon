@@ -51,6 +51,17 @@ manifest and reviewed media catalog before retrieval. Answers are assembled from
 verified atomic claims, include exact code excerpts when code evidence is
 available, and render only validated diagram data.
 
+The browser uses an SSE endpoint so it can show progress immediately and reveal
+the final verified answer incrementally. Raw model output is never streamed as
+trusted content: verification and compliance checks finish before answer chunks
+are emitted.
+
+For general-definition questions, an explicitly enabled supplement can retrieve
+up to three HTTPS pages from a fixed list of official documentation domains.
+External pages are filtered before fetching, treated as untrusted data, and
+verified before citation. Repository evidence remains authoritative for claims
+about Cogentrex itself.
+
 The learning corpus is application-owned and separate from user document RAG.
 Synchronize it explicitly after migrations and before tutor acceptance:
 
@@ -67,6 +78,10 @@ The command refuses a dirty repository and mock embeddings by default. Use
 `--dry-run` to inspect the source inventory without database writes or provider
 calls. `--mock-embeddings --allow-mock` is an explicit deterministic local-only
 mode; it supports lexical/context testing but is not semantic-quality evidence.
+For offline semantic retrieval, configure the `local` embedding provider with
+`BAAI/bge-small-en-v1.5` and 384 dimensions. Vectors remain in the existing
+PostgreSQL SQL-JSON store; a separate vector database is not required at the
+current bounded corpus size.
 
 ## One-source pipeline
 

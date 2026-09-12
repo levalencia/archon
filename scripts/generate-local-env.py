@@ -26,6 +26,7 @@ EMBEDDING_PROVIDER_KEYS = frozenset(
         "COGENTREX_EMBEDDING_ALLOWED_HOSTS",
         "COGENTREX_EMBEDDING_DIMENSIONS",
         "COGENTREX_EMBEDDING_API_VERSION",
+        "COGENTREX_EMBEDDING_CACHE_PATH",
     }
 )
 TELEMETRY_PROVIDER_KEYS = frozenset(
@@ -49,6 +50,9 @@ ALLOWED_PROVIDER_KEYS = (
             "COGENTREX_LLM_API_KEY",
             "COGENTREX_LLM_BASE_URL",
             "COGENTREX_PROMPT_CACHING_ENABLED",
+            "COGENTREX_BRAVE_API_KEY",
+            "COGENTREX_LEARNING_TUTOR_WEB_SUPPLEMENT_ENABLED",
+            "COGENTREX_LEARNING_TUTOR_WEB_MAX_RESULTS",
             "LOGFIRE_TOKEN",
             "LOGFIRE_BASE_URL",
         }
@@ -65,9 +69,7 @@ REQUIRED_PROVIDER_KEYS = frozenset(
     }
 )
 MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
-OTEL_DESTINATIONS = frozenset(
-    {"debug", "jaeger", "logfire", "azure-monitor", "tempo", "otlp"}
-)
+OTEL_DESTINATIONS = frozenset({"debug", "jaeger", "logfire", "azure-monitor", "tempo", "otlp"})
 LEARNING_MEDIA_MARKER = "cogentrex.learning-library/v1\n"
 
 
@@ -110,9 +112,7 @@ def read_provider_env(path: Path) -> dict[str, str]:
     if missing:
         raise ValueError("provider env is missing required keys: " + ", ".join(missing))
     if values["COGENTREX_LLM_PROVIDER"].lower() != "foundry":
-        raise ValueError(
-            "managed live mode currently requires COGENTREX_LLM_PROVIDER=foundry"
-        )
+        raise ValueError("managed live mode currently requires COGENTREX_LLM_PROVIDER=foundry")
     if not MODEL_PATTERN.fullmatch(values["COGENTREX_LLM_MODEL"]):
         raise ValueError("invalid managed live model name")
     endpoint = urlparse(values["COGENTREX_LLM_BASE_URL"])
@@ -121,56 +121,67 @@ def read_provider_env(path: Path) -> dict[str, str]:
 
     supplied_embeddings = {key for key in EMBEDDING_PROVIDER_KEYS if values.get(key)}
     if supplied_embeddings:
-        required_embeddings = {
-            "COGENTREX_EMBEDDING_PROVIDER",
-            "COGENTREX_EMBEDDING_MODEL",
-            "COGENTREX_EMBEDDING_BASE_URL",
-            "COGENTREX_EMBEDDING_ALLOWED_HOSTS",
-            "COGENTREX_EMBEDDING_DIMENSIONS",
-            "COGENTREX_EMBEDDING_API_VERSION",
-        }
-        if missing_embeddings := sorted(
-            key for key in required_embeddings if not values.get(key)
-        ):
+        provider = values.get("COGENTREX_EMBEDDING_PROVIDER", "").lower()
+        if provider == "local":
+            # Local fastembed provider needs only dimensions and optional cache path.
+            try:
+                dimensions = int(values.get("COGENTREX_EMBEDDING_DIMENSIONS", "384"))
+            except ValueError:
+                raise ValueError("embedding dimensions must be an integer") from None
+            if dimensions != 384:
+                raise ValueError(
+                    "local embedding provider (BAAI/bge-small-en-v1.5) requires dimensions=384"
+                )
+        elif provider == "foundry":
+            required_embeddings = {
+                "COGENTREX_EMBEDDING_PROVIDER",
+                "COGENTREX_EMBEDDING_MODEL",
+                "COGENTREX_EMBEDDING_BASE_URL",
+                "COGENTREX_EMBEDDING_ALLOWED_HOSTS",
+                "COGENTREX_EMBEDDING_DIMENSIONS",
+                "COGENTREX_EMBEDDING_API_VERSION",
+            }
+            if missing_embeddings := sorted(
+                key for key in required_embeddings if not values.get(key)
+            ):
+                raise ValueError(
+                    "embedding configuration is incomplete: " + ", ".join(missing_embeddings)
+                )
+            if not MODEL_PATTERN.fullmatch(values["COGENTREX_EMBEDDING_MODEL"]):
+                raise ValueError("invalid managed embedding model name")
+            embedding_endpoint = urlparse(values["COGENTREX_EMBEDDING_BASE_URL"])
+            if (
+                embedding_endpoint.scheme != "https"
+                or not embedding_endpoint.hostname
+                or embedding_endpoint.username
+                or embedding_endpoint.password
+                or embedding_endpoint.query
+                or embedding_endpoint.fragment
+            ):
+                raise ValueError("managed embedding endpoint must be an absolute HTTPS URL")
+            allowed_hosts = {
+                host.strip().lower()
+                for host in values["COGENTREX_EMBEDDING_ALLOWED_HOSTS"].split(",")
+                if host.strip()
+            }
+            if embedding_endpoint.hostname.lower() not in allowed_hosts:
+                raise ValueError("managed embedding endpoint host must be explicitly allowed")
+            try:
+                dimensions = int(values["COGENTREX_EMBEDDING_DIMENSIONS"])
+            except ValueError:
+                raise ValueError("embedding dimensions must be an integer") from None
+            if not 1 <= dimensions <= 4096:
+                raise ValueError("embedding dimensions must be between 1 and 4096")
+            if not re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?",
+                values["COGENTREX_EMBEDDING_API_VERSION"],
+            ):
+                raise ValueError("invalid embedding API version")
+            values.setdefault("COGENTREX_EMBEDDING_API_KEY", values["COGENTREX_LLM_API_KEY"])
+        else:
             raise ValueError(
-                "embedding configuration is incomplete: "
-                + ", ".join(missing_embeddings)
+                "managed embeddings currently require provider=foundry or provider=local"
             )
-        if values["COGENTREX_EMBEDDING_PROVIDER"].lower() != "foundry":
-            raise ValueError("managed embeddings currently require provider=foundry")
-        if not MODEL_PATTERN.fullmatch(values["COGENTREX_EMBEDDING_MODEL"]):
-            raise ValueError("invalid managed embedding model name")
-        embedding_endpoint = urlparse(values["COGENTREX_EMBEDDING_BASE_URL"])
-        if (
-            embedding_endpoint.scheme != "https"
-            or not embedding_endpoint.hostname
-            or embedding_endpoint.username
-            or embedding_endpoint.password
-            or embedding_endpoint.query
-            or embedding_endpoint.fragment
-        ):
-            raise ValueError("managed embedding endpoint must be an absolute HTTPS URL")
-        allowed_hosts = {
-            host.strip().lower()
-            for host in values["COGENTREX_EMBEDDING_ALLOWED_HOSTS"].split(",")
-            if host.strip()
-        }
-        if embedding_endpoint.hostname.lower() not in allowed_hosts:
-            raise ValueError(
-                "managed embedding endpoint host must be explicitly allowed"
-            )
-        try:
-            dimensions = int(values["COGENTREX_EMBEDDING_DIMENSIONS"])
-        except ValueError:
-            raise ValueError("embedding dimensions must be an integer") from None
-        if not 1 <= dimensions <= 4096:
-            raise ValueError("embedding dimensions must be between 1 and 4096")
-        if not re.fullmatch(
-            r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?",
-            values["COGENTREX_EMBEDDING_API_VERSION"],
-        ):
-            raise ValueError("invalid embedding API version")
-        values.setdefault("COGENTREX_EMBEDDING_API_KEY", values["COGENTREX_LLM_API_KEY"])
 
     raw_destinations = values.get("COGENTREX_OTEL_DESTINATIONS")
     if raw_destinations is None:
@@ -252,9 +263,7 @@ def generate_values(
     values = {
         "POSTGRES_PASSWORD": secrets.token_hex(32),
         "COGENTREX_SECRET_KEY": secrets.token_urlsafe(48),
-        "COGENTREX_ENCRYPTION_MASTER_KEY": base64.urlsafe_b64encode(
-            secrets.token_bytes(32)
-        )
+        "COGENTREX_ENCRYPTION_MASTER_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32))
         .decode()
         .rstrip("="),
         "COGENTREX_EFFECT_IDENTITY_SECRET": secrets.token_urlsafe(48),

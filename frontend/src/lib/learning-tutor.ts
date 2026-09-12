@@ -1,4 +1,5 @@
 import { authenticatedFetch } from '$lib/auth';
+import { SSEParser } from '$lib/sse';
 
 export type LearningView = 'roadmap' | 'stories' | 'architecture' | 'evidence' | 'present' | 'listen' | 'study';
 
@@ -16,7 +17,7 @@ export interface LearningTutorContext {
 
 export interface TutorCitation {
   id: string;
-  kind: 'documentation' | 'code' | 'test' | 'video' | 'visual';
+  kind: 'documentation' | 'code' | 'test' | 'video' | 'visual' | 'web';
   title: string;
   excerpt: string;
   score: number;
@@ -34,6 +35,10 @@ export interface TutorCitation {
     end_seconds?: number;
     route?: string;
     concept_id?: string;
+    url?: string;
+    domain?: string;
+    retrieved_at?: number;
+    search_source?: string;
   };
 }
 
@@ -105,6 +110,70 @@ export async function askLearningTutor(
   return await response.json() as LearningTutorAnswer;
 }
 
+// ---------------------------------------------------------------------------
+// Streaming SSE client — delivers verified answer incrementally
+// ---------------------------------------------------------------------------
+
+export interface TutorStreamCallbacks {
+  signal?: AbortSignal;
+  onStatus?: (data: { run_id: string; phase: string; message: string }) => void;
+  onProgress?: (data: { run_id: string; phase: string; message: string }) => void;
+  onAnswerDelta?: (data: { run_id: string; index: number; delta: string }) => void;
+  onResult?: (data: LearningTutorAnswer) => void;
+  onError?: (data: { run_id: string; message: string }) => void;
+  onDone?: (data: { run_id: string }) => void;
+}
+
+export async function streamLearningTutor(
+  question: string,
+  context: LearningTutorContext,
+  callbacks: TutorStreamCallbacks,
+  fetcher: Fetcher = authenticatedFetch,
+  parser?: SSEParser,
+): Promise<void> {
+  const response = await fetcher('/api/learning-tutor/answer/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, project_id: 'default', context }),
+    signal: callbacks.signal,
+  });
+  if (!response.ok) throw new Error(`Learning tutor stream failed (${response.status})`);
+  if (!response.body) throw new Error('No response body for SSE stream');
+
+  const sseParser = parser ?? new SSEParser();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      const text = value ? decoder.decode(value, { stream: !done }) : '';
+      const events = sseParser.push(text, done);
+      for (const evt of events) {
+        let data: any;
+        try {
+          data = JSON.parse(evt.data);
+        } catch {
+          const message = 'The learning tutor returned an invalid stream event.';
+          callbacks.onError?.({ run_id: '', message });
+          throw new Error(message);
+        }
+        switch (evt.event) {
+          case 'status': callbacks.onStatus?.(data); break;
+          case 'progress': callbacks.onProgress?.(data); break;
+          case 'answer_delta': callbacks.onAnswerDelta?.(data); break;
+          case 'result': callbacks.onResult?.(data); break;
+          case 'error': callbacks.onError?.(data); break;
+          case 'done': callbacks.onDone?.(data); break;
+        }
+      }
+      if (done) break;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function getLearningTutorSession(
   sessionId: string,
   fetcher: Fetcher = authenticatedFetch,
@@ -114,8 +183,50 @@ export async function getLearningTutorSession(
   return await response.json() as TutorSession;
 }
 
+/** Allowed domains for web citation hrefs (HTTPS only). */
+const WEB_CITATION_ALLOWED_DOMAINS: ReadonlySet<string> = new Set([
+  'docs.python.org',
+  'learn.microsoft.com',
+  'developer.mozilla.org',
+  'docs.aws.amazon.com',
+  'cloud.google.com',
+  'kubernetes.io',
+  'docs.docker.com',
+  'fastapi.tiangolo.com',
+  'starlette.io',
+  'pydantic-docs.helpmanual.io',
+  'docs.pydantic.dev',
+  'www.postgresql.org',
+  'redis.io',
+  'opentelemetry.io',
+  'swagger.io',
+  'spec.openapis.org',
+  'www.rfc-editor.org',
+  'datatracker.ietf.org',
+]);
+
+function isAllowedWebDomain(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, '');
+  for (const allowed of WEB_CITATION_ALLOWED_DOMAINS) {
+    if (h === allowed || h.endsWith(`.${allowed}`)) return true;
+  }
+  return false;
+}
+
 export function citationHref(citation: TutorCitation): string | undefined {
   const locator = citation.locator;
+  // Web citations: validate URL is HTTPS and domain-allowlisted
+  if (citation.kind === 'web' && locator.url) {
+    try {
+      const parsed = new URL(locator.url);
+      if (parsed.protocol === 'https:' && isAllowedWebDomain(parsed.hostname)) {
+        return locator.url;
+      }
+    } catch {
+      // Invalid URL
+    }
+    return undefined;
+  }
   if (citation.kind === 'video' && locator.artifact_id && locator.start_seconds !== undefined) {
     const params = new URLSearchParams({
       view: 'present',

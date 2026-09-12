@@ -78,7 +78,7 @@ class Settings(BaseSettings):
         return self
 
     # Embeddings
-    embedding_provider: str = "mock"  # mock | openai | foundry
+    embedding_provider: str = "mock"  # mock | openai | foundry | local
     embedding_model: str = "text-embedding-3-small"
     embedding_api_key: str = ""  # falls back to llm_api_key if empty
     embedding_dimensions: int = Field(default=256, ge=1, le=4096)
@@ -89,6 +89,9 @@ class Settings(BaseSettings):
         default="2024-05-01-preview",
         pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?$",
     )
+    # Local embedding model cache directory (empty = fastembed default).
+    # In Docker, mount a read-only volume here with a pre-downloaded model.
+    embedding_cache_path: str = ""
 
     # Bounded document/vector resources
     document_max_characters: int = Field(default=1_000_000, ge=1, le=20_000_000)
@@ -118,6 +121,8 @@ class Settings(BaseSettings):
     learning_media_signed_url_ttl_seconds: int = Field(default=300, ge=30, le=3600)
     learning_tutor_enabled: bool = True
     learning_tutor_top_k: int = Field(default=10, ge=1, le=30)
+    learning_tutor_web_supplement_enabled: bool = False
+    learning_tutor_web_max_results: int = Field(default=3, ge=1, le=3)
 
     # Database
     database_url: str = "sqlite+aiosqlite:///cogentrex.db"
