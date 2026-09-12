@@ -18,6 +18,7 @@ import re
 import socket
 import uuid
 from dataclasses import dataclass, field
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 import structlog
@@ -267,6 +268,8 @@ class EmbeddingService:
         if not 1 <= dimensions <= 4096:
             raise ValueError("Embedding dimensions must be between 1 and 4096")
         self.provider = provider
+        if provider == "local" and model in {"text-embedding-3-small", "mock-embedding"}:
+            model = self._LOCAL_MODEL_NAME
         self.model = model
         self.api_key = api_key
         self.dimensions = dimensions
@@ -288,6 +291,15 @@ class EmbeddingService:
     def validate_configuration(self) -> None:
         """Fail startup for a configured real provider without credentials."""
         if self.provider == "local":
+            if self.model != self._LOCAL_MODEL_NAME:
+                raise ValueError(
+                    f"Local embedding provider requires model={self._LOCAL_MODEL_NAME}"
+                )
+            if self.dimensions != self._LOCAL_DIMENSIONS:
+                raise ValueError(
+                    f"Local embedding provider ({self._LOCAL_MODEL_NAME}) requires "
+                    f"exactly {self._LOCAL_DIMENSIONS} dimensions, got {self.dimensions}"
+                )
             return  # No API key needed for local models.
         if self.provider != "mock" and not self.api_key:
             raise ValueError("Configured embedding provider requires an API key")
@@ -365,12 +377,15 @@ class EmbeddingService:
                 f"Local embedding provider ({self._LOCAL_MODEL_NAME}) requires "
                 f"exactly {self._LOCAL_DIMENSIONS} dimensions, got {self.dimensions}"
             )
-        model = await self._ensure_local_model()
-        raw_vectors = await asyncio.to_thread(model.embed, texts)
+        model = cast(Any, await self._ensure_local_model())
+
+        def encode() -> list[list[float]]:
+            return [[float(value) for value in vector] for vector in model.embed(texts)]
+
+        raw_vectors = await asyncio.to_thread(encode)
         embeddings: list[list[float]] = []
         for vec in raw_vectors:
-            flat = [float(v) for v in vec]
-            validated = validate_embedding(flat, self.dimensions, source="local embedding")
+            validated = validate_embedding(vec, self.dimensions, source="local embedding")
             embeddings.append(validated)
         if len(embeddings) != len(texts):
             raise ValueError("Local embedding provider returned unexpected count")

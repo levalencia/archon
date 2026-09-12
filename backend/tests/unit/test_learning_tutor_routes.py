@@ -155,11 +155,14 @@ def _parse_sse_events(raw: str) -> list[dict]:
         if line == "":
             if current_data:
                 import json
+
                 joined = "\n".join(current_data)
-                events.append({
-                    "event": current_event or "message",
-                    "data": json.loads(joined),
-                })
+                events.append(
+                    {
+                        "event": current_event or "message",
+                        "data": json.loads(joined),
+                    }
+                )
                 current_event = ""
                 current_data = []
             continue
@@ -244,6 +247,7 @@ def test_stream_rejects_unknown_context_fields(monkeypatch) -> None:
 
 def test_stream_answer_matches_json_endpoint(monkeypatch) -> None:
     """The result event from stream must match the JSON endpoint output."""
+
     async def no_limit(*args, **kwargs):
         return None
 
@@ -269,4 +273,3 @@ def test_stream_answer_matches_json_endpoint(monkeypatch) -> None:
     assert stream_result["grounded"] == json_data["grounded"]
     assert stream_result["answer_markdown"] == json_data["answer_markdown"]
     assert len(stream_result["citations"]) == len(json_data["citations"])
-

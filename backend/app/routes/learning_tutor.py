@@ -105,11 +105,14 @@ async def stream_learning_answer(
 
     async def event_stream() -> AsyncIterator[str]:
         # Immediate status event
-        yield _sse("status", {
-            "run_id": run_id,
-            "phase": "started",
-            "message": "Retrieving evidence for your question…",
-        })
+        yield _sse(
+            "status",
+            {
+                "run_id": run_id,
+                "phase": "started",
+                "message": "Retrieving evidence for your question…",
+            },
+        )
 
         # Run the full grounded workflow in a task so we can heartbeat
         result_future: asyncio.Task[Any] = asyncio.create_task(
@@ -122,11 +125,14 @@ async def stream_learning_answer(
             )
         )
 
-        yield _sse("progress", {
-            "run_id": run_id,
-            "phase": "retrieving",
-            "message": "Searching indexed learning sources…",
-        })
+        yield _sse(
+            "progress",
+            {
+                "run_id": run_id,
+                "phase": "retrieving",
+                "message": "Searching indexed learning sources…",
+            },
+        )
 
         # Heartbeat while waiting for the workflow
         while not result_future.done():
@@ -149,11 +155,14 @@ async def stream_learning_answer(
             yield _sse("done", {"run_id": run_id})
             return
 
-        yield _sse("progress", {
-            "run_id": run_id,
-            "phase": "verified",
-            "message": "Evidence verified. Streaming answer…",
-        })
+        yield _sse(
+            "progress",
+            {
+                "run_id": run_id,
+                "phase": "verified",
+                "message": "Evidence verified. Streaming answer…",
+            },
+        )
 
         # Stream verified answer in chunks — only the final grounded text
         payload = result.public()
@@ -165,11 +174,14 @@ async def stream_learning_answer(
         chunk_index = 0
         while offset < len(answer):
             end = min(offset + _CHUNK_SIZE, len(answer))
-            yield _sse("answer_delta", {
-                "run_id": run_id,
-                "index": chunk_index,
-                "delta": answer[offset:end],
-            })
+            yield _sse(
+                "answer_delta",
+                {
+                    "run_id": run_id,
+                    "index": chunk_index,
+                    "delta": answer[offset:end],
+                },
+            )
             chunk_index += 1
             offset = end
 

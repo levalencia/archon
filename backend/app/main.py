@@ -400,6 +400,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             provider_name=settings.llm_provider,
             model=settings.llm_model,
             top_k=settings.learning_tutor_top_k,
+            web_supplement_enabled=settings.learning_tutor_web_supplement_enabled,
+            web_max_results=settings.learning_tutor_web_max_results,
             provider_factory=lambda owner_id, project_id, run_id: budget_model_provider(
                 app.state.model_provider,
                 settings=settings,

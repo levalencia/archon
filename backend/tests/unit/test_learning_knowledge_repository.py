@@ -85,6 +85,19 @@ async def test_sync_is_idempotent_and_prunes_stale_sources(repositories) -> None
 
 
 @pytest.mark.asyncio
+async def test_sync_reembeds_unchanged_sources_when_embedding_space_changes(repositories) -> None:
+    knowledge, _ = repositories
+    await knowledge.sync(_sources())
+    knowledge._embeddings = EmbeddingService(  # noqa: SLF001 - test changes the provider boundary
+        provider="mock", model="mock-v2", dimensions=32
+    )
+
+    result = await knowledge.sync(_sources())
+
+    assert result == {"added": 0, "updated": 3, "unchanged": 0, "removed": 0}
+
+
+@pytest.mark.asyncio
 async def test_hybrid_search_prioritizes_exact_terms_and_active_context(repositories) -> None:
     knowledge, _ = repositories
     await knowledge.sync(_sources())

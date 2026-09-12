@@ -122,18 +122,18 @@ describe('learning tutor client', () => {
     const webCitation: TutorCitation = {
       id: 'W1',
       kind: 'web',
-      title: 'Shared services - Wikipedia',
+      title: 'Starlette applications',
       excerpt: 'A shared service is...',
       score: 0,
       source_commit: '',
       locator: {
-        url: 'https://en.wikipedia.org/wiki/Shared_services',
-        domain: 'en.wikipedia.org',
+        url: 'https://www.starlette.io/applications/',
+        domain: 'www.starlette.io',
         retrieved_at: 1000,
         search_source: 'brave',
       },
     };
-    expect(citationHref(webCitation)).toBe('https://en.wikipedia.org/wiki/Shared_services');
+    expect(citationHref(webCitation)).toBe('https://www.starlette.io/applications/');
   });
 
   it('rejects web citations from non-allowlisted domains', () => {

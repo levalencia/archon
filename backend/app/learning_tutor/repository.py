@@ -104,13 +104,28 @@ class LearningKnowledgeRepository:
             raise ValueError("Learning source IDs must be unique")
         async with self._sf() as session:
             existing_rows = (await session.scalars(select(LearningSourceRow))).all()
+            embedding_rows = (
+                await session.execute(
+                    select(LearningChunkRow.source_id, LearningChunkRow.metadata_json).where(
+                        LearningChunkRow.chunk_index == 0
+                    )
+                )
+            ).all()
         existing = {str(row.id): row for row in existing_rows}
+        embedding_spaces = {
+            str(source_id): str(metadata_json) for source_id, metadata_json in embedding_rows
+        }
         unchanged = {
             source_id
             for source_id, source in by_id.items()
             if source_id in existing
             and str(existing[source_id].content_hash) == source.content_hash
             and str(existing[source_id].source_revision) == source.revision
+            and _matches_embedding_space(
+                embedding_spaces.get(source_id, ""),
+                provider=self._embeddings.capability.provider,
+                model=self._embeddings.capability.model,
+            )
         }
         changed = [source for source_id, source in by_id.items() if source_id not in unchanged]
         prepared: dict[str, list[tuple[str, int, str, str, str, str]]] = {

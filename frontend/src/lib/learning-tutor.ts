@@ -190,8 +190,6 @@ const WEB_CITATION_ALLOWED_DOMAINS: ReadonlySet<string> = new Set([
   'www.postgresql.org',
   'redis.io',
   'opentelemetry.io',
-  'wikipedia.org',
-  'en.wikipedia.org',
   'swagger.io',
   'spec.openapis.org',
   'www.rfc-editor.org',

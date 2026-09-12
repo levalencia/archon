@@ -18,7 +18,7 @@ class TestIsAllowedUrl:
         assert is_allowed_url("https://docs.python.org/3/library/asyncio.html") is True
 
     def test_https_subdomain_match(self):
-        assert is_allowed_url("https://en.wikipedia.org/wiki/Shared_service") is True
+        assert is_allowed_url("https://www.starlette.io/applications/") is True
 
     def test_https_unknown_domain_rejected(self):
         assert is_allowed_url("https://evil.example.com/page") is False
@@ -37,6 +37,9 @@ class TestIsAllowedUrl:
 
     def test_file_scheme_rejected(self):
         assert is_allowed_url("file:///etc/passwd") is False
+
+    def test_userinfo_rejected(self):
+        assert is_allowed_url("https://attacker@docs.python.org/3/") is False
 
     def test_internal_ip_rejected(self):
         assert is_allowed_url("https://127.0.0.1/admin") is False

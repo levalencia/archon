@@ -8,10 +8,14 @@ from pathlib import Path
 import pytest
 
 from app.learning_tutor.context import LearningContext
-from app.learning_tutor.repository import LearningKnowledgeRepository, LearningTutorRepository
+from app.learning_tutor.repository import (
+    LearningEvidence,
+    LearningKnowledgeRepository,
+    LearningTutorRepository,
+)
 from app.learning_tutor.sources import LearningSourceInput
 from app.learning_tutor.web_supplement import WebEvidence
-from app.learning_tutor.workflow import LearningTutorWorkflow
+from app.learning_tutor.workflow import LearningTutorWorkflow, _needs_web_supplement, _web_query
 from app.runtime.models import ModelResponse, TokenUsage
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.chunker import EmbeddingService
@@ -325,3 +329,25 @@ async def test_verified_web_evidence_can_ground_a_general_definition(services, m
     assert result.metrics["web_cited_count"] == 1
     assert result.citations[0].kind == "web"
     assert result.citations[0].locator["url"] == "https://www.starlette.io/applications/"
+
+
+def test_general_definition_uses_web_but_code_question_stays_local() -> None:
+    evidence = [
+        LearningEvidence(
+            id="E1",
+            source_id="source",
+            chunk_id="chunk",
+            kind="documentation",
+            title="Title",
+            text="Text",
+            score=0.8,
+            content_hash="a" * 16,
+            revision="a" * 40,
+            locator={"path": "docs/test.md"},
+            context_keys=(),
+        )
+    ]
+
+    assert _needs_web_supplement("What's a shared service?", evidence) is True
+    assert _needs_web_supplement("Explain app.state in Cogentrex", evidence) is False
+    assert "application composition" in _web_query("What's a shared service?", _context())

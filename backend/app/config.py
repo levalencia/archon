@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     learning_tutor_enabled: bool = True
     learning_tutor_top_k: int = Field(default=10, ge=1, le=30)
     learning_tutor_web_supplement_enabled: bool = False
-    learning_tutor_web_max_results: int = Field(default=3, ge=1, le=5)
+    learning_tutor_web_max_results: int = Field(default=3, ge=1, le=3)
 
     # Database
     database_url: str = "sqlite+aiosqlite:///cogentrex.db"

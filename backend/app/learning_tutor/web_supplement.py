@@ -38,8 +38,6 @@ DEFAULT_ALLOWED_DOMAINS: frozenset[str] = frozenset(
         "www.postgresql.org",
         "redis.io",
         "opentelemetry.io",
-        "wikipedia.org",
-        "en.wikipedia.org",
         "swagger.io",
         "spec.openapis.org",
         "www.rfc-editor.org",
@@ -95,6 +93,8 @@ def is_allowed_url(url: str, allowed_domains: frozenset[str] | None = None) -> b
     except Exception:
         return False
     if parsed.scheme != "https":
+        return False
+    if parsed.username is not None or parsed.password is not None:
         return False
     hostname = (parsed.hostname or "").lower().rstrip(".")
     if not hostname:

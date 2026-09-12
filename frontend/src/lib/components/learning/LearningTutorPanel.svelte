@@ -3,7 +3,6 @@
   import { marked } from 'marked';
   import { ExternalLink, MessageCircleQuestion, Send, X } from 'lucide-svelte';
   import {
-    askLearningTutor,
     citationHref,
     getLearningTutorSession,
     streamLearningTutor,

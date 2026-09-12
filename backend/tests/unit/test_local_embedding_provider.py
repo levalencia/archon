@@ -78,9 +78,20 @@ class TestLocalProviderConstruction:
         svc = EmbeddingService(provider="local", dimensions=DIMENSIONS)
         cap = svc.capability
         assert cap.provider == "local"
+        assert cap.model == "BAAI/bge-small-en-v1.5"
         assert cap.dimensions == DIMENSIONS
         assert cap.mock is False
         assert cap.readiness == "ready"
+
+    def test_local_validation_rejects_unsupported_model(self, _patch_fastembed) -> None:
+        svc = EmbeddingService(provider="local", model="custom/model", dimensions=DIMENSIONS)
+        with pytest.raises(ValueError, match="BAAI/bge-small-en-v1.5"):
+            svc.validate_configuration()
+
+    def test_local_validation_rejects_wrong_dimensions(self, _patch_fastembed) -> None:
+        svc = EmbeddingService(provider="local", dimensions=128)
+        with pytest.raises(ValueError, match="384"):
+            svc.validate_configuration()
 
 
 # ---------------------------------------------------------------------------
