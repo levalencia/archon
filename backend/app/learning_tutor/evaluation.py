@@ -70,6 +70,7 @@ class TutorEvalScore(BaseModel):
     forbidden_phrase_absent: bool
     deterministic_pass: bool
     manual_checks: list[str]
+    retrieval_recall: dict[str, float] | None = None
 
 
 def load_tutor_eval_dataset(path: str | Path) -> TutorEvalDataset:
@@ -115,6 +116,16 @@ def score_tutor_response(case: TutorEvalCase, response: dict[str, Any]) -> Tutor
     manual_checks.append(
         "The answer covers the expected concepts without introducing unsupported claims."
     )
+    # Compute retrieval recall when diagnostics are provided
+    retrieval_recall: dict[str, float] | None = None
+    diagnostics = response.get("retrieval_diagnostics")
+    if isinstance(diagnostics, list) and diagnostics:
+        retrieval_recall = compute_retrieval_recall(case, diagnostics)
+    elif citations:
+        # Fall back to citation paths if no explicit diagnostics
+        diag_from_citations = [c for c in citations if isinstance(c, dict) and c.get("source_path")]
+        if diag_from_citations:
+            retrieval_recall = compute_retrieval_recall(case, diag_from_citations)
     return TutorEvalScore(
         case_id=case.id,
         non_fallback=non_fallback,
@@ -125,4 +136,34 @@ def score_tutor_response(case: TutorEvalCase, response: dict[str, Any]) -> Tutor
         forbidden_phrase_absent=forbidden_phrase_absent,
         deterministic_pass=deterministic_pass,
         manual_checks=manual_checks,
+        retrieval_recall=retrieval_recall,
     )
+
+
+def compute_retrieval_recall(
+    case: TutorEvalCase,
+    retrieved: list[dict[str, Any]],
+) -> dict[str, float]:
+    """Compute recall@1, recall@3, recall@10 against expected_source_areas.
+
+    Each retrieved item should have a 'source_path' key. Matching is prefix-based:
+    a retrieved path 'docs/oop.md#section' matches expected 'docs/oop.md'.
+    """
+    expected = set(case.expected_source_areas)
+    if not expected:
+        return {"recall@1": 0.0, "recall@3": 0.0, "recall@10": 0.0}
+
+    def _found_at_k(k: int) -> float:
+        top_paths = [str(item.get("source_path") or "") for item in retrieved[:k]]
+        found = sum(
+            1
+            for exp in expected
+            if any(p.startswith(exp) or p == exp for p in top_paths)
+        )
+        return found / len(expected)
+
+    return {
+        "recall@1": round(_found_at_k(1), 4),
+        "recall@3": round(_found_at_k(3), 4),
+        "recall@10": round(_found_at_k(10), 4),
+    }
