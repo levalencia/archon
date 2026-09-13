@@ -21,6 +21,7 @@ from app.learning_tutor.workflow import (
     _max_output_tokens,
     _needs_web_supplement,
     _rebind_miscited_claims,
+    _response_contract,
     _web_query,
 )
 from app.runtime.models import ModelResponse, TokenUsage
@@ -146,7 +147,7 @@ async def test_answer_contains_verified_citations_code_excerpt_and_diagram(servi
         {
             "sections": [
                 {
-                    "heading": "Definition",
+                    "heading": "Lifecycle",
                     "claims": [
                         {
                             "text": (
@@ -188,7 +189,7 @@ async def test_answer_contains_verified_citations_code_excerpt_and_diagram(servi
     )
 
     result = await workflow.answer(
-        question="What is a service slot?",
+        question="Trace how the service slot changes during the application lifecycle.",
         context=_context(),
         owner_id="alice",
         project_id="default",
@@ -196,9 +197,9 @@ async def test_answer_contains_verified_citations_code_excerpt_and_diagram(servi
     )
 
     assert result.grounded is True
-    assert "## Definition" in result.answer_markdown
+    assert "## Lifecycle" in result.answer_markdown
     assert "[E1]" in result.answer_markdown
-    assert result.metrics["question_class"] == "simple_definition"
+    assert result.metrics["question_class"] == "complex"
     assert result.metrics["retrieval_duration_ms"] >= 0
     assert result.metrics["persistence_duration_ms"] >= 0
     assert "retrieval_diagnostics" not in result.public()["metrics"]
@@ -209,7 +210,7 @@ async def test_answer_contains_verified_citations_code_excerpt_and_diagram(servi
     assert diagnostics[0]["rank"] == 1
     assert "source_path_hashes" in diagnostics[0]
     assert "source_path" not in diagnostics[0]
-    assert "first section heading MUST be exactly 'Definition'" in provider.messages[0].content
+    assert "Answer the exact mechanism or trade-off asked" in provider.messages[0].content
     assert "```python" in result.answer_markdown
     assert "app.state.sandbox_executor = None" in result.answer_markdown
     assert any(citation.locator.get("start_seconds") == 286.94 for citation in result.citations)
@@ -382,6 +383,19 @@ def test_definition_classification_and_output_budget_are_bounded() -> None:
     assert _max_output_tokens("What is OOP?") < _max_output_tokens(
         "Trace the complete runtime lifecycle and compare its failure boundaries"
     )
+
+
+def test_definition_contract_bounds_sections_claims_and_diagrams() -> None:
+    simple = _response_contract(has_web=True, simple_definition=True).json_schema
+    complex_answer = _response_contract(has_web=True, simple_definition=False).json_schema
+
+    simple_sections = simple["properties"]["sections"]
+    complex_sections = complex_answer["properties"]["sections"]
+    assert simple_sections["maxItems"] == 3
+    assert simple_sections["items"]["properties"]["claims"]["maxItems"] == 4
+    assert simple["properties"]["diagram"] == {"type": "null"}
+    assert complex_sections["maxItems"] == 6
+    assert complex_sections["items"]["properties"]["claims"]["maxItems"] == 8
 
 
 def test_web_query_routes_foundational_concepts_to_relevant_official_docs() -> None:
