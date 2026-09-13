@@ -226,6 +226,17 @@ class LearningTutorWorkflow:
             )
             provider_duration_ms = round((monotonic() - provider_started) * 1000, 1)
             verification_started = monotonic()
+            common_metrics = {
+                **attempt_metrics,
+                "question_class": "simple_definition" if simple_definition else "complex",
+                "retrieval_duration_ms": retrieval_duration_ms,
+                "provider_duration_ms": provider_duration_ms,
+                "web_search_duration_ms": web_obs.get("web_search_duration_ms", 0.0),
+                "web_search_attempted": web_obs.get("web_search_attempted", False),
+                "web_raw_result_count": web_obs.get("raw_result_count", 0),
+                "web_allowed_result_count": web_obs.get("allowed_result_count", 0),
+                "web_extraction_success_count": web_obs.get("extraction_success_count", 0),
+            }
             result = await self._verified_result(
                 run_id=run_id,
                 session_id=session.id,
@@ -233,21 +244,75 @@ class LearningTutorWorkflow:
                 payload=payload,
                 evidence=evidence,
                 web_evidence=web_evidence,
-                extra_metrics={
-                    **attempt_metrics,
-                    "question_class": "simple_definition" if simple_definition else "complex",
-                    "retrieval_duration_ms": retrieval_duration_ms,
-                    "provider_duration_ms": provider_duration_ms,
-                    "web_search_duration_ms": web_obs.get("web_search_duration_ms", 0.0),
-                    "web_search_attempted": web_obs.get("web_search_attempted", False),
-                    "web_raw_result_count": web_obs.get("raw_result_count", 0),
-                    "web_allowed_result_count": web_obs.get("allowed_result_count", 0),
-                    "web_extraction_success_count": web_obs.get("extraction_success_count", 0),
-                },
+                extra_metrics=common_metrics,
             )
-            result.metrics["verification_duration_ms"] = round(
-                (monotonic() - verification_started) * 1000, 1
+            verification_duration_ms = round((monotonic() - verification_started) * 1000, 1)
+            initial_supported_claims = int(result.metrics.get("supported_claims", 0))
+            initial_unsupported_claims = len(result.unsupported)
+            initial_candidate_claims = initial_supported_claims + initial_unsupported_claims
+            should_repair = bool(
+                payload["sections"]
+                and initial_candidate_claims
+                and initial_supported_claims / initial_candidate_claims < 0.25
             )
+            if should_repair:
+                repair_started = monotonic()
+                repair_payload, repair_usage, repair_attempt_metrics = await self._complete(
+                    provider,
+                    question,
+                    context,
+                    evidence,
+                    web_evidence=web_evidence,
+                    grounding_repair=True,
+                )
+                repair_provider_duration_ms = round((monotonic() - repair_started) * 1000, 1)
+                provider_duration_ms += repair_provider_duration_ms
+                usage += repair_usage
+                repair_verification_started = monotonic()
+                total_structured_attempts = int(
+                    attempt_metrics.get("structured_output_attempts", 1)
+                ) + int(repair_attempt_metrics.get("structured_output_attempts", 1))
+                repair_result = await self._verified_result(
+                    run_id=run_id,
+                    session_id=session.id,
+                    question=question,
+                    payload=repair_payload,
+                    evidence=evidence,
+                    web_evidence=web_evidence,
+                    extra_metrics={
+                        **common_metrics,
+                        "structured_output_attempts": total_structured_attempts,
+                        "provider_duration_ms": provider_duration_ms,
+                    },
+                )
+                repair_supported_claims = int(repair_result.metrics.get("supported_claims", 0))
+                repair_succeeded = repair_supported_claims > initial_supported_claims
+                if repair_succeeded:
+                    result = repair_result
+                repair_verification_duration_ms = round(
+                    (monotonic() - repair_verification_started) * 1000, 1
+                )
+                result.metrics.update(
+                    {
+                        "structured_output_attempts": total_structured_attempts,
+                        "provider_duration_ms": provider_duration_ms,
+                        "grounding_repair_attempts": 1,
+                        "grounding_repair_succeeded": repair_succeeded,
+                        "initial_supported_claims": initial_supported_claims,
+                        "initial_unsupported_claims": initial_unsupported_claims,
+                        "repair_supported_claims": repair_supported_claims,
+                        "grounding_repair_provider_duration_ms": repair_provider_duration_ms,
+                        "grounding_repair_verification_duration_ms": (
+                            repair_verification_duration_ms
+                        ),
+                    }
+                )
+                if repair_attempt_metrics.get("structured_output_failure"):
+                    result.metrics["grounding_repair_failure"] = repair_attempt_metrics[
+                        "structured_output_failure"
+                    ]
+                verification_duration_ms += repair_verification_duration_ms
+            result.metrics["verification_duration_ms"] = verification_duration_ms
         else:
             result = LearningTutorResult(
                 run_id=run_id,
@@ -300,14 +365,21 @@ class LearningTutorWorkflow:
         evidence: list[LearningEvidence],
         *,
         web_evidence: list[WebEvidence] | None = None,
+        grounding_repair: bool = False,
     ) -> tuple[dict[str, Any], TokenUsage, dict[str, Any]]:
-        """Call provider with one bounded retry on malformed structured output.
-
-        Returns ``(payload, cumulative_usage, attempt_metrics)`` where
-        *attempt_metrics* records ``structured_output_attempts`` and, if the
-        first attempt failed, ``structured_output_failure``.
-        """
+        """Call the provider with bounded structured-output recovery."""
         messages = list(_prompt(question, context, evidence, web_evidence=web_evidence or []))
+        if grounding_repair:
+            messages.append(
+                Message(
+                    Role.USER,
+                    "Regenerate the answer from the supplied evidence. At least 90% of the "
+                    "substantive words in every claim must appear verbatim in its cited evidence. "
+                    "Use short source-close claims. For code evidence, preserve exact identifiers "
+                    "and literals and do not infer purpose unless the evidence states it. Return "
+                    "exactly one JSON value matching the required schema.",
+                )
+            )
         contract = _response_contract(
             has_web=bool(web_evidence),
             simple_definition=_is_simple_definition(question),
@@ -315,7 +387,8 @@ class LearningTutorWorkflow:
         attempt_metrics: dict[str, Any] = {"structured_output_attempts": 1}
         cumulative_usage = TokenUsage()
         malformed_content = ""
-        for attempt in range(2):
+        attempt_limit = 1 if grounding_repair else 2
+        for attempt in range(attempt_limit):
             try:
                 response = await provider.complete(
                     tuple(messages),
@@ -337,8 +410,8 @@ class LearningTutorWorkflow:
             except StructuredOutputError as exc:
                 failure_code = exc.code
 
-            if attempt == 0:
-                attempt_metrics["structured_output_attempts"] = 2
+            if attempt + 1 < attempt_limit:
+                attempt_metrics["structured_output_attempts"] = attempt + 2
                 attempt_metrics["structured_output_failure"] = failure_code
                 messages.append(
                     Message(
@@ -349,6 +422,7 @@ class LearningTutorWorkflow:
                 )
                 continue
 
+            attempt_metrics["structured_output_failure"] = failure_code
             attempt_metrics["structured_output_fallback"] = True
             return (
                 {"sections": [], "related_questions": [], "diagram": None},
