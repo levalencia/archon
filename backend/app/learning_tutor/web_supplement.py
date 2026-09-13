@@ -97,6 +97,29 @@ _CONCEPT_KEYWORDS: dict[str, list[str]] = {
     "python-type-hints": ["Python", "type hints", "typing"],
 }
 
+_CANONICAL_OFFICIAL_PAGES: dict[str, tuple[str, str]] = {
+    "site:docs.python.org": (
+        "Python classes",
+        "https://docs.python.org/3/tutorial/classes.html",
+    ),
+    "site:fastapi.tiangolo.com": (
+        "FastAPI dependencies",
+        "https://fastapi.tiangolo.com/tutorial/dependencies/",
+    ),
+    "site:opentelemetry.io": (
+        "OpenTelemetry observability primer",
+        "https://opentelemetry.io/docs/concepts/observability-primer/",
+    ),
+    "site:developer.mozilla.org": (
+        "MDN server-sent events",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events",
+    ),
+    "site:docs.pydantic.dev": (
+        "Pydantic models",
+        "https://docs.pydantic.dev/latest/concepts/models/",
+    ),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class WebEvidence:
@@ -206,6 +229,16 @@ def build_concept_query(
     return enriched[:_MAX_QUERY_LEN]
 
 
+def canonical_official_results(query: str, max_results: int) -> list[dict[str, Any]]:
+    """Return allowlisted pages selected only by trusted internal query expansions."""
+    results: list[dict[str, Any]] = []
+    lowered = query.lower()
+    for marker, (title, url) in _CANONICAL_OFFICIAL_PAGES.items():
+        if marker in lowered and len(results) < max_results:
+            results.append({"title": title, "url": url, "snippet": ""})
+    return results
+
+
 def extract_relevant_sentences(
     text: str,
     query: str,
@@ -296,11 +329,10 @@ async def search_official_web(
         obs["raw_result_count"] = raw.get("total", 0)
     except Exception as exc:
         logger.warning("tutor_web_search_failed", error_type=type(exc).__name__)
+        raw = {"source": "error", "total": 0, "results": []}
         obs["search_source"] = "error"
         obs["raw_result_count"] = 0
         obs["web_search_error"] = type(exc).__name__
-        obs["web_search_duration_ms"] = round((time.monotonic() - start) * 1000, 1)
-        return [], obs
 
     # Filter to allowlisted domains BEFORE any content extraction
     raw_results = raw.get("results", [])
@@ -308,6 +340,12 @@ async def search_official_web(
     obs["allowed_result_count"] = len(allowed)
     obs["filtered_out_count"] = len(raw_results) - len(allowed)
 
+    if not allowed:
+        allowed = canonical_official_results(query, max_results)
+        obs["canonical_fallback_count"] = len(allowed)
+        if allowed:
+            obs["search_source"] = "canonical_fallback"
+            obs["allowed_result_count"] = len(allowed)
     if not allowed:
         obs["web_search_duration_ms"] = round((time.monotonic() - start) * 1000, 1)
         return [], obs
@@ -334,7 +372,7 @@ async def search_official_web(
                 content=content,
                 domain=(parsed.hostname or "").lower(),
                 retrieved_at=now,
-                search_source=raw.get("source", "none"),
+                search_source=obs.get("search_source", raw.get("source", "none")),
             )
         )
 
@@ -344,7 +382,7 @@ async def search_official_web(
     logger.info(
         "tutor_web_supplement",
         evidence_count=len(evidence),
-        search_source=raw.get("source", "none"),
+        search_source=obs.get("search_source", raw.get("source", "none")),
     )
     return evidence, obs
 

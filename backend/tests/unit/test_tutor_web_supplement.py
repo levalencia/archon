@@ -9,6 +9,7 @@ from app.learning_tutor.web_supplement import (
     WebEvidence,
     _resolves_to_public_host,
     build_concept_query,
+    canonical_official_results,
     extract_relevant_sentences,
     filter_allowed_results,
     format_web_evidence_for_prompt,
@@ -171,6 +172,38 @@ async def test_search_official_web_graceful_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_search_uses_canonical_page_when_provider_has_no_results(monkeypatch):
+    import app.learning_tutor.web_supplement as ws_mod
+
+    async def _empty_search(*args, **kwargs):
+        return {"source": "test", "total": 0, "results": []}
+
+    async def _extract(results, query=""):
+        return [
+            {
+                **item,
+                "content": (
+                    "Observability is the ability to understand a system through its outputs."
+                ),
+            }
+            for item in results
+        ]
+
+    monkeypatch.setattr(ws_mod, "web_search_tool", _empty_search)
+    monkeypatch.setattr(ws_mod, "_safe_extract_content", _extract)
+
+    evidence, obs = await ws_mod.search_official_web(
+        "observability site:opentelemetry.io OpenTelemetry",
+        max_results=3,
+    )
+
+    assert len(evidence) == 1
+    assert evidence[0].domain == "opentelemetry.io"
+    assert evidence[0].search_source == "canonical_fallback"
+    assert obs["canonical_fallback_count"] == 1
+
+
+@pytest.mark.asyncio
 async def test_search_filters_urls_before_content_extraction(monkeypatch):
     import app.learning_tutor.web_supplement as ws_mod
 
@@ -221,6 +254,21 @@ class TestBuildConceptQuery:
         assert "filetype:" not in q.lower()
         assert "inurl:" not in q.lower()
         assert "intitle:" not in q.lower()
+
+    def test_trusted_site_expansion_maps_to_canonical_allowlisted_page(self):
+        results = canonical_official_results(
+            "observability site:opentelemetry.io OpenTelemetry tracing",
+            3,
+        )
+
+        assert results == [
+            {
+                "title": "OpenTelemetry observability primer",
+                "url": "https://opentelemetry.io/docs/concepts/observability-primer/",
+                "snippet": "",
+            }
+        ]
+        assert is_allowed_url(results[0]["url"])
 
     def test_python_oop_concepts_add_python_keyword(self):
         q = build_concept_query(
