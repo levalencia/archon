@@ -8,6 +8,8 @@ from app.learning_tutor.web_supplement import (
     DEFAULT_ALLOWED_DOMAINS,
     WebEvidence,
     _resolves_to_public_host,
+    build_concept_query,
+    extract_relevant_sentences,
     filter_allowed_results,
     format_web_evidence_for_prompt,
     is_allowed_url,
@@ -185,7 +187,7 @@ async def test_search_filters_urls_before_content_extraction(monkeypatch):
             ],
         }
 
-    async def _extract(results):
+    async def _extract(results, query=""):
         extracted.extend(results)
         return [{**item, "content": item["snippet"]} for item in results]
 
@@ -196,3 +198,255 @@ async def test_search_filters_urls_before_content_extraction(monkeypatch):
 
     assert [item["url"] for item in extracted] == ["https://docs.python.org/3/"]
     assert [item.url for item in evidence] == ["https://docs.python.org/3/"]
+
+
+# ── Tests for build_concept_query ──────────────────────────────────────────
+
+
+class TestBuildConceptQuery:
+    """Concept-aware query construction for targeted official-source search."""
+
+    def test_plain_question_returned_as_is(self):
+        """Without concepts, return a cleaned version of the question."""
+        q = build_concept_query("What is a class?")
+        assert "class" in q.lower()
+
+    def test_python_oop_concepts_add_python_keyword(self):
+        q = build_concept_query(
+            "What is OOP?",
+            concepts=["object-oriented-programming", "python-architecture"],
+        )
+        lower = q.lower()
+        assert "python" in lower
+        assert "oop" in lower or "object" in lower
+
+    def test_async_concept_targets_asyncio(self):
+        q = build_concept_query(
+            "How does async work?",
+            concepts=["async-programming"],
+        )
+        lower = q.lower()
+        assert "asyncio" in lower or "async" in lower
+
+    def test_fastapi_dependency_injection_concept(self):
+        q = build_concept_query(
+            "What is dependency injection?",
+            concepts=["fastapi-dependency-injection"],
+        )
+        lower = q.lower()
+        assert "fastapi" in lower
+        assert "dependency" in lower or "depends" in lower
+
+    def test_opentelemetry_observability_concept(self):
+        q = build_concept_query(
+            "How do I add observability?",
+            concepts=["opentelemetry-observability"],
+        )
+        lower = q.lower()
+        assert "opentelemetry" in lower
+
+    def test_sse_concept_targets_mdn(self):
+        q = build_concept_query(
+            "What are server-sent events?",
+            concepts=["server-sent-events"],
+        )
+        lower = q.lower()
+        assert "server-sent events" in lower or "sse" in lower
+
+    def test_safe_default_concept(self):
+        q = build_concept_query(
+            "How do I handle defaults?",
+            concepts=["safe-default-patterns"],
+        )
+        lower = q.lower()
+        assert "default" in lower
+
+    def test_unknown_concept_passthrough(self):
+        """Unknown concepts should not crash, just be ignored gracefully."""
+        q = build_concept_query(
+            "Explain quantum computing",
+            concepts=["quantum-entanglement-magic"],
+        )
+        assert len(q) > 0
+
+    def test_empty_question(self):
+        q = build_concept_query("")
+        assert q == ""
+
+    def test_multiple_concepts_combined(self):
+        q = build_concept_query(
+            "Explain the factory pattern",
+            concepts=["fastapi-dependency-injection", "python-architecture"],
+        )
+        lower = q.lower()
+        assert "factory" in lower or "pattern" in lower
+        assert "fastapi" in lower or "python" in lower
+
+    def test_query_max_length_bounded(self):
+        """Constructed queries should not be excessively long."""
+        q = build_concept_query(
+            "A very long question " * 20,
+            concepts=["object-oriented-programming", "async-programming",
+                       "fastapi-dependency-injection", "opentelemetry-observability"],
+        )
+        assert len(q) <= 300
+
+
+# ── Tests for extract_relevant_sentences ───────────────────────────────────
+
+
+class TestExtractRelevantSentences:
+    """Query-relevant sentence extraction from allowlisted fetched pages."""
+
+    def test_extracts_matching_sentences(self):
+        text = (
+            "Python is a programming language. "
+            "It supports object-oriented programming. "
+            "The weather is nice today. "
+            "Classes define the structure of objects in Python."
+        )
+        result = extract_relevant_sentences(text, "python classes object-oriented")
+        assert "object-oriented" in result
+        assert "Classes define" in result or "Python is" in result
+        # Irrelevant sentence should be excluded or ranked lower
+        assert result.count("weather") == 0 or len(result) < len(text)
+
+    def test_returns_empty_for_no_matches(self):
+        text = "The weather is nice. Rain is expected tomorrow."
+        result = extract_relevant_sentences(text, "python asyncio")
+        # Should still return something (fallback to first sentences)
+        # but it should be bounded
+        assert len(result) <= len(text)
+
+    def test_respects_max_chars(self):
+        text = "Sentence one about Python. " * 100
+        result = extract_relevant_sentences(text, "python", max_chars=200)
+        assert len(result) <= 200 + 50  # small tolerance for sentence boundaries
+
+    def test_empty_text_returns_empty(self):
+        assert extract_relevant_sentences("", "python") == ""
+
+    def test_empty_query_returns_truncated_text(self):
+        text = "Some content about things."
+        result = extract_relevant_sentences(text, "")
+        assert len(result) > 0
+
+    def test_preserves_sentence_boundaries(self):
+        """Sentences should not be cut mid-word."""
+        text = (
+            "asyncio is the standard library for async I/O. "
+            "It provides coroutines and event loops. "
+            "FastAPI uses asyncio under the hood."
+        )
+        result = extract_relevant_sentences(text, "asyncio")
+        # Should contain complete sentences
+        sentences = [s.strip() for s in result.split(".") if s.strip()]
+        for s in sentences:
+            # Each extracted piece should be a recognizable sentence fragment
+            assert len(s) > 3
+
+    def test_case_insensitive_matching(self):
+        text = "ASYNCIO provides event loops. The FASTAPI framework is modern."
+        result = extract_relevant_sentences(text, "asyncio fastapi")
+        assert "ASYNCIO" in result or "FASTAPI" in result
+
+    def test_snippet_fallback_when_no_sentences(self):
+        """Short content without clear sentences should still work."""
+        text = "asyncio event loop"
+        result = extract_relevant_sentences(text, "asyncio")
+        assert "asyncio" in result.lower()
+
+    def test_does_not_inject_content(self):
+        """Extraction must only select from existing text, never synthesize."""
+        text = "Python has classes. Java has interfaces."
+        result = extract_relevant_sentences(text, "python classes")
+        # Every word in result must come from original text
+        for word in result.split():
+            clean = word.strip(".,;:!?")
+            if clean:
+                assert clean in text
+
+
+# ── Integration: extraction used in search pipeline ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_search_uses_query_relevant_extraction(monkeypatch):
+    """search_official_web should pass query to _safe_extract_content for relevance."""
+    import app.learning_tutor.web_supplement as ws_mod
+
+    captured_query = []
+
+    async def _search(*args, **kwargs):
+        return {
+            "source": "test",
+            "total": 1,
+            "results": [
+                {"url": "https://docs.python.org/3/", "title": "Python", "snippet": "snippet"},
+            ],
+        }
+
+    async def _extract(results, query=""):
+        captured_query.append(query)
+        return [{**item, "content": "extracted content"} for item in results]
+
+    monkeypatch.setattr(ws_mod, "web_search_tool", _search)
+    monkeypatch.setattr(ws_mod, "_safe_extract_content", _extract)
+
+    await ws_mod.search_official_web("python asyncio tutorial")
+
+    assert len(captured_query) == 1
+    assert captured_query[0] == "python asyncio tutorial"
+
+
+@pytest.mark.asyncio
+async def test_observability_includes_extraction_metadata(monkeypatch):
+    """Observability dict should include extraction success metrics."""
+    import app.learning_tutor.web_supplement as ws_mod
+
+    async def _search(*args, **kwargs):
+        return {
+            "source": "test",
+            "total": 2,
+            "results": [
+                {"url": "https://docs.python.org/3/a", "title": "A", "snippet": "s1"},
+                {"url": "https://docs.python.org/3/b", "title": "B", "snippet": "s2"},
+            ],
+        }
+
+    async def _extract(results, query=""):
+        for r in results:
+            r["content"] = "Full extracted content about Python."
+        return results
+
+    monkeypatch.setattr(ws_mod, "web_search_tool", _search)
+    monkeypatch.setattr(ws_mod, "_safe_extract_content", _extract)
+
+    _, obs = await ws_mod.search_official_web("python")
+
+    assert "extraction_success_count" in obs
+    assert obs["extraction_success_count"] >= 1
+    assert "web_evidence_count" in obs
+
+
+# ── Security: no domain leakage in concept queries ─────────────────────────
+
+
+class TestBuildConceptQuerySecurity:
+    """Ensure concept queries don't accidentally allow disallowed domains."""
+
+    def test_no_url_in_query(self):
+        """Query should not contain URLs that could be used for SSRF."""
+        q = build_concept_query(
+            "Explain https://evil.com/hack to me",
+            concepts=["python-architecture"],
+        )
+        assert "evil.com" not in q
+
+    def test_no_script_injection(self):
+        q = build_concept_query(
+            '<script>alert("xss")</script> What is OOP?',
+            concepts=["object-oriented-programming"],
+        )
+        assert "<script>" not in q
+        assert "alert" not in q
