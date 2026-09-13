@@ -52,6 +52,24 @@ class TutorProvider:
         )
 
 
+class GroundingRepairProvider:
+    def __init__(self, initial_payload: dict, repaired_payload: dict) -> None:
+        self._payloads = [initial_payload, repaired_payload]
+        self.calls = 0
+        self.all_messages: list[tuple] = []
+
+    async def complete(
+        self, messages, tools=(), *, max_tokens=4096, response_contract=None, response_format=None
+    ):
+        self.all_messages.append(tuple(messages))
+        payload = self._payloads[self.calls]
+        self.calls += 1
+        return ModelResponse(
+            content=json.dumps(payload),
+            usage=TokenUsage(input_tokens=100, output_tokens=80),
+        )
+
+
 @pytest.fixture
 async def services(tmp_path: Path):
     url = f"sqlite+aiosqlite:///{tmp_path / 'tutor.db'}"
@@ -779,3 +797,174 @@ async def test_successful_first_attempt_records_single_attempt(services) -> None
     assert result.metrics["structured_output_attempts"] == 1
     assert "structured_output_failure" not in result.metrics
     assert "structured_output_fallback" not in result.metrics
+
+
+@pytest.mark.asyncio
+async def test_zero_supported_claims_trigger_one_source_close_repair(services) -> None:
+    knowledge, tutor, conversations = services
+    provider = GroundingRepairProvider(
+        {
+            "sections": [
+                {
+                    "heading": "Lifecycle",
+                    "claims": [
+                        {
+                            "text": "An external collaborator becomes available later.",
+                            "evidence_ids": ["E1"],
+                        }
+                    ],
+                }
+            ],
+            "related_questions": [],
+            "diagram": None,
+        },
+        {
+            "sections": [
+                {
+                    "heading": "Lifecycle",
+                    "claims": [
+                        {
+                            "text": (
+                                "A service slot is initialized to None and populated during "
+                                "application lifespan."
+                            ),
+                            "evidence_ids": ["E1"],
+                        }
+                    ],
+                }
+            ],
+            "related_questions": [],
+            "diagram": None,
+        },
+    )
+    workflow = LearningTutorWorkflow(
+        knowledge=knowledge,
+        sessions=tutor,
+        runs=conversations.runs,
+        provider=provider,
+        provider_name="mock",
+        model="test-model",
+    )
+
+    result = await workflow.answer(
+        question="Trace the service-slot lifecycle.",
+        context=_context(),
+        owner_id="alice",
+        project_id="default",
+        correlation_id="grounding-repair",
+    )
+
+    assert provider.calls == 2
+    assert len(provider.all_messages[1]) == 3
+    assert "at least 90%" in provider.all_messages[1][-1].content.lower()
+    assert "previous response" not in provider.all_messages[1][-1].content.lower()
+    assert result.grounded is True
+    assert result.metrics["grounding_repair_attempts"] == 1
+    assert result.metrics["grounding_repair_succeeded"] is True
+    assert result.metrics["initial_unsupported_claims"] == 1
+    assert result.metrics["grounding_repair_provider_duration_ms"] >= 0
+    assert result.metrics["grounding_repair_verification_duration_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_exactly_quarter_supported_claims_do_not_trigger_repair(services) -> None:
+    knowledge, tutor, conversations = services
+    exact = "A service slot is initialized to None and populated during application lifespan."
+    provider = TutorProvider(
+        {
+            "sections": [
+                {
+                    "heading": "Lifecycle",
+                    "claims": [
+                        {"text": exact, "evidence_ids": ["E1"]},
+                        *[
+                            {
+                                "text": f"Unsupported interpretation {index}.",
+                                "evidence_ids": ["E1"],
+                            }
+                            for index in range(3)
+                        ],
+                    ],
+                }
+            ],
+            "related_questions": [],
+            "diagram": None,
+        }
+    )
+    workflow = LearningTutorWorkflow(
+        knowledge=knowledge,
+        sessions=tutor,
+        runs=conversations.runs,
+        provider=provider,
+        provider_name="mock",
+        model="test-model",
+    )
+
+    result = await workflow.answer(
+        question="Trace the service-slot lifecycle.",
+        context=_context(),
+        owner_id="alice",
+        project_id="default",
+        correlation_id="grounding-repair-boundary",
+    )
+
+    assert provider.calls == 1
+    assert result.grounded is True
+    assert "grounding_repair_attempts" not in result.metrics
+
+
+@pytest.mark.asyncio
+async def test_grounding_repair_never_replaces_a_stronger_initial_answer(services) -> None:
+    knowledge, tutor, conversations = services
+    exact = "A service slot is initialized to None and populated during application lifespan."
+    unsupported = [
+        {"text": f"Unsupported interpretation {index}.", "evidence_ids": ["E1"]}
+        for index in range(4)
+    ]
+    provider = GroundingRepairProvider(
+        {
+            "sections": [
+                {
+                    "heading": "Lifecycle",
+                    "claims": [{"text": exact, "evidence_ids": ["E1"]}, *unsupported],
+                }
+            ],
+            "related_questions": [],
+            "diagram": None,
+        },
+        {
+            "sections": [
+                {
+                    "heading": "Lifecycle",
+                    "claims": [
+                        {"text": "Still unsupported interpretation.", "evidence_ids": ["E1"]}
+                    ],
+                }
+            ],
+            "related_questions": [],
+            "diagram": None,
+        },
+    )
+    workflow = LearningTutorWorkflow(
+        knowledge=knowledge,
+        sessions=tutor,
+        runs=conversations.runs,
+        provider=provider,
+        provider_name="mock",
+        model="test-model",
+    )
+
+    result = await workflow.answer(
+        question="Trace the service-slot lifecycle.",
+        context=_context(),
+        owner_id="alice",
+        project_id="default",
+        correlation_id="grounding-repair-no-regression",
+    )
+
+    assert provider.calls == 2
+    assert result.grounded is True
+    assert exact in result.answer_markdown
+    assert result.metrics["grounding_repair_succeeded"] is False
+    assert result.metrics["initial_supported_claims"] == 1
+    assert result.metrics["repair_supported_claims"] == 0
