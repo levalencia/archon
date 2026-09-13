@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -26,6 +26,36 @@ from app.services.vector_store import cosine_similarity
 
 _TOKEN = re.compile(r"[a-z0-9_./:-]+")
 
+# Deterministic concept aliases: maps short/colloquial forms to canonical expansions.
+_CONCEPT_ALIASES: dict[str, list[str]] = {
+    "oop": ["object-oriented programming", "object oriented programming", "classes", "objects"],
+    "di": ["dependency injection", "inject", "injected"],
+    "factory": ["factory pattern", "factory method", "create_app"],
+    "preflight": ["preflight check", "preflight checks", "pre-flight"],
+    "observability": ["metrics", "tracing", "structured logging", "monitoring"],
+    "policy": ["security policy", "permission rules", "policy rules"],
+    "rag": ["retrieval-augmented generation", "retrieval augmented generation"],
+    "sse": ["server-sent events", "server sent events", "event stream"],
+    "chunking": ["chunking strategy", "text splitting", "overlapping windows", "chunk"],
+}
+
+# Reverse mapping: canonical terms and their aliases both point to the alias set
+_ALIAS_EXPANSIONS: dict[str, set[str]] = {}
+for _alias, _expansions in _CONCEPT_ALIASES.items():
+    terms = {_alias} | set(_expansions)
+    for _term in terms:
+        _ALIAS_EXPANSIONS[_term.lower()] = terms
+
+
+def _expand_query(query: str) -> set[str]:
+    """Expand query tokens using concept aliases for deterministic boosting."""
+    query_lower = query.lower().rstrip("?.!")
+    expanded: set[str] = set()
+    for alias, terms in _ALIAS_EXPANSIONS.items():
+        if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", query_lower):
+            expanded |= terms
+    return expanded
+
 
 @dataclass(frozen=True, slots=True)
 class LearningEvidence:
@@ -40,6 +70,21 @@ class LearningEvidence:
     revision: str
     locator: dict[str, Any]
     context_keys: tuple[str, ...]
+    score_components: dict[str, float] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.score_components:
+            object.__setattr__(
+                self,
+                "score_components",
+                {
+                    "dense": 0.0,
+                    "lexical": 0.0,
+                    "context": 0.0,
+                    "exact_symbol": 0.0,
+                    "final": self.score,
+                },
+            )
 
     def public(self) -> dict[str, Any]:
         return {
@@ -283,8 +328,11 @@ class LearningKnowledgeRepository:
                 await self._embeddings.embed(question), dimensions, source="query embedding"
             )
         query_tokens = _tokens(question)
+        expanded_terms = _expand_query(question)
         phrase = question.strip().lower().rstrip("?.!")
-        ranked: list[tuple[float, LearningChunkRow, LearningSourceRow, dict[str, Any]]] = []
+        ranked: list[
+            tuple[float, LearningChunkRow, LearningSourceRow, dict[str, Any], dict[str, float]]
+        ] = []
         for chunk, source in rows:
             try:
                 metadata = json.loads(str(chunk.metadata_json))
@@ -311,14 +359,32 @@ class LearningKnowledgeRepository:
                     dense = 0.0
             haystack = f"{source.title}\n{chunk.content}".lower()
             lexical = _lexical_score(query_tokens, phrase, haystack)
+            # Boost lexical via concept alias expansion
+            if expanded_terms:
+                alias_hits = sum(1 for term in expanded_terms if term.lower() in haystack)
+                if alias_hits:
+                    lexical = min(1.0, lexical + 0.3 * alias_hits / len(expanded_terms))
             context = 1.0 if context_keys and context_keys.intersection(stored_contexts) else 0.0
-            score = 0.5 * dense + 0.4 * lexical + 0.1 * context
+            # Exact symbol/file/path matching
+            exact_symbol = _exact_symbol_score(question, locator, haystack)
+            if expanded_terms or exact_symbol:
+                score = 0.45 * dense + 0.35 * lexical + 0.1 * context + 0.1 * exact_symbol
+            else:
+                score = 0.5 * dense + 0.4 * lexical + 0.1 * context
+            components = {
+                "dense": round(dense, 4),
+                "lexical": round(lexical, 4),
+                "context": round(context, 4),
+                "exact_symbol": round(exact_symbol, 4),
+                "final": round(score, 4),
+            }
             ranked.append(
                 (
                     score,
                     chunk,
                     source,
                     {**metadata, "locator": locator, "contexts": stored_contexts},
+                    components,
                 )
             )
         ranked.sort(key=lambda item: (-item[0], str(item[1].id)))
@@ -335,8 +401,9 @@ class LearningKnowledgeRepository:
                 revision=str(source.source_revision),
                 locator=dict(metadata["locator"]),
                 context_keys=tuple(metadata["contexts"]),
+                score_components=components,
             )
-            for index, (score, chunk, source, metadata) in enumerate(ranked[:top_k], 1)
+            for index, (score, chunk, source, metadata, components) in enumerate(ranked[:top_k], 1)
         ]
 
 
@@ -477,9 +544,29 @@ def _lexical_score(query_tokens: set[str], phrase: str, haystack: str) -> float:
     return min(1.0, overlap + phrase_bonus)
 
 
+def _exact_symbol_score(question: str, locator: dict[str, Any], haystack: str) -> float:
+    """Score boost for exact symbol name, file name, or path matches in the query."""
+    q = question.strip().lower()
+    score = 0.0
+    # Check symbol name match
+    symbol = str(locator.get("symbol") or "").lower()
+    if symbol and symbol in q:
+        score = max(score, 1.0)
+    # Check file name match (e.g. 'factory.py')
+    path = str(locator.get("path") or "")
+    if path:
+        filename = path.rsplit("/", 1)[-1].lower()
+        if filename and filename in q:
+            score = max(score, 0.8)
+        # Check full path mention
+        if path.lower() in q:
+            score = max(score, 1.0)
+    return score
+
+
 def _redacted_json(redactor: PersistenceRedactor, value: Any) -> str:
-    raw = json.dumps(value, sort_keys=True, allow_nan=False)
-    return redactor.redact_text(raw).text
+    safe_value = redactor.redact_value(value)
+    return json.dumps(safe_value, sort_keys=True, allow_nan=False)
 
 
 def _turn(row: LearningTutorTurnRow) -> TutorTurn:

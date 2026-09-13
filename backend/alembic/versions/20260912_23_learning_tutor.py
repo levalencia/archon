@@ -3,11 +3,13 @@
 Revision ID: 20260912_23
 Revises: 20260902_22
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260912_23"
@@ -89,9 +91,7 @@ def upgrade() -> None:
         sa.Column("diagram_json", sa.Text(), nullable=True),
         sa.Column("metrics_json", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["session_id"], ["learning_tutor_sessions.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["session_id"], ["learning_tutor_sessions.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

@@ -12,7 +12,7 @@ from typing import Any, Literal
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
-StructuredOutputErrorCode = Literal["malformed_json", "schema_mismatch"]
+StructuredOutputErrorCode = Literal["malformed_json", "schema_mismatch", "pedagogy_mismatch"]
 _MAX_SCHEMA_BYTES = 32_768
 _DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
 _DEFAULT_MAX_DEPTH = 64

@@ -51,10 +51,74 @@ DEFAULT_ALLOWED_DOMAINS: frozenset[str] = frozenset(
 
 _MAX_WEB_RESULTS = 3
 _MAX_CONTENT_CHARS = 2000
+_MAX_QUERY_LEN = 300
 _STRIP_SCRIPT = re.compile(r"<script[^>]*>.*?</script>", re.DOTALL)
 _STRIP_STYLE = re.compile(r"<style[^>]*>.*?</style>", re.DOTALL)
 _STRIP_TAGS = re.compile(r"<[^>]+>")
 _COLLAPSE_WS = re.compile(r"\s+")
+_STRIP_URL = re.compile(r"https?://\S+")
+_STRIP_HTML_TAG = re.compile(r"<[^>]*>")
+_STRIP_SEARCH_OPERATOR = re.compile(r"(?i)(?<!\S)(?:site|filetype|inurl|intitle):\S+")
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+
+# ── Concept-to-keyword routing table ───────────────────────────────────────
+# Maps concept slugs to search keywords added for better official-source targeting.
+_CONCEPT_KEYWORDS: dict[str, list[str]] = {
+    "object-oriented-programming": ["site:docs.python.org", "Python", "OOP", "classes", "objects"],
+    "python-architecture": ["Python", "architecture", "modules"],
+    "async-programming": ["site:docs.python.org", "Python", "asyncio", "async", "await"],
+    "fastapi-dependency-injection": [
+        "site:fastapi.tiangolo.com",
+        "FastAPI",
+        "Depends",
+        "dependency injection",
+    ],
+    "opentelemetry-observability": [
+        "site:opentelemetry.io",
+        "OpenTelemetry",
+        "tracing",
+        "observability",
+    ],
+    "server-sent-events": [
+        "site:developer.mozilla.org",
+        "server-sent events",
+        "SSE",
+        "EventSource",
+    ],
+    "safe-default-patterns": ["Python", "safe defaults", "sentinel"],
+    "fastapi-factory": [
+        "site:fastapi.tiangolo.com",
+        "FastAPI",
+        "application factory",
+        "create_app",
+    ],
+    "pydantic-validation": ["site:docs.pydantic.dev", "Pydantic", "validation", "BaseModel"],
+    "python-decorators": ["Python", "decorators", "@"],
+    "python-type-hints": ["Python", "type hints", "typing"],
+}
+
+_CANONICAL_OFFICIAL_PAGES: dict[str, tuple[str, str]] = {
+    "site:docs.python.org": (
+        "Python classes",
+        "https://docs.python.org/3/tutorial/classes.html",
+    ),
+    "site:fastapi.tiangolo.com": (
+        "FastAPI dependencies",
+        "https://fastapi.tiangolo.com/tutorial/dependencies/",
+    ),
+    "site:opentelemetry.io": (
+        "OpenTelemetry observability primer",
+        "https://opentelemetry.io/docs/concepts/observability-primer/index.md",
+    ),
+    "site:developer.mozilla.org": (
+        "MDN server-sent events",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events",
+    ),
+    "site:docs.pydantic.dev": (
+        "Pydantic models",
+        "https://docs.pydantic.dev/latest/concepts/models/",
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +185,130 @@ def filter_allowed_results(
     return filtered
 
 
+def build_concept_query(
+    question: str,
+    *,
+    concepts: list[str] | None = None,
+) -> str:
+    """Build a concept-aware search query for official-source targeting.
+
+    Sanitises the question (removes URLs, HTML tags) then enriches with
+    concept-specific keywords so that search engines return relevant
+    official documentation pages.
+    """
+    if not question or not question.strip():
+        return ""
+
+    # Sanitise: strip URLs, script/style blocks, and HTML tags to prevent injection
+    cleaned = _STRIP_URL.sub("", question)
+    cleaned = _STRIP_SCRIPT.sub("", cleaned)
+    cleaned = _STRIP_STYLE.sub("", cleaned)
+    cleaned = _STRIP_HTML_TAG.sub("", cleaned)
+    cleaned = _STRIP_SEARCH_OPERATOR.sub("", cleaned)
+    cleaned = _COLLAPSE_WS.sub(" ", cleaned).strip()
+
+    if not cleaned:
+        return ""
+
+    if not concepts:
+        return cleaned[:_MAX_QUERY_LEN]
+
+    # Collect unique keywords from concept routing table
+    seen: set[str] = set()
+    extras: list[str] = []
+    for concept in concepts:
+        for kw in _CONCEPT_KEYWORDS.get(concept, []):
+            kw_lower = kw.lower()
+            # Only add keyword if not already present in the question
+            if kw_lower not in cleaned.lower() and kw_lower not in seen:
+                extras.append(kw)
+                seen.add(kw_lower)
+
+    enriched = cleaned + " " + " ".join(extras) if extras else cleaned
+
+    return enriched[:_MAX_QUERY_LEN]
+
+
+def canonical_official_results(query: str, max_results: int) -> list[dict[str, Any]]:
+    """Return allowlisted pages selected only by trusted internal query expansions."""
+    results: list[dict[str, Any]] = []
+    lowered = query.lower()
+    for marker, (title, url) in _CANONICAL_OFFICIAL_PAGES.items():
+        if marker in lowered and len(results) < max_results:
+            results.append({"title": title, "url": url, "snippet": ""})
+    return results
+
+
+def extract_relevant_sentences(
+    text: str,
+    query: str,
+    *,
+    max_chars: int = _MAX_CONTENT_CHARS,
+) -> str:
+    """Extract query-relevant sentences from fetched page text.
+
+    Uses token overlap scoring to rank sentences by relevance to the
+    search query. Falls back to leading text when no strong matches.
+    Only selects from existing text — never synthesises content.
+    """
+    if not text:
+        return ""
+
+    if not query or not query.strip():
+        return text[:max_chars]
+
+    # Tokenise query into lowercase words for matching
+    query_tokens = {w.lower() for w in re.findall(r"\w+", query) if len(w) > 2}
+    definition_match = re.match(
+        r"^(?:what(?:'s| is)|define|explain)\s+(?:an?\s+|the\s+)?([a-z0-9-]+)",
+        query.strip().lower(),
+    )
+    definition_term = definition_match.group(1) if definition_match else ""
+
+    if not query_tokens:
+        return text[:max_chars]
+
+    # Split into sentences
+    sentences = _SENTENCE_SPLIT.split(text.strip())
+
+    if not sentences:
+        return text[:max_chars]
+
+    # Score each sentence by number of distinct query tokens it contains
+    scored: list[tuple[int, int, str]] = []
+    for idx, sentence in enumerate(sentences):
+        if len(sentence) > max_chars:
+            continue
+        sentence_lower = sentence.lower()
+        score = sum(1 for t in query_tokens if t in sentence_lower)
+        if definition_term and sentence_lower.lstrip("#* ").startswith(definition_term):
+            score += 100
+        scored.append((score, idx, sentence))
+
+    # Sort by score descending, then original order for ties
+    scored.sort(key=lambda x: (-x[0], x[1]))
+
+    # Take top-scoring sentences, respecting max_chars
+    selected: list[tuple[int, str]] = []
+    total_len = 0
+    for score, idx, sentence in scored:
+        # Only include sentences with at least one matching token,
+        # unless we have nothing yet (fallback)
+        if score == 0 and selected:
+            break
+        if total_len + len(sentence) > max_chars and selected:
+            break
+        selected.append((idx, sentence))
+        total_len += len(sentence) + 1  # +1 for space
+
+    if not selected:
+        return text[:max_chars]
+
+    # Re-sort by original order so text reads naturally
+    selected.sort(key=lambda x: x[0])
+    return " ".join(s for _, s in selected)
+
+
 async def search_official_web(
     query: str,
     *,
@@ -150,11 +338,10 @@ async def search_official_web(
         obs["raw_result_count"] = raw.get("total", 0)
     except Exception as exc:
         logger.warning("tutor_web_search_failed", error_type=type(exc).__name__)
+        raw = {"source": "error", "total": 0, "results": []}
         obs["search_source"] = "error"
         obs["raw_result_count"] = 0
         obs["web_search_error"] = type(exc).__name__
-        obs["web_search_duration_ms"] = round((time.monotonic() - start) * 1000, 1)
-        return [], obs
 
     # Filter to allowlisted domains BEFORE any content extraction
     raw_results = raw.get("results", [])
@@ -163,17 +350,27 @@ async def search_official_web(
     obs["filtered_out_count"] = len(raw_results) - len(allowed)
 
     if not allowed:
+        allowed = canonical_official_results(query, max_results)
+        obs["canonical_fallback_count"] = len(allowed)
+        if allowed:
+            obs["search_source"] = "canonical_fallback"
+            obs["allowed_result_count"] = len(allowed)
+    if not allowed:
         obs["web_search_duration_ms"] = round((time.monotonic() - start) * 1000, 1)
         return [], obs
 
     # Extract content ONLY from allowlisted URLs
-    enriched = await _safe_extract_content(allowed)
+    enriched = await _safe_extract_content(allowed, query=query)
 
     evidence: list[WebEvidence] = []
+    extraction_success = 0
     now = time.time()
     for idx, item in enumerate(enriched):
         url = item.get("url", "")
         parsed = urlparse(url)
+        content = (item.get("content") or item.get("snippet", ""))[:_MAX_CONTENT_CHARS]
+        if item.get("content") and item["content"] != item.get("snippet", ""):
+            extraction_success += 1
         evidence.append(
             WebEvidence(
                 id=f"W{idx + 1}",
@@ -181,27 +378,32 @@ async def search_official_web(
                 title=item.get("title", ""),
                 url=url,
                 snippet=item.get("snippet", ""),
-                content=(item.get("content") or item.get("snippet", ""))[:_MAX_CONTENT_CHARS],
+                content=content,
                 domain=(parsed.hostname or "").lower(),
                 retrieved_at=now,
-                search_source=raw.get("source", "none"),
+                search_source=obs.get("search_source", raw.get("source", "none")),
             )
         )
 
     obs["web_evidence_count"] = len(evidence)
+    obs["extraction_success_count"] = extraction_success
     obs["web_search_duration_ms"] = round((time.monotonic() - start) * 1000, 1)
     logger.info(
         "tutor_web_supplement",
         evidence_count=len(evidence),
-        search_source=raw.get("source", "none"),
+        search_source=obs.get("search_source", raw.get("source", "none")),
     )
     return evidence, obs
 
 
 async def _safe_extract_content(
-    results: list[dict[str, Any]], max_chars: int = _MAX_CONTENT_CHARS
+    results: list[dict[str, Any]], max_chars: int = _MAX_CONTENT_CHARS, query: str = ""
 ) -> list[dict[str, Any]]:
-    """Extract page content from pre-allowlisted URLs only."""
+    """Extract page content from pre-allowlisted URLs only.
+
+    When *query* is provided, uses query-relevant sentence extraction
+    to return the most pertinent excerpt rather than a blind truncation.
+    """
     import httpx
 
     async with httpx.AsyncClient(
@@ -227,7 +429,13 @@ async def _safe_extract_content(
                     text = _STRIP_STYLE.sub("", text)
                     text = _STRIP_TAGS.sub(" ", text)
                     text = _COLLAPSE_WS.sub(" ", text).strip()
-                    result["content"] = text[:max_chars]
+                    # Use query-relevant extraction when query is available
+                    if query:
+                        result["content"] = extract_relevant_sentences(
+                            text, query, max_chars=max_chars
+                        )
+                    else:
+                        result["content"] = text[:max_chars]
                 else:
                     result["content"] = result.get("snippet", "")
             except Exception:

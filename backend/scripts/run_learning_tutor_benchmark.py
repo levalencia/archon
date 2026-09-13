@@ -41,6 +41,33 @@ def _post(base_url: str, token: str, payload: dict[str, Any], timeout: float) ->
     return decoded
 
 
+def _run_retrieval_diagnostics(
+    base_url: str, token: str, run_id: str, timeout: float
+) -> list[dict[str, Any]]:
+    if not run_id:
+        return []
+    request = Request(
+        f"{base_url.rstrip('/')}/api/runs/{run_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        method="GET",
+    )
+    with urlopen(request, timeout=timeout) as response:  # noqa: S310 -- explicit operator URL
+        decoded = json.loads(response.read())
+    trajectory = decoded.get("trajectory") if isinstance(decoded, dict) else None
+    events = trajectory.get("evidence") if isinstance(trajectory, dict) else None
+    if not isinstance(events, list):
+        return []
+    for event in events:
+        if isinstance(event, dict) and event.get("kind") == "evidence_retrieved":
+            ranked = event.get("ranked_evidence")
+            return (
+                [item for item in ranked if isinstance(item, dict)]
+                if isinstance(ranked, list)
+                else []
+            )
+    return []
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, default=_DEFAULT_DATASET)
@@ -102,6 +129,12 @@ def main() -> None:
                 },
                 args.timeout,
             )
+            response["retrieval_diagnostics"] = _run_retrieval_diagnostics(
+                args.base_url,
+                token,
+                str(response.get("run_id") or ""),
+                args.timeout,
+            )
             score = score_tutor_response(case, response)
             observations.append(
                 {
@@ -112,10 +145,12 @@ def main() -> None:
                     "answer_markdown": response.get("answer_markdown", ""),
                     "citations": response.get("citations", []),
                     "metrics": response.get("metrics", {}),
+                    "retrieval_diagnostics": response.get("retrieval_diagnostics", []),
                     "error": None,
+                    "error_status": None,
                 }
             )
-        except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+        except HTTPError as exc:
             observations.append(
                 {
                     "case_id": case.id,
@@ -125,7 +160,24 @@ def main() -> None:
                     "answer_markdown": "",
                     "citations": [],
                     "metrics": {},
+                    "retrieval_diagnostics": [],
+                    "error": "HTTPError",
+                    "error_status": exc.code,
+                }
+            )
+        except (URLError, TimeoutError, ValueError) as exc:
+            observations.append(
+                {
+                    "case_id": case.id,
+                    "difficulty": case.difficulty,
+                    "latency_seconds": round(monotonic() - started, 3),
+                    "score": None,
+                    "answer_markdown": "",
+                    "citations": [],
+                    "metrics": {},
+                    "retrieval_diagnostics": [],
                     "error": type(exc).__name__,
+                    "error_status": None,
                 }
             )
 

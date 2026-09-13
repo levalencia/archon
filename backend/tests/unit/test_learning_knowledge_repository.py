@@ -143,3 +143,33 @@ async def test_tutor_sessions_are_owner_scoped_and_turns_keep_context(repositori
     assert loaded.turns[0].context["playback_seconds"] == 300.0
     assert loaded.turns[0].evidence[0]["id"] == "E1"
     assert await tutor.get_session(session.id, owner_id="bob") is None
+
+
+@pytest.mark.asyncio
+async def test_tutor_turn_redacts_structured_evidence_before_json_encoding(repositories) -> None:
+    _, tutor = repositories
+    session = await tutor.get_or_create_session(
+        owner_id="alice",
+        project_id="default",
+        context_key="view:roadmap",
+        title="Roadmap",
+    )
+    excerpt = ('The JSON example says "contact learner@example.com at 127.0.0.1". ' * 180).strip()
+
+    stored = await tutor.store_turn(
+        session_id=session.id,
+        owner_id="alice",
+        project_id="default",
+        question="What is a chunk?",
+        answer="A chunk is a bounded unit of text.",
+        context={"view": "roadmap"},
+        evidence=[{"id": "E1", "kind": "documentation", "excerpt": excerpt}],
+        diagram=None,
+        metrics={"grounded": True},
+    )
+
+    assert stored.evidence[0]["id"] == "E1"
+    assert "learner@example.com" not in stored.evidence[0]["excerpt"]
+    assert "127.0.0.1" not in stored.evidence[0]["excerpt"]
+    assert "[EMAIL]" in stored.evidence[0]["excerpt"]
+    assert "[IP_ADDRESS]" in stored.evidence[0]["excerpt"]
