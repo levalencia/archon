@@ -566,8 +566,8 @@ def _exact_symbol_score(question: str, locator: dict[str, Any], haystack: str) -
 
 
 def _redacted_json(redactor: PersistenceRedactor, value: Any) -> str:
-    raw = json.dumps(value, sort_keys=True, allow_nan=False)
-    return redactor.redact_text(raw).text
+    safe_value = redactor.redact_value(value)
+    return json.dumps(safe_value, sort_keys=True, allow_nan=False)
 
 
 def _turn(row: LearningTutorTurnRow) -> TutorTurn:
