@@ -617,7 +617,7 @@ def _is_simple_definition(question: str) -> bool:
         )
     ):
         return False
-    return bool(re.match(r"^(?:what(?:'s| is| are)|define|explain\b)", normalized))
+    return bool(re.match(r"^(?:what(?:'s| is| are)|define\b|explain\b)", normalized))
 
 
 def _max_output_tokens(question: str) -> int:

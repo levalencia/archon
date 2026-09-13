@@ -384,6 +384,7 @@ def test_definition_classification_and_output_budget_are_bounded() -> None:
     assert _is_simple_definition("What is OOP?") is True
     assert _is_simple_definition("what's DI?") is True
     assert _is_simple_definition("Explain observability simply") is True
+    assert _is_simple_definition("Definitely not a definition request") is False
     assert _is_simple_definition("How does _lexical_score rank repository chunks?") is False
     assert _is_simple_definition("Compare SQL JSON retrieval with pgvector") is False
     assert _max_output_tokens("What is OOP?") < _max_output_tokens(

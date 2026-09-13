@@ -98,7 +98,6 @@ class LearningEvidence:
             "content_hash": self.content_hash,
             "source_commit": self.revision,
             "locator": self.locator,
-            "score_components": dict(self.score_components),
         }
 
 

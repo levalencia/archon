@@ -239,13 +239,12 @@ async def test_evidence_carries_score_components(knowledge) -> None:
 
 
 @pytest.mark.asyncio
-async def test_public_dict_includes_score_components(knowledge) -> None:
-    """public() should include score_components for safe diagnostics."""
+async def test_public_dict_excludes_internal_score_components(knowledge) -> None:
+    """Public evidence must not expose internal retrieval weights."""
     await knowledge.sync(_concept_sources())
     evidence = await knowledge.search("what is OOP?", top_k=1)
     pub = evidence[0].public()
-    assert "score_components" in pub
-    assert pub["score_components"]["final"] == pub["score"]
+    assert "score_components" not in pub
 
 
 # ── Exact symbol/file matching ───────────────────────────────────────
