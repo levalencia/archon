@@ -324,7 +324,11 @@ class LearningTutorWorkflow:
                 cumulative_usage += response.usage
                 malformed_content = response.content or ""
                 payload = contract.parse_and_validate(malformed_content)
-                _validate_answer_shape(payload, question)
+                _validate_answer_shape(
+                    payload,
+                    question,
+                    require_web_definition=bool(web_evidence),
+                )
                 return payload, cumulative_usage, attempt_metrics
             except json.JSONDecodeError:
                 failure_code = "provider_malformed_json"
@@ -489,7 +493,12 @@ async def _rebind_miscited_claims(
     return tuple(rebound)
 
 
-def _validate_answer_shape(payload: dict[str, Any], question: str) -> None:
+def _validate_answer_shape(
+    payload: dict[str, Any],
+    question: str,
+    *,
+    require_web_definition: bool = False,
+) -> None:
     if not _is_simple_definition(question):
         return
     sections = payload.get("sections")
@@ -504,6 +513,15 @@ def _validate_answer_shape(payload: dict[str, Any], question: str) -> None:
     claims = first.get("claims")
     if not isinstance(claims, list) or not claims:
         raise StructuredOutputError("pedagogy_mismatch", "Definition section requires a claim")
+    first_ids = claims[0].get("evidence_ids") if isinstance(claims[0], dict) else None
+    if require_web_definition and (
+        not isinstance(first_ids, list)
+        or not any(isinstance(item, str) and item.startswith("W") for item in first_ids)
+    ):
+        raise StructuredOutputError(
+            "pedagogy_mismatch",
+            "Definition must cite supplied official web evidence",
+        )
 
 
 def _prompt(
@@ -534,7 +552,9 @@ def _prompt(
         "the requested term without mentioning Cogentrex unless the question explicitly asks "
         "for a Cogentrex-specific definition. Put other product-specific material in a "
         "separate 'How Cogentrex uses it' section. Use at most three sections and eight claims "
-        "in total, and return diagram as null. "
+        "in total, and return diagram as null. When web evidence is supplied, the first "
+        "Definition claim MUST cite at least one W-prefixed evidence ID and closely preserve "
+        "that source's wording. "
         if _is_simple_definition(question)
         else "Answer the exact mechanism or trade-off asked; do not substitute a nearby concept. "
     )

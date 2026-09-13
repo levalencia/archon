@@ -22,9 +22,11 @@ from app.learning_tutor.workflow import (
     _needs_web_supplement,
     _rebind_miscited_claims,
     _response_contract,
+    _validate_answer_shape,
     _web_query,
 )
 from app.runtime.models import ModelResponse, TokenUsage
+from app.runtime.structured_output import StructuredOutputError
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.chunker import EmbeddingService
 from app.services.conversations import ConversationRepository
@@ -396,6 +398,28 @@ def test_definition_contract_bounds_sections_claims_and_diagrams() -> None:
     assert simple["properties"]["diagram"] == {"type": "null"}
     assert complex_sections["maxItems"] == 6
     assert complex_sections["items"]["properties"]["claims"]["maxItems"] == 8
+
+
+def test_definition_requires_official_web_evidence_when_it_was_supplied() -> None:
+    payload = {
+        "sections": [
+            {
+                "heading": "Definition",
+                "claims": [{"text": "A definition.", "evidence_ids": ["E1"]}],
+            }
+        ]
+    }
+
+    with pytest.raises(StructuredOutputError) as exc_info:
+        _validate_answer_shape(
+            payload,
+            "What is OOP?",
+            require_web_definition=True,
+        )
+
+    assert exc_info.value.code == "pedagogy_mismatch"
+    payload["sections"][0]["claims"][0]["evidence_ids"] = ["W1"]
+    _validate_answer_shape(payload, "What is OOP?", require_web_definition=True)
 
 
 def test_web_query_routes_foundational_concepts_to_relevant_official_docs() -> None:
