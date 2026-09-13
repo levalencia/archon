@@ -407,6 +407,21 @@ class TestExtractRelevantSentences:
         )
         assert len(result) <= 200
 
+    def test_prioritizes_definition_over_sentence_with_more_keyword_overlap(self):
+        text = (
+            "Observability lets you understand a system from the outside. "
+            "Application logs, metrics, and traces are telemetry signals used by observability "
+            "backends."
+        )
+
+        result = extract_relevant_sentences(
+            text,
+            "What is observability? Explain logs, metrics, and traces.",
+            max_chars=120,
+        )
+
+        assert result == "Observability lets you understand a system from the outside."
+
     def test_empty_text_returns_empty(self):
         assert extract_relevant_sentences("", "python") == ""
 

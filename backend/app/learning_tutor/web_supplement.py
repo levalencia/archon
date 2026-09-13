@@ -259,6 +259,11 @@ def extract_relevant_sentences(
 
     # Tokenise query into lowercase words for matching
     query_tokens = {w.lower() for w in re.findall(r"\w+", query) if len(w) > 2}
+    definition_match = re.match(
+        r"^(?:what(?:'s| is)|define|explain)\s+(?:an?\s+|the\s+)?([a-z0-9-]+)",
+        query.strip().lower(),
+    )
+    definition_term = definition_match.group(1) if definition_match else ""
 
     if not query_tokens:
         return text[:max_chars]
@@ -276,6 +281,8 @@ def extract_relevant_sentences(
             continue
         sentence_lower = sentence.lower()
         score = sum(1 for t in query_tokens if t in sentence_lower)
+        if definition_term and sentence_lower.lstrip("#* ").startswith(definition_term):
+            score += 100
         scored.append((score, idx, sentence))
 
     # Sort by score descending, then original order for ties
