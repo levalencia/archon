@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import StreamingResponse
 
-from app.learning_tutor.context import LearningContextRequest
+from app.learning_tutor.context import ContextResolutionError, LearningContextRequest
 from app.learning_tutor.service import LearningTutorService
 from app.observability.logging import get_correlation_id
 from app.security.auth import get_current_user
@@ -63,8 +63,13 @@ async def answer_learning_question(
             project_id=body.project_id,
             correlation_id=get_correlation_id() or "learning-tutor",
         )
-    except ValueError as exc:
+    except ContextResolutionError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="The learning tutor encountered an upstream error",
+        ) from exc
     payload = result.public()
     if compliance is not None:
         payload = cast(dict[str, Any], compliance.enforce_payload(payload))
@@ -142,6 +147,9 @@ async def stream_learning_answer(
                     await asyncio.wait_for(asyncio.shield(result_future), timeout=5.0)
                 except TimeoutError:
                     yield ": heartbeat\n\n"
+                except Exception:
+                    # Task raised — will be inspected via result_future.result() below
+                    break
         finally:
             if not result_future.done():
                 result_future.cancel()
@@ -150,7 +158,7 @@ async def stream_learning_answer(
 
         try:
             result = result_future.result()
-        except ValueError:
+        except ContextResolutionError:
             yield _sse(
                 "error",
                 {"run_id": run_id, "message": "The learning context could not be resolved."},
@@ -160,7 +168,7 @@ async def stream_learning_answer(
         except Exception:
             yield _sse(
                 "error",
-                {"run_id": run_id, "message": "The learning tutor encountered an error."},
+                {"run_id": run_id, "message": "The learning tutor encountered an upstream error."},
             )
             yield _sse("done", {"run_id": run_id})
             return

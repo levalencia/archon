@@ -11,6 +11,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.learning_media.catalog import LearningMediaCatalog
 
+
+class ContextResolutionError(ValueError):
+    """Raised when browser-supplied context identifiers cannot be resolved.
+
+    This is a *data* error (the user asked about something that doesn't exist in
+    the manifest) and must be distinguished from programming/configuration
+    ``ValueError``s so that only this family of errors maps to HTTP 404.
+    """
+
+
 LearningView = Literal[
     "roadmap", "stories", "architecture", "evidence", "present", "listen", "study"
 ]
@@ -143,7 +153,7 @@ class LearningContextResolver:
         if request.concept_id is not None:
             concept = self._concepts.get(request.concept_id)
             if concept is None:
-                raise ValueError("Unknown learning concept")
+                raise ContextResolutionError("Unknown learning concept")
             return LearningContext(
                 context_key=f"concept:{request.concept_id}",
                 view=request.view,
@@ -162,7 +172,7 @@ class LearningContextResolver:
         if request.module_id is not None:
             module = self._modules.get(request.module_id)
             if module is None:
-                raise ValueError("Unknown learning module")
+                raise ContextResolutionError("Unknown learning module")
             return LearningContext(
                 context_key=f"module:{request.module_id}",
                 view=request.view,
@@ -201,14 +211,14 @@ class LearningContextResolver:
         if request.selected_node_id is not None:
             node = self._architecture_nodes.get(request.selected_node_id)
             if node is None:
-                raise ValueError("Unknown architecture component")
+                raise ContextResolutionError("Unknown architecture component")
             concept_ids.extend(str(item) for item in node.get("concept_ids", []))
             title = str(node.get("title") or request.selected_node_id)
             context_key = f"architecture:node:{request.selected_node_id}"
         if request.selected_edge_id is not None:
             edge = self._architecture_edges.get(request.selected_edge_id)
             if edge is None:
-                raise ValueError("Unknown architecture relation")
+                raise ContextResolutionError("Unknown architecture relation")
             for endpoint in (edge.get("source"), edge.get("target")):
                 node = self._architecture_nodes.get(str(endpoint))
                 if node is not None:
@@ -217,7 +227,7 @@ class LearningContextResolver:
             context_key = f"architecture:edge:{request.selected_edge_id}"
         if request.concept_id is not None:
             if request.concept_id not in self._concepts:
-                raise ValueError("Unknown learning concept")
+                raise ContextResolutionError("Unknown learning concept")
             concept_ids.append(request.concept_id)
         return LearningContext(
             context_key=context_key,
@@ -238,12 +248,12 @@ class LearningContextResolver:
     def _resolve_story(self, request: LearningContextRequest) -> LearningContext:
         story = self._stories.get(str(request.story_id))
         if story is None:
-            raise ValueError("Unknown learning story")
+            raise ContextResolutionError("Unknown learning story")
         steps = story.get("steps", [])
         concept_ids: tuple[str, ...] = ()
         if request.step_index is not None:
             if not isinstance(steps, list) or request.step_index >= len(steps):
-                raise ValueError("Unknown learning story step")
+                raise ContextResolutionError("Unknown learning story step")
             step = steps[request.step_index]
             if isinstance(step, dict):
                 concept_ids = tuple(str(item) for item in step.get("concept_ids", []))
@@ -269,17 +279,17 @@ class LearningContextResolver:
 
     def _resolve_artifact(self, request: LearningContextRequest) -> LearningContext:
         if self._media_catalog is None:
-            raise ValueError("Learning media is unavailable")
+            raise ContextResolutionError("Learning media is unavailable")
         try:
             artifact = self._media_catalog.artifact(str(request.artifact_id))
         except KeyError as exc:
-            raise ValueError("Unknown learning artifact") from exc
+            raise ContextResolutionError("Unknown learning artifact") from exc
         metadata = artifact.metadata
         duration = metadata.get("duration_seconds")
         if request.playback_seconds is not None and (
             not isinstance(duration, (int, float)) or request.playback_seconds > float(duration)
         ):
-            raise ValueError("Invalid video playback position")
+            raise ContextResolutionError("Invalid video playback position")
         segment = self._segment_at(artifact.content_path, request.playback_seconds)
         sources: list[dict[str, Any] | str] = []
         if segment is not None:

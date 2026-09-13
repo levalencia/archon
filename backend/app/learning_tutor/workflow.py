@@ -212,7 +212,7 @@ class LearningTutorWorkflow:
                 if self._provider_factory is not None
                 else self._provider
             )
-            payload, usage = await self._complete(
+            payload, usage, attempt_metrics = await self._complete(
                 provider, question, context, evidence, web_evidence=web_evidence
             )
             result = await self._verified_result(
@@ -221,6 +221,7 @@ class LearningTutorWorkflow:
                 payload=payload,
                 evidence=evidence,
                 web_evidence=web_evidence,
+                extra_metrics=attempt_metrics,
             )
         else:
             result = LearningTutorResult(
@@ -264,18 +265,57 @@ class LearningTutorWorkflow:
         evidence: list[LearningEvidence],
         *,
         web_evidence: list[WebEvidence] | None = None,
-    ) -> tuple[dict[str, Any], TokenUsage]:
+    ) -> tuple[dict[str, Any], TokenUsage, dict[str, Any]]:
+        """Call provider with one bounded retry on malformed structured output.
+
+        Returns ``(payload, cumulative_usage, attempt_metrics)`` where
+        *attempt_metrics* records ``structured_output_attempts`` and, if the
+        first attempt failed, ``structured_output_failure``.
+        """
         messages = _prompt(question, context, evidence, web_evidence=web_evidence or [])
         contract = _response_contract(has_web=bool(web_evidence))
+        attempt_metrics: dict[str, Any] = {"structured_output_attempts": 1}
         response = await provider.complete(
             messages,
             max_tokens=4096,
             response_contract=contract,
         )
+        cumulative_usage = response.usage
         try:
-            return contract.parse_and_validate(response.content or ""), response.usage
-        except StructuredOutputError:
-            return {"sections": [], "related_questions": [], "diagram": None}, response.usage
+            payload = contract.parse_and_validate(response.content or "")
+            return payload, cumulative_usage, attempt_metrics
+        except StructuredOutputError as first_error:
+            # One bounded repair retry
+            attempt_metrics["structured_output_attempts"] = 2
+            attempt_metrics["structured_output_failure"] = first_error.code
+            repair_instruction = Message(
+                Role.ASSISTANT, response.content or ""
+            )
+            repair_prompt = Message(
+                Role.USER,
+                "Your previous response was not valid JSON matching the required schema. "
+                "Return exactly one corrected JSON value. Do not include any explanation.",
+            )
+            retry_messages = (*messages, repair_instruction, repair_prompt)
+            retry_response = await provider.complete(
+                retry_messages,
+                max_tokens=4096,
+                response_contract=contract,
+            )
+            cumulative_usage = cumulative_usage + retry_response.usage
+            try:
+                return (
+                    contract.parse_and_validate(retry_response.content or ""),
+                    cumulative_usage,
+                    attempt_metrics,
+                )
+            except StructuredOutputError:
+                attempt_metrics["structured_output_fallback"] = True
+                return (
+                    {"sections": [], "related_questions": [], "diagram": None},
+                    cumulative_usage,
+                    attempt_metrics,
+                )
 
     async def _verified_result(
         self,
@@ -285,6 +325,7 @@ class LearningTutorWorkflow:
         payload: dict[str, Any],
         evidence: list[LearningEvidence],
         web_evidence: list[WebEvidence] | None = None,
+        extra_metrics: dict[str, Any] | None = None,
     ) -> LearningTutorResult:
         by_id = {item.id: item for item in evidence}
         web_by_id = {item.id: item for item in (web_evidence or [])}
@@ -378,6 +419,7 @@ class LearningTutorWorkflow:
                 "method": "deterministic_claim_support",
                 "web_evidence_count": len(web_evidence or []),
                 "web_cited_count": len(web_citations),
+                **(extra_metrics or {}),
             },
         )
 

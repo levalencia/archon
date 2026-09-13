@@ -391,3 +391,183 @@ async def test_miscited_exact_claim_is_rebound_to_supporting_evidence() -> None:
     rebound = await _rebind_miscited_claims((Claim(definition, ("E2",)),), evidence)
 
     assert rebound == (Claim(definition, ("E1",)),)
+
+
+# ---------------------------------------------------------------------------
+# Structured-output retry and fallback tests
+# ---------------------------------------------------------------------------
+
+
+class MalformedThenFixedProvider:
+    """First call returns malformed JSON; second call returns valid payload."""
+
+    def __init__(self, bad_content: str, good_payload: dict) -> None:
+        self._bad = bad_content
+        self._good = good_payload
+        self.calls = 0
+        self.all_messages: list[tuple] = []
+
+    async def complete(
+        self, messages, tools=(), *, max_tokens=4096, response_contract=None, response_format=None
+    ):
+        self.calls += 1
+        self.all_messages.append(tuple(messages))
+        if self.calls == 1:
+            return ModelResponse(
+                content=self._bad,
+                usage=TokenUsage(input_tokens=50, output_tokens=30),
+            )
+        return ModelResponse(
+            content=json.dumps(self._good),
+            usage=TokenUsage(input_tokens=60, output_tokens=40),
+        )
+
+
+class AlwaysMalformedProvider:
+    """Always returns invalid JSON."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def complete(
+        self, messages, tools=(), *, max_tokens=4096, response_contract=None, response_format=None
+    ):
+        self.calls += 1
+        return ModelResponse(
+            content="NOT JSON AT ALL",
+            usage=TokenUsage(input_tokens=50, output_tokens=30),
+        )
+
+
+class ExplodingProvider:
+    """Raises RuntimeError on complete (simulates provider/network failure)."""
+
+    async def complete(
+        self, messages, tools=(), *, max_tokens=4096, response_contract=None, response_format=None
+    ):
+        raise RuntimeError("upstream provider timeout")
+
+
+@pytest.mark.asyncio
+async def test_malformed_output_retries_once_and_succeeds(services) -> None:
+    knowledge, tutor, conversations = services
+    slot_claim = (
+        "A service slot is initialized to None and populated "
+        "during application lifespan."
+    )
+    good = {
+        "sections": [
+            {
+                "heading": "Answer",
+                "claims": [
+                    {
+                        "text": slot_claim,
+                        "evidence_ids": ["E1"],
+                    }
+                ],
+            }
+        ],
+        "related_questions": [],
+        "diagram": None,
+    }
+    provider = MalformedThenFixedProvider("{{BROKEN JSON", good)
+    workflow = LearningTutorWorkflow(
+        knowledge=knowledge,
+        sessions=tutor,
+        runs=conversations.runs,
+        provider=provider,
+        provider_name="mock",
+        model="test-model",
+    )
+
+    result = await workflow.answer(
+        question="What is a service slot?",
+        context=_context(),
+        owner_id="alice",
+        project_id="default",
+        correlation_id="retry-test",
+    )
+
+    assert provider.calls == 2
+    assert result.metrics["structured_output_attempts"] == 2
+    assert result.metrics["structured_output_failure"] == "malformed_json"
+    # Cumulative usage: 50+60 input, 30+40 output
+    assert "structured_output_fallback" not in result.metrics
+
+
+@pytest.mark.asyncio
+async def test_repeated_malformed_output_returns_fallback_never_leaks_parser(services) -> None:
+    knowledge, tutor, conversations = services
+    provider = AlwaysMalformedProvider()
+    workflow = LearningTutorWorkflow(
+        knowledge=knowledge,
+        sessions=tutor,
+        runs=conversations.runs,
+        provider=provider,
+        provider_name="mock",
+        model="test-model",
+    )
+
+    result = await workflow.answer(
+        question="What is a service slot?",
+        context=_context(),
+        owner_id="alice",
+        project_id="default",
+        correlation_id="fallback-test",
+    )
+
+    assert provider.calls == 2  # original + one retry, then fallback
+    assert result.metrics["structured_output_attempts"] == 2
+    assert result.metrics["structured_output_fallback"] is True
+    assert result.grounded is False
+    # Must not leak parser internals
+    md = result.answer_markdown.lower()
+    assert "json" not in md or "could not verify" in md
+
+
+@pytest.mark.asyncio
+async def test_successful_first_attempt_records_single_attempt(services) -> None:
+    knowledge, tutor, conversations = services
+    slot_claim = (
+        "A service slot is initialized to None and populated "
+        "during application lifespan."
+    )
+    provider = TutorProvider(
+        {
+            "sections": [
+                {
+                    "heading": "Answer",
+                    "claims": [
+                        {
+                            "text": slot_claim,
+                            "evidence_ids": ["E1"],
+                        }
+                    ],
+                }
+            ],
+            "related_questions": [],
+            "diagram": None,
+        }
+    )
+    workflow = LearningTutorWorkflow(
+        knowledge=knowledge,
+        sessions=tutor,
+        runs=conversations.runs,
+        provider=provider,
+        provider_name="mock",
+        model="test-model",
+    )
+
+    result = await workflow.answer(
+        question="What is a service slot?",
+        context=_context(),
+        owner_id="alice",
+        project_id="default",
+        correlation_id="single-attempt",
+    )
+
+    assert provider.calls == 1
+    assert result.metrics["structured_output_attempts"] == 1
+    assert "structured_output_failure" not in result.metrics
+    assert "structured_output_fallback" not in result.metrics
+

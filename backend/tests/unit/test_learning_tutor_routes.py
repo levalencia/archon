@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.learning_tutor.context import LearningContext
+from app.learning_tutor.context import ContextResolutionError, LearningContext
 from app.learning_tutor.repository import TutorSession
 from app.learning_tutor.workflow import LearningTutorResult, TutorCitation
 from app.routes.learning_tutor import router
@@ -273,3 +273,111 @@ def test_stream_answer_matches_json_endpoint(monkeypatch) -> None:
     assert stream_result["grounded"] == json_data["grounded"]
     assert stream_result["answer_markdown"] == json_data["answer_markdown"]
     assert len(stream_result["citations"]) == len(json_data["citations"])
+
+
+# ---------------------------------------------------------------------------
+# Error-semantics tests: context resolution vs provider failure
+# ---------------------------------------------------------------------------
+
+
+class ContextErrorTutor:
+    """FakeTutor that raises ContextResolutionError."""
+
+    async def ask(self, **kwargs):
+        raise ContextResolutionError("Unknown learning artifact")
+
+    async def history(self, **kwargs):
+        return None
+
+
+class ProviderErrorTutor:
+    """FakeTutor that raises a generic provider error (not ContextResolutionError)."""
+
+    async def ask(self, **kwargs):
+        raise RuntimeError("upstream provider timeout")
+
+    async def history(self, **kwargs):
+        return None
+
+
+def _error_app(tutor) -> FastAPI:
+    app = FastAPI()
+    app.include_router(router)
+    app.state.learning_tutor = tutor
+    app.state.rate_limiter = SimpleNamespace()
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "alice"}
+    return app
+
+
+_QUESTION_BODY = {
+    "question": "What is a service slot?",
+    "project_id": "default",
+    "context": {
+        "view": "present",
+        "artifact_id": "code-first-video-02",
+        "playback_seconds": 300.0,
+    },
+}
+
+
+def test_context_resolution_error_returns_404(monkeypatch) -> None:
+    async def no_limit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.learning_tutor.enforce_rate_limit", no_limit)
+    with TestClient(_error_app(ContextErrorTutor())) as client:
+        response = client.post("/api/learning-tutor/answer", json=_QUESTION_BODY)
+
+    assert response.status_code == 404
+    assert "Unknown learning artifact" in response.json()["detail"]
+
+
+def test_provider_error_returns_502_without_leak(monkeypatch) -> None:
+    async def no_limit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.learning_tutor.enforce_rate_limit", no_limit)
+    with TestClient(_error_app(ProviderErrorTutor())) as client:
+        response = client.post("/api/learning-tutor/answer", json=_QUESTION_BODY)
+
+    assert response.status_code == 502
+    body = response.json()
+    assert "upstream" in body["detail"].lower()
+    # Must not leak internal exception details
+    assert "timeout" not in body["detail"].lower()
+
+
+def test_stream_context_error_emits_sse_error_event(monkeypatch) -> None:
+    async def no_limit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.learning_tutor.enforce_rate_limit", no_limit)
+    with TestClient(_error_app(ContextErrorTutor())) as client:
+        response = client.post("/api/learning-tutor/answer/stream", json=_QUESTION_BODY)
+
+    assert response.status_code == 200  # SSE always starts 200
+    events = _parse_sse_events(response.text)
+    error_events = [e for e in events if e["event"] == "error"]
+    assert len(error_events) >= 1
+    assert "context" in error_events[0]["data"]["message"].lower()
+    # Terminal done event
+    assert events[-1]["event"] == "done"
+
+
+def test_stream_provider_error_emits_sanitized_sse_error(monkeypatch) -> None:
+    async def no_limit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.learning_tutor.enforce_rate_limit", no_limit)
+    with TestClient(_error_app(ProviderErrorTutor())) as client:
+        response = client.post("/api/learning-tutor/answer/stream", json=_QUESTION_BODY)
+
+    assert response.status_code == 200
+    events = _parse_sse_events(response.text)
+    error_events = [e for e in events if e["event"] == "error"]
+    assert len(error_events) >= 1
+    # Must not leak "timeout" from the RuntimeError
+    assert "timeout" not in error_events[0]["data"]["message"].lower()
+    assert "upstream" in error_events[0]["data"]["message"].lower()
+    assert events[-1]["event"] == "done"
+
