@@ -229,6 +229,7 @@ class LearningTutorWorkflow:
             result = await self._verified_result(
                 run_id=run_id,
                 session_id=session.id,
+                question=question,
                 payload=payload,
                 evidence=evidence,
                 web_evidence=web_evidence,
@@ -361,6 +362,7 @@ class LearningTutorWorkflow:
         *,
         run_id: str,
         session_id: str,
+        question: str,
         payload: dict[str, Any],
         evidence: list[LearningEvidence],
         web_evidence: list[WebEvidence] | None = None,
@@ -414,6 +416,21 @@ class LearningTutorWorkflow:
             if not rendered_sections or rendered_sections[-1][0] != heading:
                 rendered_sections.append((heading, []))
             rendered_sections[-1][1].append(claim)
+        extractive_web_recovery = 0
+        has_verified_definition = bool(
+            rendered_sections and rendered_sections[0][0].strip().casefold() == "definition"
+        )
+        if _is_simple_definition(question) and not has_verified_definition and web_evidence:
+            recovered_claim = _extractive_web_definition(question, web_evidence)
+            if recovered_claim is not None:
+                recovered, _, _ = await verify_document_claims(
+                    (recovered_claim,), document_evidence
+                )
+                if recovered:
+                    supported = (recovered_claim, *supported)
+                    rendered_sections.insert(0, ("Definition", [recovered_claim]))
+                    web_generated_count += 1
+                    extractive_web_recovery = 1
         cited_ids = {
             evidence_id
             for claim in supported
@@ -466,6 +483,7 @@ class LearningTutorWorkflow:
                     any(evidence_id in web_by_id for evidence_id in claim.evidence_ids)
                     for claim in supported
                 ),
+                "web_extractive_recovery_count": extractive_web_recovery,
                 "web_cited_count": len(web_citations),
                 **(extra_metrics or {}),
             },
@@ -650,6 +668,54 @@ def _retrieval_diagnostics(evidence: list[LearningEvidence]) -> list[dict[str, A
             }
         )
     return diagnostics
+
+
+_DEFINITION_STOP_WORDS = {
+    "what",
+    "explain",
+    "simply",
+    "then",
+    "show",
+    "where",
+    "how",
+    "uses",
+    "each",
+    "does",
+    "with",
+    "into",
+    "from",
+    "that",
+    "this",
+}
+
+
+def _extractive_web_definition(question: str, evidence: list[WebEvidence]) -> Claim | None:
+    expanded_question = re.sub(r"\boop\b", "object oriented programming", question.lower())
+    expanded_question = re.sub(r"\bdi\b", "dependency injection", expanded_question)
+    query_terms = {
+        token
+        for token in re.findall(r"[a-z0-9]+", expanded_question)
+        if len(token) > 2 and token not in _DEFINITION_STOP_WORDS and token != "cogentrex"
+    }
+    best: tuple[int, int, str, str] | None = None
+    for item in evidence:
+        for sentence in re.split(r"(?<=[.!?])\s+|[\r\n]+", item.content):
+            sentence = " ".join(sentence.split()).strip(" -•")
+            if not 30 <= len(sentence) <= 600:
+                continue
+            sentence_terms = set(re.findall(r"[a-z0-9]+", sentence.lower()))
+            overlap = len(query_terms.intersection(sentence_terms))
+            if overlap == 0:
+                continue
+            definition_bonus = (
+                2 if re.search(r"\b(?:is|are|means|refers to)\b", sentence.lower()) else 0
+            )
+            candidate = (overlap * 10 + definition_bonus, -len(sentence), sentence, item.id)
+            if best is None or candidate > best:
+                best = candidate
+    if best is None:
+        return None
+    return Claim(best[2], (best[3],))
 
 
 def _needs_web_supplement(question: str, evidence: list[LearningEvidence]) -> bool:

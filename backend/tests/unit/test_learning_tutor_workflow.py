@@ -17,6 +17,7 @@ from app.learning_tutor.sources import LearningSourceInput
 from app.learning_tutor.web_supplement import WebEvidence
 from app.learning_tutor.workflow import (
     LearningTutorWorkflow,
+    _extractive_web_definition,
     _is_simple_definition,
     _max_output_tokens,
     _needs_web_supplement,
@@ -423,6 +424,36 @@ def test_definition_requires_official_web_evidence_when_it_was_supplied() -> Non
     assert exc_info.value.code == "pedagogy_mismatch"
     payload["sections"][0]["claims"][0]["evidence_ids"] = ["W1"]
     _validate_answer_shape(payload, "What is OOP?", require_web_definition=True)
+
+
+def test_extractive_web_definition_selects_a_literal_relevant_sentence() -> None:
+    content = (
+        "Installation details are listed elsewhere. "
+        "Observability is the ability to understand a system through logs, metrics, and traces."
+    )
+    evidence = [
+        WebEvidence(
+            id="W1",
+            kind="web",
+            title="Observability primer",
+            url="https://opentelemetry.io/docs/concepts/observability-primer/",
+            snippet="",
+            content=content,
+            domain="opentelemetry.io",
+            retrieved_at=1.0,
+            search_source="test",
+        )
+    ]
+
+    claim = _extractive_web_definition(
+        "What is observability? Explain logs, metrics, and traces.", evidence
+    )
+
+    assert claim is not None
+    assert claim.text == (
+        "Observability is the ability to understand a system through logs, metrics, and traces."
+    )
+    assert claim.evidence_ids == ("W1",)
 
 
 def test_web_query_routes_foundational_concepts_to_relevant_official_docs() -> None:
