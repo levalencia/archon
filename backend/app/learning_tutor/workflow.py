@@ -697,6 +697,11 @@ def _extractive_web_definition(question: str, evidence: list[WebEvidence]) -> Cl
         for token in re.findall(r"[a-z0-9]+", expanded_question)
         if len(token) > 2 and token not in _DEFINITION_STOP_WORDS and token != "cogentrex"
     }
+    definition_match = re.match(
+        r"^(?:what(?:'s| is)|define|explain)\s+(?:an?\s+|the\s+)?([a-z0-9-]+)",
+        question.strip().lower(),
+    )
+    definition_term = definition_match.group(1) if definition_match else ""
     best: tuple[int, int, str, str] | None = None
     for item in evidence:
         for sentence in re.split(r"(?<=[.!?])\s+|[\r\n]+", item.content):
@@ -707,8 +712,13 @@ def _extractive_web_definition(question: str, evidence: list[WebEvidence]) -> Cl
             overlap = len(query_terms.intersection(sentence_terms))
             if overlap == 0:
                 continue
+            sentence_lower = sentence.lower()
             definition_bonus = (
-                2 if re.search(r"\b(?:is|are|means|refers to)\b", sentence.lower()) else 0
+                100
+                if definition_term and sentence_lower.startswith(definition_term)
+                else 2
+                if re.search(r"\b(?:is|are|means|refers to|lets)\b", sentence_lower)
+                else 0
             )
             candidate = (overlap * 10 + definition_bonus, -len(sentence), sentence, item.id)
             if best is None or candidate > best:

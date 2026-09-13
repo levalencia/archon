@@ -264,7 +264,7 @@ class TestBuildConceptQuery:
         assert results == [
             {
                 "title": "OpenTelemetry observability primer",
-                "url": "https://opentelemetry.io/docs/concepts/observability-primer/",
+                "url": "https://opentelemetry.io/docs/concepts/observability-primer/index.md",
                 "snippet": "",
             }
         ]

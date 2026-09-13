@@ -428,8 +428,9 @@ def test_definition_requires_official_web_evidence_when_it_was_supplied() -> Non
 
 def test_extractive_web_definition_selects_a_literal_relevant_sentence() -> None:
     content = (
-        "Installation details are listed elsewhere. "
-        "Observability is the ability to understand a system through logs, metrics, and traces."
+        "Logs, metrics, and traces are observability signals used by many systems. "
+        "Observability lets you understand a system from the outside without knowing its "
+        "inner workings."
     )
     evidence = [
         WebEvidence(
@@ -451,7 +452,8 @@ def test_extractive_web_definition_selects_a_literal_relevant_sentence() -> None
 
     assert claim is not None
     assert claim.text == (
-        "Observability is the ability to understand a system through logs, metrics, and traces."
+        "Observability lets you understand a system from the outside without knowing its inner "
+        "workings."
     )
     assert claim.evidence_ids == ("W1",)
 

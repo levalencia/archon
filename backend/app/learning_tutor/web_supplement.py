@@ -108,7 +108,7 @@ _CANONICAL_OFFICIAL_PAGES: dict[str, tuple[str, str]] = {
     ),
     "site:opentelemetry.io": (
         "OpenTelemetry observability primer",
-        "https://opentelemetry.io/docs/concepts/observability-primer/",
+        "https://opentelemetry.io/docs/concepts/observability-primer/index.md",
     ),
     "site:developer.mozilla.org": (
         "MDN server-sent events",
