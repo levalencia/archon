@@ -123,13 +123,13 @@ def collect_learning_corpus(
 
     for relative in sorted(_ALLOWED_EXACT):
         path = root / relative
-        if path.is_file():
+        if path.is_file() and not path.is_symlink():
             for source in collect_markdown(path, relative_path=relative, revision=revision):
                 add(source, "view:architecture", "view:evidence")
 
     for relative in sorted(_CORE_CODE_EXACT):
         path = root / relative
-        if not path.is_file():
+        if not path.is_file() or path.is_symlink():
             continue
         collector = collect_python if path.suffix.lower() == ".py" else collect_text_code
         for source in collector(path, relative_path=relative, revision=revision, kind="code"):

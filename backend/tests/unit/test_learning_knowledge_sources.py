@@ -178,3 +178,26 @@ def test_corpus_includes_core_tutor_code_and_visual_learning_docs(tmp_path: Path
     paths = {item.locator.get("path"): item.kind for item in sources}
     assert paths["backend/app/learning_tutor/workflow.py"] == "code"
     assert paths["docs/visual-learning/README.md"] == "documentation"
+
+
+def test_corpus_skips_symlinked_core_sources(tmp_path: Path) -> None:
+    target = tmp_path / "real-workflow.py"
+    target.write_text("def answer():\n    return 'outside allowlist'\n", encoding="utf-8")
+    workflow = tmp_path / "backend/app/learning_tutor/workflow.py"
+    workflow.parent.mkdir(parents=True)
+    workflow.symlink_to(target)
+    studio = tmp_path / "studio.json"
+    studio.write_text(
+        json.dumps({"schema": "cogentrex.visual-learning-studio", "concepts": []}),
+        encoding="utf-8",
+    )
+
+    sources = collect_learning_corpus(
+        repository_root=tmp_path,
+        studio_path=studio,
+        revision="f" * 40,
+    )
+
+    assert all(
+        item.locator.get("path") != "backend/app/learning_tutor/workflow.py" for item in sources
+    )
