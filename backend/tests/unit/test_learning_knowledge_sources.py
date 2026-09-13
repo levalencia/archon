@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.learning_media.catalog import LearningMediaCatalog
+from app.learning_tutor.indexer import collect_learning_corpus
 from app.learning_tutor.sources import (
     LearningSourceInput,
     collect_markdown,
@@ -153,3 +154,27 @@ def test_collectors_reject_paths_outside_repository(tmp_path: Path) -> None:
     outside.write_text("# Outside\n", encoding="utf-8")
     with pytest.raises(ValueError, match="relative path"):
         collect_markdown(outside, relative_path="../outside.md", revision="a" * 40)
+
+
+def test_corpus_includes_core_tutor_code_and_visual_learning_docs(tmp_path: Path) -> None:
+    workflow = tmp_path / "backend/app/learning_tutor/workflow.py"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("def answer():\n    return 'grounded'\n", encoding="utf-8")
+    visual_readme = tmp_path / "docs/visual-learning/README.md"
+    visual_readme.parent.mkdir(parents=True)
+    visual_readme.write_text("# Visual Learning\n\nTutor architecture.\n", encoding="utf-8")
+    studio = tmp_path / "studio.json"
+    studio.write_text(
+        json.dumps({"schema": "cogentrex.visual-learning-studio", "concepts": []}),
+        encoding="utf-8",
+    )
+
+    sources = collect_learning_corpus(
+        repository_root=tmp_path,
+        studio_path=studio,
+        revision="e" * 40,
+    )
+
+    paths = {item.locator.get("path"): item.kind for item in sources}
+    assert paths["backend/app/learning_tutor/workflow.py"] == "code"
+    assert paths["docs/visual-learning/README.md"] == "documentation"

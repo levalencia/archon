@@ -48,3 +48,19 @@ def test_real_learning_corpus_contains_canonical_docs_code_tests_and_videos() ->
     }
     assert any("service slot" in item.text.lower() for item in videos)
     assert len(sources) == len({item.id for item in sources})
+    indexed_paths = {str(item.locator.get("path") or "") for item in sources}
+    assert {
+        "backend/app/config.py",
+        "backend/app/learning_tutor/context.py",
+        "backend/app/learning_tutor/repository.py",
+        "backend/app/learning_tutor/web_supplement.py",
+        "backend/app/learning_tutor/workflow.py",
+        "backend/app/observability/tracing.py",
+        "backend/app/routes/learning_tutor.py",
+        "docs/EVIDENCE.md",
+        "docs/course/reference/glossary.md",
+        "docs/course/reference/stop-reasons.md",
+        "docs/operations/cogentrex-namespace-cutover.md",
+        "docs/visual-learning/README.md",
+        "frontend/src/lib/learning-tutor.ts",
+    } <= indexed_paths
