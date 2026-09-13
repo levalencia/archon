@@ -6,8 +6,8 @@ from app.learning_tutor.evaluation import (
     TutorEvalCase,
     TutorEvalRubric,
     TutorEvalScore,
-    score_tutor_response,
     compute_retrieval_recall,
+    score_tutor_response,
 )
 
 
@@ -87,10 +87,26 @@ def test_compute_retrieval_recall_partial_path_match() -> None:
     assert recall["recall@1"] == 1.0
 
 
-def test_compute_retrieval_recall_empty_citations() -> None:
-    recall = compute_retrieval_recall(
-        _make_case(), []
+def test_compute_retrieval_recall_normalizes_symbol_and_annotation_suffixes() -> None:
+    case = _make_case(
+        expected_source_areas=[
+            "backend/app/runtime/engine.py::AgentRuntime",
+            "docs/course/modules/01-python-architecture/README.md (Protocols)",
+        ]
     )
+    retrieved = [
+        {"source_path": "backend/app/runtime/engine.py"},
+        {"source_path": "docs/course/modules/01-python-architecture/README.md"},
+    ]
+
+    recall = compute_retrieval_recall(case, retrieved)
+
+    assert recall["recall@1"] == 0.5
+    assert recall["recall@3"] == 1.0
+
+
+def test_compute_retrieval_recall_empty_citations() -> None:
+    recall = compute_retrieval_recall(_make_case(), [])
     assert recall["recall@1"] == 0.0
     assert recall["recall@3"] == 0.0
     assert recall["recall@10"] == 0.0
@@ -119,7 +135,17 @@ def test_score_with_retrieval_diagnostics_includes_recall() -> None:
         "grounded": True,
         "citations": [{"kind": "documentation", "source_path": "docs/oop.md"}],
         "retrieval_diagnostics": [
-            {"source_path": "docs/oop.md", "score": 0.9, "score_components": {"dense": 0.8, "lexical": 0.9, "context": 1.0, "exact_symbol": 0.0, "final": 0.9}},
+            {
+                "source_path": "docs/oop.md",
+                "score": 0.9,
+                "score_components": {
+                    "dense": 0.8,
+                    "lexical": 0.9,
+                    "context": 1.0,
+                    "exact_symbol": 0.0,
+                    "final": 0.9,
+                },
+            },
         ],
     }
     score = score_tutor_response(case, response)
@@ -128,3 +154,25 @@ def test_score_with_retrieval_diagnostics_includes_recall() -> None:
     assert hasattr(score, "retrieval_recall")
     assert score.retrieval_recall is not None
     assert score.retrieval_recall["recall@1"] == 1.0
+
+
+def test_score_reads_retrieval_diagnostics_from_public_metrics() -> None:
+    case = _make_case(expected_source_areas=["docs/oop.md"])
+    response = {
+        "answer_markdown": "OOP means classes and objects.",
+        "grounded": True,
+        "citations": [{"kind": "documentation"}],
+        "metrics": {
+            "retrieval_diagnostics": [
+                {"source_path": "docs/oop.md", "score": 0.9},
+            ]
+        },
+    }
+
+    score = score_tutor_response(case, response)
+
+    assert score.retrieval_recall == {
+        "recall@1": 1.0,
+        "recall@3": 1.0,
+        "recall@10": 1.0,
+    }

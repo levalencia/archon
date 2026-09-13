@@ -17,6 +17,8 @@ from app.learning_tutor.sources import LearningSourceInput
 from app.learning_tutor.web_supplement import WebEvidence
 from app.learning_tutor.workflow import (
     LearningTutorWorkflow,
+    _is_simple_definition,
+    _max_output_tokens,
     _needs_web_supplement,
     _rebind_miscited_claims,
     _web_query,
@@ -33,13 +35,13 @@ class TutorProvider:
     def __init__(self, payload: dict) -> None:
         self.payload = payload
         self.calls = 0
-        self.messages = ()
+        self.messages: list = []
 
     async def complete(
         self, messages, tools=(), *, max_tokens=4096, response_contract=None, response_format=None
     ):
         self.calls += 1
-        self.messages = tuple(messages)
+        self.messages = list(messages)
         return ModelResponse(
             content=json.dumps(self.payload),
             usage=TokenUsage(input_tokens=100, output_tokens=80),
@@ -144,7 +146,7 @@ async def test_answer_contains_verified_citations_code_excerpt_and_diagram(servi
         {
             "sections": [
                 {
-                    "heading": "Direct answer",
+                    "heading": "Definition",
                     "claims": [
                         {
                             "text": (
@@ -194,8 +196,12 @@ async def test_answer_contains_verified_citations_code_excerpt_and_diagram(servi
     )
 
     assert result.grounded is True
-    assert "## Direct answer" in result.answer_markdown
+    assert "## Definition" in result.answer_markdown
     assert "[E1]" in result.answer_markdown
+    assert result.metrics["question_class"] == "simple_definition"
+    assert result.metrics["retrieval_diagnostics"][0]["rank"] == 1
+    assert result.metrics["retrieval_duration_ms"] >= 0
+    assert "first section heading MUST be exactly 'Definition'" in provider.messages[0].content
     assert "```python" in result.answer_markdown
     assert "app.state.sandbox_executor = None" in result.answer_markdown
     assert any(citation.locator.get("start_seconds") == 286.94 for citation in result.citations)
@@ -212,7 +218,7 @@ async def test_unknown_citations_and_diagram_references_are_removed(services) ->
         {
             "sections": [
                 {
-                    "heading": "Answer",
+                    "heading": "Definition",
                     "claims": [{"text": "This claim has no source.", "evidence_ids": ["E999"]}],
                 }
             ],
@@ -262,7 +268,7 @@ async def test_evidence_is_delimited_as_untrusted_data(services) -> None:
         model="test-model",
     )
     await workflow.answer(
-        question="Explain the state slots",
+        question="Inspect the state slots",
         context=_context(),
         owner_id="alice",
         project_id="default",
@@ -359,6 +365,28 @@ def test_general_definition_uses_web_but_code_question_stays_local() -> None:
     assert "application composition" in _web_query("What's a shared service?", _context())
 
 
+def test_definition_classification_and_output_budget_are_bounded() -> None:
+    assert _is_simple_definition("What is OOP?") is True
+    assert _is_simple_definition("what's DI?") is True
+    assert _is_simple_definition("Explain observability simply") is True
+    assert _is_simple_definition("How does _lexical_score rank repository chunks?") is False
+    assert _is_simple_definition("Compare SQL JSON retrieval with pgvector") is False
+    assert _max_output_tokens("What is OOP?") < _max_output_tokens(
+        "Trace the complete runtime lifecycle and compare its failure boundaries"
+    )
+
+
+def test_web_query_routes_foundational_concepts_to_relevant_official_docs() -> None:
+    oop = _web_query("What is OOP?", _context()).lower()
+    di = _web_query("What's DI?", _context()).lower()
+    observability = _web_query("What is observability?", _context()).lower()
+
+    assert "python" in oop and "classes" in oop
+    assert "fastapi" in di and "dependency injection" in di
+    assert "opentelemetry" in observability and "tracing" in observability
+    assert "fastapi starlette" not in oop
+
+
 @pytest.mark.asyncio
 async def test_miscited_exact_claim_is_rebound_to_supporting_evidence() -> None:
     definition = (
@@ -448,17 +476,78 @@ class ExplodingProvider:
         raise RuntimeError("upstream provider timeout")
 
 
+class ProviderJsonFailureThenFixed:
+    def __init__(self, payload: dict) -> None:
+        self.payload = payload
+        self.calls = 0
+
+    async def complete(
+        self, messages, tools=(), *, max_tokens=4096, response_contract=None, response_format=None
+    ):
+        self.calls += 1
+        if self.calls == 1:
+            raise json.JSONDecodeError("malformed provider JSON", "{", 1)
+        return ModelResponse(
+            content=json.dumps(self.payload),
+            usage=TokenUsage(input_tokens=60, output_tokens=40),
+        )
+
+
+@pytest.mark.asyncio
+async def test_definition_question_retries_when_definition_section_is_missing(services) -> None:
+    knowledge, tutor, conversations = services
+    claim = "A service slot is initialized to None and populated during application lifespan."
+    wrong_shape = json.dumps(
+        {
+            "sections": [
+                {
+                    "heading": "How Cogentrex uses it",
+                    "claims": [{"text": claim, "evidence_ids": ["E1"]}],
+                }
+            ],
+            "related_questions": [],
+            "diagram": None,
+        }
+    )
+    fixed = {
+        "sections": [
+            {"heading": "Definition", "claims": [{"text": claim, "evidence_ids": ["E1"]}]}
+        ],
+        "related_questions": [],
+        "diagram": None,
+    }
+    provider = MalformedThenFixedProvider(wrong_shape, fixed)
+    workflow = LearningTutorWorkflow(
+        knowledge=knowledge,
+        sessions=tutor,
+        runs=conversations.runs,
+        provider=provider,
+        provider_name="mock",
+        model="test-model",
+    )
+
+    result = await workflow.answer(
+        question="What is a service slot?",
+        context=_context(),
+        owner_id="alice",
+        project_id="default",
+        correlation_id="definition-shape-retry",
+    )
+
+    assert provider.calls == 2
+    assert result.grounded is True
+    assert result.answer_markdown.startswith("## Definition")
+    assert result.metrics["structured_output_failure"] == "pedagogy_mismatch"
+
+
 @pytest.mark.asyncio
 async def test_malformed_output_retries_once_and_succeeds(services) -> None:
     knowledge, tutor, conversations = services
-    slot_claim = (
-        "A service slot is initialized to None and populated "
-        "during application lifespan."
-    )
+    slot_claim = "A service slot is initialized to None and populated during application lifespan."
     good = {
         "sections": [
             {
-                "heading": "Answer",
+                "heading": "Definition",
                 "claims": [
                     {
                         "text": slot_claim,
@@ -496,6 +585,45 @@ async def test_malformed_output_retries_once_and_succeeds(services) -> None:
 
 
 @pytest.mark.asyncio
+async def test_provider_json_decode_failure_retries_instead_of_escaping_as_404(services) -> None:
+    knowledge, tutor, conversations = services
+    claim = "A service slot is initialized to None and populated during application lifespan."
+    provider = ProviderJsonFailureThenFixed(
+        {
+            "sections": [
+                {
+                    "heading": "Definition",
+                    "claims": [{"text": claim, "evidence_ids": ["E1"]}],
+                }
+            ],
+            "related_questions": [],
+            "diagram": None,
+        }
+    )
+    workflow = LearningTutorWorkflow(
+        knowledge=knowledge,
+        sessions=tutor,
+        runs=conversations.runs,
+        provider=provider,
+        provider_name="mock",
+        model="test-model",
+    )
+
+    result = await workflow.answer(
+        question="What is a service slot?",
+        context=_context(),
+        owner_id="alice",
+        project_id="default",
+        correlation_id="provider-json-retry",
+    )
+
+    assert provider.calls == 2
+    assert result.grounded is True
+    assert result.metrics["structured_output_attempts"] == 2
+    assert result.metrics["structured_output_failure"] == "provider_malformed_json"
+
+
+@pytest.mark.asyncio
 async def test_repeated_malformed_output_returns_fallback_never_leaks_parser(services) -> None:
     knowledge, tutor, conversations = services
     provider = AlwaysMalformedProvider()
@@ -528,15 +656,12 @@ async def test_repeated_malformed_output_returns_fallback_never_leaks_parser(ser
 @pytest.mark.asyncio
 async def test_successful_first_attempt_records_single_attempt(services) -> None:
     knowledge, tutor, conversations = services
-    slot_claim = (
-        "A service slot is initialized to None and populated "
-        "during application lifespan."
-    )
+    slot_claim = "A service slot is initialized to None and populated during application lifespan."
     provider = TutorProvider(
         {
             "sections": [
                 {
-                    "heading": "Answer",
+                    "heading": "Definition",
                     "claims": [
                         {
                             "text": slot_claim,
@@ -570,4 +695,3 @@ async def test_successful_first_attempt_records_single_attempt(services) -> None
     assert result.metrics["structured_output_attempts"] == 1
     assert "structured_output_failure" not in result.metrics
     assert "structured_output_fallback" not in result.metrics
-

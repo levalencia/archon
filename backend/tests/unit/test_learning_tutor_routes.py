@@ -380,4 +380,3 @@ def test_stream_provider_error_emits_sanitized_sse_error(monkeypatch) -> None:
     assert "timeout" not in error_events[0]["data"]["message"].lower()
     assert "upstream" in error_events[0]["data"]["message"].lower()
     assert events[-1]["event"] == "done"
-

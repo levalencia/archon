@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from app.learning_tutor.repository import LearningKnowledgeRepository, LearningEvidence
+from app.learning_tutor.repository import (
+    LearningEvidence,
+    LearningKnowledgeRepository,
+    _expand_query,
+)
 from app.learning_tutor.sources import LearningSourceInput
 from app.security.persistence_redactor import PersistenceRedactor
 from app.services.chunker import EmbeddingService
@@ -76,7 +80,10 @@ def _concept_sources() -> list[LearningSourceInput]:
             kind="documentation",
             key="docs/preflight.md#preflight-checks",
             title="Preflight Checks",
-            text="A preflight check validates configuration and external service connectivity before startup.",
+            text=(
+                "A preflight check validates configuration and external service connectivity "
+                "before startup."
+            ),
             revision=_REV,
             locator={"path": "docs/preflight.md", "line_start": 1, "line_end": 3},
             context_keys=("concept:preflight",),
@@ -85,7 +92,10 @@ def _concept_sources() -> list[LearningSourceInput]:
             kind="documentation",
             key="docs/observability.md#observability",
             title="Observability",
-            text="Observability exposes metrics, tracing, and structured logging for production insight.",
+            text=(
+                "Observability exposes metrics, tracing, and structured logging for production "
+                "insight."
+            ),
             revision=_REV,
             locator={"path": "docs/observability.md", "line_start": 1, "line_end": 3},
             context_keys=("concept:observability",),
@@ -94,7 +104,9 @@ def _concept_sources() -> list[LearningSourceInput]:
             kind="documentation",
             key="docs/policy.md#security-policy",
             title="Security Policy",
-            text="A policy in Cogentrex defines permission rules that restrict agent tool execution.",
+            text=(
+                "A policy in Cogentrex defines permission rules that restrict agent tool execution."
+            ),
             revision=_REV,
             locator={"path": "docs/policy.md", "line_start": 1, "line_end": 3},
             context_keys=("concept:policy",),
@@ -103,7 +115,10 @@ def _concept_sources() -> list[LearningSourceInput]:
             kind="documentation",
             key="docs/rag.md#retrieval-augmented-generation",
             title="Retrieval-Augmented Generation",
-            text="RAG (Retrieval-Augmented Generation) fetches relevant chunks before calling the LLM.",
+            text=(
+                "RAG (Retrieval-Augmented Generation) fetches relevant chunks before calling "
+                "the LLM."
+            ),
             revision=_REV,
             locator={"path": "docs/rag.md", "line_start": 1, "line_end": 3},
             context_keys=("concept:rag",),
@@ -121,7 +136,10 @@ def _concept_sources() -> list[LearningSourceInput]:
             kind="documentation",
             key="docs/chunking.md#chunking-strategy",
             title="Chunking Strategy",
-            text="Chunking splits large documents into overlapping windows for embedding and retrieval.",
+            text=(
+                "Chunking splits large documents into overlapping windows for embedding and "
+                "retrieval."
+            ),
             revision=_REV,
             locator={"path": "docs/chunking.md", "line_start": 1, "line_end": 3},
             context_keys=("concept:chunking",),
@@ -146,6 +164,10 @@ async def test_di_alias_boosts_di_source(knowledge) -> None:
     await knowledge.sync(_concept_sources())
     evidence = await knowledge.search("what's DI?", top_k=3)
     assert evidence[0].title == "Dependency Injection"
+
+
+def test_short_alias_does_not_match_inside_an_unrelated_word() -> None:
+    assert _expand_query("What is the difference between two scores?") == set()
 
 
 @pytest.mark.asyncio

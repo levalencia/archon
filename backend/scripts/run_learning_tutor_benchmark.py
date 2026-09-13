@@ -113,9 +113,24 @@ def main() -> None:
                     "citations": response.get("citations", []),
                     "metrics": response.get("metrics", {}),
                     "error": None,
+                    "error_status": None,
                 }
             )
-        except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+        except HTTPError as exc:
+            observations.append(
+                {
+                    "case_id": case.id,
+                    "difficulty": case.difficulty,
+                    "latency_seconds": round(monotonic() - started, 3),
+                    "score": None,
+                    "answer_markdown": "",
+                    "citations": [],
+                    "metrics": {},
+                    "error": "HTTPError",
+                    "error_status": exc.code,
+                }
+            )
+        except (URLError, TimeoutError, ValueError) as exc:
             observations.append(
                 {
                     "case_id": case.id,
@@ -126,6 +141,7 @@ def main() -> None:
                     "citations": [],
                     "metrics": {},
                     "error": type(exc).__name__,
+                    "error_status": None,
                 }
             )
 

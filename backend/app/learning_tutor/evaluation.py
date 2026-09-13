@@ -119,6 +119,9 @@ def score_tutor_response(case: TutorEvalCase, response: dict[str, Any]) -> Tutor
     # Compute retrieval recall when diagnostics are provided
     retrieval_recall: dict[str, float] | None = None
     diagnostics = response.get("retrieval_diagnostics")
+    if not isinstance(diagnostics, list):
+        metrics = response.get("metrics")
+        diagnostics = metrics.get("retrieval_diagnostics") if isinstance(metrics, dict) else None
     if isinstance(diagnostics, list) and diagnostics:
         retrieval_recall = compute_retrieval_recall(case, diagnostics)
     elif citations:
@@ -149,17 +152,17 @@ def compute_retrieval_recall(
     Each retrieved item should have a 'source_path' key. Matching is prefix-based:
     a retrieved path 'docs/oop.md#section' matches expected 'docs/oop.md'.
     """
-    expected = set(case.expected_source_areas)
+
+    def _normalized_source(value: str) -> str:
+        return value.split("::", 1)[0].split(" (", 1)[0].strip()
+
+    expected = {_normalized_source(value) for value in case.expected_source_areas}
     if not expected:
         return {"recall@1": 0.0, "recall@3": 0.0, "recall@10": 0.0}
 
     def _found_at_k(k: int) -> float:
         top_paths = [str(item.get("source_path") or "") for item in retrieved[:k]]
-        found = sum(
-            1
-            for exp in expected
-            if any(p.startswith(exp) or p == exp for p in top_paths)
-        )
+        found = sum(1 for exp in expected if any(p.startswith(exp) or p == exp for p in top_paths))
         return found / len(expected)
 
     return {

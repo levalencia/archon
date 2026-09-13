@@ -52,7 +52,7 @@ def _expand_query(query: str) -> set[str]:
     query_lower = query.lower().rstrip("?.!")
     expanded: set[str] = set()
     for alias, terms in _ALIAS_EXPANSIONS.items():
-        if alias in query_lower:
+        if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", query_lower):
             expanded |= terms
     return expanded
 
@@ -74,7 +74,17 @@ class LearningEvidence:
 
     def __post_init__(self) -> None:
         if self.score_components is None:
-            object.__setattr__(self, "score_components", {"dense": 0.0, "lexical": 0.0, "context": 0.0, "exact_symbol": 0.0, "final": self.score})
+            object.__setattr__(
+                self,
+                "score_components",
+                {
+                    "dense": 0.0,
+                    "lexical": 0.0,
+                    "context": 0.0,
+                    "exact_symbol": 0.0,
+                    "final": self.score,
+                },
+            )
 
     def public(self) -> dict[str, Any]:
         return {
@@ -321,7 +331,9 @@ class LearningKnowledgeRepository:
         query_tokens = _tokens(question)
         expanded_terms = _expand_query(question)
         phrase = question.strip().lower().rstrip("?.!")
-        ranked: list[tuple[float, LearningChunkRow, LearningSourceRow, dict[str, Any], dict[str, float]]] = []
+        ranked: list[
+            tuple[float, LearningChunkRow, LearningSourceRow, dict[str, Any], dict[str, float]]
+        ] = []
         for chunk, source in rows:
             try:
                 metadata = json.loads(str(chunk.metadata_json))

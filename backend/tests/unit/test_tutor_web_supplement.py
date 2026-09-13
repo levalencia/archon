@@ -286,8 +286,12 @@ class TestBuildConceptQuery:
         """Constructed queries should not be excessively long."""
         q = build_concept_query(
             "A very long question " * 20,
-            concepts=["object-oriented-programming", "async-programming",
-                       "fastapi-dependency-injection", "opentelemetry-observability"],
+            concepts=[
+                "object-oriented-programming",
+                "async-programming",
+                "fastapi-dependency-injection",
+                "opentelemetry-observability",
+            ],
         )
         assert len(q) <= 300
 
