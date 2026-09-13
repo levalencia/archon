@@ -33,9 +33,24 @@ _ALLOWED_PREFIXES = (
 )
 _ALLOWED_EXACT = {
     "docs/ARCHITECTURE-DIAGRAMS.md",
+    "docs/EVIDENCE.md",
     "docs/IMPLEMENTATION-EVIDENCE.md",
     "docs/REMAINING-DEFERRED-GAPS.md",
+    "docs/course/reference/glossary.md",
+    "docs/course/reference/stop-reasons.md",
+    "docs/operations/cogentrex-namespace-cutover.md",
+    "docs/visual-learning/README.md",
     "docker-compose.local.yml",
+}
+_CORE_CODE_EXACT = {
+    "backend/app/config.py",
+    "backend/app/learning_tutor/context.py",
+    "backend/app/learning_tutor/repository.py",
+    "backend/app/learning_tutor/web_supplement.py",
+    "backend/app/learning_tutor/workflow.py",
+    "backend/app/observability/tracing.py",
+    "backend/app/routes/learning_tutor.py",
+    "frontend/src/lib/learning-tutor.ts",
 }
 
 
@@ -108,9 +123,17 @@ def collect_learning_corpus(
 
     for relative in sorted(_ALLOWED_EXACT):
         path = root / relative
-        if path.is_file():
+        if path.is_file() and not path.is_symlink():
             for source in collect_markdown(path, relative_path=relative, revision=revision):
                 add(source, "view:architecture", "view:evidence")
+
+    for relative in sorted(_CORE_CODE_EXACT):
+        path = root / relative
+        if not path.is_file() or path.is_symlink():
+            continue
+        collector = collect_python if path.suffix.lower() == ".py" else collect_text_code
+        for source in collector(path, relative_path=relative, revision=revision, kind="code"):
+            add(source, "view:architecture", "view:evidence")
 
     if media_catalog is not None:
         for source in collect_video_transcripts(
