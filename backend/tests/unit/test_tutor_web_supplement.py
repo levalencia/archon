@@ -389,6 +389,24 @@ class TestExtractRelevantSentences:
         result = extract_relevant_sentences(text, "python", max_chars=200)
         assert len(result) <= 200 + 50  # small tolerance for sentence boundaries
 
+    def test_skips_oversized_navigation_block_before_relevant_sentence(self):
+        navigation = " Logs Metrics Traces" * 200
+        text = (
+            f"{navigation}. "
+            "Observability is the ability to understand a system through its outputs."
+        )
+
+        result = extract_relevant_sentences(
+            text,
+            "What is observability? Explain logs, metrics, and traces.",
+            max_chars=200,
+        )
+
+        assert result == (
+            "Observability is the ability to understand a system through its outputs."
+        )
+        assert len(result) <= 200
+
     def test_empty_text_returns_empty(self):
         assert extract_relevant_sentences("", "python") == ""
 

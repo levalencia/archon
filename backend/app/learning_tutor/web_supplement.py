@@ -272,6 +272,8 @@ def extract_relevant_sentences(
     # Score each sentence by number of distinct query tokens it contains
     scored: list[tuple[int, int, str]] = []
     for idx, sentence in enumerate(sentences):
+        if len(sentence) > max_chars:
+            continue
         sentence_lower = sentence.lower()
         score = sum(1 for t in query_tokens if t in sentence_lower)
         scored.append((score, idx, sentence))
