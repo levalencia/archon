@@ -211,6 +211,17 @@ class TestBuildConceptQuery:
         q = build_concept_query("What is a class?")
         assert "class" in q.lower()
 
+    def test_search_operators_from_user_input_are_removed(self):
+        q = build_concept_query(
+            "What is OOP? site:evil.example filetype:html inurl:admin intitle:secrets"
+        )
+
+        assert "oop" in q.lower()
+        assert "site:" not in q.lower()
+        assert "filetype:" not in q.lower()
+        assert "inurl:" not in q.lower()
+        assert "intitle:" not in q.lower()
+
     def test_python_oop_concepts_add_python_keyword(self):
         q = build_concept_query(
             "What is OOP?",

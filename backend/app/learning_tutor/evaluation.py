@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -157,12 +158,27 @@ def compute_retrieval_recall(
         return value.split("::", 1)[0].split(" (", 1)[0].strip()
 
     expected = {_normalized_source(value) for value in case.expected_source_areas}
+    expected_pairs = [
+        (value, hashlib.sha256(value.encode()).hexdigest()[:16]) for value in sorted(expected)
+    ]
     if not expected:
         return {"recall@1": 0.0, "recall@3": 0.0, "recall@10": 0.0}
 
     def _found_at_k(k: int) -> float:
         top_paths = [str(item.get("source_path") or "") for item in retrieved[:k]]
-        found = sum(1 for exp in expected if any(p.startswith(exp) or p == exp for p in top_paths))
+        top_hashes: set[str] = set()
+        for item in retrieved[:k]:
+            single_hash = item.get("source_path_hash")
+            if isinstance(single_hash, str):
+                top_hashes.add(single_hash)
+            source_hashes = item.get("source_path_hashes")
+            if isinstance(source_hashes, list):
+                top_hashes.update(str(value) for value in source_hashes)
+        found = sum(
+            1
+            for exp, expected_hash in expected_pairs
+            if expected_hash in top_hashes or any(p.startswith(exp) or p == exp for p in top_paths)
+        )
         return found / len(expected)
 
     return {

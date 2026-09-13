@@ -199,8 +199,16 @@ async def test_answer_contains_verified_citations_code_excerpt_and_diagram(servi
     assert "## Definition" in result.answer_markdown
     assert "[E1]" in result.answer_markdown
     assert result.metrics["question_class"] == "simple_definition"
-    assert result.metrics["retrieval_diagnostics"][0]["rank"] == 1
     assert result.metrics["retrieval_duration_ms"] >= 0
+    assert result.metrics["persistence_duration_ms"] >= 0
+    assert "retrieval_diagnostics" not in result.public()["metrics"]
+    events = await conversations.runs.events("alice", result.run_id)
+    assert events is not None
+    retrieved = next(item for item in events.items if item.kind == "evidence_retrieved")
+    diagnostics = retrieved.payload["ranked_evidence"]
+    assert diagnostics[0]["rank"] == 1
+    assert "source_path_hashes" in diagnostics[0]
+    assert "source_path" not in diagnostics[0]
     assert "first section heading MUST be exactly 'Definition'" in provider.messages[0].content
     assert "```python" in result.answer_markdown
     assert "app.state.sandbox_executor = None" in result.answer_markdown
@@ -578,6 +586,7 @@ async def test_malformed_output_retries_once_and_succeeds(services) -> None:
     )
 
     assert provider.calls == 2
+    assert len(provider.all_messages[1]) == 3
     assert result.metrics["structured_output_attempts"] == 2
     assert result.metrics["structured_output_failure"] == "malformed_json"
     # Cumulative usage: 50+60 input, 30+40 output

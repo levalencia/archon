@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -70,10 +70,10 @@ class LearningEvidence:
     revision: str
     locator: dict[str, Any]
     context_keys: tuple[str, ...]
-    score_components: dict[str, float] = None  # type: ignore[assignment]
+    score_components: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.score_components is None:
+        if not self.score_components:
             object.__setattr__(
                 self,
                 "score_components",
@@ -368,7 +368,10 @@ class LearningKnowledgeRepository:
             context = 1.0 if context_keys and context_keys.intersection(stored_contexts) else 0.0
             # Exact symbol/file/path matching
             exact_symbol = _exact_symbol_score(question, locator, haystack)
-            score = 0.45 * dense + 0.35 * lexical + 0.1 * context + 0.1 * exact_symbol
+            if expanded_terms or exact_symbol:
+                score = 0.45 * dense + 0.35 * lexical + 0.1 * context + 0.1 * exact_symbol
+            else:
+                score = 0.5 * dense + 0.4 * lexical + 0.1 * context
             components = {
                 "dense": round(dense, 4),
                 "lexical": round(lexical, 4),

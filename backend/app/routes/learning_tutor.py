@@ -64,7 +64,7 @@ async def answer_learning_question(
             correlation_id=get_correlation_id() or "learning-tutor",
         )
     except ContextResolutionError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Learning context not found") from exc
     except Exception as exc:
         raise HTTPException(
             status_code=502,

@@ -63,7 +63,18 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
         {"id", "name", "arguments_hash", "action", "reason_code", "status"}
     ),
     AgentEventKind.EVIDENCE_RETRIEVED.value: frozenset(
-        {"evidence_ids", "document_ids", "chunk_ids", "content_hashes", "scores", "evidence_count"}
+        {
+            "evidence_ids",
+            "document_ids",
+            "chunk_ids",
+            "content_hashes",
+            "scores",
+            "evidence_count",
+            "web_evidence_count",
+            "web_search_source",
+            "web_filtered_count",
+            "ranked_evidence",
+        }
     ),
     AgentEventKind.CLAIM_VERIFIED.value: frozenset(
         {
@@ -157,7 +168,14 @@ _SAFE_FIELDS: dict[str, frozenset[str]] = {
         }
     ),
     AgentEventKind.RUN_STOPPED.value: frozenset(
-        {"reason", "error", "cache_read_input_tokens", "cache_write_input_tokens"}
+        {
+            "reason",
+            "error",
+            "cache_read_input_tokens",
+            "cache_write_input_tokens",
+            "persistence_duration_ms",
+            "workflow_duration_ms",
+        }
     ),
 }
 

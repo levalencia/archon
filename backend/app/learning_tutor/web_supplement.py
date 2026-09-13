@@ -58,6 +58,7 @@ _STRIP_TAGS = re.compile(r"<[^>]+>")
 _COLLAPSE_WS = re.compile(r"\s+")
 _STRIP_URL = re.compile(r"https?://\S+")
 _STRIP_HTML_TAG = re.compile(r"<[^>]*>")
+_STRIP_SEARCH_OPERATOR = re.compile(r"(?i)(?<!\S)(?:site|filetype|inurl|intitle):\S+")
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
 # ── Concept-to-keyword routing table ───────────────────────────────────────
@@ -160,6 +161,7 @@ def build_concept_query(
     cleaned = _STRIP_SCRIPT.sub("", cleaned)
     cleaned = _STRIP_STYLE.sub("", cleaned)
     cleaned = _STRIP_HTML_TAG.sub("", cleaned)
+    cleaned = _STRIP_SEARCH_OPERATOR.sub("", cleaned)
     cleaned = _COLLAPSE_WS.sub(" ", cleaned).strip()
 
     if not cleaned:

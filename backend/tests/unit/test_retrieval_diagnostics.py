@@ -277,3 +277,11 @@ async def test_unrelated_query_still_returns_results(knowledge) -> None:
     evidence = await knowledge.search("how do I handle errors in production?", top_k=3)
     assert len(evidence) >= 1
     assert all(isinstance(e, LearningEvidence) for e in evidence)
+    for item in evidence:
+        components = item.score_components
+        expected = round(
+            0.5 * components["dense"] + 0.4 * components["lexical"] + 0.1 * components["context"],
+            4,
+        )
+        assert components["exact_symbol"] == 0.0
+        assert components["final"] == pytest.approx(expected, abs=0.0001)

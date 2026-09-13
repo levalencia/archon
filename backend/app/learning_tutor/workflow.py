@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import uuid
@@ -241,7 +242,6 @@ class LearningTutorWorkflow:
                     "web_raw_result_count": web_obs.get("raw_result_count", 0),
                     "web_allowed_result_count": web_obs.get("allowed_result_count", 0),
                     "web_extraction_success_count": web_obs.get("extraction_success_count", 0),
-                    "retrieval_diagnostics": _retrieval_diagnostics(evidence),
                 },
             )
             result.metrics["verification_duration_ms"] = round(
@@ -259,7 +259,7 @@ class LearningTutorWorkflow:
                 unsupported=(),
                 metrics={"faithfulness_score": 0.0, "citation_coverage": 0.0},
             )
-        result.metrics["workflow_duration_ms"] = round((monotonic() - workflow_started) * 1000, 1)
+        persistence_started = monotonic()
         await self._sessions.store_turn(
             session_id=session.id,
             owner_id=owner_id,
@@ -271,11 +271,20 @@ class LearningTutorWorkflow:
             diagram=result.diagram,
             metrics=result.metrics,
         )
+        result.metrics["persistence_duration_ms"] = round(
+            (monotonic() - persistence_started) * 1000, 1
+        )
+        result.metrics["workflow_duration_ms"] = round((monotonic() - workflow_started) * 1000, 1)
         await self._runs.append(
             **identity,  # type: ignore[arg-type]
             kind="run_stopped",
             iteration=1,
-            payload={"reason": "completed", "error": False},
+            payload={
+                "reason": "completed",
+                "error": False,
+                "persistence_duration_ms": result.metrics["persistence_duration_ms"],
+                "workflow_duration_ms": result.metrics["workflow_duration_ms"],
+            },
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
             total_tokens=usage.total_tokens,
@@ -323,8 +332,6 @@ class LearningTutorWorkflow:
             if attempt == 0:
                 attempt_metrics["structured_output_attempts"] = 2
                 attempt_metrics["structured_output_failure"] = failure_code
-                if malformed_content:
-                    messages.append(Message(Role.ASSISTANT, malformed_content))
                 messages.append(
                     Message(
                         Role.USER,
@@ -599,14 +606,21 @@ def _retrieval_diagnostics(evidence: list[LearningEvidence]) -> list[dict[str, A
         source_path = str(locator.get("path") or "")
         if not source_path and locator.get("artifact_id"):
             source_path = f"learning-media:{locator['artifact_id']}"
+        path_candidates = {source_path}
+        if source_path and not source_path.startswith("learning-media:"):
+            parts = source_path.split("/")
+            path_candidates.update("/".join(parts[:index]) for index in range(1, len(parts)))
+        source_path_hashes = sorted(
+            hashlib.sha256(candidate.encode()).hexdigest()[:16]
+            for candidate in path_candidates
+            if candidate
+        )
         diagnostics.append(
             {
                 "rank": rank,
                 "evidence_id": item.id,
-                "source_id": item.source_id,
-                "source_path": source_path,
+                "source_path_hashes": source_path_hashes,
                 "kind": item.kind,
-                "title": item.title,
                 "score": item.score,
                 "score_components": dict(item.score_components),
             }

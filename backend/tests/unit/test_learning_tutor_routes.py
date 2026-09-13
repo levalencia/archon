@@ -329,7 +329,7 @@ def test_context_resolution_error_returns_404(monkeypatch) -> None:
         response = client.post("/api/learning-tutor/answer", json=_QUESTION_BODY)
 
     assert response.status_code == 404
-    assert "Unknown learning artifact" in response.json()["detail"]
+    assert response.json()["detail"] == "Learning context not found"
 
 
 def test_provider_error_returns_502_without_leak(monkeypatch) -> None:

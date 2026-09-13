@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from app.learning_tutor.evaluation import (
     TutorEvalCase,
     TutorEvalRubric,
@@ -103,6 +105,19 @@ def test_compute_retrieval_recall_normalizes_symbol_and_annotation_suffixes() ->
 
     assert recall["recall@1"] == 0.5
     assert recall["recall@3"] == 1.0
+
+
+def test_compute_retrieval_recall_accepts_hashed_source_paths() -> None:
+    case = _make_case(expected_source_areas=["docs/oop.md"])
+    retrieved = [
+        {
+            "source_path_hash": hashlib.sha256(b"docs/oop.md").hexdigest()[:16],
+        }
+    ]
+
+    recall = compute_retrieval_recall(case, retrieved)
+
+    assert recall["recall@1"] == 1.0
 
 
 def test_compute_retrieval_recall_empty_citations() -> None:
