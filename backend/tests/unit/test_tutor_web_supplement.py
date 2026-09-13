@@ -228,6 +228,7 @@ class TestBuildConceptQuery:
             concepts=["object-oriented-programming", "python-architecture"],
         )
         lower = q.lower()
+        assert "site:docs.python.org" in lower
         assert "python" in lower
         assert "oop" in lower or "object" in lower
 
@@ -245,6 +246,7 @@ class TestBuildConceptQuery:
             concepts=["fastapi-dependency-injection"],
         )
         lower = q.lower()
+        assert "site:fastapi.tiangolo.com" in lower
         assert "fastapi" in lower
         assert "dependency" in lower or "depends" in lower
 
@@ -254,6 +256,7 @@ class TestBuildConceptQuery:
             concepts=["opentelemetry-observability"],
         )
         lower = q.lower()
+        assert "site:opentelemetry.io" in lower
         assert "opentelemetry" in lower
 
     def test_sse_concept_targets_mdn(self):

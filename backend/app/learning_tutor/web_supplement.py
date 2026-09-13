@@ -64,15 +64,35 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 # ── Concept-to-keyword routing table ───────────────────────────────────────
 # Maps concept slugs to search keywords added for better official-source targeting.
 _CONCEPT_KEYWORDS: dict[str, list[str]] = {
-    "object-oriented-programming": ["Python", "OOP", "classes"],
+    "object-oriented-programming": ["site:docs.python.org", "Python", "OOP", "classes", "objects"],
     "python-architecture": ["Python", "architecture", "modules"],
-    "async-programming": ["Python", "asyncio", "async", "await"],
-    "fastapi-dependency-injection": ["FastAPI", "Depends", "dependency injection"],
-    "opentelemetry-observability": ["OpenTelemetry", "tracing", "observability"],
-    "server-sent-events": ["server-sent events", "SSE", "EventSource"],
+    "async-programming": ["site:docs.python.org", "Python", "asyncio", "async", "await"],
+    "fastapi-dependency-injection": [
+        "site:fastapi.tiangolo.com",
+        "FastAPI",
+        "Depends",
+        "dependency injection",
+    ],
+    "opentelemetry-observability": [
+        "site:opentelemetry.io",
+        "OpenTelemetry",
+        "tracing",
+        "observability",
+    ],
+    "server-sent-events": [
+        "site:developer.mozilla.org",
+        "server-sent events",
+        "SSE",
+        "EventSource",
+    ],
     "safe-default-patterns": ["Python", "safe defaults", "sentinel"],
-    "fastapi-factory": ["FastAPI", "application factory", "create_app"],
-    "pydantic-validation": ["Pydantic", "validation", "BaseModel"],
+    "fastapi-factory": [
+        "site:fastapi.tiangolo.com",
+        "FastAPI",
+        "application factory",
+        "create_app",
+    ],
+    "pydantic-validation": ["site:docs.pydantic.dev", "Pydantic", "validation", "BaseModel"],
     "python-decorators": ["Python", "decorators", "@"],
     "python-type-hints": ["Python", "type hints", "typing"],
 }
