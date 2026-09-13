@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from contextlib import suppress
 from typing import Any, cast
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import StreamingResponse
@@ -21,6 +22,7 @@ from app.security.compliance import ComplianceViolationError
 from app.security.dependencies import enforce_rate_limit
 
 router = APIRouter(prefix="/api/learning-tutor", tags=["learning-tutor"])
+logger = structlog.get_logger()
 
 _CHUNK_SIZE = 80  # characters per answer_delta chunk
 
@@ -66,6 +68,7 @@ async def answer_learning_question(
     except ContextResolutionError as exc:
         raise HTTPException(status_code=404, detail="Learning context not found") from exc
     except Exception as exc:
+        logger.exception("learning_tutor_answer_failed", error_type=type(exc).__name__)
         raise HTTPException(
             status_code=502,
             detail="The learning tutor encountered an upstream error",
@@ -165,7 +168,8 @@ async def stream_learning_answer(
             )
             yield _sse("done", {"run_id": run_id})
             return
-        except Exception:
+        except Exception as exc:
+            logger.exception("learning_tutor_stream_failed", error_type=type(exc).__name__)
             yield _sse(
                 "error",
                 {"run_id": run_id, "message": "The learning tutor encountered an upstream error."},
