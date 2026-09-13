@@ -372,6 +372,9 @@ def test_general_definition_uses_web_but_code_question_stays_local() -> None:
     ]
 
     assert _needs_web_supplement("What's a shared service?", evidence) is True
+    assert _needs_web_supplement("What is OOP, and where does Cogentrex use it?", evidence) is True
+    assert _needs_web_supplement("What is dependency injection in Cogentrex?", evidence) is True
+    assert _needs_web_supplement("What is a policy in Cogentrex?", evidence) is False
     assert _needs_web_supplement("Explain app.state in Cogentrex", evidence) is False
     assert "application composition" in _web_query("What's a shared service?", _context())
 

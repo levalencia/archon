@@ -657,11 +657,20 @@ def _needs_web_supplement(question: str, evidence: list[LearningEvidence]) -> bo
     normalized = question.strip().lower()
     if not evidence:
         return True
-    if any(marker in normalized for marker in ("cogentrex", ".py", "app.state", "line ")):
-        return False
     asks_for_definition = bool(
         re.match(r"^(?:what(?:'s| is| are)|define|explain\b|how does\b|why\b)", normalized)
     )
+    foundational_concept = bool(
+        re.search(
+            r"\boop\b|object[- ]oriented|\bdi\b|dependency injection|\bfactory\b|"
+            r"\bobservability\b|\basync(?:io)?\b|\bsse\b|server[- ]sent events",
+            normalized,
+        )
+    )
+    if asks_for_definition and foundational_concept:
+        return True
+    if any(marker in normalized for marker in ("cogentrex", ".py", "app.state", "line ")):
+        return False
     return asks_for_definition or max(item.score for item in evidence) < 0.35
 
 
