@@ -1,6 +1,6 @@
 # Learning Tutor Evaluation and Improvement Plan
 
-Status: active evaluation design. The 90-case dataset is structurally validated; only the six-case basic smoke has live-provider evidence so far.
+Status: completed initial evaluation and remediation cycle. The frozen 90-case baseline and final local live-provider results are summarized in [`../evidence/learning-tutor-quality-final.md`](../evidence/learning-tutor-quality-final.md).
 
 ## Objective
 

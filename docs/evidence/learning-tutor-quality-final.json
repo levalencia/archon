@@ -1,0 +1,149 @@
+{
+  "schema": "cogentrex.learning-tutor-quality-evidence",
+  "version": 1,
+  "generated_at": "2026-09-14T06:27:21Z",
+  "revision": "212e84fe194ed398b4b677e147e23d0e53172d26",
+  "provider": "foundry",
+  "model": "claude-opus-4-6",
+  "deployment": "verified-local-only",
+  "dataset": {
+    "version": 1,
+    "cases": 90,
+    "basic": 30,
+    "medium": 30,
+    "hard": 30
+  },
+  "corpus": {
+    "sources": 3302,
+    "chunks": 4450,
+    "embedding_provider": "local",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "dimensions": 384,
+    "vector_store": "sql-json-cosine"
+  },
+  "deterministic": {
+    "baseline": {
+      "passed": 65,
+      "grounded": 75,
+      "non_fallback": 75,
+      "citation_requirement_met": 71,
+      "web_policy_met": 85,
+      "execution_errors": 1,
+      "fallbacks": 14
+    },
+    "final": {
+      "passed": 80,
+      "grounded": 88,
+      "non_fallback": 88,
+      "citation_requirement_met": 85,
+      "web_policy_met": 86,
+      "execution_errors": 0,
+      "fallbacks": 2
+    },
+    "paired_comparison": {
+      "passed": {
+        "delta_percentage_points": 16.67,
+        "bootstrap_95ci_percentage_points": [6.67, 26.67],
+        "mcnemar_exact_p": 0.004077
+      },
+      "grounded": {
+        "delta_percentage_points": 14.44,
+        "bootstrap_95ci_percentage_points": [6.67, 22.22],
+        "mcnemar_exact_p": 0.000977
+      },
+      "citation_requirement_met": {
+        "delta_percentage_points": 15.56,
+        "bootstrap_95ci_percentage_points": [6.67, 24.44],
+        "mcnemar_exact_p": 0.002577
+      }
+    },
+    "by_difficulty": {
+      "basic": {"passed": 30, "grounded": 30, "citation_requirement_met": 30},
+      "medium": {"passed": 23, "grounded": 28, "citation_requirement_met": 26},
+      "hard": {"passed": 27, "grounded": 30, "citation_requirement_met": 29}
+    }
+  },
+  "retrieval": {
+    "mean_recall_at_1": 0.212,
+    "mean_recall_at_3": 0.3769,
+    "mean_recall_at_10": 0.5268,
+    "full_recall_cases_at_1": 7,
+    "full_recall_cases_at_3": 15,
+    "full_recall_cases_at_10": 26
+  },
+  "claims_and_sources": {
+    "supported_claims": 413,
+    "unsupported_claims": 585,
+    "support_rate": 0.4138,
+    "web_evidence_items": 34,
+    "web_generated_claims": 22,
+    "web_verified_claims": 11,
+    "web_citations": 11,
+    "web_extractive_recoveries": 1
+  },
+  "grounding_repair": {
+    "attempted_cases": 47,
+    "successful_cases": 40,
+    "not_better_or_failed_cases": 7,
+    "initial_supported_claims": 38,
+    "repair_supported_claims": 204,
+    "structured_parse_retries": 3,
+    "structured_fallbacks": 1,
+    "global_lexical_threshold": 0.9
+  },
+  "latency_seconds": {
+    "baseline": {"average": 34.589, "median": 31.912, "p95": 52.428, "maximum": 90.904},
+    "final": {"average": 31.317, "median": 30.239, "p95": 62.678, "maximum": 75.435},
+    "paired_mean_delta": -2.984,
+    "paired_mean_delta_bootstrap_95ci": [-7.3126, 1.3045]
+  },
+  "tokens_and_cost": {
+    "baseline_total_tokens": 466831,
+    "final_input_tokens": 497873,
+    "final_output_tokens": 151596,
+    "final_total_tokens": 649469,
+    "final_average_tokens_per_case": 7216.3,
+    "final_reconciled_charges": 140,
+    "final_actual_cost_nusd": 6206050750,
+    "final_actual_cost_usd": 6.20605075,
+    "baseline_cost_usd": null
+  },
+  "pedagogical_model_judge": {
+    "limitation": "Subjective model-rubric review, validated for 90 unique case IDs and reported separately from deterministic evidence.",
+    "baseline": {
+      "passed": 35,
+      "cogentrex_application_passed": 45,
+      "basic_definition_first_passed": 19,
+      "coverage": {"full": 17, "partial": 24, "poor": 49},
+      "misleading_or_unsupported": 3
+    },
+    "final": {
+      "passed": 44,
+      "cogentrex_application_passed": 63,
+      "basic_definition_first_passed": 24,
+      "coverage": {"full": 20, "partial": 49, "poor": 21},
+      "misleading_or_unsupported": 1
+    },
+    "paired_comparison": {
+      "passed": {
+        "delta_percentage_points": 10.0,
+        "bootstrap_95ci_percentage_points": [-2.22, 22.22],
+        "mcnemar_exact_p": 0.149613
+      },
+      "cogentrex_application_passed": {
+        "delta_percentage_points": 20.0,
+        "bootstrap_95ci_percentage_points": [8.89, 32.22],
+        "mcnemar_exact_p": 0.002102
+      }
+    }
+  },
+  "limitations": [
+    "The deployment evidence is local-only; no public or cloud deployment is claimed.",
+    "The model-rubric review is subjective and is not merged into deterministic pass metrics.",
+    "Pedagogical pass improved, but its paired confidence interval includes zero.",
+    "P95 latency increased from 52.428 seconds to 62.678 seconds because repair adds a provider call on weak initial generations.",
+    "Mean recall@10 is 0.5268, so retrieval coverage remains incomplete for many expected source sets.",
+    "Two medium cases still returned the verified-answer fallback.",
+    "Raw answers and owner-scoped run records remain local and are not included in this sanitized artifact."
+  ]
+}

@@ -17,21 +17,28 @@ This ledger separates code presence, wiring, tests, direct observation, UI, and 
 
 ## Contextual Visual Learning tutor
 
-The current repository head adds Alembic revision `20260912_23` and four
-application-owned tables for a curated learning corpus and owner-scoped tutor
-threads. The authenticated `/api/learning-tutor` path resolves browser context
-against the server-owned Visual Learning manifest, retrieves from the dedicated
-SQL-JSON corpus, requires evidence IDs for atomic claims, appends exact code
-excerpts, validates optional diagrams, and persists redacted turns and run-ledger
-events. The right-side tutor panel is wired into Roadmap, Stories, Architecture,
-Evidence, Present, Listen, and Study, including authored video timestamps.
+The authenticated `/api/learning-tutor` path resolves browser context against the
+server-owned Visual Learning manifest, retrieves from a curated application-owned
+corpus, requires evidence IDs for atomic claims, verifies citations, appends exact
+code excerpts, validates optional diagrams, and persists redacted turns plus
+owner-scoped run evidence. Retrieval remains bounded SQL-JSON cosine plus lexical,
+context, alias, file, and symbol ranking; it is not pgvector.
 
-Deterministic unit, migration, route, workflow, Svelte, and browser tests are the
-implementation evidence. Corpus collection has also been exercised against the
-local reviewed media library for Videos 1 and 2. This does **not** claim live
-provider answer quality, a semantic retrieval benchmark, public deployment, or
-unbounded scale: retrieval remains the repository's bounded SQL-JSON cosine plus
-lexical/context ranking, not pgvector.
+Merged revision `212e84f` was exercised locally with Foundry
+`claude-opus-4-6` over the frozen 90-case dataset. The final run completed all 90
+requests with 80 deterministic passes, 88 grounded/non-fallback answers, 85 cases
+meeting citation requirements, and zero execution errors. A separate blinded
+model-rubric review marked 44 answers pedagogically useful and 63 as correctly
+applying the concept to Cogentrex. The sanitized methodology, paired baseline
+comparison, retrieval, latency, token, cost, and limitation evidence is recorded
+in [`docs/evidence/learning-tutor-quality-final.md`](evidence/learning-tutor-quality-final.md)
+and its [machine-readable summary](evidence/learning-tutor-quality-final.json).
+
+This evidence is local and provider-specific. It does **not** establish public
+deployment, complete expected-source recall, universally strong pedagogy,
+production scale, or a tail-latency improvement. The final mean recall@10 was
+0.5268, two medium cases still fell back, and P95 latency increased because weak
+initial generations can invoke one additional bounded provider call.
 
 ### Historical candidate baseline (superseded)
 
