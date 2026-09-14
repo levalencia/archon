@@ -101,6 +101,31 @@
       "explicit_context_vocabulary_results": 1
     }
   },
+  "local_deployment": {
+    "merge_commit": "1511aee380a478d17320ae465a2b5c866854655f",
+    "scope": "retained local stack only",
+    "status": "ready",
+    "runtime_mode": "live-foundry",
+    "postgres_preserved": true,
+    "redis_preserved": true,
+    "users_before_after": [42, 42],
+    "runs_before_after": [482, 482],
+    "sources_before_after": [3302, 3903],
+    "chunks_before_after": [4450, 5047],
+    "vocabulary_sources": 299,
+    "merge_revision_sources": 3839,
+    "stale_media_revision_sources": 64,
+    "global_vocabulary_discovery": false,
+    "general_context_vocabulary_results": 0,
+    "explicit_context_top_vocabulary_id": "sse",
+    "healthz_status": 200,
+    "readyz_status": 200,
+    "studio_schema_version": 4,
+    "studio_vocabulary_terms": 299,
+    "browser_desktop_glossary": "pass",
+    "browser_mobile_eight_views": "pass",
+    "public_or_cloud_deployment": false
+  },
   "accounting": {
     "charges": 144,
     "charge_states": {"reconciled": 144},

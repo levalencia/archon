@@ -56,6 +56,8 @@ and its [machine-readable summary](evidence/visual-learning-vocabulary-evaluatio
 
 Follow-up revision `8a1d3b6` keeps global vocabulary discovery default-off while preserving exact learner-selected `vocabulary:<id>` context. This separates the deterministic catalog, Glossary UI, and explicit Tutor path from the flag-on behavior that failed the global quality gate.
 
+PR #32 merged as `1511aee` and the controlled rollout was deployed to the retained local stack without replacing PostgreSQL or Redis. Readiness, 299 indexed vocabulary sources, default-off global discovery, exact explicit-context retrieval, and desktop/mobile Glossary behavior were observed. This remains local deployment evidence only; the external learning-media library was still stale at `33c56af` during this acceptance.
+
 ### Historical candidate baseline (superseded)
 
 The following records the pre-merge candidate status at `feature/skills-project-instructions-mcp` for historical traceability. Code evidence was anchored at `9eaf49e`; exact-head `verify.sh` PASS at `26e36737` with backend 1,537 passed / 4 skipped, Svelte 0/0, Vitest 53, Playwright 33. These numbers are superseded by the merged main CI results above.

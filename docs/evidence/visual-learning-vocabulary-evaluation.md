@@ -189,3 +189,22 @@ Revision `8a1d3b6` implements the recommended boundary without changing retrieva
 - the clean backend suite completed with 1,904 passed and 7 skipped.
 
 Direct runtime retrieval against the isolated 3,903-source PostgreSQL candidate observed `FLAG=False`, zero vocabulary results for a general SSE protocol question, and `sse` as the top vocabulary result for explicit `vocabulary:sse` context. This accepts the deterministic catalog/UI/explicit-context slice while keeping the inconclusive global Tutor behavior off by default.
+
+## Merged local deployment
+
+PR #32 merged as `1511aee`. The retained local stack was hot-swapped without recreating PostgreSQL or Redis. Post-deployment evidence:
+
+- `STATUS=ready` at `http://127.0.0.1:80` in live Foundry mode;
+- backend and frontend healthy on images built from merged `main`;
+- PostgreSQL and Redis container IDs unchanged;
+- users preserved at 42 and runs preserved at 482;
+- corpus increased from 3,302 sources / 4,450 chunks to 3,903 sources / 5,047 chunks;
+- 299 vocabulary sources indexed;
+- 3,839 sources use merge revision `1511aee`; 64 media sources retain stale revision `33c56af`;
+- effective global vocabulary discovery is `False`;
+- general SSE retrieval returns zero vocabulary sources while explicit `vocabulary:sse` ranks `sse` first;
+- gateway `/healthz` and `/readyz` return HTTP 200;
+- served Studio artifact is schema version 4 with 299 vocabulary terms;
+- deployed desktop Glossary search/selection and all eight Studio views at 390×844 passed browser acceptance.
+
+This establishes merged **local** deployment of the controlled rollout. It does not establish public/cloud deployment, current learning media, or acceptance of flag-on global vocabulary discovery.
