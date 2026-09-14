@@ -178,3 +178,14 @@ A live stability replay then reran the seven regressions plus six improvements:
 The replay used 80,218 input plus 22,963 output tokens across 23 reconciled charges, costing USD 0.946344. The mixed transitions confirm provider-generation and verifier instability rather than a stable vocabulary-ranking defect. Because the 13-case gate failed, no further 12-case smoke or second 90-case matrix was run.
 
 The revised recommendation is to avoid an unsupported ranking tweak. Either split the deterministic catalog/glossary/UI capability from Tutor activation, or put Tutor vocabulary retrieval behind a controlled rollout that can require repeated stability acceptance. A broader generation/verifier reliability change belongs in a separate evaluated initiative.
+
+## Controlled rollout implemented
+
+Revision `8a1d3b6` implements the recommended boundary without changing retrieval weights or prompts:
+
+- unprompted vocabulary discovery is default-off;
+- exact `vocabulary:<id>` context remains available when the learner selects a Glossary entry;
+- `COGENTREX_LEARNING_TUTOR_VOCABULARY_DISCOVERY_ENABLED=true` enables the evaluated global behavior for controlled experiments;
+- the clean backend suite completed with 1,904 passed and 7 skipped.
+
+Direct runtime retrieval against the isolated 3,903-source PostgreSQL candidate observed `FLAG=False`, zero vocabulary results for a general SSE protocol question, and `sse` as the top vocabulary result for explicit `vocabulary:sse` context. This accepts the deterministic catalog/UI/explicit-context slice while keeping the inconclusive global Tutor behavior off by default.

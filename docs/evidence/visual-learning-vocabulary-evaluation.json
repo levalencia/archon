@@ -90,6 +90,17 @@
       "conclusion": "Mixed transitions confirm provider-generation and verifier instability. No deterministic vocabulary-routing defect was demonstrated, so no ranking code was changed."
     }
   },
+  "controlled_rollout": {
+    "revision": "8a1d3b6f9816727a8404247118b7900be4c687f5",
+    "global_vocabulary_discovery_default": false,
+    "explicit_vocabulary_context_available": true,
+    "environment_flag": "COGENTREX_LEARNING_TUTOR_VOCABULARY_DISCOVERY_ENABLED",
+    "runtime_observation": {
+      "general_context_vocabulary_results": 0,
+      "explicit_context_top_vocabulary_id": "sse",
+      "explicit_context_vocabulary_results": 1
+    }
+  },
   "accounting": {
     "charges": 144,
     "charge_states": {"reconciled": 144},
@@ -101,7 +112,7 @@
     "actual_usd": 6.30831325
   },
   "gates": {
-    "backend": "1902 passed, 7 skipped",
+    "backend": "1904 passed, 7 skipped",
     "frontend_unit": "5 passed",
     "svelte_check": "0 errors, 0 warnings",
     "frontend_build": "pass",
@@ -120,7 +131,7 @@
     "No public deployment was performed."
   ],
   "recommendation": {
-    "global_tutor_promotion": "no-go",
-    "vocabulary_catalog_and_ui": "Functional acceptance passed, but do not merge the combined candidate. The 90-case vocabulary ablation did not reproduce a deterministic routing defect behind the live regressions, so an arbitrary ranking change would be unsupported. Split catalog/UI delivery from Tutor activation or add a feature-controlled Tutor rollout with repeated stability acceptance."
+    "global_tutor_vocabulary_discovery": "default-off; evaluated flag-on behavior remains no-go",
+    "vocabulary_catalog_and_ui": "promotion candidate with explicit vocabulary context preserved and unprompted vocabulary discovery disabled by default"
   }
 }
