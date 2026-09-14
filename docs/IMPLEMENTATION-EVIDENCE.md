@@ -40,6 +40,20 @@ production scale, or a tail-latency improvement. The final mean recall@10 was
 0.5268, two medium cases still fell back, and P95 latency increased because weak
 initial generations can invoke one additional bounded provider call.
 
+### Vocabulary candidate evaluation — not promoted
+
+Local candidate `53b62d7` adds the canonical 299-term vocabulary, generated
+glossary, searchable Visual Learning view, validated Tutor context, and 299
+per-term retrieval sources. Its implementation and browser gates pass, and a
+paired blind review improves basic pedagogical pass from 19/30 to 24/30.
+
+The complete 90-case Tutor matrix did not improve globally: deterministic pass
+changed from 80/90 to 79/90, grounded answers from 88/90 to 83/90, citation
+requirements from 85/90 to 84/90, and mean expected-source recall@10 from
+0.5268 to 0.4731. The combined candidate is therefore **not promoted**. See
+[`docs/evidence/visual-learning-vocabulary-evaluation.md`](evidence/visual-learning-vocabulary-evaluation.md)
+and its [machine-readable summary](evidence/visual-learning-vocabulary-evaluation.json).
+
 ### Historical candidate baseline (superseded)
 
 The following records the pre-merge candidate status at `feature/skills-project-instructions-mcp` for historical traceability. Code evidence was anchored at `9eaf49e`; exact-head `verify.sh` PASS at `26e36737` with backend 1,537 passed / 4 skipped, Svelte 0/0, Vitest 53, Playwright 33. These numbers are superseded by the merged main CI results above.
