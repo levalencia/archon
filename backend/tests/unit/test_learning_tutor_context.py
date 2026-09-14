@@ -80,7 +80,20 @@ def _studio(path: Path) -> Path:
         json.dumps(
             {
                 "schema": "cogentrex.visual-learning-studio",
-                "version": 3,
+                "version": 4,
+                "vocabulary": [
+                    {
+                        "id": "preflight-check",
+                        "term": "Preflight check",
+                        "concept_ids": ["application-composition"],
+                        "learn_more": [
+                            {
+                                "path": "docs/course/concepts/application-composition.md",
+                                "label": "Application composition",
+                            }
+                        ],
+                    }
+                ],
                 "concepts": [
                     {
                         "id": "application-composition",
@@ -147,6 +160,23 @@ def test_resolves_concept_and_rejects_client_supplied_unknown_ids(tmp_path: Path
 
     with pytest.raises(ValueError, match="Unknown learning concept"):
         resolver.resolve(LearningContextRequest(view="evidence", concept_id="forged"))
+
+
+def test_resolves_vocabulary_context_and_rejects_forged_term_ids(tmp_path: Path) -> None:
+    resolver = LearningContextResolver(studio_path=_studio(tmp_path / "studio.json"))
+
+    context = resolver.resolve(
+        LearningContextRequest(view="glossary", vocabulary_id="preflight-check")
+    )
+
+    assert context.context_key == "vocabulary:preflight-check"
+    assert context.title == "Preflight check"
+    assert context.concept_ids == ("application-composition",)
+    assert context.vocabulary_id == "preflight-check"
+    assert context.source_references[0]["path"].endswith("application-composition.md")
+
+    with pytest.raises(ValueError, match="Unknown vocabulary term"):
+        resolver.resolve(LearningContextRequest(view="glossary", vocabulary_id="forged"))
 
 
 def test_rejects_timestamp_outside_declared_video_duration(tmp_path: Path) -> None:

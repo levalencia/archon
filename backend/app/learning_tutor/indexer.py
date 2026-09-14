@@ -121,6 +121,39 @@ def collect_learning_corpus(
             for source in _collect_path(root, relative, revision, kind):
                 add(source, concept_key, f"module:{concept.get('module_id')}")
 
+    for vocabulary in studio.get("vocabulary", []):
+        if not isinstance(vocabulary, dict) or not vocabulary.get("id"):
+            continue
+        vocabulary_id = str(vocabulary["id"])
+        concept_ids = tuple(str(item) for item in vocabulary.get("concept_ids", []))
+        aliases = ", ".join(str(item) for item in vocabulary.get("aliases", []))
+        text = "\n\n".join(
+            part
+            for part in (
+                str(vocabulary.get("term") or vocabulary_id),
+                f"Also called: {aliases}" if aliases else "",
+                str(vocabulary.get("definition") or ""),
+                f"In Cogentrex: {vocabulary.get('cogentrex') or ''}",
+            )
+            if part
+        )
+        add(
+            LearningSourceInput(
+                kind="visual",
+                key=f"visual:vocabulary:{vocabulary_id}",
+                title=f"Glossary — {vocabulary.get('term') or vocabulary_id}",
+                text=text,
+                revision=revision,
+                locator={
+                    "route": "/learn?view=glossary",
+                    "vocabulary_id": vocabulary_id,
+                    "concept_id": concept_ids[0] if concept_ids else None,
+                },
+            ),
+            f"vocabulary:{vocabulary_id}",
+            *(f"concept:{item}" for item in concept_ids),
+        )
+
     for relative in sorted(_ALLOWED_EXACT):
         path = root / relative
         if path.is_file() and not path.is_symlink():

@@ -26,6 +26,23 @@ export interface LearningConcept {
   proof: { code: boolean; tests: boolean; evidence: boolean };
 }
 
+export type VocabularyLevel = 'beginner' | 'intermediate' | 'advanced';
+
+export interface VocabularyEntry {
+  id: string;
+  term: string;
+  aliases: string[];
+  category: string;
+  level: VocabularyLevel;
+  definition: string;
+  cogentrex: string;
+  concept_ids: string[];
+  eval_concept_ids: string[];
+  related_ids: string[];
+  learn_more: LearningLink[];
+  media_refs: Array<{ label: string; href: string }>;
+}
+
 export interface LearningModule {
   id: string;
   title: string;
@@ -93,7 +110,7 @@ export interface LearningPackRecipe {
 
 export interface VisualLearningStudio {
   schema: 'cogentrex.visual-learning-studio';
-  version: 3;
+  version: 4;
   generated_from: string[];
   stats: {
     concepts: number;
@@ -101,11 +118,14 @@ export interface VisualLearningStudio {
     stories: number;
     architecture_layers: number;
     learning_packs: number;
+    vocabulary_terms: number;
+    vocabulary_aliases: number;
     statuses: Record<ConceptStatus, number>;
   };
   roadmap: RoadmapPhase[];
   modules: LearningModule[];
   concepts: LearningConcept[];
+  vocabulary: VocabularyEntry[];
   stories: LearningStory[];
   architecture: {
     layers: ArchitectureLayer[];
@@ -150,7 +170,7 @@ export async function loadVisualLearningStudio(
   const studio = (await response.json()) as VisualLearningStudio;
   if (
     studio.schema !== 'cogentrex.visual-learning-studio'
-    || studio.version !== 3
+    || studio.version !== 4
     || studio.stats.concepts !== 67
     || studio.stats.modules !== 16
   ) {
@@ -176,5 +196,29 @@ export function evidenceFilter(
     const matchesStatus = status === 'all' || concept.status === status;
     const haystack = `${concept.title} ${concept.module_title} ${concept.limitations}`.toLowerCase();
     return matchesStatus && (!normalized || haystack.includes(normalized));
+  });
+}
+
+export function vocabularyFilter(
+  entries: VocabularyEntry[],
+  query: string,
+  category: string | 'all',
+  level: VocabularyLevel | 'all',
+): VocabularyEntry[] {
+  const normalized = query.trim().toLowerCase();
+  return entries.filter(entry => {
+    const matchesCategory = category === 'all' || entry.category === category;
+    const matchesLevel = level === 'all' || entry.level === level;
+    const names = [entry.term, ...entry.aliases].map(value => value.toLowerCase());
+    const haystack = [
+      ...names,
+      entry.definition,
+      entry.cogentrex,
+      ...entry.concept_ids,
+      ...entry.eval_concept_ids,
+    ].join(' ').toLowerCase();
+    const matchesQuery = !normalized
+      || (normalized.length <= 2 ? names.includes(normalized) : haystack.includes(normalized));
+    return matchesCategory && matchesLevel && matchesQuery;
   });
 }

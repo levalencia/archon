@@ -65,6 +65,18 @@ test('evidence view preserves status and proof boundaries', async ({ page }) => 
   await expect(details).toContainText('No evidence details are available');
 });
 
+test('glossary exposes searchable beginner definitions and Cogentrex links', async ({ page }) => {
+  await openStudio(page, 'glossary');
+  await expect(page.getByRole('heading', { name: 'Canonical Cogentrex vocabulary' })).toBeVisible();
+  await expect(page.getByText('299 of 299 terms')).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search vocabulary' }).fill('DI');
+  await expect(page.getByRole('button', { name: /Dependency injection/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Readiness/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /Dependency injection/ }).click();
+  await expect(page.getByLabel('Selected vocabulary details')).toContainText('In Cogentrex');
+  await expect(page.getByLabel('Selected vocabulary details')).toContainText('runtime');
+});
+
 test('Present, Listen, and Study expose explicit unpublished-library states', async ({ page }) => {
   await openStudio(page, 'present');
   await expect(page.getByRole('heading', { name: 'Explain Cogentrex visually' })).toBeVisible();
@@ -98,7 +110,7 @@ test('legacy map URL redirects to the structured Stories view', async ({ page })
 test('all studio modes avoid horizontal overflow on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => localStorage.setItem('cogentrex_token', 'playwright-token'));
-  for (const view of ['roadmap', 'stories', 'architecture', 'evidence', 'present', 'listen', 'study']) {
+  for (const view of ['roadmap', 'stories', 'architecture', 'evidence', 'glossary', 'present', 'listen', 'study']) {
     await page.goto(`/learn?view=${view}`);
     await expect(page.getByRole('heading', { name: 'Choose the view that matches your question' })).toBeVisible();
     await expect.poll(async () => page.evaluate(() => document.body.scrollWidth <= document.body.clientWidth)).toBe(true);

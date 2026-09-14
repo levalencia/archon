@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from collections.abc import Iterable
@@ -182,7 +183,7 @@ def _validate_markdown_links(course_root: Path, issues: list[str]) -> None:
                 issues.append(f"{path}: unresolved template placeholder {placeholder}")
         for target in LINK_RE.findall(text):
             target = target.strip().split("#", 1)[0]
-            if not target or target.startswith(("http://", "https://", "mailto:")):
+            if not target or target.startswith(("http://", "https://", "mailto:", "/")):
                 continue
             resolved = (path.parent / target).resolve()
             if not resolved.exists():
@@ -252,6 +253,35 @@ def _validate_catalog(repo_root: Path, course_root: Path, issues: list[str]) -> 
         issues.append("catalog must evidence implemented generic-self-reflection")
 
 
+def _validate_vocabulary(course_root: Path, issues: list[str]) -> None:
+    source = course_root / "reference" / "vocabulary.yaml"
+    glossary = course_root / "reference" / "glossary.md"
+    audit_path = course_root / "reference" / "vocabulary-audit.json"
+    for path in (source, glossary, audit_path):
+        if not path.is_file():
+            issues.append(f"missing vocabulary artifact: {path}")
+    if not glossary.is_file() or not audit_path.is_file():
+        return
+    try:
+        audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        issues.append("vocabulary-audit.json is invalid")
+        return
+    entries = audit.get("entries")
+    if not isinstance(entries, int) or entries < 200:
+        issues.append("canonical vocabulary must contain at least 200 curated terms")
+        return
+    if audit.get("uncovered_catalog_concepts"):
+        issues.append("vocabulary leaves catalog concepts uncovered")
+    if audit.get("uncovered_eval_concept_ids"):
+        issues.append("vocabulary leaves Tutor evaluation concepts uncovered")
+    text = glossary.read_text(encoding="utf-8")
+    if "Generated from `vocabulary.yaml`" not in text:
+        issues.append("glossary.md is not generated from canonical vocabulary")
+    if len(re.findall(r"^## ", text, re.MULTILINE)) != entries:
+        issues.append("glossary heading count does not match vocabulary audit")
+
+
 def validate_repository(repo_root: Path) -> list[str]:
     repo_root = repo_root.resolve()
     course_root = repo_root / "docs" / "course"
@@ -265,6 +295,7 @@ def validate_repository(repo_root: Path) -> list[str]:
         _validate_concept(concept, issues)
     _validate_markdown_links(course_root, issues)
     _validate_catalog(repo_root, course_root, issues)
+    _validate_vocabulary(course_root, issues)
     return sorted(set(issues))
 
 

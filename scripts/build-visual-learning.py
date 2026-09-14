@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "docs/course/concept-catalog.yaml"
 CURATION = ROOT / "docs/visual-learning/studio-curation.yaml"
 LEARNING_ARTIFACTS = ROOT / "docs/visual-learning/learning-artifacts.yaml"
+VOCABULARY = ROOT / "docs/course/reference/vocabulary.yaml"
+GLOSSARY = ROOT / "docs/course/reference/glossary.md"
 PROMPTBOOK = ROOT / "docs/visual-learning/hermes-generation-promptbook.md"
 RUNBOOK = ROOT / "docs/visual-learning/hermes-generation-runbook.md"
 DEFAULT_OUTPUT = ROOT / "frontend/static/learning/cogentrex-studio.json"
@@ -97,9 +99,7 @@ def _validated_file(path: str, owner: str) -> None:
         raise ValueError(f"{owner}: missing or unsafe referenced file: {path}")
 
 
-def _load_concepts() -> tuple[
-    list[dict[str, Any]], list[dict[str, Any]], dict[str, int]
-]:
+def _load_concepts() -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     raw = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
     if not isinstance(raw, list) or len(raw) != 67:
         count = len(raw) if isinstance(raw, list) else "invalid"
@@ -221,9 +221,7 @@ def _validate_architecture(
             components.add(component_id)
             unknown = set(component.get("concept_ids", [])) - known_concepts
             if unknown:
-                raise ValueError(
-                    f"component {component_id} references {sorted(unknown)}"
-                )
+                raise ValueError(f"component {component_id} references {sorted(unknown)}")
     allowed_types = {
         "CALLS",
         "ROUTES",
@@ -256,9 +254,7 @@ def _load_learning_library() -> dict[str, Any]:
         ids.add(pack["id"])
         if pack.get("language") != "en":
             raise ValueError(f"learning pack {pack['id']} must use English")
-        pack["sources"] = list(
-            dict.fromkeys(priority + pack.get("sources", []))
-        )
+        pack["sources"] = list(dict.fromkeys(priority + pack.get("sources", [])))
         for path in pack["sources"]:
             _validated_file(path, pack["id"])
         pack["source_count"] = len(pack["sources"])
@@ -269,6 +265,37 @@ def _load_learning_library() -> dict[str, Any]:
     config["promptbook_href"] = GITHUB_BASE + PROMPTBOOK.relative_to(ROOT).as_posix()
     config["runbook_href"] = GITHUB_BASE + RUNBOOK.relative_to(ROOT).as_posix()
     return config
+
+
+def _load_vocabulary() -> list[dict[str, Any]]:
+    payload = yaml.safe_load(VOCABULARY.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        raise ValueError("learning vocabulary must use schema version one")
+    entries = payload.get("entries")
+    if not isinstance(entries, list) or len(entries) < 200:
+        raise ValueError("learning vocabulary is not extensive enough")
+    seen: set[str] = set()
+    result: list[dict[str, Any]] = []
+    for entry in entries:
+        identifier = entry["id"]
+        if identifier in seen:
+            raise ValueError(f"duplicate vocabulary id: {identifier}")
+        seen.add(identifier)
+        links = []
+        for path in entry["learn_more"]:
+            _validated_file(path, identifier)
+            links.append(_link(path))
+        result.append(
+            {
+                **entry,
+                "aliases": list(entry.get("aliases", [])),
+                "eval_concept_ids": list(entry.get("eval_concept_ids", [])),
+                "related_ids": list(entry.get("related_ids", [])),
+                "media_refs": list(entry.get("media_refs", [])),
+                "learn_more": links,
+            }
+        )
+    return result
 
 
 def build_studio() -> dict[str, Any]:
@@ -283,22 +310,21 @@ def build_studio() -> dict[str, Any]:
     for phase in roadmap:
         unknown = set(phase["module_ids"]) - module_ids
         if unknown:
-            raise ValueError(
-                f"roadmap phase {phase['id']} references {sorted(unknown)}"
-            )
+            raise ValueError(f"roadmap phase {phase['id']} references {sorted(unknown)}")
     stories = _validate_stories(curation.get("stories", []), known_concepts)
-    architecture = _validate_architecture(
-        curation.get("architecture", {}), known_concepts
-    )
+    architecture = _validate_architecture(curation.get("architecture", {}), known_concepts)
     learning_library = _load_learning_library()
+    vocabulary = _load_vocabulary()
 
     return {
         "schema": "cogentrex.visual-learning-studio",
-        "version": 3,
+        "version": 4,
         "generated_from": [
             "docs/course/concept-catalog.yaml",
             "docs/course/concepts/*.md",
             "docs/course/modules/*/README.md",
+            "docs/course/reference/vocabulary.yaml",
+            "docs/course/reference/glossary.md",
             "docs/visual-learning/studio-curation.yaml",
             "docs/visual-learning/learning-artifacts.yaml",
             "docs/visual-learning/hermes-generation-promptbook.md",
@@ -310,11 +336,14 @@ def build_studio() -> dict[str, Any]:
             "stories": len(stories),
             "architecture_layers": len(architecture.get("layers", [])),
             "learning_packs": len(learning_library.get("packs", [])),
+            "vocabulary_terms": len(vocabulary),
+            "vocabulary_aliases": sum(len(entry.get("aliases", [])) for entry in vocabulary),
             "statuses": status_counts,
         },
         "roadmap": roadmap,
         "modules": modules,
         "concepts": concepts,
+        "vocabulary": vocabulary,
         "stories": stories,
         "architecture": architecture,
         "learning_library": learning_library,
@@ -332,13 +361,8 @@ def main() -> None:
     args = parser.parse_args()
     payload = render(build_studio())
     if args.check:
-        if (
-            not args.output.is_file()
-            or args.output.read_text(encoding="utf-8") != payload
-        ):
-            raise SystemExit(
-                f"visual learning studio is stale: run {Path(__file__).name}"
-            )
+        if not args.output.is_file() or args.output.read_text(encoding="utf-8") != payload:
+            raise SystemExit(f"visual learning studio is stale: run {Path(__file__).name}")
         print("Visual learning studio is current: 67 concepts, 16 modules")
         return
     args.output.parent.mkdir(parents=True, exist_ok=True)

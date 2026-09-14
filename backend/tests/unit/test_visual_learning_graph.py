@@ -19,15 +19,34 @@ def test_studio_preserves_catalog_and_view_counts() -> None:
     studio = builder.build_studio()
 
     assert studio["schema"] == "cogentrex.visual-learning-studio"
-    assert studio["version"] == 3
+    assert studio["version"] == 4
     assert studio["stats"] == {
         "concepts": 67,
         "modules": 16,
         "stories": 5,
         "architecture_layers": 5,
         "learning_packs": 6,
+        "vocabulary_terms": 299,
+        "vocabulary_aliases": 540,
         "statuses": {"deferred": 7, "implemented": 60, "partial": 0},
     }
+
+
+def test_studio_contains_searchable_canonical_vocabulary() -> None:
+    studio = builder.build_studio()
+
+    assert len(studio["vocabulary"]) >= 200
+    assert "docs/course/reference/vocabulary.yaml" in studio["generated_from"]
+    assert "docs/course/reference/glossary.md" in studio["generated_from"]
+    by_id = {entry["id"]: entry for entry in studio["vocabulary"]}
+    assert by_id["class"]["term"] == "Class"
+    assert "classes-and-objects" in by_id["class"]["eval_concept_ids"]
+    assert by_id["preflight-check"]["media_refs"][0]["href"].endswith("t=235.7")
+    assert "python-protocols-di" in by_id["protocol"]["concept_ids"]
+    for entry in studio["vocabulary"]:
+        assert entry["definition"]
+        assert entry["cogentrex"]
+        assert entry["learn_more"]
 
 
 def test_every_concept_has_truthful_learning_and_proof_metadata() -> None:

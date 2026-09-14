@@ -1,0 +1,137 @@
+{
+  "schema": "cogentrex.visual-learning-vocabulary-evidence",
+  "candidate_revision": "53b62d73003a9d73abc40458e8ca870ce72e62b1",
+  "dataset_version": 1,
+  "catalog": {
+    "canonical_terms": 299,
+    "aliases": 540,
+    "official_concepts_covered": 67,
+    "evaluation_concepts_covered": 37,
+    "declared_learning_terms_covered": 80
+  },
+  "candidate_index": {
+    "sources": 3901,
+    "chunks": 5044,
+    "vocabulary_sources": 299,
+    "video_sources": 64,
+    "embedding_provider": "local",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "embedding_dimensions": 384
+  },
+  "deterministic": {
+    "baseline": {
+      "basic": {"cases": 30, "deterministic_pass": 30, "grounded": 30, "citation_requirement_met": 30, "web_policy_met": 30, "errors": 0},
+      "medium": {"cases": 30, "deterministic_pass": 23, "grounded": 28, "citation_requirement_met": 26, "web_policy_met": 28, "errors": 0},
+      "hard": {"cases": 30, "deterministic_pass": 27, "grounded": 30, "citation_requirement_met": 29, "web_policy_met": 28, "errors": 0},
+      "overall": {"cases": 90, "deterministic_pass": 80, "grounded": 88, "citation_requirement_met": 85, "web_policy_met": 86, "errors": 0},
+      "latency_seconds": {"mean": 31.317, "median": 30.239, "p95": 62.678, "max": 75.435},
+      "claims": {"supported": 413, "unsupported": 585},
+      "glossary_citations": 13,
+      "mean_retrieval_recall": {"recall@1": 0.212, "recall@3": 0.3769, "recall@10": 0.5268}
+    },
+    "candidate": {
+      "basic": {"cases": 30, "deterministic_pass": 30, "grounded": 30, "citation_requirement_met": 30, "web_policy_met": 30, "errors": 0},
+      "medium": {"cases": 30, "deterministic_pass": 26, "grounded": 27, "citation_requirement_met": 28, "web_policy_met": 29, "errors": 0},
+      "hard": {"cases": 30, "deterministic_pass": 23, "grounded": 26, "citation_requirement_met": 26, "web_policy_met": 28, "errors": 0},
+      "overall": {"cases": 90, "deterministic_pass": 79, "grounded": 83, "citation_requirement_met": 84, "web_policy_met": 87, "errors": 0},
+      "latency_seconds": {"mean": 30.404, "median": 29.093, "p95": 59.477, "max": 65.734},
+      "claims": {"supported": 459, "unsupported": 516},
+      "glossary_citations": 116,
+      "mean_retrieval_recall": {"recall@1": 0.1657, "recall@3": 0.3546, "recall@10": 0.4731}
+    }
+  },
+  "paired_deterministic": {
+    "deterministic_pass": {"baseline": 80, "candidate": 79, "delta_percentage_points": -1.11, "improved_cases": 6, "regressed_cases": 7, "bootstrap_95ci_percentage_points": [-8.89, 6.67], "mcnemar_exact_p": 1.0},
+    "grounded": {"baseline": 88, "candidate": 83, "delta_percentage_points": -5.56, "improved_cases": 1, "regressed_cases": 6, "bootstrap_95ci_percentage_points": [-11.11, 0.0], "mcnemar_exact_p": 0.125},
+    "citation_requirement_met": {"baseline": 85, "candidate": 84, "delta_percentage_points": -1.11, "improved_cases": 5, "regressed_cases": 6, "bootstrap_95ci_percentage_points": [-7.78, 5.56], "mcnemar_exact_p": 1.0},
+    "web_policy_met": {"baseline": 86, "candidate": 87, "delta_percentage_points": 1.11, "improved_cases": 1, "regressed_cases": 0, "bootstrap_95ci_percentage_points": [0.0, 3.33], "mcnemar_exact_p": 1.0}
+  },
+  "pedagogical": {
+    "baseline": {
+      "basic": {"pedagogical_pass": 19, "cogentrex_application_pass": 22, "definition_first": 23, "coverage": {"full": 17, "partial": 11, "poor": 2}, "misleading_or_unsupported": 0},
+      "medium": {"pedagogical_pass": 10, "cogentrex_application_pass": 21, "definition_first": 1, "coverage": {"full": 4, "partial": 17, "poor": 9}, "misleading_or_unsupported": 1},
+      "hard": {"pedagogical_pass": 17, "cogentrex_application_pass": 26, "definition_first": 0, "coverage": {"full": 0, "partial": 24, "poor": 6}, "misleading_or_unsupported": 0},
+      "overall": {"pedagogical_pass": 46, "cogentrex_application_pass": 69, "definition_first": 24, "coverage": {"full": 21, "partial": 52, "poor": 17}, "misleading_or_unsupported": 1}
+    },
+    "candidate": {
+      "basic": {"pedagogical_pass": 24, "cogentrex_application_pass": 29, "definition_first": 25, "coverage": {"full": 22, "partial": 8, "poor": 0}, "misleading_or_unsupported": 0},
+      "medium": {"pedagogical_pass": 7, "cogentrex_application_pass": 17, "definition_first": 4, "coverage": {"full": 2, "partial": 15, "poor": 13}, "misleading_or_unsupported": 1},
+      "hard": {"pedagogical_pass": 16, "cogentrex_application_pass": 22, "definition_first": 0, "coverage": {"full": 0, "partial": 21, "poor": 9}, "misleading_or_unsupported": 0},
+      "overall": {"pedagogical_pass": 47, "cogentrex_application_pass": 68, "definition_first": 29, "coverage": {"full": 24, "partial": 44, "poor": 22}, "misleading_or_unsupported": 1}
+    },
+    "preference": {"candidate": 41, "baseline": 31, "tie": 18},
+    "paired": {
+      "pedagogical_pass": {"baseline": 46, "candidate": 47, "delta_percentage_points": 1.11, "improved_cases": 11, "regressed_cases": 10, "bootstrap_95ci_percentage_points": [-8.89, 11.11], "mcnemar_exact_p": 1.0},
+      "cogentrex_application_pass": {"baseline": 69, "candidate": 68, "delta_percentage_points": -1.11, "improved_cases": 10, "regressed_cases": 11, "bootstrap_95ci_percentage_points": [-11.11, 8.89], "mcnemar_exact_p": 1.0}
+    }
+  },
+  "post_evaluation_diagnosis": {
+    "offline_vocabulary_ablation": {
+      "cases": 90,
+      "source_count_with_vocabulary": 3902,
+      "source_count_without_vocabulary": 3603,
+      "recall_changed_cases": 8,
+      "changed_case_ids": ["BASIC-005", "BASIC-011", "BASIC-012", "BASIC-013", "BASIC-017", "BASIC-024", "BASIC-026", "HARD-007"],
+      "conclusion": "None of the seven deterministic live regressions changed recall when the 299 vocabulary sources were removed. The ranking-regression hypothesis was not reproduced."
+    },
+    "stability_replay": {
+      "cases": 13,
+      "deterministic_pass": 8,
+      "grounded": 9,
+      "errors": 0,
+      "recovered_prior_regressions": ["MEDIUM-013", "HARD-012", "HARD-017"],
+      "persistent_prior_regressions": ["MEDIUM-023", "HARD-002", "HARD-026", "HARD-030"],
+      "previous_improvement_that_failed_replay": ["HARD-022"],
+      "charges": 23,
+      "input_tokens": 80218,
+      "output_tokens": 22963,
+      "total_tokens": 103181,
+      "actual_usd": 0.946344,
+      "conclusion": "Mixed transitions confirm provider-generation and verifier instability. No deterministic vocabulary-routing defect was demonstrated, so no ranking code was changed."
+    }
+  },
+  "controlled_rollout": {
+    "revision": "8a1d3b6f9816727a8404247118b7900be4c687f5",
+    "global_vocabulary_discovery_default": false,
+    "explicit_vocabulary_context_available": true,
+    "environment_flag": "COGENTREX_LEARNING_TUTOR_VOCABULARY_DISCOVERY_ENABLED",
+    "runtime_observation": {
+      "general_context_vocabulary_results": 0,
+      "explicit_context_top_vocabulary_id": "sse",
+      "explicit_context_vocabulary_results": 1
+    }
+  },
+  "accounting": {
+    "charges": 144,
+    "charge_states": {"reconciled": 144},
+    "input_tokens": 481679,
+    "output_tokens": 160209,
+    "total_tokens": 641888,
+    "cache_read_tokens": 36534,
+    "cache_write_tokens": 47277,
+    "actual_usd": 6.30831325
+  },
+  "gates": {
+    "backend": "1904 passed, 7 skipped",
+    "frontend_unit": "5 passed",
+    "svelte_check": "0 errors, 0 warnings",
+    "frontend_build": "pass",
+    "playwright": "9 passed",
+    "ruff_format_bandit": "pass",
+    "docs_and_generators": "pass"
+  },
+  "invalid_batches_excluded": [
+    "Candidate smoke with embeddings/provider mismatch: Foundry embeddings returned HTTP 429 before persistence.",
+    "Candidate smoke with learning media and web supplement disabled: 8/12 plus one HTTP 404."
+  ],
+  "limitations": [
+    "The external media library contains review-ready artifacts from revision 33c56af and was not regenerated.",
+    "The blind pedagogical judge is subjective model evidence; paired labels were randomized and decoded only after scoring.",
+    "The current candidate improves basic pedagogy but does not improve global deterministic, grounding, citation, or expected-source recall metrics.",
+    "No public deployment was performed."
+  ],
+  "recommendation": {
+    "global_tutor_vocabulary_discovery": "default-off; evaluated flag-on behavior remains no-go",
+    "vocabulary_catalog_and_ui": "promotion candidate with explicit vocabulary context preserved and unprompted vocabulary discovery disabled by default"
+  }
+}
