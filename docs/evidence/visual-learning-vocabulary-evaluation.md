@@ -158,3 +158,23 @@ The external learning-media library was mounted read-only and not modified. Its 
 - **Push, PR, merge, stable deployment, or media regeneration:** not performed.
 
 The next repair should preserve the demonstrated basic-question benefit while restoring medium/hard expected-source recall and grounding. It should be evaluated first on the seven regressions plus the six improvements, then on the 12-case smoke, and finally on the frozen 90-case matrix only if those gates pass.
+
+## Post-evaluation diagnosis
+
+The proposed query-aware ranking repair was not implemented because the defect could not be reproduced deterministically.
+
+An offline ablation ran all 90 questions against the same 3,902-source local-embedding index, then removed only the 299 `visual:vocabulary:*` sources and repeated retrieval. Recall changed for eight cases: seven basic cases and `HARD-007`. None of the seven deterministic live regressions changed. `HARD-007` already failed both baseline and candidate because of web policy, not grounding. The vocabulary-source displacement hypothesis therefore does not explain the observed live regressions.
+
+A live stability replay then reran the seven regressions plus six improvements:
+
+- 13 attempted and completed;
+- 8 deterministic passes;
+- 9 grounded answers;
+- zero execution errors;
+- previous regressions `MEDIUM-013`, `HARD-012`, and `HARD-017` recovered;
+- `MEDIUM-023`, `HARD-002`, `HARD-026`, and `HARD-030` remained failed;
+- previously improved `HARD-022` failed the replay.
+
+The replay used 80,218 input plus 22,963 output tokens across 23 reconciled charges, costing USD 0.946344. The mixed transitions confirm provider-generation and verifier instability rather than a stable vocabulary-ranking defect. Because the 13-case gate failed, no further 12-case smoke or second 90-case matrix was run.
+
+The revised recommendation is to avoid an unsupported ranking tweak. Either split the deterministic catalog/glossary/UI capability from Tutor activation, or put Tutor vocabulary retrieval behind a controlled rollout that can require repeated stability acceptance. A broader generation/verifier reliability change belongs in a separate evaluated initiative.

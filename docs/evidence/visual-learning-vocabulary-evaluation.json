@@ -65,6 +65,31 @@
       "cogentrex_application_pass": {"baseline": 69, "candidate": 68, "delta_percentage_points": -1.11, "improved_cases": 10, "regressed_cases": 11, "bootstrap_95ci_percentage_points": [-11.11, 8.89], "mcnemar_exact_p": 1.0}
     }
   },
+  "post_evaluation_diagnosis": {
+    "offline_vocabulary_ablation": {
+      "cases": 90,
+      "source_count_with_vocabulary": 3902,
+      "source_count_without_vocabulary": 3603,
+      "recall_changed_cases": 8,
+      "changed_case_ids": ["BASIC-005", "BASIC-011", "BASIC-012", "BASIC-013", "BASIC-017", "BASIC-024", "BASIC-026", "HARD-007"],
+      "conclusion": "None of the seven deterministic live regressions changed recall when the 299 vocabulary sources were removed. The ranking-regression hypothesis was not reproduced."
+    },
+    "stability_replay": {
+      "cases": 13,
+      "deterministic_pass": 8,
+      "grounded": 9,
+      "errors": 0,
+      "recovered_prior_regressions": ["MEDIUM-013", "HARD-012", "HARD-017"],
+      "persistent_prior_regressions": ["MEDIUM-023", "HARD-002", "HARD-026", "HARD-030"],
+      "previous_improvement_that_failed_replay": ["HARD-022"],
+      "charges": 23,
+      "input_tokens": 80218,
+      "output_tokens": 22963,
+      "total_tokens": 103181,
+      "actual_usd": 0.946344,
+      "conclusion": "Mixed transitions confirm provider-generation and verifier instability. No deterministic vocabulary-routing defect was demonstrated, so no ranking code was changed."
+    }
+  },
   "accounting": {
     "charges": 144,
     "charge_states": {"reconciled": 144},
@@ -96,6 +121,6 @@
   ],
   "recommendation": {
     "global_tutor_promotion": "no-go",
-    "vocabulary_catalog_and_ui": "Functional acceptance passed, but do not merge the combined candidate until Tutor retrieval regressions are resolved or the change is split behind a controlled routing boundary."
+    "vocabulary_catalog_and_ui": "Functional acceptance passed, but do not merge the combined candidate. The 90-case vocabulary ablation did not reproduce a deterministic routing defect behind the live regressions, so an arbitrary ranking change would be unsupported. Split catalog/UI delivery from Tutor activation or add a feature-controlled Tutor rollout with repeated stability acceptance."
   }
 }
