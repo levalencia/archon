@@ -177,6 +177,12 @@ The Visual Learning Studio operates in two modes:
 | **Base** (default after clone) | Roadmap, Stories, Architecture, Evidence, and the searchable Glossary from the tracked Studio manifest. Present, Listen, and Study report that published media is unavailable. | Nothing extra needed. |
 | **Rich** (after media install) | Everything above **plus** MP3 audio, MP4 video, high-fidelity SVG diagrams, and HTML presentation decks. | Install the checksummed media package (see below). |
 
+### Tutor vocabulary rollout
+
+The Glossary and its validated `vocabulary_id` context are available by default. When a learner explicitly selects a glossary entry, the Tutor may retrieve that exact vocabulary source. Unprompted discovery of vocabulary sources from other Tutor views is default-off because the full quality matrix did not establish a global improvement.
+
+Operators can enable the evaluated rollout with `COGENTREX_LEARNING_TUTOR_VOCABULARY_DISCOVERY_ENABLED=true`. Treat that flag as a quality experiment rather than a production-readiness claim; rerun the frozen Tutor evaluation before changing the default.
+
 ### Install rich media (online)
 
 ```bash

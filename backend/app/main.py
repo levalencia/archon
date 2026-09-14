@@ -382,6 +382,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.embedding_service,
             redactor,
             candidate_limit=settings.vector_search_candidate_limit,
+            vocabulary_discovery_enabled=settings.learning_tutor_vocabulary_discovery_enabled,
         )
         learning_sessions = LearningTutorRepository(auth_store.session_factory, redactor)
         packaged_studio = Path("/app/learning/cogentrex-studio.json")

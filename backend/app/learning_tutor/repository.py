@@ -139,12 +139,14 @@ class LearningKnowledgeRepository:
         candidate_limit: int = 10_000,
         chunk_size: int = 1_500,
         chunk_overlap: int = 120,
+        vocabulary_discovery_enabled: bool = False,
     ) -> None:
         self._sf = session_factory
         self._embeddings = embeddings
         self._redactor = redactor
         self._candidate_limit = candidate_limit
         self._chunker = RecursiveChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        self._vocabulary_discovery_enabled = vocabulary_discovery_enabled
 
     async def sync(self, sources: list[LearningSourceInput]) -> dict[str, int]:
         """Idempotently replace changed sources and prune entries absent from the manifest."""
@@ -343,6 +345,16 @@ class LearningKnowledgeRepository:
                 locator = json.loads(str(source.locator_json))
                 stored_contexts = tuple(json.loads(str(source.context_keys_json)))
             except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            vocabulary_id = str(locator.get("vocabulary_id") or "")
+            explicit_vocabulary_context = bool(
+                vocabulary_id and context_keys and f"vocabulary:{vocabulary_id}" in context_keys
+            )
+            if (
+                vocabulary_id
+                and not self._vocabulary_discovery_enabled
+                and not explicit_vocabulary_context
+            ):
                 continue
             if not _matches_embedding_space(
                 str(chunk.metadata_json),
