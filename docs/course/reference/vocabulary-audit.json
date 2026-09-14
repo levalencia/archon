@@ -1,0 +1,40 @@
+{
+  "schema": "cogentrex.learning-vocabulary-audit",
+  "version": 1,
+  "entries": 299,
+  "aliases": 540,
+  "categories": {
+    "context-memory": 31,
+    "delivery-media": 24,
+    "evaluation": 16,
+    "foundations": 9,
+    "knowledge-quality": 20,
+    "mcp-delegation": 11,
+    "observability-operations": 30,
+    "python-architecture": 42,
+    "runtime": 53,
+    "tools-policy-security": 63
+  },
+  "levels": {
+    "advanced": 47,
+    "beginner": 119,
+    "intermediate": 133
+  },
+  "catalog_concepts": 67,
+  "catalog_concepts_covered": 67,
+  "uncovered_catalog_concepts": [],
+  "eval_concept_ids": 37,
+  "eval_concept_ids_covered": 37,
+  "uncovered_eval_concept_ids": [],
+  "declared_learning_terms": 80,
+  "declared_learning_terms_covered": 80,
+  "uncovered_declared_learning_terms": [],
+  "course_markdown_files": 116,
+  "concept_pages": 65,
+  "modules": 16,
+  "code_walkthroughs": 12,
+  "evaluation_cases": 90,
+  "media_references": 22,
+  "source": "docs/course/reference/vocabulary.yaml",
+  "generated_glossary": "docs/course/reference/glossary.md"
+}

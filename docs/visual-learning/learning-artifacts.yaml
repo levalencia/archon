@@ -8,6 +8,8 @@ source_priority:
 - docs/REMAINING-DEFERRED-GAPS.md
 - docs/ARCHITECTURE-DIAGRAMS.md
 - docs/course/README.md
+- docs/course/reference/vocabulary.yaml
+- docs/course/reference/glossary.md
 packs:
 - id: system-overview
   title: Cogentrex — System Overview

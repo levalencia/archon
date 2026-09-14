@@ -25,6 +25,10 @@ from app.services.db_store import (
 from app.services.vector_store import cosine_similarity
 
 _TOKEN = re.compile(r"[a-z0-9_./:-]+")
+_DEFINITION_QUERY = re.compile(
+    r"\b(?:what\s+is|what\s+are|what(?:'s|\s+does)|define|meaning\s+of|difference\s+between)\b",
+    re.IGNORECASE,
+)
 
 # Deterministic concept aliases: maps short/colloquial forms to canonical expansions.
 _CONCEPT_ALIASES: dict[str, list[str]] = {
@@ -365,17 +369,29 @@ class LearningKnowledgeRepository:
                 if alias_hits:
                     lexical = min(1.0, lexical + 0.3 * alias_hits / len(expanded_terms))
             context = 1.0 if context_keys and context_keys.intersection(stored_contexts) else 0.0
+            vocabulary_context = (
+                1.0
+                if context_keys
+                and any(
+                    key.startswith("vocabulary:") and key in stored_contexts for key in context_keys
+                )
+                else 0.0
+            )
             # Exact symbol/file/path matching
             exact_symbol = _exact_symbol_score(question, locator, haystack)
+            definition_source = _definition_source_score(question, locator)
             if expanded_terms or exact_symbol:
                 score = 0.45 * dense + 0.35 * lexical + 0.1 * context + 0.1 * exact_symbol
             else:
                 score = 0.5 * dense + 0.4 * lexical + 0.1 * context
+            score = min(1.0, score + 0.2 * definition_source + 0.25 * vocabulary_context)
             components = {
                 "dense": round(dense, 4),
                 "lexical": round(lexical, 4),
                 "context": round(context, 4),
+                "vocabulary_context": round(vocabulary_context, 4),
                 "exact_symbol": round(exact_symbol, 4),
+                "definition_source": round(definition_source, 4),
                 "final": round(score, 4),
             }
             ranked.append(
@@ -534,6 +550,21 @@ def _matches_embedding_space(metadata_json: str, *, provider: str, model: str) -
     return (
         metadata.get("embedding_provider") == provider and metadata.get("embedding_model") == model
     )
+
+
+def _definition_source_score(question: str, locator: dict[str, Any]) -> float:
+    if not _DEFINITION_QUERY.search(question):
+        return 0.0
+    if locator.get("vocabulary_id"):
+        return 1.0
+    path = str(locator.get("path") or "")
+    if path == "docs/course/reference/glossary.md":
+        return 1.0
+    if path.startswith("docs/course/concepts/"):
+        return 0.75
+    if path.startswith("docs/course/modules/"):
+        return 0.4
+    return 0.0
 
 
 def _lexical_score(query_tokens: set[str], phrase: str, haystack: str) -> float:

@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Build the canonical beginner glossary and vocabulary coverage report."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SOURCE = ROOT / "docs/course/reference/vocabulary.yaml"
+DEFAULT_GLOSSARY = ROOT / "docs/course/reference/glossary.md"
+DEFAULT_AUDIT = ROOT / "docs/course/reference/vocabulary-audit.json"
+CATALOG = ROOT / "docs/course/concept-catalog.yaml"
+EVALS = ROOT / "backend/evals/learning_tutor/concepts-v1.json"
+ALLOWED_CATEGORIES = {
+    "foundations",
+    "python-architecture",
+    "runtime",
+    "tools-policy-security",
+    "context-memory",
+    "knowledge-quality",
+    "evaluation",
+    "mcp-delegation",
+    "observability-operations",
+    "delivery-media",
+}
+ALLOWED_LEVELS = {"beginner", "intermediate", "advanced"}
+_SAFE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def normalize_term(value: str) -> str:
+    """Normalize a term or alias for uniqueness and lookup."""
+    return re.sub(r"\s+", " ", value.strip().casefold().strip("`*_"))
+
+
+def load_vocabulary(path: Path = DEFAULT_SOURCE) -> dict[str, Any]:
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        raise ValueError("vocabulary source must be a version-one object")
+    entries = payload.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("vocabulary entries must be a non-empty list")
+
+    catalog = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
+    concept_ids = {item["id"] for item in catalog}
+    ids: set[str] = set()
+    terms: dict[str, str] = {}
+    aliases: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("every vocabulary entry must be an object")
+        identifier = entry.get("id")
+        term = entry.get("term")
+        if not isinstance(identifier, str) or not _SAFE_ID.fullmatch(identifier):
+            raise ValueError(f"invalid vocabulary id: {identifier}")
+        if identifier in ids:
+            raise ValueError(f"duplicate vocabulary id: {identifier}")
+        ids.add(identifier)
+        if not isinstance(term, str) or not term.strip():
+            raise ValueError(f"{identifier}: term is required")
+        normalized = normalize_term(term)
+        if normalized in terms:
+            raise ValueError(f"duplicate vocabulary term: {term}")
+        terms[normalized] = identifier
+        if entry.get("category") not in ALLOWED_CATEGORIES:
+            raise ValueError(f"{identifier}: unsupported category")
+        if entry.get("level") not in ALLOWED_LEVELS:
+            raise ValueError(f"{identifier}: unsupported level")
+        for field in ("definition", "cogentrex"):
+            if not isinstance(entry.get(field), str) or len(entry[field].strip()) < 40:
+                raise ValueError(f"{identifier}: {field} is too thin")
+        for field in (
+            "aliases",
+            "concept_ids",
+            "eval_concept_ids",
+            "related_ids",
+            "learn_more",
+            "media_refs",
+        ):
+            if not isinstance(entry.get(field, []), list):
+                raise ValueError(f"{identifier}: {field} must be a list")
+        unknown = set(entry.get("concept_ids", [])) - concept_ids
+        if unknown:
+            raise ValueError(f"{identifier}: unknown concept ids: {sorted(unknown)}")
+        for linked_path in entry.get("learn_more", []):
+            target = (ROOT / linked_path).resolve()
+            if ROOT not in target.parents or not target.is_file():
+                raise ValueError(f"{identifier}: missing or unsafe learn_more path: {linked_path}")
+        for alias in entry.get("aliases", []):
+            if not isinstance(alias, str) or not alias.strip():
+                raise ValueError(f"{identifier}: alias must be non-empty text")
+            normalized_alias = normalize_term(alias)
+            owner = aliases.get(normalized_alias) or terms.get(normalized_alias)
+            if owner is not None and owner != identifier:
+                raise ValueError(f"duplicate vocabulary alias {alias}: {owner} and {identifier}")
+            aliases[normalized_alias] = identifier
+
+    for entry in entries:
+        unknown_related = set(entry.get("related_ids", [])) - ids
+        if unknown_related:
+            raise ValueError(f"{entry['id']}: unknown related ids: {sorted(unknown_related)}")
+    return payload
+
+
+def _relative_link(path: str) -> str:
+    return Path(os.path.relpath(ROOT / path, DEFAULT_GLOSSARY.parent)).as_posix()
+
+
+def render_glossary(vocabulary: dict[str, Any]) -> str:
+    entries = sorted(vocabulary["entries"], key=lambda item: item["term"].casefold())
+    lines = [
+        "# Beginner glossary",
+        "",
+        "> Generated from `vocabulary.yaml`. Do not edit this file directly. Each term is a",
+        "> heading-scoped source so the Learning Tutor can retrieve one definition at a time.",
+        "",
+        "Use this page for orientation. Linked concept pages remain the canonical deep teaching",
+        "source, and implementation truth remains in source code, tests, and evidence documents.",
+        "",
+    ]
+    for entry in entries:
+        lines.extend([f"## {entry['term']}", ""])
+        aliases = entry.get("aliases", [])
+        if aliases:
+            lines.extend([f"**Also called:** {', '.join(aliases)}", ""])
+        lines.extend(
+            [
+                f"**Level:** {entry['level']} · **Category:** {entry['category']}",
+                "",
+                entry["definition"].strip(),
+                "",
+                f"**In Cogentrex:** {entry['cogentrex'].strip()}",
+                "",
+            ]
+        )
+        links = [
+            f"[{Path(path).stem.replace('-', ' ').title()}]({_relative_link(path)})"
+            for path in entry["learn_more"]
+        ]
+        lines.extend([f"**Learn more:** {' · '.join(links)}", ""])
+        if entry.get("media_refs"):
+            media = [
+                f"[{item['label']}]({item['href']})" if isinstance(item, dict) else str(item)
+                for item in entry["media_refs"]
+            ]
+            lines.extend([f"**Watch/listen:** {' · '.join(media)}", ""])
+        related = entry.get("related_ids", [])
+        if related:
+            labels = {item["id"]: item["term"] for item in entries}
+            lines.extend(
+                [
+                    "**Related:** " + " · ".join(f"[{labels[item]}](#{item})" for item in related),
+                    "",
+                ]
+            )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def declared_learning_terms() -> set[str]:
+    """Collect vocabulary explicitly declared by canonical modules and concept pages."""
+    declared: set[str] = set()
+    for path in (ROOT / "docs/course").rglob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        for heading in ("Prerequisites and vocabulary", "Precision vocabulary"):
+            section = re.search(
+                rf"^## {re.escape(heading)}\s*$\n(.*?)(?=^##\s|\Z)",
+                text,
+                re.MULTILINE | re.DOTALL,
+            )
+            if section:
+                declared.update(
+                    normalize_term(term.rstrip("*"))
+                    for term in re.findall(
+                        r"^\s*-\s+\*\*(.+?)(?::|\*\*)", section.group(1), re.MULTILINE
+                    )
+                )
+    return declared
+
+
+def build_coverage_audit(vocabulary: dict[str, Any]) -> dict[str, Any]:
+    entries = vocabulary["entries"]
+    covered = {concept for entry in entries for concept in entry["concept_ids"]}
+    covered_eval = {
+        concept
+        for entry in entries
+        for concept in (*entry["concept_ids"], *entry.get("eval_concept_ids", []))
+    }
+    catalog = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
+    catalog_ids = {item["id"] for item in catalog}
+    dataset = json.loads(EVALS.read_text(encoding="utf-8"))
+    eval_ids = {
+        concept
+        for case in dataset["cases"]
+        for concept in case.get("expected_concepts", [])
+        if isinstance(concept, str) and _SAFE_ID.fullmatch(concept)
+    }
+    alias_count = sum(len(entry.get("aliases", [])) for entry in entries)
+    searchable_terms = {
+        normalize_term(value)
+        for entry in entries
+        for value in (entry["term"], *entry.get("aliases", []))
+    }
+    declared_terms = declared_learning_terms()
+    course_root = ROOT / "docs/course"
+    return {
+        "schema": "cogentrex.learning-vocabulary-audit",
+        "version": 1,
+        "entries": len(entries),
+        "aliases": alias_count,
+        "categories": dict(sorted(Counter(entry["category"] for entry in entries).items())),
+        "levels": dict(sorted(Counter(entry["level"] for entry in entries).items())),
+        "catalog_concepts": len(catalog_ids),
+        "catalog_concepts_covered": len(catalog_ids & covered),
+        "uncovered_catalog_concepts": sorted(catalog_ids - covered),
+        "eval_concept_ids": len(eval_ids),
+        "eval_concept_ids_covered": len(eval_ids & covered_eval),
+        "uncovered_eval_concept_ids": sorted(eval_ids - covered_eval),
+        "declared_learning_terms": len(declared_terms),
+        "declared_learning_terms_covered": len(declared_terms & searchable_terms),
+        "uncovered_declared_learning_terms": sorted(declared_terms - searchable_terms),
+        "course_markdown_files": len(list(course_root.rglob("*.md"))),
+        "concept_pages": len(list((course_root / "concepts").glob("*.md"))),
+        "modules": len(list((course_root / "modules").glob("*/README.md"))),
+        "code_walkthroughs": len(list((course_root / "code-walkthroughs").glob("*.md"))),
+        "evaluation_cases": len(dataset["cases"]),
+        "media_references": sum(len(entry.get("media_refs", [])) for entry in entries),
+        "source": "docs/course/reference/vocabulary.yaml",
+        "generated_glossary": "docs/course/reference/glossary.md",
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
+    parser.add_argument("--glossary", type=Path, default=DEFAULT_GLOSSARY)
+    parser.add_argument("--audit", type=Path, default=DEFAULT_AUDIT)
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    vocabulary = load_vocabulary(args.source)
+    glossary = render_glossary(vocabulary)
+    audit = json.dumps(build_coverage_audit(vocabulary), indent=2, ensure_ascii=False) + "\n"
+    if args.check:
+        if not args.glossary.is_file() or args.glossary.read_text(encoding="utf-8") != glossary:
+            raise SystemExit("learning glossary is stale: run build-learning-vocabulary.py")
+        if not args.audit.is_file() or args.audit.read_text(encoding="utf-8") != audit:
+            raise SystemExit("vocabulary audit is stale: run build-learning-vocabulary.py")
+        print(f"Learning vocabulary is current: {len(vocabulary['entries'])} terms")
+        return
+    args.glossary.write_text(glossary, encoding="utf-8")
+    args.audit.write_text(audit, encoding="utf-8")
+    print(f"Wrote {args.glossary.relative_to(ROOT)} and {args.audit.relative_to(ROOT)}")
+
+
+if __name__ == "__main__":
+    main()

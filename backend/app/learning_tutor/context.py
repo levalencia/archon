@@ -22,7 +22,14 @@ class ContextResolutionError(ValueError):
 
 
 LearningView = Literal[
-    "roadmap", "stories", "architecture", "evidence", "present", "listen", "study"
+    "roadmap",
+    "stories",
+    "architecture",
+    "evidence",
+    "glossary",
+    "present",
+    "listen",
+    "study",
 ]
 
 
@@ -33,6 +40,7 @@ class LearningContextRequest(BaseModel):
 
     view: LearningView
     concept_id: str | None = Field(default=None, max_length=255)
+    vocabulary_id: str | None = Field(default=None, max_length=255)
     module_id: str | None = Field(default=None, max_length=255)
     story_id: str | None = Field(default=None, max_length=255)
     step_index: int | None = Field(default=None, ge=0, le=100)
@@ -67,6 +75,7 @@ class LearningContext:
     source_commit: str | None
     source_references: tuple[dict[str, Any] | str, ...]
     segment: LearningTranscriptSegment | None = None
+    vocabulary_id: str | None = None
 
     def public(self) -> dict[str, Any]:
         return {
@@ -74,6 +83,7 @@ class LearningContext:
             "view": self.view,
             "title": self.title,
             "concept_ids": list(self.concept_ids),
+            "vocabulary_id": self.vocabulary_id,
             "module_id": self.module_id,
             "story_id": self.story_id,
             "step_index": self.step_index,
@@ -117,6 +127,11 @@ class LearningContextResolver:
         self._concepts = {
             str(item["id"]): item for item in payload.get("concepts", []) if isinstance(item, dict)
         }
+        self._vocabulary = {
+            str(item["id"]): item
+            for item in payload.get("vocabulary", [])
+            if isinstance(item, dict) and item.get("id")
+        }
         self._modules = {
             str(item["id"]): item for item in payload.get("modules", []) if isinstance(item, dict)
         }
@@ -150,6 +165,26 @@ class LearningContextResolver:
             return self._resolve_story(request)
         if request.selected_node_id is not None or request.selected_edge_id is not None:
             return self._resolve_architecture(request)
+        if request.vocabulary_id is not None:
+            vocabulary = self._vocabulary.get(request.vocabulary_id)
+            if vocabulary is None:
+                raise ContextResolutionError("Unknown vocabulary term")
+            return LearningContext(
+                context_key=f"vocabulary:{request.vocabulary_id}",
+                view=request.view,
+                title=str(vocabulary.get("term") or request.vocabulary_id),
+                concept_ids=tuple(str(item) for item in vocabulary.get("concept_ids", [])),
+                module_id=None,
+                story_id=None,
+                step_index=None,
+                artifact_id=None,
+                playback_seconds=None,
+                selected_node_id=None,
+                selected_edge_id=None,
+                source_commit=None,
+                source_references=tuple(vocabulary.get("learn_more", [])),
+                vocabulary_id=request.vocabulary_id,
+            )
         if request.concept_id is not None:
             concept = self._concepts.get(request.concept_id)
             if concept is None:

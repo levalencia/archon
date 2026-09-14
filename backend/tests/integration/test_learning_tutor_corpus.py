@@ -47,6 +47,14 @@ def test_real_learning_corpus_contains_canonical_docs_code_tests_and_videos() ->
         "code-first-video-02",
     }
     assert any("service slot" in item.text.lower() for item in videos)
+    vocabulary = [item for item in sources if item.locator.get("route") == "/learn?view=glossary"]
+    assert len(vocabulary) == 299
+    preflight = next(
+        item for item in vocabulary if item.locator.get("vocabulary_id") == "preflight-check"
+    )
+    assert "vocabulary:preflight-check" in preflight.context_keys
+    assert "concept:application-composition" in preflight.context_keys
+    assert "Preflight check" in preflight.text
     assert len(sources) == len({item.id for item in sources})
     indexed_paths = {str(item.locator.get("path") or "") for item in sources}
     assert {

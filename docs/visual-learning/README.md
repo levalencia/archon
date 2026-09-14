@@ -174,7 +174,7 @@ The Visual Learning Studio operates in two modes:
 
 | Mode | Media available | How to get it |
 |------|----------------|---------------|
-| **Base** (default after clone) | Roadmap, Stories, Architecture, and Evidence from the tracked Studio manifest. Present, Listen, and Study report that published media is unavailable. | Nothing extra needed. |
+| **Base** (default after clone) | Roadmap, Stories, Architecture, Evidence, and the searchable Glossary from the tracked Studio manifest. Present, Listen, and Study report that published media is unavailable. | Nothing extra needed. |
 | **Rich** (after media install) | Everything above **plus** MP3 audio, MP4 video, high-fidelity SVG diagrams, and HTML presentation decks. | Install the checksummed media package (see below). |
 
 ### Install rich media (online)

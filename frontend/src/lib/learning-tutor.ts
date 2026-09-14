@@ -1,11 +1,12 @@
 import { authenticatedFetch } from '$lib/auth';
 import { SSEParser } from '$lib/sse';
 
-export type LearningView = 'roadmap' | 'stories' | 'architecture' | 'evidence' | 'present' | 'listen' | 'study';
+export type LearningView = 'roadmap' | 'stories' | 'architecture' | 'evidence' | 'glossary' | 'present' | 'listen' | 'study';
 
 export interface LearningTutorContext {
   view: LearningView;
   concept_id?: string;
+  vocabulary_id?: string;
   module_id?: string;
   story_id?: string;
   step_index?: number;

@@ -118,6 +118,46 @@ async def test_hybrid_search_prioritizes_exact_terms_and_active_context(reposito
 
 
 @pytest.mark.asyncio
+async def test_definition_queries_prioritize_glossary_before_unrelated_code(repositories) -> None:
+    knowledge, _ = repositories
+    await knowledge.sync(
+        [
+            LearningSourceInput(
+                kind="documentation",
+                key="docs/course/reference/glossary.md#class",
+                title="Beginner glossary — Class",
+                text=(
+                    "Class. A class is a reusable blueprint that defines what data its objects "
+                    "hold and what behavior those objects provide."
+                ),
+                revision="a" * 40,
+                locator={"path": "docs/course/reference/glossary.md", "line_start": 20},
+                context_keys=("vocabulary:class", "concept:python-protocols-di"),
+            ),
+            LearningSourceInput(
+                kind="code",
+                key="backend/app/runtime/engine.py#class-object",
+                title="Runtime class object helpers",
+                text="class ObjectRegistry: class_object = object()",
+                revision="a" * 40,
+                locator={"path": "backend/app/runtime/engine.py", "line_start": 1},
+                context_keys=(),
+            ),
+        ]
+    )
+
+    evidence = await knowledge.search(
+        "What is the difference between a class and an object?",
+        context_keys={"vocabulary:class"},
+        top_k=2,
+    )
+
+    assert evidence[0].locator["path"] == "docs/course/reference/glossary.md"
+    assert evidence[0].score_components["definition_source"] == 1.0
+    assert evidence[0].score_components["vocabulary_context"] == 1.0
+
+
+@pytest.mark.asyncio
 async def test_tutor_sessions_are_owner_scoped_and_turns_keep_context(repositories) -> None:
     _, tutor = repositories
     session = await tutor.get_or_create_session(
