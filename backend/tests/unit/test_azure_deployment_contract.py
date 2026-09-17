@@ -35,6 +35,7 @@ def test_bicep_declares_hardened_vm_boundary_without_embedded_secrets() -> None:
         "microsoft.network/networksecuritygroups",
         "microsoft.network/publicipaddresses",
         "microsoft.compute/virtualmachines",
+        "microsoft.managedidentity/userassignedidentities",
         "microsoft.containerregistry/registries",
         "microsoft.keyvault/vaults",
         "microsoft.operationalinsights/workspaces",
@@ -109,6 +110,19 @@ def test_dev_workflow_uses_oidc_and_never_long_lived_azure_credentials() -> None
     assert "docker-compose.prod.yml" not in workflow
     assert "az acr login" in workflow
     assert workflow.count("docker push") >= 3
+
+
+def test_github_oidc_uses_federated_managed_identity_without_directory_app_registration() -> None:
+    bicep = "\n".join(path.read_text() for path in sorted(AZURE.rglob("*.bicep"))).lower()
+    configure = _read(ROOT / "scripts" / "azure" / "configure-github-oidc.sh")
+    assert "userassignedidentities/federatedidentitycredentials" in bicep
+    main = _read(AZURE / "main.bicep")
+    assert "githubRepository: 'levalencia/cogentrex'" in main
+    assert "githubEnvironment: 'development'" in main
+    assert "githubIdentityClientId" in _read(AZURE / "main.bicep")
+    assert "az ad app" not in configure
+    assert "az ad sp" not in configure
+    assert "AZURE_CLIENT_ID" in configure
 
 
 def test_backend_image_contains_azure_identity_runtime_dependency() -> None:

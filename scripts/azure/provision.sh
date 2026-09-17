@@ -36,6 +36,9 @@ for required in (
     "acrId",
     "acrName",
     "acrLoginServer",
+    "githubIdentityClientId",
+    "githubIdentityPrincipalId",
+    "githubIdentityId",
 ):
     if not outputs.get(required, {}).get("value"):
         raise SystemExit(f"missing deployment output: {required}")

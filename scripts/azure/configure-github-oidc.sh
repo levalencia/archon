@@ -6,7 +6,7 @@ RESOURCE_GROUP=${AZURE_RESOURCE_GROUP:-cogentrex}
 OUTPUT_FILE=${AZURE_OUTPUT_FILE:-.azure/deployment-outputs.json}
 GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-levalencia/cogentrex}
 GITHUB_ENVIRONMENT=${GITHUB_ENVIRONMENT:-development}
-APP_DISPLAY_NAME=${AZURE_GITHUB_APP_NAME:-cogentrex-github-dev}
+
 
 [[ -r "$OUTPUT_FILE" ]] || { printf 'Deployment outputs are missing\n' >&2; exit 66; }
 
@@ -28,55 +28,25 @@ KEY_VAULT_NAME=$(value keyVaultName)
 ACR_ID=$(value acrId)
 ACR_NAME=$(value acrName)
 ACR_LOGIN_SERVER=$(value acrLoginServer)
+APP_ID=$(value githubIdentityClientId)
+SP_OBJECT_ID=$(value githubIdentityPrincipalId)
 RG_ID=$(az group show --subscription "$SUBSCRIPTION_ID" --name "$RESOURCE_GROUP" --query id -o tsv)
 
-APP_ID=$(az ad app list --filter "displayName eq '$APP_DISPLAY_NAME'" --query '[0].appId' -o tsv)
-if [[ -z "$APP_ID" ]]; then
-  APP_ID=$(az ad app create --display-name "$APP_DISPLAY_NAME" --query appId -o tsv)
-fi
-APP_OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
-SP_OBJECT_ID=$(az ad sp list --filter "appId eq '$APP_ID'" --query '[0].id' -o tsv)
-if [[ -z "$SP_OBJECT_ID" ]]; then
-  SP_OBJECT_ID=$(az ad sp create --id "$APP_ID" --query id -o tsv)
-fi
-
-credential_name="github-cogentrex-development"
-existing=$(az ad app federated-credential list --id "$APP_OBJECT_ID" \
-  --query "[?name=='$credential_name'] | length(@)" -o tsv)
-if [[ "$existing" == "0" ]]; then
-  credential_file=$(mktemp)
-  trap 'rm -f "$credential_file"' EXIT
-  python3 - "$credential_file" "$credential_name" "$GITHUB_REPOSITORY" "$GITHUB_ENVIRONMENT" <<'PY'
-import json
-import sys
-from pathlib import Path
-path, name, repository, environment = sys.argv[1:]
-Path(path).write_text(json.dumps({
-    "name": name,
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": f"repo:{repository}:environment:{environment}",
-    "audiences": ["api://AzureADTokenExchange"],
-}), encoding="utf-8")
-PY
-  az ad app federated-credential create --id "$APP_OBJECT_ID" \
-    --parameters "$credential_file" --output none
-fi
-
-ensure_role() {
+verify_role() {
   local role="$1"
   local scope="$2"
   local count
   count=$(az role assignment list --assignee-object-id "$SP_OBJECT_ID" --scope "$scope" \
     --query "[?roleDefinitionName=='$role'] | length(@)" -o tsv)
-  if [[ "$count" == "0" ]]; then
-    az role assignment create --assignee-object-id "$SP_OBJECT_ID" \
-      --assignee-principal-type ServicePrincipal --role "$role" --scope "$scope" --output none
-  fi
+  [[ "$count" != "0" ]] || {
+    printf 'Missing role %s at scope %s\n' "$role" "$scope" >&2
+    exit 1
+  }
 }
 
-ensure_role "Virtual Machine Contributor" "$VM_ID"
-ensure_role "AcrPush" "$ACR_ID"
-ensure_role "Reader" "$RG_ID"
+verify_role "Virtual Machine Contributor" "$VM_ID"
+verify_role "AcrPush" "$ACR_ID"
+verify_role "Reader" "$RG_ID"
 
 gh api --method PUT "repos/${GITHUB_REPOSITORY}/environments/${GITHUB_ENVIRONMENT}" >/dev/null
 set_var() {

@@ -45,6 +45,7 @@ var kvName = 'ctxkv${take(nameSuffix, 8)}'
 var lawName = '${prefix}-law'
 var aiName = '${prefix}-ai'
 var acrName = '${prefix}${nameSuffix}'
+var githubIdentityName = '${prefix}-github-dev'
 
 // ─── Modules ───────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,18 @@ module acr './modules/acr.bicep' = {
   }
 }
 
+module githubIdentity './modules/github-identity.bicep' = {
+  name: 'githubIdentity'
+  params: {
+    location: location
+    identityName: githubIdentityName
+    githubRepository: 'levalencia/cogentrex'
+    githubEnvironment: 'development'
+    vmName: vmName
+    registryName: acr.outputs.registryName
+  }
+}
+
 // ─── Outputs ───────────────────────────────────────────────────────────────────
 
 output vmName string = vmName
@@ -126,3 +139,6 @@ output vmPrincipalId string = vm.outputs.vmPrincipalId
 output acrId string = acr.outputs.registryId
 output acrName string = acr.outputs.registryName
 output acrLoginServer string = acr.outputs.loginServer
+output githubIdentityClientId string = githubIdentity.outputs.clientId
+output githubIdentityPrincipalId string = githubIdentity.outputs.principalId
+output githubIdentityId string = githubIdentity.outputs.identityId
