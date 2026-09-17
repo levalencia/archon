@@ -20,7 +20,7 @@ def _read(path: Path) -> str:
 
 def test_deployment_plan_is_approved_and_preserves_sandbox_parity() -> None:
     plan = _read(ROOT / ".azure" / "deployment-plan.md")
-    assert "Status: Validated" in plan
+    assert "Status: Infrastructure provisioned" in plan
     assert "network_mode:none" in plan
     assert "custom seccomp" in plan
     assert "dev.cogentrex.com" in plan

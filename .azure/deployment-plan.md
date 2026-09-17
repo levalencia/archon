@@ -1,6 +1,6 @@
 # Cogentrex Azure Deployment Plan
 
-Status: Validated — deployment authorized
+Status: Infrastructure provisioned — application deployment pending
 Date: 2026-09-17
 Branch: `feat/azure-public-deployment`
 Source revision: `048706a7a9b4f29eecb631659b236ad5a672f2c6`
@@ -121,6 +121,8 @@ Rationale:
 - [x] Application changes implemented test-first.
 - [x] Azure validation completed and recorded.
 - [x] Deployment approved.
+- [x] Azure infrastructure provisioned.
+- [x] GitHub federated managed identity and development environment configured.
 - [ ] Development deployment verified.
 - [ ] Production cutover approved and verified.
 
@@ -134,9 +136,15 @@ Rationale:
 - Recovery: added a deterministic Key Vault naming regression test, shortened the generated name to `ctxkv` plus an eight-character suffix, then reran Bicep build, focused tests, Azure validation, and what-if: PASS.
 - Initial GitHub OIDC bootstrap through an Entra app registration: BLOCKED because the current user lacks directory application-registration permission; no app or credential was created.
 - OIDC recovery: replaced Entra app creation with a Bicep-managed user-assigned managed identity, GitHub federated identity credential, and resource-scoped Virtual Machine Contributor, AcrPush and Reader assignments; static tests and Bicep build: PASS.
+- Azure provisioning retry: PASS. VM `cogentrex-vm`, ACR `cogentrexff5lamo5xajso`, Key Vault `ctxkvff5lamo5`, Log Analytics and Application Insights are `Succeeded` in Sweden Central.
+- VM bootstrap via Azure Run Command: PASS (`cloud-init status: done`, Docker 29.8.1, Compose 5.5.1, Azure CLI 2.90.0).
+- VM managed identity live RBAC: AcrPull=1, Key Vault Secrets User=1, Cognitive Services OpenAI User=1.
+- GitHub UAMI live RBAC: Virtual Machine Contributor=1, AcrPush=1, Reader=1.
+- GitHub federated credential subject: `repo:levalencia/cogentrex:environment:development`; environment variable inventory configured without secrets.
+- Temporary development hostname: `https://20.91.141.190.sslip.io` (application not deployed yet).
 - Azure static deployment contracts: 35 PASS.
 - Focused backend deployment/provider/pricing contracts: 92 PASS.
 - Full backend suite: 1,815 PASS, 7 skipped.
 - Canonical unit gate: 775 PASS, 1,047 deselected, 66.83% coverage.
 - Frontend check, Vitest and production build: PASS.
-- No Azure resources have been created by this plan yet.
+- Production DNS and `cogentrex.com` remain unchanged.
