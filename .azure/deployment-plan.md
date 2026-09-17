@@ -1,6 +1,6 @@
 # Cogentrex Azure Deployment Plan
 
-Status: Approved — ready for implementation
+Status: Validated — deployment authorized
 Date: 2026-09-17
 Branch: `feat/azure-public-deployment`
 Source revision: `048706a7a9b4f29eecb631659b236ad5a672f2c6`
@@ -116,14 +116,23 @@ Rationale:
 - [x] Existing architecture and CI audited.
 - [x] Initial deployment-plan skeleton created.
 - [x] Requirements approved.
-- [ ] Azure policies, quotas, region and SKU validated.
-- [ ] Infrastructure generated.
-- [ ] Application changes implemented test-first.
-- [ ] Azure validation completed and recorded.
-- [ ] Deployment approved.
+- [x] Azure policies, quotas, region and SKU validated.
+- [x] Infrastructure generated.
+- [x] Application changes implemented test-first.
+- [x] Azure validation completed and recorded.
+- [x] Deployment approved.
 - [ ] Development deployment verified.
 - [ ] Production cutover approved and verified.
 
 ## 11. Validation proof
 
-Not run. This plan is not yet approved or ready for Azure validation.
+- `az bicep build --file infra/azure/main.bicep`: PASS.
+- Azure deployment group `what-if`: PASS; existing AI Services resources ignored, new VM/network/ACR/Key Vault/monitoring resources proposed.
+- Azure template validation: PASS.
+- Formal post-plan Azure template validation: PASS (`Succeeded`, no error).
+- Azure static deployment contracts: 35 PASS.
+- Focused backend deployment/provider/pricing contracts: 92 PASS.
+- Full backend suite: 1,815 PASS, 7 skipped.
+- Canonical unit gate: 775 PASS, 1,047 deselected, 66.83% coverage.
+- Frontend check, Vitest and production build: PASS.
+- No Azure resources have been created by this plan yet.
