@@ -2,8 +2,7 @@
 
 param location string
 param identityName string
-param githubRepository string
-param githubEnvironment string
+param githubSubject string
 param vmName string
 param registryName string
 
@@ -17,7 +16,7 @@ resource githubCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/fede
   name: 'github-cogentrex-development'
   properties: {
     issuer: 'https://token.actions.githubusercontent.com'
-    subject: 'repo:${githubRepository}:environment:${githubEnvironment}'
+    subject: githubSubject
     audiences: [
       'api://AzureADTokenExchange'
     ]

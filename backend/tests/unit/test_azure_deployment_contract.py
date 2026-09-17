@@ -117,8 +117,7 @@ def test_github_oidc_uses_federated_managed_identity_without_directory_app_regis
     configure = _read(ROOT / "scripts" / "azure" / "configure-github-oidc.sh")
     assert "userassignedidentities/federatedidentitycredentials" in bicep
     main = _read(AZURE / "main.bicep")
-    assert "githubRepository: 'levalencia/cogentrex'" in main
-    assert "githubEnvironment: 'development'" in main
+    assert "repo:levalencia@6962857/cogentrex@1342041970:environment:development" in main
     assert "githubIdentityClientId" in _read(AZURE / "main.bicep")
     assert "az ad app" not in configure
     assert "az ad sp" not in configure
