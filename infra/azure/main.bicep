@@ -119,8 +119,7 @@ module githubIdentity './modules/github-identity.bicep' = {
   params: {
     location: location
     identityName: githubIdentityName
-    githubRepository: 'levalencia/cogentrex'
-    githubEnvironment: 'development'
+    githubSubject: 'repo:levalencia@6962857/cogentrex@1342041970:environment:development'
     vmName: vmName
     registryName: acr.outputs.registryName
   }
