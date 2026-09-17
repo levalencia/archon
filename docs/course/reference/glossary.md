@@ -1450,7 +1450,7 @@ Whether the claims in an answer are supported by the evidence that was actually 
 
 Grounding means constraining an answer to supplied evidence instead of letting the model rely on unsupported memory or invention.
 
-**In Cogentrex:** Cogentrex retrieves bounded evidence, requires evidence IDs on claims, and checks support before showing a grounded Tutor answer.
+**In Cogentrex:** Cogentrex tenant-scoped document RAG retrieves bounded evidence and checks support before presenting a grounded answer.
 
 **Learn more:** [Groundedness](../concepts/groundedness.md) · [Rag](../concepts/rag.md)
 
