@@ -42,16 +42,17 @@ The following remain intact:
 
 ## Verification
 
+- Full backend suite: `1,770 passed`, `7 skipped`.
 - Tutor-removal source/route/ORM contract: PASS.
 - Migration 23 → 24 → 23 → 24 contract: PASS.
+- Canonical unit gate: `758 passed` with coverage above the configured threshold.
+- Ruff and formatter: PASS.
 - Frontend Svelte check: 0 errors, 0 warnings.
-- Frontend Vitest: 80 passed.
-- Visual Learning Playwright: 14 passed.
+- Frontend Vitest: `80 passed`.
+- Frontend Visual Learning Playwright: `14 passed`.
 - Vocabulary generator check: 299 terms current.
 - Visual Learning generator check: 67 concepts / 16 modules current.
 - Course documentation validation: PASS.
-
-Full clean-tree backend acceptance is recorded separately after commit.
 
 ## Boundaries
 
