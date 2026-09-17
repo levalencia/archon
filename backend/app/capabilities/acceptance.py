@@ -30,7 +30,6 @@ REQUIRED_CAPABILITY_IDS = {
     "hybrid-agent-orchestration-pilot",
     "isolated-sandbox-live-target",
     "live-embedding-provider",
-    "contextual-learning-tutor",
 }
 
 

@@ -119,11 +119,6 @@ class Settings(BaseSettings):
     learning_media_enabled: bool = False
     learning_media_library_root: str = ""
     learning_media_signed_url_ttl_seconds: int = Field(default=300, ge=30, le=3600)
-    learning_tutor_enabled: bool = True
-    learning_tutor_top_k: int = Field(default=10, ge=1, le=30)
-    learning_tutor_vocabulary_discovery_enabled: bool = False
-    learning_tutor_web_supplement_enabled: bool = False
-    learning_tutor_web_max_results: int = Field(default=3, ge=1, le=3)
 
     # Database
     database_url: str = "sqlite+aiosqlite:///cogentrex.db"

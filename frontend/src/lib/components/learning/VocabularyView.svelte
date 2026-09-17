@@ -1,19 +1,12 @@
 <script lang="ts">
   import { BookOpen, ExternalLink, PlayCircle, Search } from 'lucide-svelte';
-  import type { LearningTutorContext } from '$lib/learning-tutor';
   import {
     vocabularyFilter,
     type VisualLearningStudio,
     type VocabularyLevel,
   } from '$lib/visual-learning';
 
-  let {
-    studio,
-    onContextChange = () => {},
-  }: {
-    studio: VisualLearningStudio;
-    onContextChange?: (context: LearningTutorContext, title: string) => void;
-  } = $props();
+  let { studio }: { studio: VisualLearningStudio } = $props();
 
   let query = $state('');
   let category = $state('all');
@@ -29,17 +22,6 @@
     else if (!visibleRows.some(entry => entry.id === selectedId)) selectedId = visibleRows[0].id;
   });
 
-  $effect(() => {
-    if (!selected) return;
-    onContextChange(
-      {
-        view: 'glossary',
-        vocabulary_id: selected.id,
-        concept_id: selected.concept_ids[0],
-      },
-      `Glossary: ${selected.term}`,
-    );
-  });
 </script>
 
 <section class="pb-24" aria-labelledby="glossary-heading">

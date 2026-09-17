@@ -5827,7 +5827,7 @@
       "category": "knowledge-quality",
       "level": "intermediate",
       "definition": "A measure of the angle between two vectors; closer to 1 means more similar direction. Used to rank candidate chunks by semantic relevance.",
-      "cogentrex": "Cogentrex computes cosine similarity in Python over SQL JSON vectors rather than using pgvector. The Learning Tutor corpus is application-owned and context-ranked; tenant document retrieval is scoped separately.",
+      "cogentrex": "Cogentrex computes cosine similarity in Python over SQL JSON vectors rather than using pgvector for tenant-scoped document retrieval.",
       "concept_ids": [
         "retrieval",
         "embeddings"

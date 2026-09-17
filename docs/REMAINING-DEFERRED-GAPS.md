@@ -1,6 +1,6 @@
 # Remaining Deferred Gaps
 
-**Current boundary:** Alembic head `20260912_23`. GitHub Actions is authoritative
+**Current boundary:** Alembic head `20260917_24`. GitHub Actions is authoritative
 for exact-revision CI status. No public deployment is claimed.
 
 Cogentrex is an evidence-rich **local Agent Reliability Workbench**. The omissions below are deliberate product and evidence boundaries, not hidden implementation promises. `Deferred` means outside the current capstone scope with no delivery date. A nearby file, manifest, test double, or local observation does not change that status.
