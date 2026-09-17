@@ -1,30 +1,17 @@
 # Caddyfile for Cogentrex Azure VM
-# Temporary sslip.io hostname driven by COGENTREX_PUBLIC_IP env var.
-# Replace with dev.cogentrex.com when GoDaddy DNS is configured.
-#
-# Usage: COGENTREX_PUBLIC_IP=x.x.x.x caddy run --config /etc/caddy/Caddyfile
-#
-# sslip.io provides automatic DNS-based TLS via Let's Encrypt.
+# Hostname is supplied through COGENTREX_PUBLIC_HOSTNAME.
+# Use the temporary x.x.x.x.sslip.io name until GoDaddy DNS is updated.
 
-{$COGENTREX_PUBLIC_IP:0.0.0.0}.sslip.io {
-	# Reverse proxy to the Compose gateway (nginx) on port 8080
-	reverse_proxy localhost:8080
+{$COGENTREX_PUBLIC_HOSTNAME:localhost} {
+	# Preserve the local Compose gateway and its same-origin routing contract.
+	reverse_proxy 127.0.0.1:8080
 
-	# Standard security headers
 	header {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		-Server
-	}
-
-	# Health check passthrough (no TLS needed internally)
-	handle /healthz {
-		reverse_proxy localhost:8080
-	}
-	handle /readyz {
-		reverse_proxy localhost:8080
 	}
 
 	log {
@@ -34,9 +21,4 @@
 		}
 		format json
 	}
-}
-
-# HTTP redirect (Caddy does this automatically with HTTPS, but explicit)
-http://{$COGENTREX_PUBLIC_IP:0.0.0.0}.sslip.io {
-	redir https://{host}{uri} permanent
 }

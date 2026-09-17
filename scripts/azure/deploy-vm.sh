@@ -29,9 +29,19 @@ readonly TMPDIR_PERSIST="${TMPDIR:-/var/tmp/cogentrex}"
 readonly COMPOSE_PROJECT="cogentrex-azure"
 readonly COMPOSE_ENV_FILE="${APP_ROOT}/.env.azure"
 readonly COMPOSE_FILE_LOCAL="docker-compose.local.yml"
+readonly COMPOSE_FILE_AZURE="deploy/docker-compose.azure.yml"
 readonly MEDIA_ROOT="${APP_ROOT}/media"
+readonly OPENAI_ENDPOINT="${COGENTREX_OPENAI_ENDPOINT:-https://cogentrex.services.ai.azure.com/openai/v1}"
+readonly OPENAI_MODEL="${COGENTREX_OPENAI_MODEL:-DeepSeek-V4-Flash}"
+readonly KEY_VAULT_NAME="${COGENTREX_KEY_VAULT_NAME:-}"
+readonly PUBLIC_HOSTNAME="${COGENTREX_PUBLIC_HOSTNAME:-}"
+readonly ACR_NAME="${COGENTREX_ACR_NAME:-}"
+readonly ACR_LOGIN_SERVER="${COGENTREX_ACR_LOGIN_SERVER:-}"
+readonly AZURE_SUBSCRIPTION_ID="${COGENTREX_AZURE_SUBSCRIPTION_ID:-}"
+readonly LOCAL_BASE_URL="http://127.0.0.1:8080"
 # Media marker used by install_learning_media_if_absent
 export LEARNING_MEDIA_MARKER="cogentrex.learning-library/v1"
+LAST_BACKUP=""
 
 # ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +64,7 @@ current_deployed_sha() {
 
 save_deploy_state() {
   local sha="$1"
+  local previous_sha="${2:-}"
   local ts
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$DEPLOY_STATE")"
@@ -62,6 +73,8 @@ save_deploy_state() {
   chmod 600 "$tmp"
   {
     printf 'COGENTREX_DEPLOYED_SHA=%s\n' "$sha"
+    printf 'COGENTREX_PREVIOUS_SHA=%s\n' "$previous_sha"
+    printf 'COGENTREX_LAST_BACKUP=%s\n' "$LAST_BACKUP"
     printf 'COGENTREX_DEPLOY_TIMESTAMP=%s\n' "$ts"
     printf 'COGENTREX_COMPOSE_PROJECT=%s\n' "$COMPOSE_PROJECT"
   } > "$tmp"
@@ -83,8 +96,8 @@ ensure_repo() {
     git clone "$REPO_URL" "$repo_dir"
   fi
 
-  log "Checking out SHA ${sha}..."
-  git -C "$repo_dir" checkout "$sha" --force
+  log "Checking out immutable SHA ${sha}..."
+  git -C "$repo_dir" checkout --detach --force "$sha"
   git -C "$repo_dir" submodule update --init --recursive
 }
 
@@ -97,23 +110,41 @@ install_learning_media_if_absent() {
     return 0
   fi
 
-  # Check if release artifact exists in repo
   local repo_dir="${APP_ROOT}/repo"
   local release_script="${repo_dir}/scripts/learning-media-release.py"
-  if [[ -x "$release_script" ]] || [[ -f "$release_script" ]]; then
-    log "Installing learning media from release script..."
-    python3 "$release_script" --output-dir "$MEDIA_ROOT" || {
-      log "WARNING: Learning media installation failed; continuing without media."
-      return 0
-    }
-  else
-    log "No learning media release script found; skipping media installation."
-  fi
+  local manifest="${repo_dir}/docs/visual-learning/release-manifest.json"
+  [[ -f "$release_script" && -f "$manifest" ]] || die "Learning media installer or manifest missing"
+  log "Installing checksummed learning media release..."
+  python3 "$release_script" install --target "$MEDIA_ROOT" --manifest "$manifest"
 }
 
 # ─── Protected Env Generation ───────────────────────────────────────────────────
 
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  python3 - "$COMPOSE_ENV_FILE" "$key" "$value" <<'PY'
+from pathlib import Path
+import os
+import sys
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+value = sys.argv[3]
+if "\n" in value or "\r" in value:
+    raise SystemExit("environment value contains a newline")
+lines = path.read_text(encoding="utf-8").splitlines()
+lines = [line for line in lines if not line.startswith(f"{key}=")]
+lines.append(f"{key}={value}")
+tmp = path.with_suffix(path.suffix + ".tmp")
+tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+os.chmod(tmp, 0o600)
+tmp.replace(path)
+PY
+}
+
 generate_env() {
+  local image_tag="$1"
   local repo_dir="${APP_ROOT}/repo"
   local env_gen="${repo_dir}/scripts/generate-local-env.py"
 
@@ -121,37 +152,53 @@ generate_env() {
     die "Environment generator not found at ${env_gen}"
   fi
 
-  # Create env file if it doesn't exist; retain existing secrets across deploys
+  # Generate secret material only once. Rewriting the file would rotate keys and
+  # make retained encrypted data unreadable.
   if [[ ! -f "$COMPOSE_ENV_FILE" ]]; then
     touch "$COMPOSE_ENV_FILE"
     chmod 600 "$COMPOSE_ENV_FILE"
+    python3 "$env_gen" "$COMPOSE_ENV_FILE" --learning-media-root "$MEDIA_ROOT"
+  else
+    log "Retaining existing protected environment and encryption material."
   fi
 
-  local gen_args=(python3 "$env_gen" "$COMPOSE_ENV_FILE"
-    --learning-media-root "$MEDIA_ROOT"
-  )
+  set_env_value COGENTREX_LLM_PROVIDER openai
+  set_env_value COGENTREX_LOCAL_PORT 8080
+  set_env_value COGENTREX_LLM_AUTH_MODE azure_identity
+  set_env_value COGENTREX_LLM_BASE_URL "$OPENAI_ENDPOINT"
+  set_env_value COGENTREX_LLM_MODEL "$OPENAI_MODEL"
+  set_env_value COGENTREX_LLM_API_KEY ""
+  set_env_value COGENTREX_RUNTIME_MODE live-foundry
+  set_env_value COGENTREX_OPENAI_NATIVE_TOOLS_ENABLED true
+  set_env_value COGENTREX_VERIFIER_ENABLED true
+  set_env_value COGENTREX_VERIFIER_MODEL "$OPENAI_MODEL"
+  set_env_value COGENTREX_AGENT_RUN_BUDGET_USD 0.25
+  set_env_value COGENTREX_AGENT_PROJECT_BUDGET_USD 10.00
+  set_env_value COGENTREX_RATE_LIMIT_AUTH_REQUESTS 10
+  set_env_value COGENTREX_RATE_LIMIT_CHAT_REQUESTS 6
+  set_env_value COGENTREX_OTEL_CAPTURE_MESSAGE_CONTENT false
+  set_env_value COGENTREX_OTEL_COLLECTOR_CONFIG_FILE "${APP_ROOT}/repo/deploy/otel-collector.azure.yml"
+  set_env_value COGENTREX_ACR_LOGIN_SERVER "$ACR_LOGIN_SERVER"
+  set_env_value COGENTREX_IMAGE_TAG "$image_tag"
 
-  # If a provider env file exists, use it
-  local provider_env="${APP_ROOT}/.env.provider"
-  if [[ -f "$provider_env" ]]; then
-    gen_args+=(--provider-env "$provider_env")
+  if [[ -n "$KEY_VAULT_NAME" ]]; then
+    log "Loading Application Insights configuration through VM managed identity."
+    az login --identity --allow-no-subscriptions --output none
+    [[ -n "$AZURE_SUBSCRIPTION_ID" ]] || die "Azure subscription ID is required"
+    az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+    local app_insights
+    for attempt in {1..18}; do
+      app_insights="$(az keyvault secret show \
+        --vault-name "$KEY_VAULT_NAME" \
+        --name applicationinsights-connection-string \
+        --query value -o tsv 2>/dev/null || true)"
+      [[ -n "$app_insights" ]] && break
+      log "Waiting for Key Vault RBAC propagation (${attempt}/18)..."
+      sleep 10
+    done
+    [[ -n "$app_insights" ]] || die "Application Insights configuration is empty"
+    set_env_value APPLICATIONINSIGHTS_CONNECTION_STRING "$app_insights"
   fi
-
-  "${gen_args[@]}"
-
-  # Append Azure-specific overrides (Managed Identity, no provider secrets)
-  {
-    printf '\n# Azure VM overrides (managed identity)\n'
-    if [[ -n "${COGENTREX_OPENAI_ENDPOINT:-}" ]]; then
-      printf 'COGENTREX_LLM_BASE_URL=%s\n' "$COGENTREX_OPENAI_ENDPOINT"
-    fi
-    if [[ -n "${COGENTREX_OPENAI_MODEL:-}" ]]; then
-      printf 'COGENTREX_LLM_MODEL=%s\n' "$COGENTREX_OPENAI_MODEL"
-    fi
-    if [[ -n "${APPLICATIONINSIGHTS_CONNECTION_STRING:-}" ]]; then
-      printf 'APPLICATIONINSIGHTS_CONNECTION_STRING=%s\n' "$APPLICATIONINSIGHTS_CONNECTION_STRING"
-    fi
-  } >> "$COMPOSE_ENV_FILE"
   chmod 600 "$COMPOSE_ENV_FILE"
 }
 
@@ -169,27 +216,12 @@ pg_backup() {
   local repo_dir="${APP_ROOT}/repo"
   local backup_script="${repo_dir}/scripts/local-backup.sh"
 
-  if [[ -f "$backup_script" ]]; then
-    log "Running pg_dump backup via canonical script..."
-    bash "$backup_script" "$COMPOSE_PROJECT" "$COMPOSE_ENV_FILE" "$dump_file" || {
-      log "WARNING: Backup failed; proceeding with deployment."
-      return 0
-    }
-    log "Backup saved: ${dump_file}"
-  else
-    # Fallback: direct pg_dump through compose
-    log "Running pg_dump backup (direct)..."
-    local compose=(docker compose --env-file "$COMPOSE_ENV_FILE"
-      -f "${APP_ROOT}/repo/${COMPOSE_FILE_LOCAL}" -p "$COMPOSE_PROJECT")
-    if "${compose[@]}" exec -T postgres pg_dump -U cogentrex -d cogentrex -Fc \
-        --no-owner --no-acl > "$dump_file" 2>/dev/null; then
-      chmod 600 "$dump_file"
-      log "Backup saved: ${dump_file}"
-    else
-      log "WARNING: Backup failed (no running postgres?); proceeding."
-      rm -f "$dump_file"
-    fi
-  fi
+  [[ -f "$backup_script" ]] || die "Canonical backup script missing"
+  log "Running mandatory pg_dump backup via canonical script..."
+  bash "$backup_script" "$COMPOSE_PROJECT" "$COMPOSE_ENV_FILE" "$dump_file"
+  [[ -s "$dump_file" && -s "${dump_file}.sha256" ]] || die "Backup evidence is incomplete"
+  LAST_BACKUP="$dump_file"
+  log "Backup saved: ${dump_file}"
 }
 
 # ─── Docker Compose Update ──────────────────────────────────────────────────────
@@ -197,16 +229,46 @@ pg_backup() {
 compose_update() {
   local repo_dir="${APP_ROOT}/repo"
   local compose=(docker compose --env-file "$COMPOSE_ENV_FILE"
-    -f "${repo_dir}/${COMPOSE_FILE_LOCAL}" -p "$COMPOSE_PROJECT")
+    -f "${repo_dir}/${COMPOSE_FILE_LOCAL}"
+    -f "${repo_dir}/${COMPOSE_FILE_AZURE}"
+    -p "$COMPOSE_PROJECT")
 
-  log "Building images..."
-  "${compose[@]}" build
-
-  log "Pulling external images..."
-  "${compose[@]}" pull --ignore-buildable 2>/dev/null || true
+  [[ -n "$ACR_NAME" && -n "$ACR_LOGIN_SERVER" ]] || die "ACR configuration is required"
+  az login --identity --allow-no-subscriptions --output none
+  [[ -n "$AZURE_SUBSCRIPTION_ID" ]] || die "Azure subscription ID is required"
+  az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+  az acr login --name "$ACR_NAME" --output none
+  log "Pulling immutable application images..."
+  "${compose[@]}" pull
 
   log "Starting services (preserving volumes)..."
-  "${compose[@]}" up -d --wait --remove-orphans
+  COGENTREX_LOCAL_PORT=8080 "${compose[@]}" up -d --wait --remove-orphans --no-build
+}
+
+configure_caddy() {
+  [[ -n "$PUBLIC_HOSTNAME" ]] || die "COGENTREX_PUBLIC_HOSTNAME is required"
+  local repo_dir="${APP_ROOT}/repo"
+  local source_config="${repo_dir}/deploy/Caddyfile.azure"
+  local caddy_image="caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d"
+  [[ -f "$source_config" ]] || die "Caddy configuration missing"
+
+  install -d -o root -g root -m 0755 /etc/caddy
+  install -o root -g root -m 0644 "$source_config" /etc/caddy/Caddyfile
+  docker pull "$caddy_image"
+  docker run --rm \
+    -e COGENTREX_PUBLIC_HOSTNAME="$PUBLIC_HOSTNAME" \
+    -v /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
+    "$caddy_image" validate --config /etc/caddy/Caddyfile
+  docker rm -f cogentrex-caddy >/dev/null 2>&1 || true
+  docker run -d \
+    --name cogentrex-caddy \
+    --restart unless-stopped \
+    --network host \
+    -e COGENTREX_PUBLIC_HOSTNAME="$PUBLIC_HOSTNAME" \
+    -v /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
+    -v cogentrex-caddy-data:/data \
+    -v cogentrex-caddy-config:/config \
+    "$caddy_image"
 }
 
 # ─── Health Checks ──────────────────────────────────────────────────────────────
@@ -258,14 +320,25 @@ print("  readyz: ready, db=up, redis=up")
 
 check_media() {
   local base_url="$1"
-  if [[ -f "${MEDIA_ROOT}/.cogentrex-learning-library" ]]; then
-    log "Checking /learn media endpoint..."
-    if curl --fail --silent --show-error "${base_url}/learn" >/dev/null 2>&1; then
-      log "  /learn endpoint accessible."
-    else
-      log "WARNING: /learn endpoint not accessible."
-    fi
-  fi
+  [[ -f "${MEDIA_ROOT}/.cogentrex-learning-library" ]] || die "Learning media marker missing"
+  [[ -s "${MEDIA_ROOT}/catalog.json" ]] || die "Learning media catalog missing"
+  log "Checking /learn route and installed media catalog..."
+  curl --fail --silent --show-error "${base_url}/learn" >/dev/null
+  python3 - "$MEDIA_ROOT/catalog.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+catalog = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+artifacts = [artifact for pack in catalog.get("packs", []) for artifact in pack.get("artifacts", [])]
+if not artifacts:
+    raise SystemExit("learning media catalog has no artifacts")
+for artifact in artifacts:
+    path = Path(sys.argv[1]).parent / artifact["file"]
+    if not path.is_file():
+        raise SystemExit(f"missing learning artifact: {artifact['id']}")
+print(f"learning_media_artifacts={len(artifacts)}")
+PY
 }
 
 check_sandbox() {
@@ -274,6 +347,13 @@ check_sandbox() {
     -f "${repo_dir}/${COMPOSE_FILE_LOCAL}" -p "$COMPOSE_PROJECT")
 
   log "Checking sandbox container controls..."
+  local sandbox_id
+  sandbox_id="$("${compose[@]}" ps -q sandbox-runner)"
+  [[ -n "$sandbox_id" ]] || die "Sandbox container is not running"
+  [[ "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$sandbox_id")" == "none" ]] \
+    || die "Sandbox network mode is not none"
+  [[ "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$sandbox_id")" == "true" ]] \
+    || die "Sandbox root filesystem is not read-only"
   if "${compose[@]}" exec -T sandbox-runner python3 -c \
     "import socket; socket.create_connection(('8.8.8.8', 53), timeout=3)" 2>/dev/null; then
     die "Sandbox network isolation FAILED: egress should be denied"
@@ -291,8 +371,17 @@ rollback() {
   fi
   log "ROLLING BACK to SHA ${previous_sha}..."
   ensure_repo "$previous_sha"
+  set_env_value COGENTREX_IMAGE_TAG "$previous_sha"
+  if [[ -n "$LAST_BACKUP" && -s "$LAST_BACKUP" ]]; then
+    local repo_dir="${APP_ROOT}/repo"
+    local compose=(docker compose --env-file "$COMPOSE_ENV_FILE"
+      -f "${repo_dir}/${COMPOSE_FILE_LOCAL}" -p "$COMPOSE_PROJECT")
+    "${compose[@]}" stop gateway frontend backend
+    ALLOW_REPLACE=1 bash "${repo_dir}/scripts/local-restore.sh" \
+      "$COMPOSE_PROJECT" "$COMPOSE_ENV_FILE" "$LAST_BACKUP"
+  fi
   compose_update
-  wait_for_health "http://127.0.0.1:80" 120
+  wait_for_health "$LOCAL_BASE_URL" 120
   save_deploy_state "$previous_sha"
   log "Rollback to ${previous_sha} complete."
 }
@@ -316,13 +405,17 @@ main() {
 
   validate_sha "$target_sha"
 
+  cloud-init status --wait >/dev/null
+  command -v docker >/dev/null || die "Docker is not installed"
+  docker compose version >/dev/null || die "Docker Compose plugin is unavailable"
+
   local previous_sha
   previous_sha="$(current_deployed_sha)"
 
   if [[ "$previous_sha" == "$target_sha" ]]; then
     log "SHA ${target_sha} is already deployed. Re-running health checks..."
-    wait_for_health "http://127.0.0.1:80" 60
-    check_health_details "http://127.0.0.1:80"
+    wait_for_health "$LOCAL_BASE_URL" 60
+    check_health_details "$LOCAL_BASE_URL"
     log "Deployment verified."
     exit 0
   fi
@@ -336,19 +429,20 @@ main() {
   export TMPDIR="$TMPDIR_PERSIST"
   export XDG_STATE_HOME="$STATE_DIR"
 
-  # Step 1: Clone/fetch and checkout
-  ensure_repo "$target_sha"
-
-  # Step 2: Install learning media if absent
-  install_learning_media_if_absent
-
-  # Step 3: Generate/retain protected env
-  generate_env
-
-  # Step 4: Backup before update (only if stack is running)
+  # Step 1: Back up the running revision before changing the checkout.
   if [[ -n "$previous_sha" ]]; then
+    [[ -f "$COMPOSE_ENV_FILE" ]] || die "Retained deployment is missing its protected env"
     pg_backup "$previous_sha"
   fi
+
+  # Step 2: Clone/fetch and checkout the immutable target.
+  ensure_repo "$target_sha"
+
+  # Step 3: Install learning media if absent.
+  install_learning_media_if_absent
+
+  # Step 4: Generate or retain the protected environment.
+  generate_env "$target_sha"
 
   # Step 5: Docker compose update (preserving volumes)
   if ! compose_update; then
@@ -360,7 +454,7 @@ main() {
   fi
 
   # Step 6: Health checks
-  if ! wait_for_health "http://127.0.0.1:80" 120; then
+  if ! wait_for_health "$LOCAL_BASE_URL" 120; then
     log "ERROR: Health checks failed after deployment."
     if [[ -n "$previous_sha" ]]; then
       rollback "$previous_sha"
@@ -368,7 +462,7 @@ main() {
     exit 1
   fi
 
-  if ! check_health_details "http://127.0.0.1:80"; then
+  if ! check_health_details "$LOCAL_BASE_URL"; then
     log "ERROR: Detailed health checks failed."
     if [[ -n "$previous_sha" ]]; then
       rollback "$previous_sha"
@@ -376,16 +470,19 @@ main() {
     exit 1
   fi
 
-  # Step 7: Media & sandbox checks (non-fatal warnings)
-  check_media "http://127.0.0.1:80" || true
-  check_sandbox || true
+  # Step 7: Media and sandbox are required parity gates.
+  check_media "$LOCAL_BASE_URL"
+  check_sandbox
 
-  # Step 8: Record deployment
-  save_deploy_state "$target_sha"
+  # Step 8: Configure the public HTTPS edge only after local acceptance passes.
+  configure_caddy
+
+  # Step 9: Record deployment
+  save_deploy_state "$target_sha" "$previous_sha"
 
   log "Deployment of ${target_sha} complete."
   log "Previous SHA: ${previous_sha:-none}"
-  log "Public URL: https://${COGENTREX_PUBLIC_IP:-<unknown>}.sslip.io"
+  log "Public URL: https://${PUBLIC_HOSTNAME}"
 }
 
 main "$@"

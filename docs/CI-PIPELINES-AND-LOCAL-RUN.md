@@ -2,13 +2,14 @@
 
 This guide explains the repository's automated checks, the verified Docker Compose target, and the supported commands for running Cogentrex locally.
 
-The canonical GitHub Actions file is:
+The canonical GitHub Actions files are:
 
 ```text
 .github/workflows/ci.yml
+.github/workflows/deploy-dev.yml
 ```
 
-There is no `cip.yaml`. The filename is `ci.yml`.
+There is no `cip.yaml`. The CI filename is `ci.yml`; development CD is `deploy-dev.yml`.
 
 ## Terminology
 
@@ -23,10 +24,11 @@ Cogentrex currently has:
 
 | Item | Count |
 |---|---:|
-| GitHub Actions workflow files | 1 |
-| Active GitHub workflows | 1 |
+| GitHub Actions workflow files | 2 |
+| Active GitHub workflows | 2 |
 | Jobs in the CI workflow | 3 |
-| Deployment/CD workflows | 0 |
+| Jobs in the dev deployment workflow | 4 |
+| Deployment/CD workflows | 1 |
 | Verified base Compose services | 7 |
 | Optional profile services | 1 (`jaeger`) |
 
@@ -142,6 +144,14 @@ The job:
 7. removes the smoke container through an exit trap.
 
 This is an image startup smoke. It is not the seven-service Compose acceptance.
+
+## Development deployment workflow
+
+`.github/workflows/deploy-dev.yml` runs after a push to `dev` or a manual dispatch. It repeats the three quality jobs, authenticates to Azure with GitHub OIDC, builds and pushes immutable backend, frontend, and sandbox images to ACR, invokes the versioned deployment script through Azure VM Run Command, and checks the development HTTPS endpoint.
+
+The `deploy` job uses the protected GitHub environment `development`. Repository/environment variables identify the Azure tenant, subscription, resource group, VM, ACR, Key Vault, hostname, and smoke URL; no long-lived Azure credential secret is accepted. The VM retains the current Docker Compose isolation model, including the networkless seccomp-constrained sandbox.
+
+The presence of this workflow proves automation configuration only. A development deployment becomes accepted evidence only after Azure validation, a successful workflow run for the exact revision, public readiness, media and sandbox probes, and recorded rollback evidence.
 
 ## What CI does not do
 

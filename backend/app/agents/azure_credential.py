@@ -1,6 +1,6 @@
 """Azure Managed Identity token provider for OpenAI-compatible endpoints.
 
-Acquires and caches tokens from ``azure.identity.aio.ManagedIdentityCredential``
+Acquires and caches tokens from ``azure.identity.aio.DefaultAzureCredential``
 (or any compatible ``TokenCredential``) and refreshes them before they expire.
 Never logs or includes raw tokens in error messages.
 """
@@ -8,7 +8,7 @@ Never logs or includes raw tokens in error messages.
 from __future__ import annotations
 
 import time
-from typing import Protocol
+from typing import Any, Protocol
 
 import structlog
 
@@ -24,16 +24,9 @@ _REFRESH_MARGIN_SECONDS = 300
 class AsyncTokenCredential(Protocol):
     """Minimal protocol matching ``azure.identity.aio`` credential objects."""
 
-    async def get_token(self, *scopes: str) -> _AccessToken: ...
+    async def get_token(self, *scopes: str, **kwargs: Any) -> Any: ...
 
     async def close(self) -> None: ...
-
-
-class _AccessToken(Protocol):
-    """Minimal protocol matching ``azure.core.credentials.AccessToken``."""
-
-    token: str
-    expires_on: int
 
 
 class AzureTokenProvider:
@@ -42,7 +35,7 @@ class AzureTokenProvider:
     Parameters
     ----------
     credential:
-        An async ``TokenCredential`` (e.g. ``ManagedIdentityCredential``).
+        An async ``TokenCredential`` (e.g. ``DefaultAzureCredential``).
     scope:
         OAuth2 scope.  Defaults to ``https://ai.azure.com/.default``.
     """

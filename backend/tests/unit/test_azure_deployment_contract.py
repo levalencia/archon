@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 AZURE = ROOT / "infra" / "azure"
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -29,20 +28,23 @@ def test_deployment_plan_is_approved_and_preserves_sandbox_parity() -> None:
 
 
 def test_bicep_declares_hardened_vm_boundary_without_embedded_secrets() -> None:
-    main = _read(AZURE / "main.bicep")
-    lowered = main.lower()
+    bicep = "\n".join(path.read_text() for path in sorted(AZURE.rglob("*.bicep")))
+    lowered = bicep.lower()
     for resource_type in (
         "microsoft.network/virtualnetworks",
         "microsoft.network/networksecuritygroups",
         "microsoft.network/publicipaddresses",
         "microsoft.compute/virtualmachines",
+        "microsoft.containerregistry/registries",
         "microsoft.keyvault/vaults",
         "microsoft.operationalinsights/workspaces",
     ):
         assert resource_type in lowered
     assert "standard_b2s" in lowered
-    assert "passwordauthentication: false" in lowered
-    assert "22" not in _read(AZURE / "network-security.bicep")
+    assert "disablepasswordauthentication: true" in lowered
+    network = _read(AZURE / "modules" / "network.bicep")
+    assert "DenySSH" in network
+    assert "destinationPortRange: '22'" in network
     assert "password=" not in lowered
     assert "api_key" not in lowered
 
@@ -50,24 +52,37 @@ def test_bicep_declares_hardened_vm_boundary_without_embedded_secrets() -> None:
 def test_bootstrap_installs_docker_caddy_and_uses_managed_identity() -> None:
     bootstrap = _read(AZURE / "cloud-init.yml")
     assert "docker-ce" in bootstrap
-    assert "caddy" in bootstrap
-    assert "azure-cli" in bootstrap
+    assert "InstallAzureCLIDeb" in bootstrap
     assert "/opt/cogentrex" in bootstrap
     assert "ssh" not in bootstrap.lower()
+    deploy = _read(ROOT / "scripts" / "azure" / "deploy-vm.sh")
+    assert "caddy:2.10.2-alpine@sha256:" in deploy
 
 
 def test_deploy_script_is_sha_pinned_backed_up_and_idempotent() -> None:
     deploy = _read(ROOT / "scripts" / "azure" / "deploy-vm.sh")
     assert "^[0-9a-f]{40}$" in deploy
-    assert "git checkout --detach" in deploy
+    assert 'git -C "$repo_dir" checkout --detach --force' in deploy
     assert "pg_dump" in deploy
     assert "docker compose" in deploy
-    assert "--no-build" not in deploy  # VM path intentionally builds current source.
+    assert "--no-build" in deploy
+    assert "docker-compose.azure.yml" in deploy
+    assert "az acr login" in deploy
     assert "healthz" in deploy
     assert "readyz" in deploy
     assert "sandbox" in deploy
     assert "rollback" in deploy.lower()
     assert "set -Eeuo pipefail" in deploy
+    assert '"$release_script" install' in deploy
+    assert '--target "$MEDIA_ROOT"' in deploy
+    assert "Backup failed; proceeding" not in deploy
+    assert "check_sandbox || true" not in deploy
+    assert "set_env_value COGENTREX_LLM_PROVIDER openai" in deploy
+    assert "set_env_value COGENTREX_LLM_AUTH_MODE azure_identity" in deploy
+    assert "DeepSeek-V4-Flash" in deploy
+    assert "/etc/caddy/Caddyfile" in deploy
+    assert "caddy:2.10.2-alpine@sha256:" in deploy
+    assert "--network host" in deploy
 
 
 def test_dev_workflow_uses_oidc_and_never_long_lived_azure_credentials() -> None:
@@ -83,6 +98,22 @@ def test_dev_workflow_uses_oidc_and_never_long_lived_azure_credentials() -> None
     assert "environment: development" in workflow
     assert "github.sha" in workflow
     assert "vm run-command invoke" in workflow
+    assert 'show "$1:scripts/azure/deploy-vm.sh"' in workflow
+    assert "/tmp/cogentrex-deploy-vm.sh" in workflow
+    assert "docker-compose.prod.yml" not in workflow
+    assert "az acr login" in workflow
+    assert workflow.count("docker push") >= 3
+
+
+def test_backend_image_contains_azure_identity_runtime_dependency() -> None:
+    pyproject = _read(ROOT / "backend" / "pyproject.toml")
+    runtime_dependencies = pyproject.split("[project.optional-dependencies]", 1)[0]
+    assert "azure-identity" in runtime_dependencies
+
+
+def test_compose_passes_managed_identity_auth_mode() -> None:
+    compose = _read(ROOT / "docker-compose.local.yml")
+    assert "COGENTREX_LLM_AUTH_MODE" in compose
 
 
 def test_ci_runs_for_pull_requests_targeting_dev() -> None:

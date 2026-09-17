@@ -24,11 +24,11 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
 
         token_provider = None
         if settings.llm_auth_mode == "azure_identity":
-            from azure.identity.aio import ManagedIdentityCredential  # type: ignore[import-untyped]
+            from azure.identity.aio import DefaultAzureCredential  # type: ignore[import-untyped]
 
             from app.agents.azure_credential import AzureTokenProvider
 
-            credential = ManagedIdentityCredential()
+            credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
             token_provider = AzureTokenProvider(credential)
 
         return OpenAIAdapter(

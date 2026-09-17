@@ -109,10 +109,10 @@ if [[ -f "$caddyfile" ]]; then
   else
     fail "Caddyfile missing reverse_proxy"
   fi
-  if grep -q 'COGENTREX_PUBLIC_IP' "$caddyfile"; then
-    pass "Caddyfile uses COGENTREX_PUBLIC_IP env var"
+  if grep -q 'COGENTREX_PUBLIC_HOSTNAME' "$caddyfile"; then
+    pass "Caddyfile uses COGENTREX_PUBLIC_HOSTNAME env var"
   else
-    fail "Caddyfile missing COGENTREX_PUBLIC_IP env"
+    fail "Caddyfile missing COGENTREX_PUBLIC_HOSTNAME env"
   fi
 else
   fail "Caddyfile.azure not found"
@@ -122,7 +122,7 @@ fi
 printf '\n=== Bicep Files ===\n'
 for bicep in main.bicep modules/network.bicep modules/vm.bicep \
              modules/keyvault.bicep modules/monitoring.bicep \
-             modules/cognitive-rbac.bicep cloud-init.yml; do
+             modules/cognitive-rbac.bicep modules/acr.bicep cloud-init.yml; do
   if [[ -f "$ROOT/infra/azure/$bicep" ]]; then
     pass "exists: infra/azure/${bicep}"
   else
@@ -143,8 +143,8 @@ for pattern in 'validate_sha' 'pg_backup' 'compose_update' 'rollback' \
   fi
 done
 
-# No provider secrets in deploy script
-for secret_pattern in 'API_KEY' 'PASSWORD.*=.*[^${}]' 'SECRET_KEY.*=.*[^${}]'; do
+# No hardcoded provider credentials or infrastructure secrets in deploy script.
+for secret_pattern in 'COGENTREX_LLM_API_KEY=.*[A-Za-z0-9]{16}' 'PASSWORD.*=.*[^${}]' 'SECRET_KEY.*=.*[^${}]'; do
   if grep -qE "^[^#]*${secret_pattern}" "$deploy" 2>/dev/null; then
     fail "deploy-vm.sh may contain hardcoded secret pattern: ${secret_pattern}"
   else

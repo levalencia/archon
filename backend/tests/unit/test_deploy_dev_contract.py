@@ -38,7 +38,10 @@ class TestTriggers:
         assert deploy_dev[_ON]["push"]["branches"] == ["dev"]
 
     def test_workflow_dispatch_enabled(self, deploy_dev: dict) -> None:
-        assert "workflow_dispatch" in deploy_dev[_ON] or deploy_dev[_ON].get("workflow_dispatch") is None
+        assert (
+            "workflow_dispatch" in deploy_dev[_ON]
+            or deploy_dev[_ON].get("workflow_dispatch") is None
+        )
 
     def test_no_pull_request_target(self, deploy_dev: dict) -> None:
         assert "pull_request_target" not in deploy_dev[_ON]
@@ -109,7 +112,9 @@ class TestDeploySafety:
         scripts_match = re.search(r"--scripts\s+'([^']*)'", run_block)
         assert scripts_match is not None, "--scripts should use single-quoted literal"
         scripts_body = scripts_match.group(1)
-        assert "${{" not in scripts_body, "Scripts body must not contain GitHub expression interpolation"
+        assert "${{" not in scripts_body, (
+            "Scripts body must not contain GitHub expression interpolation"
+        )
         # SHA delivered via --parameters
         assert "--parameters" in run_block
 

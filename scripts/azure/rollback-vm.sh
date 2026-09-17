@@ -42,44 +42,20 @@ main() {
   if [[ "$force" == "true" ]]; then
     log "Force rollback to SHA ${target_sha}"
   else
-    # Read the current deployed SHA from state
     if [[ ! -f "$DEPLOY_STATE" ]]; then
       die "No deploy state found at ${DEPLOY_STATE}; cannot determine previous SHA."
     fi
 
     local current_sha
+    local previous_sha
     # shellcheck disable=SC1090
     current_sha="$(source "$DEPLOY_STATE" && printf '%s' "${COGENTREX_DEPLOYED_SHA:-}")"
+    # shellcheck disable=SC1090
+    previous_sha="$(source "$DEPLOY_STATE" && printf '%s' "${COGENTREX_PREVIOUS_SHA:-}")"
     [[ -n "$current_sha" ]] || die "No deployed SHA found in state file."
-
-    # Look for backup metadata to find previous SHA
-    local backup_dir="${APP_ROOT}/backups"
-    local latest_backup
-    latest_backup="$(find "$backup_dir" -name '*.metadata.json' -type f 2>/dev/null \
-      | sort -r | head -1)"
-
-    if [[ -n "$latest_backup" ]]; then
-      target_sha="$(python3 -c "
-import json, sys
-with open(sys.argv[1]) as f:
-    m = json.load(f)
-# Extract SHA prefix from backup filename
-import os
-base = os.path.basename(sys.argv[1])
-# Format: cogentrex-<sha12>-<ts>.dump.metadata.json
-parts = base.split('-')
-if len(parts) >= 2:
-    sha_prefix = parts[1]
-    print(sha_prefix)
-else:
-    print('')
-" "$latest_backup")"
-    fi
-
-    if [[ -z "$target_sha" || ${#target_sha} -ne 40 ]]; then
-      die "Cannot determine previous SHA from backups. Use --force SHA to specify."
-    fi
-
+    target_sha="$previous_sha"
+    [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]] \
+      || die "No valid previous SHA in deploy state. Use --force SHA to specify."
     log "Rolling back from ${current_sha} to ${target_sha}"
   fi
 

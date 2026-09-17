@@ -15,6 +15,7 @@ import pytest
 
 from app.agents.azure_credential import DEFAULT_SCOPE, AzureTokenProvider
 from app.agents.openai_adapter import OpenAIAdapter
+from app.observability.cost_tracker import price_model_usage_nusd, validated_pricing_pair
 
 # ---------------------------------------------------------------------------
 # Helpers / fakes
@@ -99,11 +100,12 @@ class TestFactorySelectsManagedIdentity:
         from app.agents import llm_factory
         from app.config import Settings
 
-        # Fake out azure.identity.aio.ManagedIdentityCredential
-        class FakeMIC:
-            pass
+        # Fake out azure.identity.aio.DefaultAzureCredential
+        class FakeDefaultCredential:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
 
-        fake_module = type("mod", (), {"ManagedIdentityCredential": FakeMIC})()
+        fake_module = type("mod", (), {"DefaultAzureCredential": FakeDefaultCredential})()
         monkeypatch.setitem(
             __import__("sys").modules,
             "azure.identity.aio",
@@ -134,6 +136,21 @@ class TestFactorySelectsManagedIdentity:
         client = llm_factory._create_single_client("openai", settings)
         assert isinstance(client, OpenAIAdapter)
         assert client._token_provider is None
+
+
+@pytest.mark.unit
+def test_deepseek_v4_flash_has_exact_foundry_pricing() -> None:
+    assert validated_pricing_pair("DeepSeek-V4-Flash", "openai") == (
+        "openai",
+        "DeepSeek-V4-Flash",
+    )
+    assert (
+        price_model_usage_nusd("DeepSeek-V4-Flash", "openai", 1_000_000, 1_000_000) == 700_000_000
+    )
+    assert (
+        price_model_usage_nusd("DeepSeek-V4-Flash", "openai", 1_000_000, 0, cache_read=1_000_000)
+        == 28_000_000
+    )
 
 
 # ---------------------------------------------------------------------------

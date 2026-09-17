@@ -44,6 +44,7 @@ var vmName = '${prefix}-vm'
 var kvName = '${prefix}-kv-${nameSuffix}'
 var lawName = '${prefix}-law'
 var aiName = '${prefix}-ai'
+var acrName = '${prefix}${nameSuffix}'
 
 // ─── Modules ───────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ module keyVault './modules/keyvault.bicep' = {
     location: location
     kvName: kvName
     vmPrincipalId: vm.outputs.vmPrincipalId
+    applicationInsightsConnectionString: monitoring.outputs.aiConnectionString
   }
 }
 
@@ -102,12 +104,25 @@ module cognitiveRbac './modules/cognitive-rbac.bicep' = {
   }
 }
 
+module acr './modules/acr.bicep' = {
+  name: 'acr'
+  params: {
+    location: location
+    registryName: acrName
+    vmPrincipalId: vm.outputs.vmPrincipalId
+  }
+}
+
 // ─── Outputs ───────────────────────────────────────────────────────────────────
 
 output vmName string = vmName
+output vmId string = vm.outputs.vmId
 output publicIpAddress string = network.outputs.publicIpAddress
 output publicIpFqdn string = '${network.outputs.publicIpAddress}.sslip.io'
 output keyVaultName string = kvName
 output logAnalyticsWorkspaceId string = monitoring.outputs.lawId
-output appInsightsConnectionString string = monitoring.outputs.aiConnectionString
+output appInsightsName string = aiName
 output vmPrincipalId string = vm.outputs.vmPrincipalId
+output acrId string = acr.outputs.registryId
+output acrName string = acr.outputs.registryName
+output acrLoginServer string = acr.outputs.loginServer
