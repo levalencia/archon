@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # LLM Provider (vendor-neutral)
     llm_provider: str = "mock"  # mock | openai | anthropic | foundry | ollama
     llm_model: str = "mock-model"
+    llm_auth_mode: Literal["api_key", "azure_identity"] = "api_key"
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_fallback_providers: str = ""  # comma-separated list e.g. "openai,ollama"

@@ -22,6 +22,15 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
     if provider == "openai":
         from app.agents.openai_adapter import OpenAIAdapter
 
+        token_provider = None
+        if settings.llm_auth_mode == "azure_identity":
+            from azure.identity.aio import ManagedIdentityCredential  # type: ignore[import-untyped]
+
+            from app.agents.azure_credential import AzureTokenProvider
+
+            credential = ManagedIdentityCredential()
+            token_provider = AzureTokenProvider(credential)
+
         return OpenAIAdapter(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
@@ -31,6 +40,7 @@ def _create_single_client(provider: str, settings: Settings) -> LLMClient:
             json_mode_enabled=settings.openai_json_mode_enabled,
             json_schema_enabled=settings.openai_json_schema_enabled,
             cache_usage_enabled=settings.openai_cache_usage_enabled,
+            token_provider=token_provider,
         )
 
     if provider == "anthropic":
