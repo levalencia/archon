@@ -130,6 +130,8 @@ Rationale:
 - Azure deployment group `what-if`: PASS; existing AI Services resources ignored, new VM/network/ACR/Key Vault/monitoring resources proposed.
 - Azure template validation: PASS.
 - Formal post-plan Azure template validation: PASS (`Succeeded`, no error).
+- First provisioning attempt: FAIL before application deployment because the generated Key Vault name exceeded Azure's 24-character limit; VM/network/ACR/monitoring were created successfully and retained.
+- Recovery: added a deterministic Key Vault naming regression test, shortened the generated name to `ctxkv` plus an eight-character suffix, then reran Bicep build, focused tests, Azure validation, and what-if: PASS.
 - Azure static deployment contracts: 35 PASS.
 - Focused backend deployment/provider/pricing contracts: 92 PASS.
 - Full backend suite: 1,815 PASS, 7 skipped.

@@ -49,6 +49,12 @@ def test_bicep_declares_hardened_vm_boundary_without_embedded_secrets() -> None:
     assert "api_key" not in lowered
 
 
+def test_key_vault_name_stays_within_azure_length_limit() -> None:
+    main = _read(AZURE / "main.bicep")
+    assert "var kvName = 'ctxkv${take(nameSuffix, 8)}'" in main
+    assert "${prefix}-kv-${nameSuffix}" not in main
+
+
 def test_bootstrap_installs_docker_caddy_and_uses_managed_identity() -> None:
     bootstrap = _read(AZURE / "cloud-init.yml")
     assert "docker-ce" in bootstrap
