@@ -1,0 +1,78 @@
+#cloud-config
+# Cogentrex VM cloud-init – installs Docker Engine, Compose plugin,
+# Azure CLI, Caddy, git, and prepares /opt/cogentrex.
+
+package_update: true
+package_upgrade: true
+
+apt:
+  sources:
+    docker.list:
+      source: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu noble stable"
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+      keyserver: https://download.docker.com/linux/ubuntu/gpg
+    caddy-stable.list:
+      source: "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
+      keyid: 65760C51EDEA2017CEA2CA15155B6D79CA56EA34
+      keyserver: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
+    azure-cli.list:
+      source: "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ noble main"
+      keyid: BC528686B50D79E339D3721CEB3E94ADBE1229CF
+      keyserver: https://packages.microsoft.com/keys/microsoft.asc
+
+packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+  - caddy
+  - git
+  - azure-cli
+  - jq
+  - curl
+  - unzip
+  - ca-certificates
+  - gnupg
+
+groups:
+  - docker
+
+system_info:
+  default_user:
+    groups: [docker]
+
+runcmd:
+  # Enable and start Docker
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Create application directory with secure ownership
+  - mkdir -p /opt/cogentrex
+  - chown cogentrex:cogentrex /opt/cogentrex
+  - chmod 750 /opt/cogentrex
+
+  # Create persistent state directories
+  - mkdir -p /opt/cogentrex/.state
+  - mkdir -p /opt/cogentrex/backups
+  - mkdir -p /opt/cogentrex/media
+  - chown -R cogentrex:cogentrex /opt/cogentrex
+
+  # Create TMPDIR and XDG_STATE_HOME for cogentrex user
+  - mkdir -p /var/tmp/cogentrex
+  - chown cogentrex:cogentrex /var/tmp/cogentrex
+  - chmod 700 /var/tmp/cogentrex
+
+  # Write environment profile for cogentrex user
+  - |
+    cat > /etc/profile.d/cogentrex.sh << 'PROFILE'
+    export TMPDIR=/var/tmp/cogentrex
+    export XDG_STATE_HOME=/opt/cogentrex/.state
+    export COGENTREX_APP_ROOT=/opt/cogentrex
+    PROFILE
+    chmod 644 /etc/profile.d/cogentrex.sh
+
+  # Stop default Caddy until configured
+  - systemctl stop caddy
+  - systemctl disable caddy
+
+final_message: "Cogentrex VM cloud-init completed in $UPTIME seconds"
