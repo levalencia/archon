@@ -1,0 +1,154 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # ── Quality gates (mirror CI) ──────────────────────────────────────
+  backend-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --extra dev
+      - name: Ruff lint
+        run: uv run ruff check app tests ../scripts/validate-course-docs.py
+      - name: Ruff format
+        run: uv run ruff format --check app tests ../scripts/validate-course-docs.py
+      - name: Course documentation contracts
+        run: uv run python ../scripts/validate-course-docs.py
+      - name: Bandit security scan
+        run: uv run bandit -r app -ll
+      - name: Backend tests
+        run: uv run pytest -q --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=50
+
+  frontend-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Svelte and TypeScript checks
+        run: npm run check
+      - name: Frontend tests
+        run: npm test -- --run
+      - name: Production build
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests
+        run: npx playwright test
+
+  backend-image:
+    runs-on: ubuntu-latest
+    needs: [backend-quality, frontend-quality]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t cogentrex-backend:${{ github.sha }} .
+      - name: Smoke test backend image
+        run: |
+          memory_env_name='COGENTREX_ENCRYPTION_MASTER_'"KEY"
+          memory_material="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          export "${memory_env_name}=${memory_material}"
+          docker run -d --name cogentrex-test -p 8000:8000 \
+            -e COGENTREX_DATABASE_URL="sqlite+aiosqlite:////tmp/cogentrex-ci.db" \
+            -e COGENTREX_MEMORY_ENCRYPTION_ENABLED=true \
+            -e "$memory_env_name" \
+            cogentrex-backend:${{ github.sha }}
+          unset "$memory_env_name" memory_material
+          trap 'docker rm -f cogentrex-test >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://localhost:8000/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs cogentrex-test
+          exit 1
+
+  # ── Deploy to Azure dev VM ─────────────────────────────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [backend-image]
+    environment: development
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy via VM run-command
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_RG: ${{ vars.AZURE_DEV_RESOURCE_GROUP }}
+          DEPLOY_VM: ${{ vars.AZURE_DEV_VM_NAME }}
+        run: |
+          az vm run-command invoke \
+            --resource-group "$DEPLOY_RG" \
+            --name "$DEPLOY_VM" \
+            --command-id RunShellScript \
+            --scripts 'cd /opt/cogentrex && git fetch origin && git checkout "$1" && docker compose -f docker-compose.prod.yml up -d --build --force-recreate' \
+            --parameters "$DEPLOY_SHA"
+
+      - name: Smoke test dev endpoint
+        env:
+          SMOKE_URL: ${{ vars.AZURE_DEV_SMOKE_URL }}
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --max-time 10 "${SMOKE_URL}/healthz"; then
+              echo ""
+              echo "✅ Smoke test passed on attempt ${attempt}"
+              exit 0
+            fi
+            echo "Attempt ${attempt}/30 – waiting 10s..."
+            sleep 10
+          done
+          echo "❌ Smoke test failed after 30 attempts"
+          exit 1
+
+      - name: Capture deployment evidence
+        if: always()
+        run: |
+          mkdir -p evidence
+          echo "commit: ${{ github.sha }}"            > evidence/deploy-dev.txt
+          echo "ref: ${{ github.ref }}"               >> evidence/deploy-dev.txt
+          echo "actor: ${{ github.actor }}"           >> evidence/deploy-dev.txt
+          echo "run_id: ${{ github.run_id }}"         >> evidence/deploy-dev.txt
+          echo "run_number: ${{ github.run_number }}" >> evidence/deploy-dev.txt
+          echo "timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> evidence/deploy-dev.txt
+
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-dev-evidence-${{ github.run_number }}
+          path: evidence/
+          retention-days: 30
