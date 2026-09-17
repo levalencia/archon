@@ -8,6 +8,8 @@ Target subscription: `6331e1e6-713f-4b7a-8665-99dfd16207c5`
 Target resource group: `cogentrex`
 Preferred region: Sweden Central, subject to policy/quota/service checks
 
+This plan supersedes the 2026-08-27 local-only/deferred decision after Luis explicitly authorized Azure resource creation, GitHub Actions deployment, and a public development environment on 2026-09-17. The previous plan remains available in Git history.
+
 ## 1. Goal
 
 Publish Cogentrex through GitHub Actions while preserving the existing seven-service behavior and the sandbox controls: network isolation, custom seccomp, capability drop, read-only filesystem, resource limits, and Unix-socket IPC.

@@ -1,0 +1,105 @@
+"""Static contracts for the Azure dev deployment lane.
+
+These tests intentionally validate security and parity properties without requiring
+Azure credentials. Live Azure evidence is recorded separately in the deployment plan.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[3]
+AZURE = ROOT / "infra" / "azure"
+WORKFLOWS = ROOT / ".github" / "workflows"
+
+
+def _read(path: Path) -> str:
+    assert path.is_file(), f"missing deployment artifact: {path.relative_to(ROOT)}"
+    return path.read_text(encoding="utf-8")
+
+
+def test_deployment_plan_is_approved_and_preserves_sandbox_parity() -> None:
+    plan = _read(ROOT / ".azure" / "deployment-plan.md")
+    assert "Status: Approved" in plan
+    assert "network_mode:none" in plan
+    assert "custom seccomp" in plan
+    assert "dev.cogentrex.com" in plan
+    assert "Provider-live access is not enabled" in plan
+
+
+def test_bicep_declares_hardened_vm_boundary_without_embedded_secrets() -> None:
+    main = _read(AZURE / "main.bicep")
+    lowered = main.lower()
+    for resource_type in (
+        "microsoft.network/virtualnetworks",
+        "microsoft.network/networksecuritygroups",
+        "microsoft.network/publicipaddresses",
+        "microsoft.compute/virtualmachines",
+        "microsoft.keyvault/vaults",
+        "microsoft.operationalinsights/workspaces",
+    ):
+        assert resource_type in lowered
+    assert "standard_b2s" in lowered
+    assert "passwordauthentication: false" in lowered
+    assert "22" not in _read(AZURE / "network-security.bicep")
+    assert "password=" not in lowered
+    assert "api_key" not in lowered
+
+
+def test_bootstrap_installs_docker_caddy_and_uses_managed_identity() -> None:
+    bootstrap = _read(AZURE / "cloud-init.yml")
+    assert "docker-ce" in bootstrap
+    assert "caddy" in bootstrap
+    assert "azure-cli" in bootstrap
+    assert "/opt/cogentrex" in bootstrap
+    assert "ssh" not in bootstrap.lower()
+
+
+def test_deploy_script_is_sha_pinned_backed_up_and_idempotent() -> None:
+    deploy = _read(ROOT / "scripts" / "azure" / "deploy-vm.sh")
+    assert "^[0-9a-f]{40}$" in deploy
+    assert "git checkout --detach" in deploy
+    assert "pg_dump" in deploy
+    assert "docker compose" in deploy
+    assert "--no-build" not in deploy  # VM path intentionally builds current source.
+    assert "healthz" in deploy
+    assert "readyz" in deploy
+    assert "sandbox" in deploy
+    assert "rollback" in deploy.lower()
+    assert "set -Eeuo pipefail" in deploy
+
+
+def test_dev_workflow_uses_oidc_and_never_long_lived_azure_credentials() -> None:
+    workflow = _read(WORKFLOWS / "deploy-dev.yml")
+    assert "id-token: write" in workflow
+    assert "contents: read" in workflow
+    assert "azure/login" in workflow
+    assert "AZURE_CLIENT_ID" in workflow
+    assert "AZURE_TENANT_ID" in workflow
+    assert "AZURE_SUBSCRIPTION_ID" in workflow
+    assert "AZURE_CREDENTIALS" not in workflow
+    assert "branches: [dev]" in workflow
+    assert "environment: development" in workflow
+    assert "github.sha" in workflow
+    assert "vm run-command invoke" in workflow
+
+
+def test_ci_runs_for_pull_requests_targeting_dev() -> None:
+    ci = _read(WORKFLOWS / "ci.yml")
+    assert "branches: [main, dev]" in ci
+
+
+def test_cloud_deployment_keeps_local_compose_as_parity_target() -> None:
+    deploy = _read(ROOT / "scripts" / "azure" / "deploy-vm.sh")
+    assert "docker-compose.local.yml" in deploy
+    for service in (
+        "gateway",
+        "frontend",
+        "backend",
+        "sandbox-runner",
+        "postgres",
+        "redis",
+        "otel-collector",
+    ):
+        assert service in _read(ROOT / "docker-compose.local.yml")
