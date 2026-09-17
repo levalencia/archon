@@ -5827,7 +5827,7 @@
       "category": "knowledge-quality",
       "level": "intermediate",
       "definition": "A measure of the angle between two vectors; closer to 1 means more similar direction. Used to rank candidate chunks by semantic relevance.",
-      "cogentrex": "Cogentrex computes cosine similarity in Python over SQL JSON vectors rather than using pgvector. The Learning Tutor corpus is application-owned and context-ranked; tenant document retrieval is scoped separately.",
+      "cogentrex": "Cogentrex computes cosine similarity in Python over SQL JSON vectors rather than using pgvector for tenant-scoped document retrieval.",
       "concept_ids": [
         "retrieval",
         "embeddings"
@@ -7460,7 +7460,7 @@
       "category": "knowledge-quality",
       "level": "beginner",
       "definition": "Grounding means constraining an answer to supplied evidence instead of letting the model rely on unsupported memory or invention.",
-      "cogentrex": "Cogentrex retrieves bounded evidence, requires evidence IDs on claims, and checks support before showing a grounded Tutor answer.",
+      "cogentrex": "Cogentrex tenant-scoped document RAG retrieves bounded evidence and checks support before presenting a grounded answer.",
       "concept_ids": [
         "groundedness",
         "rag"

@@ -1,15 +1,13 @@
 <script lang="ts">
   import { Check, ExternalLink, Minus, Search } from 'lucide-svelte';
-  import type { LearningTutorContext } from '$lib/learning-tutor';
   import { STATUS_META, evidenceFilter, type ConceptStatus, type VisualLearningStudio } from '$lib/visual-learning';
 
-  let { studio, onContextChange = () => {} }: { studio: VisualLearningStudio; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
+  let { studio }: { studio: VisualLearningStudio } = $props();
   let query = $state('');
   let status = $state<ConceptStatus | 'all'>('all');
   let selectedId = $state('agent-anatomy');
   let rows = $derived(evidenceFilter(studio.concepts, query, status));
   let selected = $derived(rows.find(item => item.id === selectedId));
-  $effect(() => { if (selected) onContextChange({ view: 'evidence', concept_id: selected.id }, selected.title); });
 
   $effect(() => {
     const visibleRows = rows;

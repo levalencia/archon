@@ -15,46 +15,19 @@
 
 This ledger separates code presence, wiring, tests, direct observation, UI, and deployment. Historical acceptance records remain below for traceability; they do not override the current capability manifest.
 
-## Contextual Visual Learning tutor
+## Visual Learning and published media
 
-The authenticated `/api/learning-tutor` path resolves browser context against the
-server-owned Visual Learning manifest, retrieves from a curated application-owned
-corpus, requires evidence IDs for atomic claims, verifies citations, appends exact
-code excerpts, validates optional diagrams, and persists redacted turns plus
-owner-scoped run evidence. Retrieval remains bounded SQL-JSON cosine plus lexical,
-context, alias, file, and symbol ranking; it is not pgvector.
+The `/learn` surface, canonical vocabulary, diagrams, presentations, quizzes,
+audio lessons, videos, transcripts, source links, and signed media delivery remain
+implemented. They use the static Visual Learning manifest and the independent
+`learning_media` catalog/streaming path.
 
-Merged revision `212e84f` was exercised locally with Foundry
-`claude-opus-4-6` over the frozen 90-case dataset. The final run completed all 90
-requests with 80 deterministic passes, 88 grounded/non-fallback answers, 85 cases
-meeting citation requirements, and zero execution errors. A separate blinded
-model-rubric review marked 44 answers pedagogically useful and 63 as correctly
-applying the concept to Cogentrex. The sanitized methodology, paired baseline
-comparison, retrieval, latency, token, cost, and limitation evidence is recorded
-in [`docs/evidence/learning-tutor-quality-final.md`](evidence/learning-tutor-quality-final.md)
-and its [machine-readable summary](evidence/learning-tutor-quality-final.json).
-
-This evidence is local and provider-specific. It does **not** establish public
-deployment, complete expected-source recall, universally strong pedagogy,
-production scale, or a tail-latency improvement. The final mean recall@10 was
-0.5268, two medium cases still fell back, and P95 latency increased because weak
-initial generations can invoke one additional bounded provider call.
-
-### Vocabulary candidate evaluation — not promoted
-
-Local candidate `53b62d7` adds the canonical 299-term vocabulary, generated
-glossary, searchable Visual Learning view, validated Tutor context, and 299
-per-term retrieval sources. Its implementation and browser gates pass, and a
-paired blind review improves basic pedagogical pass from 19/30 to 24/30.
-
-The complete 90-case Tutor matrix did not improve globally: deterministic pass
-changed from 80/90 to 79/90, grounded answers from 88/90 to 83/90, citation
-requirements from 85/90 to 84/90, and mean expected-source recall@10 from
-0.5268 to 0.4731. The combined candidate is therefore **not promoted**. See
-[`docs/evidence/visual-learning-vocabulary-evaluation.md`](evidence/visual-learning-vocabulary-evaluation.md)
-and its [machine-readable summary](evidence/visual-learning-vocabulary-evaluation.json).
-
-Follow-up revision `8a1d3b6` keeps global vocabulary discovery default-off while preserving exact learner-selected `vocabulary:<id>` context. This separates the deterministic catalog, Glossary UI, and explicit Tutor path from the flag-on behavior that failed the global quality gate.
+The contextual Learning Tutor chat, its dedicated RAG corpus, SQL-JSON learning
+vectors, sessions, turns, routes, and frontend panel were removed in revision
+`20260917_24`. Historical Tutor evidence remains in `docs/evidence/` for audit
+traceability only and is not a current capability claim. The removal boundary,
+preserved Visual Learning surfaces, migration behavior, and undeployed database
+status are recorded in [`docs/evidence/learning-tutor-removal-2026-09-17.md`](evidence/learning-tutor-removal-2026-09-17.md).
 
 ### Historical candidate baseline (superseded)
 
@@ -76,7 +49,7 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 
 ## Skills + Project Instructions (merged to main)
 
-The repository implements migrations `20260901_15` through `20260912_23`, ten
+The repository implements migrations `20260901_15` through `20260917_24`, ten
 owned bundled skills, immutable skill revisions and exact
 owner/project/revision bindings, approved project-instruction snapshots,
 metadata-first capability discovery, and one request-context preparation path

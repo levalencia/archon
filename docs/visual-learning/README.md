@@ -42,47 +42,6 @@ The videos are not a parallel documentation system. Canonical explanations remai
 
 `review-ready` means the package is wired and technically validated but still awaits learner acceptance. Only accepted revisions should be promoted to `published`.
 
-## Contextual learning tutor
-
-Every Studio view exposes **Ask about this topic**. The browser submits only
-trusted identifiers such as the active concept, story step, artifact, or video
-timestamp. The backend resolves those identifiers against the tracked Studio
-manifest and reviewed media catalog before retrieval. Answers are assembled from
-verified atomic claims, include exact code excerpts when code evidence is
-available, and render only validated diagram data.
-
-The browser uses an SSE endpoint so it can show progress immediately and reveal
-the final verified answer incrementally. Raw model output is never streamed as
-trusted content: verification and compliance checks finish before answer chunks
-are emitted.
-
-For general-definition questions, an explicitly enabled supplement can retrieve
-up to three HTTPS pages from a fixed list of official documentation domains.
-External pages are filtered before fetching, treated as untrusted data, and
-verified before citation. Repository evidence remains authoritative for claims
-about Cogentrex itself.
-
-The learning corpus is application-owned and separate from user document RAG.
-Synchronize it explicitly after migrations and before tutor acceptance:
-
-```bash
-cd backend
-uv run python scripts/sync_learning_knowledge.py \
-  --repository-root .. \
-  --media-root ../../cogentrex-learning-media \
-  --video code-first-video-01 \
-  --video code-first-video-02
-```
-
-The command refuses a dirty repository and mock embeddings by default. Use
-`--dry-run` to inspect the source inventory without database writes or provider
-calls. `--mock-embeddings --allow-mock` is an explicit deterministic local-only
-mode; it supports lexical/context testing but is not semantic-quality evidence.
-For offline semantic retrieval, configure the `local` embedding provider with
-`BAAI/bge-small-en-v1.5` and 384 dimensions. Vectors remain in the existing
-PostgreSQL SQL-JSON store; a separate vector database is not required at the
-current bounded corpus size.
-
 ## One-source pipeline
 
 ```mermaid
@@ -177,11 +136,9 @@ The Visual Learning Studio operates in two modes:
 | **Base** (default after clone) | Roadmap, Stories, Architecture, Evidence, and the searchable Glossary from the tracked Studio manifest. Present, Listen, and Study report that published media is unavailable. | Nothing extra needed. |
 | **Rich** (after media install) | Everything above **plus** MP3 audio, MP4 video, high-fidelity SVG diagrams, and HTML presentation decks. | Install the checksummed media package (see below). |
 
-### Tutor vocabulary rollout
+### Vocabulary
 
-The Glossary and its validated `vocabulary_id` context are available by default. When a learner explicitly selects a glossary entry, the Tutor may retrieve that exact vocabulary source. Unprompted discovery of vocabulary sources from other Tutor views is default-off because the full quality matrix did not establish a global improvement.
-
-Operators can enable the evaluated rollout with `COGENTREX_LEARNING_TUTOR_VOCABULARY_DISCOVERY_ENABLED=true`. Treat that flag as a quality experiment rather than a production-readiness claim; rerun the frozen Tutor evaluation before changing the default.
+The searchable Glossary remains part of the tracked Visual Learning manifest and is available in the Base installation without any Tutor or vector index.
 
 ### Install rich media (online)
 

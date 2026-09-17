@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { Download, ExternalLink, RefreshCw } from 'lucide-svelte';
-  import type { LearningTutorContext } from '$lib/learning-tutor';
   import {
     getLearningArtifact,
     getMediaAccess,
@@ -22,7 +21,7 @@
   import VideoLessonPlayer from './VideoLessonPlayer.svelte';
 
   type MediaMode = 'present' | 'listen' | 'study';
-  let { mode, onContextChange = () => {} }: { mode: MediaMode; onContextChange?: (context: LearningTutorContext, title: string) => void } = $props();
+  let { mode }: { mode: MediaMode } = $props();
   const types = {
     present: ['deck', 'diagram', 'infographic', 'video'],
     listen: ['audio', 'podcast'],
@@ -100,14 +99,6 @@
     if (first && !visibleArtifacts.some(item => item.id === selectedId)) void loadArtifact(first);
   });
 
-  $effect(() => {
-    if (!selected) return;
-    onContextChange({
-      view: mode,
-      artifact_id: selected.id,
-      playback_seconds: selected.type === 'video' ? playbackSeconds : undefined,
-    }, selected.title);
-  });
 </script>
 
 <section aria-labelledby="library-heading">

@@ -149,7 +149,7 @@ def test_images_run_nonroot_and_backend_migrates() -> None:
     assert backend.count("@sha256:") >= 3
     assert "alembic upgrade head" in entrypoint
     smoke = (ROOT / "scripts/local-deploy-smoke.sh").read_text()
-    assert '[[ "$migration" == "20260912_23" ]]' in smoke
+    assert '[[ "$migration" == "20260917_24" ]]' in smoke
     assert "app.acceptance.control_plane" in smoke
     assert 'durable_monetary_budget"] == "enabled"' in smoke
     assert 'durable_effect_ledger"] == "enabled"' in smoke

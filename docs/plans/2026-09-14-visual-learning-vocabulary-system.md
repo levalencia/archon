@@ -1,5 +1,7 @@
 # Visual Learning Vocabulary System
 
+> **Historical plan:** Vocabulary and Visual Learning remain active, but all Learning Tutor retrieval goals in this document were retired by migration `20260917_24`.
+
 ## Goal
 
 Create one canonical, extensive vocabulary system that covers the terms used across course Markdown, Visual Learning, published media, Learning Tutor evaluations, and implementation walkthroughs. Make the vocabulary searchable in `/learn`, heading-scoped for Tutor retrieval, and continuously audited for drift.
