@@ -1182,8 +1182,8 @@ class DatabaseStore:
                 revisions = tuple(result.scalars())
             except Exception as exc:
                 raise RuntimeError("database schema is not managed by Alembic") from exc
-        if revisions != ("20260912_23",):
-            raise RuntimeError("database schema is not at expected Alembic head 20260912_23")
+        if revisions != ("20260917_24",):
+            raise RuntimeError("database schema is not at expected Alembic head 20260917_24")
         logger.info("database_schema_verified", alembic_revision=revisions[0])
 
     @property
