@@ -518,13 +518,6 @@ class EvidenceVerifierSpecialist:
                         wait_for_existing_terminal(),
                         deadline=time.monotonic() + _TERMINAL_CLEANUP_SECONDS,
                     )
-                if not terminal.task.done():
-                    terminal.task.cancel()
-                    with suppress(BaseException):
-                        await await_before_deadline(
-                            wait_for_existing_terminal(),
-                            deadline=time.monotonic() + _TERMINAL_CLEANUP_SECONDS,
-                        )
             if not terminal.persisted:
                 logger.warning(
                     "verifier_terminal_persistence_indeterminate",

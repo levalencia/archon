@@ -312,10 +312,7 @@ async def test_terminal_persistence_race_keeps_one_verifier_sequence(ledger: Any
         kind = str(kwargs["kind"])
         payload = kwargs["payload"]
         if kind == AgentEventKind.DELEGATION_COMPLETED.value:
-            try:
-                await asyncio.sleep(10)
-            except asyncio.CancelledError:
-                await asyncio.sleep(0.15)
+            await asyncio.sleep(0.3)
         records.append((kind, payload.get("status") or payload.get("reason")))
         if kind == AgentEventKind.RUN_STOPPED.value:
             terminal_finished.set()
@@ -350,11 +347,28 @@ async def test_terminal_persistence_race_keeps_one_verifier_sequence(ledger: Any
 @pytest.mark.asyncio
 async def test_timeout_and_cancellation_are_terminal(ledger: Any) -> None:
     _, repository = ledger
+    original_append = repository.append
+    terminal_events = {
+        "timeout-child": asyncio.Event(),
+        "cancel-child": asyncio.Event(),
+    }
+
+    async def delayed_terminal_append(**kwargs: Any) -> None:
+        run_id = str(kwargs["run_id"])
+        if run_id == "timeout-child" and kwargs["kind"] == AgentEventKind.RUN_STOPPED.value:
+            await asyncio.sleep(0.3)
+        await original_append(**kwargs)
+        if kwargs["kind"] == AgentEventKind.RUN_STOPPED.value:
+            terminal_events[run_id].set()
+
+    repository.append = delayed_terminal_append  # type: ignore[method-assign]
     timeout_provider = BlockingProvider()
     result = await EvidenceVerifierSpecialist(
         timeout_provider, repository, PersistenceRedactor()
     ).verify(make_request(child_id="timeout-child", budget=VerificationBudget(2_000, 10, 0.1)))
     assert result.status is ChildVerificationStatus.TIMEOUT
+    assert not terminal_events["timeout-child"].is_set()
+    await asyncio.wait_for(terminal_events["timeout-child"].wait(), timeout=1.0)
     timeout_run = await repository.get("user-1", "timeout-child")
     assert timeout_run is not None and timeout_run.status == "failed"
 
@@ -368,6 +382,7 @@ async def test_timeout_and_cancellation_are_terminal(ledger: Any) -> None:
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+    await asyncio.wait_for(terminal_events["cancel-child"].wait(), timeout=1.0)
     cancel_run = await repository.get("user-1", "cancel-child")
     assert cancel_run is not None and cancel_run.status == "cancelled"
 

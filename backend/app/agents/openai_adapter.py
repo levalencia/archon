@@ -7,7 +7,7 @@ import json
 import math
 import re
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import httpx
 import structlog
@@ -22,6 +22,12 @@ logger = structlog.get_logger()
 _MODEL_IDENTITY_RE = re.compile(r"[A-Za-z0-9._:/-]{1,128}\Z")
 
 OpenAIAdapterErrorCode = Literal["invalid_response", "invalid_tool_arguments"]
+
+
+class _TokenProvider(Protocol):
+    """Minimal async bearer-token provider (satisfied by AzureTokenProvider)."""
+
+    async def get_bearer_token(self) -> str: ...
 
 
 class OpenAIAdapterError(ValueError):
@@ -250,6 +256,7 @@ class OpenAIAdapter:
         json_mode_enabled: bool = False,
         json_schema_enabled: bool = False,
         cache_usage_enabled: bool = False,
+        token_provider: _TokenProvider | None = None,
     ) -> None:
         self.model = model
         self.base_url = (base_url or "https://api.openai.com/v1").rstrip("/")
@@ -264,22 +271,29 @@ class OpenAIAdapter:
             stop_reason=True,
             streaming=False,
         )
+        self._token_provider = token_provider
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if token_provider is None:
+            headers["Authorization"] = f"Bearer {api_key}"
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             timeout=60.0,
         )
+        auth_mode = "managed_identity" if token_provider is not None else "api_key"
         logger.info(
             "openai_adapter_init",
             model=_model_identity(model),
+            auth_mode=auth_mode,
             **safe_value_metadata("base_url", self.base_url),
         )
 
     async def _send(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        response = await self._client.post("/chat/completions", json=payload)
+        headers: dict[str, str] = {}
+        if self._token_provider is not None:
+            token = await self._token_provider.get_bearer_token()
+            headers["Authorization"] = f"Bearer {token}"
+        response = await self._client.post("/chat/completions", json=payload, headers=headers)
         response.raise_for_status()
         try:
             data = response.json()

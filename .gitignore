@@ -55,6 +55,7 @@ htmlcov/
 cogentrex_memory.json
 cogentrex_sessions.json
 *.runtime.json
+.azure/deployment-outputs.json
 
 # Browser test artifacts
 frontend/test-results/

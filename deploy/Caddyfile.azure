@@ -1,0 +1,24 @@
+# Caddyfile for Cogentrex Azure VM
+# Hostname is supplied through COGENTREX_PUBLIC_HOSTNAME.
+# Use the temporary x.x.x.x.sslip.io name until GoDaddy DNS is updated.
+
+{$COGENTREX_PUBLIC_HOSTNAME:localhost} {
+	# Preserve the local Compose gateway and its same-origin routing contract.
+	reverse_proxy 127.0.0.1:8080
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format json
+	}
+}

@@ -12,15 +12,21 @@ def test_ci_guide_matches_workflow_inventory() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
     workflow_files = sorted([*WORKFLOW_DIR.glob("*.yml"), *WORKFLOW_DIR.glob("*.yaml")])
 
-    assert [path.name for path in workflow_files] == ["ci.yml"]
-    workflow = yaml.safe_load(workflow_files[0].read_text(encoding="utf-8"))
-    jobs = set(workflow["jobs"])
+    assert [path.name for path in workflow_files] == ["ci.yml", "deploy-dev.yml"]
+    workflows = {
+        path.name: yaml.safe_load(path.read_text(encoding="utf-8")) for path in workflow_files
+    }
+    jobs = set(workflows["ci.yml"]["jobs"])
+    deploy_jobs = set(workflows["deploy-dev.yml"]["jobs"])
 
     assert jobs == {"backend-quality", "frontend-quality", "backend-image"}
-    assert "GitHub Actions workflow files | 1" in guide
+    assert deploy_jobs == {"backend-quality", "frontend-quality", "backend-image", "deploy"}
+    assert "GitHub Actions workflow files | 2" in guide
     assert "Jobs in the CI workflow | 3" in guide
+    assert "Jobs in the dev deployment workflow | 4" in guide
     for job in jobs:
         assert f"`{job}`" in guide
+    assert "`deploy`" in guide
 
 
 def test_ci_guide_matches_compose_and_run_commands() -> None:

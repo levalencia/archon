@@ -53,6 +53,12 @@ MODEL_PRICING: dict[str, ModelPricing] = {
     "gpt-4o-mini": ModelPricing(0.00015, 0.0006, providers=frozenset({"openai", "foundry"})),
     "gpt-4-turbo": ModelPricing(0.01, 0.03, providers=frozenset({"openai", "foundry"})),
     "o1": ModelPricing(0.015, 0.06, providers=frozenset({"openai", "foundry"})),
+    # Azure Foundry DeepSeek pricing, reviewed 2026-09-17:
+    # https://azure.microsoft.com/en-us/pricing/details/ai-foundry-models/deepseek/
+    # Published Global rates: $0.19 input, $0.028 cached input, $0.51 output per 1M tokens.
+    "DeepSeek-V4-Flash": ModelPricing(
+        0.00019, 0.00051, 0.000028, providers=frozenset({"openai", "foundry"})
+    ),
     "llama3.1:8b": ModelPricing(0.0, 0.0, providers=frozenset({"ollama"})),
     "llava:7b": ModelPricing(0.0, 0.0, providers=frozenset({"ollama"})),
     "mock-model": ModelPricing(0.0, 0.0, providers=frozenset({"mock"})),
@@ -77,10 +83,17 @@ def _counter() -> dict:
     }
 
 
-def _supports_cache_pricing(provider: str) -> bool:
-    """Recognize configured provider names and fallback adapter class names."""
+def _supports_cache_pricing(provider: str, model: str) -> bool:
+    """Return whether this exact provider/model pair reports priced cache usage."""
     normalized = "".join(character for character in provider.casefold() if character.isalnum())
-    return normalized in {"anthropic", "anthropicadapter", "foundry", "foundryadapter"}
+    if normalized in {
+        "anthropic",
+        "anthropicadapter",
+        "foundry",
+        "foundryadapter",
+    }:
+        return True
+    return normalized in {"openai", "openaiadapter"} and model == "DeepSeek-V4-Flash"
 
 
 def validated_pricing_pair(model: str, provider: str) -> tuple[str, str]:
@@ -138,7 +151,7 @@ def price_model_usage_nusd(
         raise ValueError("cache token subsets cannot exceed total input tokens")
 
     pricing = MODEL_PRICING[model]
-    cache_rates = _supports_cache_pricing(provider)
+    cache_rates = _supports_cache_pricing(provider, model)
     read_rate = (
         pricing.cache_read if cache_rates and pricing.cache_read is not None else pricing.input
     )
@@ -192,7 +205,7 @@ def quote_model_call_nusd(candidates: object, max_input_tokens: int, max_output_
         candidate_quotes = [
             price_model_usage_nusd(model, provider, max_input_tokens, max_output_tokens)
         ]
-        if _supports_cache_pricing(provider):
+        if _supports_cache_pricing(provider, model):
             pricing = MODEL_PRICING[model]
             if pricing.cache_read is not None:
                 candidate_quotes.append(
@@ -268,7 +281,7 @@ class CostTracker:
         known_model = model in MODEL_PRICING
         pricing = MODEL_PRICING.get(model, MODEL_PRICING["default"])
         input_rate, output_rate = float(pricing.input), float(pricing.output)
-        cache_pricing_supported = provider is not None and _supports_cache_pricing(provider)
+        cache_pricing_supported = provider is not None and _supports_cache_pricing(provider, model)
         cache_read_rate = (
             float(pricing.cache_read)
             if known_model and cache_pricing_supported and pricing.cache_read is not None

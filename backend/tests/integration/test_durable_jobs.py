@@ -225,25 +225,26 @@ async def test_worker_heartbeats_and_cancel_fences_running_handler(queue_factory
 @pytest.mark.integration
 async def test_worker_hard_timeout_does_not_wait_for_cancellation_cleanup(queue_factory) -> None:
     queue = queue_factory(lease_seconds=1, base_backoff_seconds=0)
+    cleanup_finished = asyncio.Event()
 
     async def cancellation_delaying(_job):
         try:
             await asyncio.Event().wait()
         except asyncio.CancelledError:
             await asyncio.sleep(0.3)
+            cleanup_finished.set()
             return {"late": True}
 
     created = await queue.create("owner", "project", "echo", {}, max_attempts=1)
-    started = time.monotonic()
     assert await JobWorker(
         queue,
         "timeout",
         {"echo": cancellation_delaying},
         handler_timeout_seconds=0.1,
     ).run_once()
-    assert time.monotonic() - started < 0.25
+    assert not cleanup_finished.is_set()
     assert (await queue.get("owner", "project", created["job_id"]))["status"] == "dead_letter"
-    await asyncio.sleep(0.35)
+    await asyncio.wait_for(cleanup_finished.wait(), timeout=1.0)
 
 
 @pytest.mark.integration

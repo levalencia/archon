@@ -1,0 +1,8 @@
+# Cloud override: use immutable images produced by GitHub Actions.
+services:
+  backend:
+    image: ${COGENTREX_ACR_LOGIN_SERVER:?COGENTREX_ACR_LOGIN_SERVER is required}/cogentrex-backend:${COGENTREX_IMAGE_TAG:?COGENTREX_IMAGE_TAG is required}
+  frontend:
+    image: ${COGENTREX_ACR_LOGIN_SERVER:?COGENTREX_ACR_LOGIN_SERVER is required}/cogentrex-frontend:${COGENTREX_IMAGE_TAG:?COGENTREX_IMAGE_TAG is required}
+  sandbox-runner:
+    image: ${COGENTREX_ACR_LOGIN_SERVER:?COGENTREX_ACR_LOGIN_SERVER is required}/cogentrex-sandbox:${COGENTREX_IMAGE_TAG:?COGENTREX_IMAGE_TAG is required}
