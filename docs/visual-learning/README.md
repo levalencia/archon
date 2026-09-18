@@ -122,7 +122,9 @@ Learning-pack definitions:
 - Hybrid Agent Orchestration Pilot
 - Azure Development Deployment and Safe Delivery
 
-All seven recipes retain the same planned artifact families, but only artifacts present in the validated published catalog appear as available. The Azure deployment pack is source-ready and visible in the tracked Studio manifest; its new rich-media files have not yet been generated or released. The deterministic builders generate structured teaching artifacts and media scripts; audio/video count as published only after their real files pass the runbook checks.
+All seven recipes retain the same planned artifact families, but only artifacts present in the validated published catalog appear as available. The Azure deployment pack is source-ready in the tracked Studio manifest and its ten rich-media artifacts are packaged as `review-ready`; human pedagogical acceptance remains pending. The deterministic builders generate structured teaching artifacts and measured media scripts; audio/video count as available only after their real files pass the runbook checks.
+
+The [Azure rich-media review](azure-deployment-operations-review.md) records TTS, captions, HyperFrames, encoded-frame, catalog, and release evidence.
 
 Video captions use authored segment timing from each transcript. If an older transcript lacks timing, the player distributes fallback cues across the artifact's declared duration rather than assuming a fixed one-minute lesson.
 

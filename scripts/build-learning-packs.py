@@ -330,7 +330,11 @@ def _validate_spec(spec: dict[str, Any], allowed: set[str]) -> None:
             raise ValueError(f"{spec['pack_id']} concept {concept['id']} has an invalid scenario")
 
 
-def build(output: Path, media_root: Path | None = None) -> Path:
+def build(
+    output: Path,
+    media_root: Path | None = None,
+    pack_ids: tuple[str, ...] = PACK_IDS,
+) -> Path:
     config = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
     declarations = {item["id"]: item for item in config["packs"]}
     output = output.expanduser().resolve()
@@ -340,9 +344,9 @@ def build(output: Path, media_root: Path | None = None) -> Path:
     _write(output / OWNER, "cogentrex.learning-library/v1\n")
     catalog_path = output / "catalog.json"
     catalog = json.loads(catalog_path.read_text()) if catalog_path.is_file() else {"schema":"cogentrex.learning-library","version":1,"generated_at":"","source_commit":_commit(),"packs":[]}
-    catalog["packs"] = [pack for pack in catalog["packs"] if pack["id"] not in PACK_IDS]
+    catalog["packs"] = [pack for pack in catalog["packs"] if pack["id"] not in pack_ids]
 
-    for pack_id in PACK_IDS:
+    for pack_id in pack_ids:
         spec = json.loads((PACK_DIR / f"{pack_id}.json").read_text(encoding="utf-8"))
         declaration = declarations[pack_id]
         allowed = set(config.get("source_priority", [])) | set(declaration["sources"])
@@ -450,11 +454,26 @@ def build(output: Path, media_root: Path | None = None) -> Path:
             audio_source=media_root/pack_id/f"{pack_id}.mp3"
             video_source=media_root/pack_id/f"{pack_id}.mp4"
             if audio_source.is_file():
+                timed_audio=media_root/pack_id/f"{pack_id}.audio-script.json"
+                audio_captions=media_root/pack_id/f"{pack_id}.audio-captions.vtt"
+                if timed_audio.is_file():
+                    shutil.copyfile(timed_audio,audio_dir/"audio-script.json")
+                if audio_captions.is_file():
+                    shutil.copyfile(audio_captions,audio_dir/"captions.vtt")
                 target=audio_dir/f"{pack_id}.mp3"
                 shutil.copyfile(audio_source,target)
                 probe=_probe(target)
                 add(audio_id,"audio",audio_script["title"],target,audio_dir/"audio-script.json",float(probe["format"]["duration"]))
             if video_source.is_file():
+                timed_video=media_root/pack_id/f"{pack_id}.video-script.json"
+                timed_storyboard=media_root/pack_id/f"{pack_id}.video-storyboard.json"
+                video_captions=media_root/pack_id/f"{pack_id}.video-captions.vtt"
+                if timed_video.is_file():
+                    shutil.copyfile(timed_video,video_dir/"video-script.json")
+                if timed_storyboard.is_file():
+                    shutil.copyfile(timed_storyboard,video_dir/"storyboard.json")
+                if video_captions.is_file():
+                    shutil.copyfile(video_captions,video_dir/"captions.vtt")
                 target=video_dir/f"{pack_id}.mp4"
                 shutil.copyfile(video_source,target)
                 probe=_probe(target)
@@ -473,8 +492,9 @@ def main() -> None:
     parser=argparse.ArgumentParser()
     parser.add_argument("--output",type=Path,default=DEFAULT_OUTPUT)
     parser.add_argument("--media-root",type=Path)
+    parser.add_argument("--pack-id",action="append",choices=PACK_IDS)
     args=parser.parse_args()
-    print(build(args.output,args.media_root))
+    print(build(args.output,args.media_root,tuple(args.pack_id or PACK_IDS)))
 
 
 if __name__ == "__main__":
