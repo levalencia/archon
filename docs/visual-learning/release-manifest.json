@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "release_tag": "learning-media-1511aee380a4",
-  "source_commit": "1511aee380a478d17320ae465a2b5c866854655f",
-  "asset_name": "cogentrex-learning-media-1511aee380a4.tar.gz",
-  "download_url": "https://github.com/levalencia/cogentrex/releases/download/learning-media-1511aee380a4/cogentrex-learning-media-1511aee380a4.tar.gz",
-  "byte_size": 648293962,
-  "archive_sha256": "8b135c14bb88c99b33a487c5a83cbe781573cb5f67ebf88358ff6fe366508aa1"
+  "release_tag": "learning-media-10178972a0d8",
+  "source_commit": "10178972a0d82b32445d7a33b3098cf7b129efe4",
+  "asset_name": "cogentrex-learning-media-10178972a0d8.tar.gz",
+  "download_url": "https://github.com/levalencia/cogentrex/releases/download/learning-media-10178972a0d8/cogentrex-learning-media-10178972a0d8.tar.gz",
+  "byte_size": 658490803,
+  "archive_sha256": "2bb8b2ba1c92cdec496422916dda9caafbb798f2b62858f9bc015aaec8f9ec75"
 }
