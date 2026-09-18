@@ -13,6 +13,10 @@ builder = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(builder)
 
 
+def test_azure_pack_is_available_for_video_generation() -> None:
+    assert "azure-deployment-operations" in builder.PACK_IDS
+
+
 def test_generated_video_avoids_duplicate_intro_cards_and_black_scene_boundaries() -> None:
     concepts = [
         {

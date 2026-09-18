@@ -151,6 +151,18 @@ def test_pack_specs_use_only_declared_existing_sources() -> None:
             assert all((ROOT / source).is_file() for source in concept["sources"])
 
 
+def test_selective_build_preserves_unselected_catalog_packs(tmp_path: Path) -> None:
+    pilot.build(tmp_path)
+
+    builder.build(tmp_path, pack_ids=("azure-deployment-operations",))
+
+    catalog = json.loads((tmp_path / "catalog.json").read_text())
+    assert {pack["id"] for pack in catalog["packs"]} == {
+        "request-lifecycle",
+        "azure-deployment-operations",
+    }
+
+
 def test_builder_refuses_nonempty_unowned_output(tmp_path: Path) -> None:
     (tmp_path / "unrelated.txt").write_text("keep")
     try:

@@ -330,7 +330,11 @@ def _validate_spec(spec: dict[str, Any], allowed: set[str]) -> None:
             raise ValueError(f"{spec['pack_id']} concept {concept['id']} has an invalid scenario")
 
 
-def build(output: Path, media_root: Path | None = None) -> Path:
+def build(
+    output: Path,
+    media_root: Path | None = None,
+    pack_ids: tuple[str, ...] = PACK_IDS,
+) -> Path:
     config = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
     declarations = {item["id"]: item for item in config["packs"]}
     output = output.expanduser().resolve()
@@ -340,9 +344,9 @@ def build(output: Path, media_root: Path | None = None) -> Path:
     _write(output / OWNER, "cogentrex.learning-library/v1\n")
     catalog_path = output / "catalog.json"
     catalog = json.loads(catalog_path.read_text()) if catalog_path.is_file() else {"schema":"cogentrex.learning-library","version":1,"generated_at":"","source_commit":_commit(),"packs":[]}
-    catalog["packs"] = [pack for pack in catalog["packs"] if pack["id"] not in PACK_IDS]
+    catalog["packs"] = [pack for pack in catalog["packs"] if pack["id"] not in pack_ids]
 
-    for pack_id in PACK_IDS:
+    for pack_id in pack_ids:
         spec = json.loads((PACK_DIR / f"{pack_id}.json").read_text(encoding="utf-8"))
         declaration = declarations[pack_id]
         allowed = set(config.get("source_priority", [])) | set(declaration["sources"])
@@ -473,8 +477,9 @@ def main() -> None:
     parser=argparse.ArgumentParser()
     parser.add_argument("--output",type=Path,default=DEFAULT_OUTPUT)
     parser.add_argument("--media-root",type=Path)
+    parser.add_argument("--pack-id",action="append",choices=PACK_IDS)
     args=parser.parse_args()
-    print(build(args.output,args.media_root))
+    print(build(args.output,args.media_root,tuple(args.pack_id or PACK_IDS)))
 
 
 if __name__ == "__main__":

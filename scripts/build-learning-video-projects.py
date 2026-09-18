@@ -22,6 +22,7 @@ PACK_IDS = (
     "reliability-operations",
     "interview-demo",
     "hybrid-agent-orchestration",
+    "azure-deployment-operations",
 )
 DURATION = 112
 SCENE_DURATION = 16
@@ -51,7 +52,7 @@ Measured, directional, deterministic entrances. One orange focal glow per scene.
 ## What NOT to Do
 - Do not turn every semantic state orange.
 - Do not use generic purple gradients, stock AI imagery, unlabeled arrows, or tiny body copy.
-- Do not imply public deployment, universal provider behavior, production SLOs, or educational acceptance.
+- Do not imply production deployment, universal provider behavior, production SLOs, or educational acceptance.
 """
 
 PACKAGE = """{
@@ -114,8 +115,12 @@ def _composition(spec: dict[str, Any], video_script: dict[str, Any], audio_durat
 :root{{--bg:#050712;--panel:#0a1022;--raised:#11182d;--text:#f4f7fb;--muted:#a9b4cc;--orange:#f6b44b;--green:#22c55e;--coral:#fb7185;--blue:#6ee7ff;--purple:#a78bfa;--border:#26324d}}*{{box-sizing:border-box}}html,body{{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--text);font-family:Arial,system-ui,sans-serif}}.root{{position:relative;width:1920px;height:1080px;background:radial-gradient(circle at 78% 10%,rgba(246,180,75,.11),transparent 32%),linear-gradient(rgba(51,65,85,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(51,65,85,.22) 1px,transparent 1px),var(--bg);background-size:auto,48px 48px,48px 48px}}.scene{{position:absolute;inset:0;padding:82px 120px 76px;display:flex;flex-direction:column;justify-content:center;opacity:0}}.kicker{{margin:0;color:var(--orange);font:700 22px ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase}}h1{{margin:24px 0 20px;max-width:1500px;font-size:76px;line-height:1.02}}.narration{{max-width:1460px;margin:0;color:#cbd5e1;font-size:31px;line-height:1.38}}.cards{{display:flex;gap:34px;align-items:stretch;margin-top:48px}}.card{{flex:1;min-height:230px;padding:30px;border:3px solid var(--blue);border-radius:20px;background:rgba(15,23,42,.96)}}.card span{{font:800 28px ui-monospace,monospace;color:var(--text)}}.card p{{font-size:25px;line-height:1.35;color:#cbd5e1}}.card.orange{{border-color:var(--orange);box-shadow:0 0 0 1px rgba(246,180,75,.42),0 0 28px rgba(246,180,75,.25)}}.card.green{{border-color:var(--green)}}.card.purple{{border-color:var(--purple)}}.card.blue{{border-color:var(--blue)}}.evidence-line{{display:flex;align-items:center;justify-content:center;gap:24px;width:100%;padding:44px;border:3px solid var(--orange);border-radius:20px;background:rgba(15,23,42,.96);box-shadow:0 0 30px rgba(246,180,75,.25);font:800 24px ui-monospace,monospace}}.evidence-line b{{color:var(--orange);font-size:42px}}.source{{position:absolute;left:120px;bottom:34px;color:var(--muted);font:18px ui-monospace,monospace;letter-spacing:.08em}}.transition-curtain{{position:absolute;inset:0;z-index:10;visibility:hidden;opacity:0;background:linear-gradient(110deg,#050712 0 42%,#f6b44b 42% 58%,#050712 58% 100%)}}</style></head><body><div class="root" data-composition-id="{html.escape(spec["pack_id"])}" data-width="1920" data-height="1080" data-start="0" data-duration="{DURATION}">{"".join(scenes)}<div id="transition-curtain" class="transition-curtain" data-layout-allow-occlusion></div><audio id="narration" src="assets/narration.mp3" data-start="0" data-duration="{audio_duration:.3f}" data-track-index="2"></audio></div><script>const tl=gsap.timeline({{paused:true}});const scenes=[...document.querySelectorAll('.scene')];const curtain=document.querySelector('#transition-curtain');tl.set(scenes,{{autoAlpha:0}},0);tl.set(curtain,{{autoAlpha:0}},0);tl.set(scenes[0],{{autoAlpha:1,x:0}},0);scenes.slice(1).forEach((scene,index)=>{{const start=(index+1)*{SCENE_DURATION};const previous=scenes[index];tl.to(curtain,{{autoAlpha:1,duration:.3,ease:'power2.inOut'}},start-.9);tl.set(previous,{{autoAlpha:0}},start-.5);tl.set(scene,{{autoAlpha:1,x:0}},start-.5);tl.to(curtain,{{autoAlpha:0,duration:.3,ease:'power2.inOut'}},start-.3);}});window.__timelines['{html.escape(spec["pack_id"])}']=tl;</script></body></html>'''
 
 
-def build(media_root: Path = MEDIA_ROOT, project_root: Path = PROJECT_ROOT) -> None:
-    for pack_id in PACK_IDS:
+def build(
+    media_root: Path = MEDIA_ROOT,
+    project_root: Path = PROJECT_ROOT,
+    pack_ids: tuple[str, ...] = PACK_IDS,
+) -> None:
+    for pack_id in pack_ids:
         spec = json.loads((PACK_DIR / f"{pack_id}.json").read_text())
         video_script_path = (
             media_root / "published" / pack_id / f"{pack_id}-video" / "video-script.json"
@@ -151,8 +156,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--media-root", type=Path, default=MEDIA_ROOT)
     parser.add_argument("--project-root", type=Path, default=PROJECT_ROOT)
+    parser.add_argument("--pack-id", action="append", choices=PACK_IDS)
     args = parser.parse_args()
-    build(args.media_root, args.project_root)
+    build(args.media_root, args.project_root, tuple(args.pack_id or PACK_IDS))
 
 
 if __name__ == "__main__":
