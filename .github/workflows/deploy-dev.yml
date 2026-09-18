@@ -130,13 +130,16 @@ jobs:
           DEPLOY_ACR_LOGIN_SERVER: ${{ vars.AZURE_DEV_ACR_LOGIN_SERVER }}
           DEPLOY_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
         run: |
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
           az vm run-command invoke \
             --resource-group "$DEPLOY_RG" \
             --name "$DEPLOY_VM" \
             --command-id RunShellScript \
-            --scripts 'set -Eeuo pipefail
+            --scripts '(
+              set -eu
               install -d -m 0750 /opt/cogentrex
-              if [[ ! -d /opt/cogentrex/repo/.git ]]; then
+              if [ ! -d /opt/cogentrex/repo/.git ]; then
                 git clone https://github.com/levalencia/cogentrex.git /opt/cogentrex/repo
               fi
               git -C /opt/cogentrex/repo fetch origin --prune
@@ -145,22 +148,41 @@ jobs:
               COGENTREX_PUBLIC_HOSTNAME="$2" COGENTREX_KEY_VAULT_NAME="$3" \
                 COGENTREX_ACR_NAME="$4" COGENTREX_ACR_LOGIN_SERVER="$5" \
                 COGENTREX_AZURE_SUBSCRIPTION_ID="$6" \
-                /tmp/cogentrex-deploy-vm.sh "$1"' \
+                /bin/bash /tmp/cogentrex-deploy-vm.sh "$1"
+              )
+              remote_status=$?
+              printf "COGENTREX_RUN_COMMAND_EXIT=%s\n" "$remote_status"
+              exit 0' \
             --parameters "$DEPLOY_SHA" "$DEPLOY_HOSTNAME" "$DEPLOY_KEY_VAULT" \
               "$DEPLOY_ACR_NAME" "$DEPLOY_ACR_LOGIN_SERVER" "$DEPLOY_SUBSCRIPTION_ID" \
-            --output none
+            --output json > "$response_file"
+          python3 - "$response_file" <<'PY'
+          import json
+          import re
+          import sys
+
+          response = json.load(open(sys.argv[1], encoding="utf-8"))
+          message = "\n".join(item.get("message", "") for item in response.get("value", []))
+          print(message)
+          match = re.search(r"COGENTREX_RUN_COMMAND_EXIT=(\d+)", message)
+          if match is None or match.group(1) != "0":
+              raise SystemExit("Azure VM deployment script failed")
+          PY
 
       - name: Smoke test dev endpoint
         env:
           SMOKE_URL: ${{ vars.AZURE_DEV_SMOKE_URL }}
         run: |
+          health_ok=false
           for attempt in $(seq 1 30); do
             if curl --fail --silent --max-time 10 "${SMOKE_URL}/healthz" > health.json; then
+              health_ok=true
               break
             fi
             echo "Attempt ${attempt}/30 – waiting 10s..."
             sleep 10
           done
+          test "$health_ok" = true || { echo "Health probe did not succeed" >&2; exit 1; }
           python - <<'PY'
           import json
           health = json.load(open("health.json", encoding="utf-8"))

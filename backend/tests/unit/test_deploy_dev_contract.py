@@ -128,6 +128,17 @@ class TestDeploySafety:
         assert len(artifact_steps) >= 1
         assert artifact_steps[0]["uses"] == "actions/upload-artifact@v4"
 
+    def test_run_command_executes_bash_and_propagates_remote_exit(self, deploy_dev: dict) -> None:
+        raw = DEPLOY_DEV_PATH.read_text()
+        assert "/bin/bash /tmp/cogentrex-deploy-vm.sh" in raw
+        assert "COGENTREX_RUN_COMMAND_EXIT=" in raw
+        assert "--output none" not in raw
+
+    def test_smoke_fails_before_parsing_when_health_never_succeeds(self, deploy_dev: dict) -> None:
+        raw = DEPLOY_DEV_PATH.read_text()
+        assert "health_ok=false" in raw
+        assert 'test "$health_ok" = true' in raw
+
 
 # ── CI trigger contract ──────────────────────────────────────────────
 

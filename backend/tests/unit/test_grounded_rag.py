@@ -675,10 +675,7 @@ async def test_grounded_terminal_persistence_race_keeps_one_completed_reason(
 
     async def slow_terminal_append(**kwargs: Any) -> Any:
         if kwargs.get("kind") == "run_stopped":
-            try:
-                await asyncio.sleep(10)
-            except asyncio.CancelledError:
-                await asyncio.sleep(0.15)
+            await asyncio.sleep(0.15)
             terminal_records.append(str(kwargs["payload"]["reason"]))
             terminal_finished.set()
             return None

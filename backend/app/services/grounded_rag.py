@@ -339,13 +339,6 @@ class GroundedDocumentWorkflow:
                             wait_for_existing_terminal(),
                             deadline=monotonic() + _TERMINAL_CLEANUP_SECONDS,
                         )
-                    if not terminal.task.done():
-                        terminal.task.cancel()
-                        with suppress(BaseException):
-                            await await_before_deadline(
-                                wait_for_existing_terminal(),
-                                deadline=monotonic() + _TERMINAL_CLEANUP_SECONDS,
-                            )
                 if not terminal.persisted:
                     logger.warning(
                         "grounded_run_terminal_persistence_indeterminate",
