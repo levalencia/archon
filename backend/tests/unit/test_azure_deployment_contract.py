@@ -56,6 +56,14 @@ def test_key_vault_name_stays_within_azure_length_limit() -> None:
     assert "${prefix}-kv-${nameSuffix}" not in main
 
 
+def test_same_sha_reconciles_runtime_configuration() -> None:
+    deploy = _read(ROOT / "scripts" / "azure" / "deploy-vm.sh")
+    same_sha = deploy.split('if [[ "$previous_sha" == "$target_sha" ]]', 1)[1].split("\n  fi", 1)[0]
+    assert "generate_env" in same_sha
+    assert "compose_update" in same_sha
+    assert "configure_caddy" in same_sha
+
+
 def test_bootstrap_installs_docker_caddy_and_uses_managed_identity() -> None:
     bootstrap = _read(AZURE / "cloud-init.yml")
     assert "docker-ce" in bootstrap

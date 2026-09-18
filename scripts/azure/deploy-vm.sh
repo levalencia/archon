@@ -415,22 +415,29 @@ main() {
   local previous_sha
   previous_sha="$(current_deployed_sha)"
 
+  # Runtime state exists independently of a specific revision. Initialize it
+  # before either a full deployment or a same-SHA configuration reconciliation.
+  mkdir -p "$TMPDIR_PERSIST" "$STATE_DIR" "$BACKUP_DIR"
+  chmod 700 "$TMPDIR_PERSIST" "$STATE_DIR" "$BACKUP_DIR"
+  export TMPDIR="$TMPDIR_PERSIST"
+  export XDG_STATE_HOME="$STATE_DIR"
+
   if [[ "$previous_sha" == "$target_sha" ]]; then
-    log "SHA ${target_sha} is already deployed. Re-running health checks..."
-    wait_for_health "$LOCAL_BASE_URL" 60
+    log "SHA ${target_sha} is already deployed. Reconciling runtime configuration..."
+    install_learning_media_if_absent
+    generate_env "$target_sha"
+    compose_update || die "Same-SHA Compose reconciliation failed"
+    wait_for_health "$LOCAL_BASE_URL" 120
     check_health_details "$LOCAL_BASE_URL"
-    log "Deployment verified."
+    check_media "$LOCAL_BASE_URL"
+    check_sandbox
+    configure_caddy
+    log "Deployment configuration reconciled and verified."
     exit 0
   fi
 
   log "Deploying SHA ${target_sha}..."
   [[ -n "$previous_sha" ]] && log "Previous SHA: ${previous_sha}"
-
-  # Persistent directories
-  mkdir -p "$TMPDIR_PERSIST" "$STATE_DIR" "$BACKUP_DIR"
-  chmod 700 "$TMPDIR_PERSIST" "$STATE_DIR" "$BACKUP_DIR"
-  export TMPDIR="$TMPDIR_PERSIST"
-  export XDG_STATE_HOME="$STATE_DIR"
 
   # Step 1: Back up the running revision before changing the checkout.
   if [[ -n "$previous_sha" ]]; then
