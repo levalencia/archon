@@ -136,6 +136,7 @@ def test_backend_image_contains_azure_identity_runtime_dependency() -> None:
 def test_compose_passes_managed_identity_auth_mode() -> None:
     compose = _read(ROOT / "docker-compose.local.yml")
     assert "COGENTREX_LLM_AUTH_MODE" in compose
+    assert "COGENTREX_OPENAI_NATIVE_TOOLS_ENABLED" in compose
 
 
 def test_ci_runs_for_pull_requests_targeting_dev() -> None:
