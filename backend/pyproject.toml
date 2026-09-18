@@ -33,6 +33,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi==0.65b0",
     "fastembed>=0.4.0,<1.0",
     "azure-identity>=1.17.0",
+    "aiohttp>=3.10,<4",
 ]
 
 [project.optional-dependencies]
