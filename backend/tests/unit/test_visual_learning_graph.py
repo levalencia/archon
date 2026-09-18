@@ -23,9 +23,9 @@ def test_studio_preserves_catalog_and_view_counts() -> None:
     assert studio["stats"] == {
         "concepts": 67,
         "modules": 16,
-        "stories": 5,
+        "stories": 6,
         "architecture_layers": 5,
-        "learning_packs": 6,
+        "learning_packs": 7,
         "vocabulary_terms": 299,
         "vocabulary_aliases": 540,
         "statuses": {"deferred": 7, "implemented": 60, "partial": 0},
@@ -105,6 +105,7 @@ def test_stories_use_small_directional_scenes() -> None:
         "memory-rag",
         "observability",
         "local-startup",
+        "azure-development-rollout",
     }
     for story in studio["stories"]:
         assert 4 <= len(story["steps"]) <= 8
@@ -125,8 +126,8 @@ def test_architecture_relations_are_typed_and_not_implicit() -> None:
     }
 
     assert len(architecture["layers"]) == 5
-    assert len(components) == 17
-    assert len(architecture["relations"]) == 14
+    assert len(components) == 18
+    assert len(architecture["relations"]) == 16
     allowed_types = {
         "CALLS",
         "ROUTES",
@@ -172,6 +173,7 @@ def test_learning_artifact_packs_and_committed_manifest_are_current() -> None:
         "reliability-operations",
         "interview-demo",
         "hybrid-agent-orchestration",
+        "azure-deployment-operations",
     }
     expected_artifacts = {
         "audio",
@@ -188,6 +190,6 @@ def test_learning_artifact_packs_and_committed_manifest_are_current() -> None:
         assert pack["source_count"] == len(pack["sources"])
         assert set(pack["artifacts"]) == expected_artifacts
         assert len(pack["artifacts"]) == 8
-    assert sum(len(item["artifacts"]) for item in studio["learning_library"]["packs"]) == 48
+    assert sum(len(item["artifacts"]) for item in studio["learning_library"]["packs"]) == 56
     assert OUTPUT.is_file()
     assert json.loads(OUTPUT.read_text(encoding="utf-8")) == studio

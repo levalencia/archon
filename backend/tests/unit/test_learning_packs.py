@@ -36,7 +36,7 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_builds_all_six_catalog_packs_with_complete_structured_artifacts(tmp_path: Path) -> None:
+def test_builds_all_seven_catalog_packs_with_complete_structured_artifacts(tmp_path: Path) -> None:
     pilot.build(tmp_path)
     catalog_path = builder.build(tmp_path)
     catalog = json.loads(catalog_path.read_text())
@@ -48,6 +48,7 @@ def test_builds_all_six_catalog_packs_with_complete_structured_artifacts(tmp_pat
         "reliability-operations",
         "interview-demo",
         "hybrid-agent-orchestration",
+        "azure-deployment-operations",
     }
 
     for pack in catalog["packs"]:

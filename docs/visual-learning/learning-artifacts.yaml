@@ -170,3 +170,35 @@ packs:
   - flashcards
   - quiz
   - report
+
+- id: azure-deployment-operations
+  title: Cogentrex — Azure Development Deployment and Safe Delivery
+  purpose: Understand protected CI/CD, Azure identity, hardened VM Compose, public smoke,
+    hosted telemetry, and rollback without overstating production readiness.
+  language: en
+  sources:
+  - docs/ARCHITECTURE-DIAGRAMS.md
+  - docs/IMPLEMENTATION-EVIDENCE.md
+  - docs/CI-PIPELINES-AND-LOCAL-RUN.md
+  - docs/REMAINING-DEFERRED-GAPS.md
+  - docs/course/modules/14-local-operations/README.md
+  - docs/course/concepts/ci.md
+  - docs/course/concepts/liveness-readiness.md
+  - docs/course/concepts/backup-restore.md
+  - docs/course/concepts/authentication.md
+  - docs/course/concepts/execution-isolation-sandbox.md
+  - docs/course/concepts/tracing-opentelemetry.md
+  - .github/workflows/ci.yml
+  - .github/workflows/deploy-dev.yml
+  - deploy/docker-compose.azure.yml
+  - deploy/otel-collector.azure.yml
+  - docs/DR-RUNBOOK.md
+  artifacts:
+  - audio
+  - video
+  - slide-deck
+  - infographic
+  - mind-map
+  - flashcards
+  - quiz
+  - report
