@@ -65,6 +65,7 @@
       <!-- Tabs -->
       <div class="flex mb-6 bg-[var(--bg-tertiary)] rounded-lg p-1">
         <button
+          type="button"
           onclick={() => { mode = 'login'; error = ''; }}
           class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer
             {mode === 'login'
@@ -75,6 +76,7 @@
           Sign In
         </button>
         <button
+          type="button"
           onclick={() => { mode = 'register'; error = ''; }}
           class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer
             {mode === 'register'
