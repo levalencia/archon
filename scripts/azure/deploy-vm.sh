@@ -107,15 +107,18 @@ install_learning_media_if_absent() {
   local marker_file="${MEDIA_ROOT}/.cogentrex-learning-library"
   if [[ -f "$marker_file" ]]; then
     log "Learning media already installed."
-    return 0
+  else
+    local repo_dir="${APP_ROOT}/repo"
+    local release_script="${repo_dir}/scripts/learning-media-release.py"
+    local manifest="${repo_dir}/docs/visual-learning/release-manifest.json"
+    [[ -f "$release_script" && -f "$manifest" ]] || die "Learning media installer or manifest missing"
+    log "Installing checksummed learning media release..."
+    python3 "$release_script" install --target "$MEDIA_ROOT" --manifest "$manifest"
   fi
 
-  local repo_dir="${APP_ROOT}/repo"
-  local release_script="${repo_dir}/scripts/learning-media-release.py"
-  local manifest="${repo_dir}/docs/visual-learning/release-manifest.json"
-  [[ -f "$release_script" && -f "$manifest" ]] || die "Learning media installer or manifest missing"
-  log "Installing checksummed learning media release..."
-  python3 "$release_script" install --target "$MEDIA_ROOT" --manifest "$manifest"
+  # Run Command executes as root, while the backend runs unprivileged. The bind
+  # mount remains read-only in Compose; host files only need read/traverse access.
+  chmod -R u+rwX,go+rX "$MEDIA_ROOT"
 }
 
 # ─── Protected Env Generation ───────────────────────────────────────────────────

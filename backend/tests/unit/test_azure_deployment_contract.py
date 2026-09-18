@@ -84,6 +84,7 @@ def test_deploy_script_is_sha_pinned_backed_up_and_idempotent() -> None:
     assert '--target "$MEDIA_ROOT"' in deploy
     assert "Backup failed; proceeding" not in deploy
     assert "check_sandbox || true" not in deploy
+    assert 'chmod -R u+rwX,go+rX "$MEDIA_ROOT"' in deploy
     assert "set_env_value COGENTREX_LLM_PROVIDER openai" in deploy
     assert "set_env_value COGENTREX_LLM_AUTH_MODE azure_identity" in deploy
     assert "DeepSeek-V4-Flash" in deploy

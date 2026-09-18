@@ -79,6 +79,15 @@ def _make_adapter_with_transport(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_default_azure_credential_async_transport_is_installed() -> None:
+    from azure.identity.aio import DefaultAzureCredential
+
+    credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+    await credential.close()
+
+
 class TestFactorySelectsManagedIdentity:
     @pytest.mark.unit
     def test_api_key_mode_is_default(self) -> None:
