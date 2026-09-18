@@ -338,6 +338,20 @@ class TestCatalogValidation:
         (tmp_path / "published" / "media-approvals.json").write_text(json.dumps(approvals))
         lmr.validate_catalog(cat, tmp_path)
 
+    def test_versioned_approval_registry_is_well_formed(self):
+        registry_path = SCRIPTS_DIR.parent / "docs" / "visual-learning" / "approved-media.json"
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        assert registry["schema"] == "cogentrex.media-approvals/v1"
+        artifacts = registry["artifacts"]
+        assert [item["artifact_id"] for item in artifacts] == [
+            "code-first-video-01",
+            "code-first-video-02",
+            "code-first-video-03",
+            "code-first-video-04",
+        ]
+        assert len({item["sha256"] for item in artifacts}) == 4
+        assert all(len(item["sha256"]) == 64 for item in artifacts)
+
     def test_missing_schema_key_raises(self, tmp_path: Path):
         cat = _make_minimal_library(tmp_path)
         del cat["schema"]
