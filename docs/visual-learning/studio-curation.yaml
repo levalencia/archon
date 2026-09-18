@@ -256,6 +256,47 @@ stories:
         explanation: Auth, chat, persistence, metrics, migrations, and trace export are exercised through the retained stack.
         concept_ids: [ci, backup-restore, rto-rpo]
 
+  - id: azure-development-rollout
+    title: A protected change reaches Azure development
+    description: Follow one merge through required CI, immutable images, identity-bound deployment, readiness, smoke, and rollback evidence.
+    steps:
+      - title: Review a bounded change
+        from: Feature branch
+        to: Protected dev PR
+        relationship: REQUESTS MERGE
+        explanation: Direct pushes are blocked; the proposed revision must enter through a pull request with an inspectable diff.
+        concept_ids: [ci]
+      - title: Prove the revision
+        from: Protected dev PR
+        to: Required CI
+        relationship: RUNS
+        explanation: Backend, frontend, browser, security, migration, and image checks must pass before merge is allowed.
+        concept_ids: [ci, migrations]
+      - title: Publish immutable images
+        from: Required CI
+        to: Azure Container Registry
+        relationship: PUBLISHES SHA
+        explanation: The merge revision names backend and frontend images, preventing mutable-tag ambiguity during rollout or rollback.
+        concept_ids: [ci, docker-compose]
+      - title: Authenticate deployment
+        from: GitHub OIDC
+        to: Azure VM Run Command
+        relationship: FEDERATES AS UAMI
+        explanation: GitHub exchanges a federated identity for Azure access; no long-lived application client secret is stored in Actions.
+        concept_ids: [authentication, authorization-ownership]
+      - title: Reconcile the runtime
+        from: Azure VM Run Command
+        to: Hardened Compose
+        relationship: PULLS MIGRATES STARTS
+        explanation: The script captures remote exit, migrates PostgreSQL, reconciles configuration, and verifies media, dependencies, and sandbox isolation.
+        concept_ids: [docker-compose, migrations, execution-isolation-sandbox, liveness-readiness]
+      - title: Accept or roll back
+        from: Hardened Compose
+        to: External HTTPS smoke
+        relationship: PROVES OR REVERTS
+        explanation: Public health, readiness, and learning routes must pass; backup plus rollback and roll-forward preserve a known recovery path.
+        concept_ids: [liveness-readiness, backup-restore, rto-rpo]
+
 architecture:
   layers:
     - id: experience
@@ -343,9 +384,13 @@ architecture:
           responsibility: Score recorded runs and gate any proposed optimization.
           concept_ids: [evaluation-harness, learning-optimization-drift]
         - id: operations
-          title: Local operations
-          responsibility: Build, migrate, back up, restore, and prove liveness/readiness.
+          title: Local and Azure operations
+          responsibility: Build, migrate, back up, restore, and prove liveness/readiness across the reproducible local baseline and Azure development target.
           concept_ids: [liveness-readiness, docker-compose, migrations, backup-restore, ci]
+        - id: cloud-delivery
+          title: Azure development delivery
+          responsibility: Use protected PRs, federated OIDC, immutable ACR images, VM Run Command, Caddy TLS, external smoke, and rollback without claiming production or Kubernetes.
+          concept_ids: [ci, authentication, authorization-ownership, liveness-readiness]
   relations:
     - {source: browser-workbench, target: gateway, type: CALLS, label: HTTP and SSE}
     - {source: gateway, target: auth, type: ROUTES, label: protected requests}
@@ -361,3 +406,5 @@ architecture:
     - {source: relational-data, target: evaluation, type: SUPPLIES_RUNS_TO, label: recorded runs}
     - {source: resilience, target: react-runtime, type: CONSTRAINS, label: retries budgets failures}
     - {source: operations, target: gateway, type: PROVES_READY, label: health and readiness}
+    - {source: cloud-delivery, target: operations, type: PERSISTS_TO, label: SHA images and configuration}
+    - {source: cloud-delivery, target: observability, type: EMITS, label: Azure Monitor telemetry}

@@ -29,6 +29,7 @@ PACK_IDS = (
     "reliability-operations",
     "interview-demo",
     "hybrid-agent-orchestration",
+    "azure-deployment-operations",
 )
 FORBIDDEN_PHRASES = (
     "owns one explicit responsibility",

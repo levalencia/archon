@@ -3,7 +3,7 @@
 These diagrams describe the current evidence-backed system. Historical diagrams that implied pgvector, Azure Blob, unbounded dynamic swarms, or host-process sandboxing were removed because those paths were not the verified product. Jaeger now exists as an optional loopback-only local trace destination behind the OpenTelemetry Collector.
 
 Capabilities and observations are revision-scoped in `IMPLEMENTATION-EVIDENCE.md` and
-`implementation/CAPABILITY-ACCEPTANCE.yaml`. No public deployment is claimed.
+`implementation/CAPABILITY-ACCEPTANCE.yaml`. Local Compose is the reproducible baseline; `https://dev.cogentrex.com` is a verified Azure development deployment, not a production/SLA claim.
 
 ## 1. Agent Reliability Workbench
 
@@ -214,7 +214,52 @@ internal only]
 
 The backend defaults to `linux/amd64` in this target because the ARM image reproduced a native `cryptography` SIGILL on the verified Mac. All referenced images are pinned by digest. The gateway publishes the application on loopback; when selected, Jaeger publishes its UI separately on loopback. PostgreSQL, Redis, backend, frontend, sandbox and Collector remain internal-only.
 
-## 9. Backup and clean restore
+## 9. Azure development topology and delivery path
+
+```mermaid
+flowchart LR
+    Dev[Feature branch] --> PR[PR to protected dev]
+    PR --> CI{Required CI}
+    CI -->|backend + frontend + image pass| Merge[Merge SHA]
+    Merge --> OIDC[GitHub OIDC]
+    OIDC --> UAMI[Deployment UAMI]
+    UAMI --> ACR[(Azure Container Registry)]
+    UAMI --> KV[Key Vault]
+    ACR --> Images[Immutable backend/frontend images]
+    Images --> RunCommand[Azure VM Run Command]
+
+    subgraph AzureVM[Azure VM — Sweden Central]
+        Caddy[Standalone Caddy container\nTLS · dev.cogentrex.com]
+        subgraph Compose[Seven-service Docker Compose]
+            Gateway[Gateway]
+            Frontend[Frontend]
+            Backend[Backend + Alembic]
+            Postgres[(PostgreSQL volume)]
+            Redis[(Redis volume)]
+            Collector[OTEL Collector]
+            Sandbox[Sandbox runner\nnetwork=none · read-only · cap-drop]
+        end
+
+        Caddy --> Gateway
+        Gateway --> Frontend
+        Gateway --> Backend
+        Backend --> Postgres
+        Backend --> Redis
+        Backend --> Collector
+        Backend -->|Unix socket| Sandbox
+    end
+
+    RunCommand -->|pull, migrate, reconcile, verify| AzureVM
+    KV -->|runtime references| Backend
+    Backend -->|Managed Identity| Foundry[Azure AI Services\nDeepSeek deployment]
+    Collector --> Monitor[Application Insights]
+    Smoke[External HTTPS smoke] --> Caddy
+    Smoke -->|fail closed| Rollback[Backup + rollback / roll-forward]
+```
+
+The development rollout is one evidence chain: protected PR, required CI, immutable merge-SHA images, federated identity, remote exit capture, migrations, dependency readiness, media and sandbox checks, Caddy reconciliation, and external HTTPS smoke. A successful merge alone is not deployment evidence. PostgreSQL and Redis remain self-managed containers on the VM; no managed database/cache, Kubernetes, Container Apps, multi-region failover, or production SLO is claimed.
+
+## 10. Backup and clean restore
 
 ```mermaid
 sequenceDiagram
@@ -235,7 +280,7 @@ sequenceDiagram
     V->>V: record RTO/RPO and cleanup
 ```
 
-## 10. Trust boundaries
+## 11. Trust boundaries
 
 ```mermaid
 flowchart TD
