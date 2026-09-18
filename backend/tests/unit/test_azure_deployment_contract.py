@@ -90,6 +90,8 @@ def test_deploy_script_is_sha_pinned_backed_up_and_idempotent() -> None:
     assert "DeepSeek-V4-Flash" in deploy
     assert "/etc/caddy/Caddyfile" in deploy
     assert "caddy:2.10.2-alpine@sha256:" in deploy
+    assert '"$caddy_image" caddy validate' in deploy
+    assert '"$caddy_image" caddy run' in deploy
     assert "--network host" in deploy
 
 

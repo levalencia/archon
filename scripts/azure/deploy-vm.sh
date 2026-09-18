@@ -261,7 +261,7 @@ configure_caddy() {
   docker run --rm \
     -e COGENTREX_PUBLIC_HOSTNAME="$PUBLIC_HOSTNAME" \
     -v /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
-    "$caddy_image" validate --config /etc/caddy/Caddyfile
+    "$caddy_image" caddy validate --config /etc/caddy/Caddyfile
   docker rm -f cogentrex-caddy >/dev/null 2>&1 || true
   docker run -d \
     --name cogentrex-caddy \
@@ -271,7 +271,7 @@ configure_caddy() {
     -v /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
     -v cogentrex-caddy-data:/data \
     -v cogentrex-caddy-config:/config \
-    "$caddy_image"
+    "$caddy_image" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 }
 
 # ─── Health Checks ──────────────────────────────────────────────────────────────
