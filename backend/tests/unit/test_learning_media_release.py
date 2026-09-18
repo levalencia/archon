@@ -305,6 +305,39 @@ class TestCatalogValidation:
         cat = _make_minimal_library(tmp_path)
         lmr.validate_catalog(cat, tmp_path)
 
+    def test_approved_artifact_checksum_must_match_catalog(self, tmp_path: Path):
+        cat = _make_minimal_library(tmp_path)
+        approvals = {
+            "schema": "cogentrex.media-approvals/v1",
+            "approvals": [
+                {
+                    "artifact_id": "demo-deck",
+                    "sha256": "f" * 64,
+                    "approved_by": "reviewer",
+                    "approved_at": "2026-09-18T00:00:00Z",
+                }
+            ],
+        }
+        (tmp_path / "published" / "media-approvals.json").write_text(json.dumps(approvals))
+        with pytest.raises(lmr.PackageError, match="approved artifact checksum changed"):
+            lmr.validate_catalog(cat, tmp_path)
+
+    def test_approved_artifact_checksum_match_passes(self, tmp_path: Path):
+        cat = _make_minimal_library(tmp_path)
+        approvals = {
+            "schema": "cogentrex.media-approvals/v1",
+            "approvals": [
+                {
+                    "artifact_id": "demo-deck",
+                    "sha256": cat["packs"][0]["artifacts"][0]["sha256"],
+                    "approved_by": "reviewer",
+                    "approved_at": "2026-09-18T00:00:00Z",
+                }
+            ],
+        }
+        (tmp_path / "published" / "media-approvals.json").write_text(json.dumps(approvals))
+        lmr.validate_catalog(cat, tmp_path)
+
     def test_missing_schema_key_raises(self, tmp_path: Path):
         cat = _make_minimal_library(tmp_path)
         del cat["schema"]

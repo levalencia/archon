@@ -39,7 +39,7 @@ readonly ACR_NAME="${COGENTREX_ACR_NAME:-}"
 readonly ACR_LOGIN_SERVER="${COGENTREX_ACR_LOGIN_SERVER:-}"
 readonly AZURE_SUBSCRIPTION_ID="${COGENTREX_AZURE_SUBSCRIPTION_ID:-}"
 readonly LOCAL_BASE_URL="http://127.0.0.1:8080"
-# Media marker used by install_learning_media_if_absent
+# Media marker used by install_learning_media_if_needed
 export LEARNING_MEDIA_MARKER="cogentrex.learning-library/v1"
 LAST_BACKUP=""
 
@@ -103,16 +103,23 @@ ensure_repo() {
 
 # ─── Learning Media ─────────────────────────────────────────────────────────────
 
-install_learning_media_if_absent() {
+install_learning_media_if_needed() {
   local marker_file="${MEDIA_ROOT}/.cogentrex-learning-library"
-  if [[ -f "$marker_file" ]]; then
-    log "Learning media already installed."
+  local repo_dir="${APP_ROOT}/repo"
+  local release_script="${repo_dir}/scripts/learning-media-release.py"
+  local manifest="${repo_dir}/docs/visual-learning/release-manifest.json"
+  [[ -f "$release_script" && -f "$manifest" ]] || die "Learning media installer or manifest missing"
+
+  local desired_source installed_source=""
+  desired_source="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_commit"])' "$manifest")"
+  if [[ -f "$marker_file" && -f "${MEDIA_ROOT}/catalog.json" ]]; then
+    installed_source="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("source_commit", ""))' "${MEDIA_ROOT}/catalog.json")"
+  fi
+
+  if [[ -f "$marker_file" && "$installed_source" == "$desired_source" ]]; then
+    log "Learning media release ${desired_source} already installed."
   else
-    local repo_dir="${APP_ROOT}/repo"
-    local release_script="${repo_dir}/scripts/learning-media-release.py"
-    local manifest="${repo_dir}/docs/visual-learning/release-manifest.json"
-    [[ -f "$release_script" && -f "$manifest" ]] || die "Learning media installer or manifest missing"
-    log "Installing checksummed learning media release..."
+    log "Installing checksummed learning media release ${desired_source} (installed: ${installed_source:-none})..."
     python3 "$release_script" install --target "$MEDIA_ROOT" --manifest "$manifest"
   fi
 
@@ -424,7 +431,7 @@ main() {
 
   if [[ "$previous_sha" == "$target_sha" ]]; then
     log "SHA ${target_sha} is already deployed. Reconciling runtime configuration..."
-    install_learning_media_if_absent
+    install_learning_media_if_needed
     generate_env "$target_sha"
     compose_update || die "Same-SHA Compose reconciliation failed"
     wait_for_health "$LOCAL_BASE_URL" 120
@@ -448,8 +455,8 @@ main() {
   # Step 2: Clone/fetch and checkout the immutable target.
   ensure_repo "$target_sha"
 
-  # Step 3: Install learning media if absent.
-  install_learning_media_if_absent
+  # Step 3: Install or refresh the checksummed learning media release.
+  install_learning_media_if_needed
 
   # Step 4: Generate or retain the protected environment.
   generate_env "$target_sha"

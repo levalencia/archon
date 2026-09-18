@@ -90,6 +90,9 @@ def test_deploy_script_is_sha_pinned_backed_up_and_idempotent() -> None:
     assert "set -Eeuo pipefail" in deploy
     assert '"$release_script" install' in deploy
     assert '--target "$MEDIA_ROOT"' in deploy
+    assert "installed_source" in deploy
+    assert "desired_source" in deploy
+    assert '"$installed_source" == "$desired_source"' in deploy
     assert "Backup failed; proceeding" not in deploy
     assert "check_sandbox || true" not in deploy
     assert 'chmod -R u+rwX,go+rX "$MEDIA_ROOT"' in deploy
