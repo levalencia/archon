@@ -16,7 +16,11 @@ from app.memory.scoped import ScopedEncryptedMemoryRepository
 def _register(client: TestClient, username: str) -> tuple[str, dict[str, str]]:
     response = client.post(
         "/api/auth/register",
-        json={"username": username, "password": "secret-password"},
+        json={
+            "username": username,
+            "password": "secret-password",
+            "email": f"{username}@example.com",
+        },
     )
     assert response.status_code == 201
     body = response.json()

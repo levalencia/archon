@@ -116,7 +116,11 @@ async def _seed_run(
 def _register(api: TestClient, username: str) -> dict[str, Any]:
     response = api.post(
         "/api/auth/register",
-        json={"username": username, "password": "valid-password-123"},
+        json={
+            "username": username,
+            "password": "valid-password-123",
+            "email": f"{username}@example.com",
+        },
     )
     assert response.status_code == 201
     return response.json()

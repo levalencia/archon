@@ -23,7 +23,12 @@ def _client(tmp_path, **overrides) -> TestClient:
 
 def _authenticate(client: TestClient) -> None:
     response = client.post(
-        "/api/auth/register", json={"username": "bounded-user", "password": "SecurePass123!"}
+        "/api/auth/register",
+        json={
+            "username": "bounded-user",
+            "password": "SecurePass123!",
+            "email": "bounded-user@example.com",
+        },
     )
     client.headers["Authorization"] = f"Bearer {response.json()['access_token']}"
 

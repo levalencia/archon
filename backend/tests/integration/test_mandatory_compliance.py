@@ -64,7 +64,12 @@ def test_sync_and_sse_reject_before_persistence(tmp_path) -> None:
     )
     with TestClient(create_app(settings=settings)) as client:
         identity = client.post(
-            "/api/auth/register", json={"username": "compliance-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "compliance-user",
+                "password": "secret1",
+                "email": "compliance-user@example.com",
+            },
         ).json()
         headers = {"Authorization": f"Bearer {identity['access_token']}"}
         payload = {"message": "Please provide a hacking tutorial"}

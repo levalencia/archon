@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { authenticatedFetch } from '$lib/auth';
+  import { onMount } from 'svelte';
+  import { refreshCurrentUser } from '$lib/auth';
 
   let { model = 'Claude Opus 4.6', provider = 'Foundry', showTrace = true, onToggleTrace = () => {} }: {
     model?: string;
@@ -10,10 +11,11 @@
 
   let healthStatus = $state<'healthy' | 'degraded' | 'down'>('healthy');
   let rateLimitInfo = $state('');
+  let admin = $state(false);
 
   async function checkHealth() {
     try {
-      const r = await authenticatedFetch('/api/admin/health');
+      const r = await fetch('/healthz');
       if (r.ok) {
         healthStatus = 'healthy';
       } else {
@@ -23,6 +25,10 @@
       healthStatus = 'down';
     }
   }
+
+  onMount(async () => {
+    admin = (await refreshCurrentUser())?.is_admin === true;
+  });
 
   $effect(() => {
     checkHealth();
@@ -67,7 +73,9 @@
     🔍 Trace
   </button>
 
-  <a href="/eval" class="px-3 py-1.5 bg-transparent border border-[var(--border)] rounded-md text-[var(--text-secondary)] text-xs cursor-pointer flex items-center gap-1 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-all no-underline">
-    🛡️ Security
-  </a>
+  {#if admin}
+    <a href="/eval" class="px-3 py-1.5 bg-transparent border border-[var(--border)] rounded-md text-[var(--text-secondary)] text-xs cursor-pointer flex items-center gap-1 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-all no-underline">
+      🛡️ Security
+    </a>
+  {/if}
 </div>

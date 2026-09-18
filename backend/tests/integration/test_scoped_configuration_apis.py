@@ -24,7 +24,12 @@ def _settings(path: Path, **values: object) -> Settings:
 
 def _register(client: TestClient, username: str) -> dict[str, str]:
     response = client.post(
-        "/api/auth/register", json={"username": username, "password": "StrongPass123!"}
+        "/api/auth/register",
+        json={
+            "username": username,
+            "password": "StrongPass123!",
+            "email": f"{username}@example.com",
+        },
     )
     assert response.status_code in {200, 201}
     return {"Authorization": f"Bearer {response.json()['access_token']}"}

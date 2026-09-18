@@ -29,7 +29,10 @@ def _set_peer(client: TestClient, host: str) -> None:
 
 
 def _register(client: TestClient, username: str) -> str:
-    response = client.post("/api/auth/register", json={"username": username, "password": "secret1"})
+    response = client.post(
+        "/api/auth/register",
+        json={"username": username, "password": "secret1", "email": f"{username}@example.com"},
+    )
     assert response.status_code == 201
     return str(response.json()["access_token"])
 
@@ -85,7 +88,11 @@ def test_login_and_register_use_indistinguishable_ip_action_limits(tmp_path) -> 
         token = _register(client, "auth-user")
         register_limited = client.post(
             "/api/auth/register",
-            json={"username": "another-user", "password": "secret1"},
+            json={
+                "username": "another-user",
+                "password": "secret1",
+                "email": "another-user@example.com",
+            },
             headers={"X-Forwarded-For": "198.51.100.99"},
         )
         assert register_limited.status_code == 429

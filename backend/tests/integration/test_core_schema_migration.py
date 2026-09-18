@@ -22,7 +22,7 @@ CORE_TABLES = (
     "artifacts",
 )
 CORE_METADATA = [Base.metadata.tables[name] for name in CORE_TABLES]
-EXPECTED_HEAD = "20260917_24"
+EXPECTED_HEAD = "20260918_25"
 
 
 def _config(database: Path) -> Config:
@@ -55,6 +55,8 @@ def _index_contract(table_name: str) -> set[tuple[str, tuple[str, ...], bool]]:
     return {
         (str(index.name), tuple(column.name for column in index.columns), bool(index.unique))
         for index in table.indexes
+        # SQLite enforces expression indexes but SQLAlchemy cannot reflect them.
+        if index.name != "uq_users_email_normalized"
     }
 
 

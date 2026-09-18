@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { authenticatedFetch } from './auth';
+import { authenticatedFetch, isAdmin } from './auth';
 
 describe('authenticatedFetch', () => {
   beforeEach(() => {
@@ -30,5 +30,24 @@ describe('authenticatedFetch', () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(new Headers(init.headers).get('Authorization')).toBe('Bearer valid-token');
     expect(localStorage.getItem('cogentrex_token')).toBe('valid-token');
+  });
+
+  it('exposes admin state only from the persisted server user payload', () => {
+    localStorage.setItem(
+      'cogentrex_user',
+      JSON.stringify({
+        user_id: 'u1',
+        username: 'luis',
+        email: 'owner@example.com',
+        is_admin: true,
+      }),
+    );
+    expect(isAdmin()).toBe(true);
+
+    localStorage.setItem(
+      'cogentrex_user',
+      JSON.stringify({ user_id: 'u2', username: 'normal', email: 'normal@example.com' }),
+    );
+    expect(isAdmin()).toBe(false);
   });
 });

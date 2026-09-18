@@ -33,7 +33,10 @@ def _profile(tmp_path: Path) -> ServerProfile:
 
 
 def _register(client: TestClient, username: str) -> str:
-    response = client.post("/api/auth/register", json={"username": username, "password": "secret1"})
+    response = client.post(
+        "/api/auth/register",
+        json={"username": username, "password": "secret1", "email": f"{username}@example.com"},
+    )
     assert response.status_code == 201
     return str(response.json()["access_token"])
 

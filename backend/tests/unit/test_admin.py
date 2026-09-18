@@ -14,7 +14,11 @@ def client() -> TestClient:
     settings = Settings(llm_provider="mock", debug=True)
     app = create_app(settings=settings)
     with TestClient(app) as c:
-        response = c.post("/api/auth/register", json={"username": "admin", "password": "secret1"})
+        response = c.post(
+            "/api/auth/register",
+            json={"username": "admin", "password": "secret1", "email": "admin@example.com"},
+        )
+        c.portal.call(c.app.state.auth.store.promote_sole_admin, "admin@example.com")
         token = response.json()["access_token"]
         c.headers.update({"Authorization": f"Bearer {token}"})
         yield c

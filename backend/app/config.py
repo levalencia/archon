@@ -141,7 +141,8 @@ class Settings(BaseSettings):
     memory_active_key_version: int = Field(default=1, ge=1, le=255)
     memory_encryption_enabled: bool = True
     delegation_signing_key: SecretStr = SecretStr("")
-    admin_usernames: list[str] = ["admin"]
+    # Deprecated compatibility input. Registration never grants privileges by username.
+    admin_usernames: list[str] = []
 
     # Rate Limiting
     rate_limit_requests: int = Field(default=60, gt=0)

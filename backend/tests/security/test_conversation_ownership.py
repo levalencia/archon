@@ -22,7 +22,10 @@ def client(tmp_path) -> Generator[TestClient, None, None]:
 
 
 def register(client: TestClient, username: str) -> dict[str, str]:
-    response = client.post("/api/auth/register", json={"username": username, "password": "secret1"})
+    response = client.post(
+        "/api/auth/register",
+        json={"username": username, "password": "secret1", "email": f"{username}@example.com"},
+    )
     assert response.status_code == 201
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 

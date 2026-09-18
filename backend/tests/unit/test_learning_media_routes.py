@@ -60,7 +60,8 @@ def _library(root: Path) -> None:
 
 def _headers(client: TestClient) -> dict[str, str]:
     response = client.post(
-        "/api/auth/register", json={"username": "learner", "password": "secret1"}
+        "/api/auth/register",
+        json={"username": "learner", "password": "secret1", "email": "learner@example.com"},
     )
     assert response.status_code == 201
     return {"Authorization": f"Bearer {response.json()['access_token']}"}

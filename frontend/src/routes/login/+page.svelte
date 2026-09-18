@@ -31,6 +31,8 @@
         localStorage.setItem('cogentrex_user', JSON.stringify({
           user_id: data.user_id,
           username: data.username,
+          email: data.email,
+          is_admin: data.is_admin,
         }));
         window.location.href = '/';
       } else {
@@ -63,6 +65,7 @@
       <!-- Tabs -->
       <div class="flex mb-6 bg-[var(--bg-tertiary)] rounded-lg p-1">
         <button
+          type="button"
           onclick={() => { mode = 'login'; error = ''; }}
           class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer
             {mode === 'login'
@@ -73,6 +76,7 @@
           Sign In
         </button>
         <button
+          type="button"
           onclick={() => { mode = 'register'; error = ''; }}
           class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer
             {mode === 'register'
@@ -123,11 +127,12 @@
                 id="email"
                 type="email"
                 bind:value={email}
+                required
                 autocomplete="email"
                 class="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg
                   text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent)]
                   transition-colors placeholder:text-[var(--text-muted)]"
-                placeholder="Optional"
+                placeholder="name@example.com"
               />
             </div>
           {/if}
@@ -167,7 +172,7 @@
 
           <button
             type="submit"
-            disabled={loading || !username || !password}
+            disabled={loading || !username || !password || (mode === 'register' && !email)}
             class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium
               transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
               {loading
@@ -190,7 +195,7 @@
     </div>
 
     <p class="text-center text-[11px] text-[var(--text-muted)] mt-4">
-      100% local · Ollama · Zero cloud dependencies
+      Local-first · Azure dev available · Provider-swappable
     </p>
   </div>
 </div>

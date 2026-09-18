@@ -10,7 +10,7 @@ GET  /api/auth/me          — Get current user info
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from starlette.responses import JSONResponse
 
 from app.security.auth import AuthRepository, get_auth_repository, get_current_user
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6)
-    email: str = ""
+    email: EmailStr
 
 
 class LoginRequest(BaseModel):
@@ -35,6 +35,8 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user_id: str
     username: str
+    email: str | None
+    is_admin: bool
 
 
 class ApiKeyRequest(BaseModel):
@@ -42,20 +44,24 @@ class ApiKeyRequest(BaseModel):
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(body: RegisterRequest, request: Request) -> TokenResponse | dict:
+async def register(body: RegisterRequest, request: Request) -> TokenResponse | JSONResponse:
     """Register a new user and return JWT token."""
     await enforce_ip_rate_limit(request, "auth_register")
     repository = get_auth_repository(request)
     try:
         user = await repository.register_user(body.username, body.password, body.email)
     except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=201)
+        return JSONResponse({"error": str(e)}, status_code=409)
 
-    token = repository.create_jwt(user["user_id"], user["username"])
+    token = repository.create_jwt(
+        user["user_id"], user["username"], is_admin=bool(user.get("is_admin"))
+    )
     return TokenResponse(
         access_token=token,
         user_id=user["user_id"],
         username=user["username"],
+        email=user["email"],
+        is_admin=bool(user["is_admin"]),
     )
 
 
@@ -75,6 +81,8 @@ async def login(body: LoginRequest, request: Request) -> TokenResponse | dict:
         access_token=token,
         user_id=user["user_id"],
         username=user["username"],
+        email=user["email"],
+        is_admin=bool(user["is_admin"]),
     )
 
 

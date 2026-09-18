@@ -1,18 +1,22 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { Conversation } from '$lib/types';
-  import { authenticatedFetch } from '$lib/auth';
+  import { authenticatedFetch, getUser, refreshCurrentUser } from '$lib/auth';
   import { LayoutDashboard, FileText, ShieldCheck, Brain, Settings, MessageSquarePlus, X, Network } from 'lucide-svelte';
   let { activeId = '', onSelect = (_id: string) => {}, onNew = () => {}, onClose = () => {} }: { activeId?: string; onSelect?: (id: string) => void; onNew?: () => void; onClose?: () => void } = $props();
   let conversations: Conversation[] = $state([]);
   let loading = $state(true); let error = $state('');
+  let user = $state(getUser());
   const destinations = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
     { href: '/documents', label: 'Documents', icon: FileText },
     { href: '/eval', label: 'Eval', icon: ShieldCheck },
     { href: '/memory', label: 'Memory', icon: Brain },
     { href: '/learn', label: 'Visual learning', icon: Network },
     { href: '/settings', label: 'Skills & Integrations', icon: Settings },
   ];
+  let visibleDestinations = $derived(destinations.filter((item) => !item.adminOnly || user?.is_admin));
+  onMount(async () => { user = await refreshCurrentUser(); });
   async function load() { loading = true; error = ''; try { const r = await authenticatedFetch('/api/conversations'); if (!r.ok) throw new Error(`Request failed (${r.status})`); conversations = await r.json(); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load conversations'; } finally { loading = false; } }
   $effect(() => { activeId; load(); });
   async function remove(id: string, e: Event) { e.stopPropagation(); try { const r = await authenticatedFetch(`/api/conversations/${id}`, { method: 'DELETE' }); if (!r.ok && r.status !== 204) throw new Error(); conversations = conversations.filter(c => c.id !== id); if (activeId === id) onNew(); } catch { error = 'Could not delete conversation'; } }
@@ -40,7 +44,7 @@
     {/each}{/if}
   </nav>
   <nav class="border-t border-[var(--border)] p-2" aria-label="Workspace destinations">
-    {#each destinations as item}
+    {#each visibleDestinations as item}
       <a href={item.href} class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-xs text-[var(--secondary)] no-underline hover:bg-[var(--raised)] hover:text-[var(--text)]"><item.icon size={16}/><span>{item.label}</span></a>
     {/each}
   </nav>

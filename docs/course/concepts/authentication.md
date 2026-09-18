@@ -2,7 +2,7 @@
 
 > **Documentation status:** Draft
 > **Concept status:** `implemented`
-> **Status boundary:** Persistent local users authenticate with scrypt password hashes and HS256 JWT/cookie or hashed API keys. No external IdP, refresh-token service, automated signing-key rotation, or production certification is claimed.
+> **Status boundary:** Persistent users authenticate with scrypt password hashes and HS256 JWT/cookie or hashed API keys. New registrations require a normalized unique email; legacy users may retain `NULL`. At most one durable user may be administrator, and promotion is a server-side command rather than a public endpoint. No external IdP, email verification, refresh-token service, automated signing-key rotation, or production certification is claimed.
 > **Used by:** [Module 13](../modules/13-auth-ui-observability/README.md)
 
 ## Identity boundary
@@ -39,6 +39,8 @@ It checks the HMAC signature, a non-empty subject, and an expiry later than curr
 `get_current_user` then reloads `payload["sub"]` from the database.
 That reload means a signed username or admin bit is not the final source of current user state.
 The default JWT lifetime in this implementation is 24 hours.
+
+Registration validates email syntax at the API boundary, then stores `strip().casefold()` normalization. A partial unique database index rejects case-insensitive duplicates while allowing preserved legacy `NULL` values. Registration never grants administrator access in the deployment configuration. The non-HTTP `python -m app.cli.promote_admin --email ...` command requires exactly one matching durable user, demotes any former administrator in the same transaction, and promotes that row. A second partial unique index independently enforces at most one `is_admin = 1` row.
 
 `AuthRepository.register_api_key` returns one random `cogentrex_...` secret to the caller.
 The database receives only its SHA-256 digest plus key name and user ID.
@@ -85,6 +87,9 @@ A valid signature whose subject no longer resolves still fails authentication.
 
 - [`test_register_login_and_api_key_survive_app_rebuild`](../../../backend/tests/integration/test_auth_persistence.py) proves users, login, and API-key resolution survive application reconstruction against the test database.
 - [`test_duplicate_user_and_invalid_token`](../../../backend/tests/integration/test_auth_persistence.py) checks duplicate registration and invalid-token rejection.
+- [`test_registration_requires_valid_unique_normalized_email`](../../../backend/tests/integration/test_auth_persistence.py) checks required syntax and case-insensitive duplicate rejection.
+- [`test_promote_sole_admin_requires_exactly_one_normalized_email`](../../../backend/tests/integration/test_auth_persistence.py) checks controlled promotion and the one-admin invariant.
+- [`test_required_email_and_single_admin_migration_preserves_legacy_users`](../../../backend/tests/integration/test_user_identity_migration.py) checks legacy email backfill plus database enforcement.
 - [`test_expired_token_is_rejected`](../../../backend/tests/integration/test_auth_persistence.py) checks the expiry boundary.
 - [`test_database_stores_only_api_key_hash`](../../../backend/tests/integration/test_auth_persistence.py) checks that the raw key is absent from its database row.
 - [`test_profiles_are_authenticated_and_never_expose_process_configuration`](../../../backend/tests/integration/test_mcp_profiles_api.py) demonstrates authentication on a sensitive route family.
@@ -117,7 +122,7 @@ A successful authentication metric is not evidence that ownership or policy chec
 
 The lab deliberately uses a local database, local accounts, one HS256 secret, and short direct code paths.
 That makes the trust boundary visible and testable.
-A production design may use an external identity provider, asymmetric signing, key identifiers, rotation, MFA, session revocation, and audited account recovery.
+A production design may use an external identity provider, verified email delivery, asymmetric signing, key identifiers, rotation, MFA, session revocation, and audited account recovery.
 Those are alternatives or extensions, not claims made by this implementation.
 Before production, threat-model secret storage, cookie flags, TLS termination, password policy, user lifecycle, clock behavior, and incident response.
 
@@ -142,7 +147,7 @@ Expected reasoning: signature and expiry establish token validity, while the dur
 
 ## 30-second answer
 
-“Cogentrex authenticates local users through one `get_current_user` dependency. Passwords use salted scrypt hashes, API keys are stored as SHA-256 hashes, and JWTs require the exact HS256 header, signature, subject, and expiry. JWT and API-key paths reload the current durable user. That proves identity on tested local paths; ownership, policy, CSRF, rotation, and production IdP concerns remain separate.”
+“Cogentrex authenticates users through one `get_current_user` dependency. New accounts require a normalized unique email, passwords use salted scrypt hashes, API keys are stored as SHA-256 hashes, and JWTs require the exact HS256 header, signature, subject, and expiry. JWT and API-key paths reload current durable role state. A database constraint permits only one administrator and promotion is server-side, not a signup claim. Email ownership verification, MFA, recovery, rotation, and an external IdP remain separate production concerns.”
 
 ## Self-check
 

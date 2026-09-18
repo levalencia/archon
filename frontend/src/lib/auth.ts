@@ -1,6 +1,13 @@
 const TOKEN_KEY = 'cogentrex_token';
 const USER_KEY = 'cogentrex_user';
 
+export type AuthUser = {
+  user_id: string;
+  username: string;
+  email: string | null;
+  is_admin: boolean;
+};
+
 export function authHeaders(headers: HeadersInit = {}): Headers {
   const result = new Headers(headers);
   if (typeof localStorage !== 'undefined') {
@@ -25,7 +32,7 @@ export function isAuthenticated(): boolean {
   return !!localStorage.getItem(TOKEN_KEY);
 }
 
-export function getUser(): { user_id: string; username: string } | null {
+export function getUser(): AuthUser | null {
   if (typeof localStorage === 'undefined') return null;
   try {
     const raw = localStorage.getItem(USER_KEY);
@@ -33,6 +40,23 @@ export function getUser(): { user_id: string; username: string } | null {
   } catch {
     return null;
   }
+}
+
+export function saveUser(user: AuthUser): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function isAdmin(): boolean {
+  return getUser()?.is_admin === true;
+}
+
+export async function refreshCurrentUser(): Promise<AuthUser | null> {
+  const response = await authenticatedFetch('/api/auth/me');
+  if (!response.ok) return null;
+  const user = (await response.json()) as AuthUser;
+  saveUser(user);
+  return user;
 }
 
 export function logout() {

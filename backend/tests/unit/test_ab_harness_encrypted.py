@@ -31,8 +31,9 @@ def admin_client() -> Iterator[TestClient]:
     with TestClient(create_app(Settings(llm_provider="mock", debug=True))) as api:
         token = api.post(
             "/api/auth/register",
-            json={"username": "admin", "password": "secret1"},
+            json={"username": "admin", "password": "secret1", "email": "admin@example.com"},
         ).json()["access_token"]
+        api.portal.call(api.app.state.auth.store.promote_sole_admin, "admin@example.com")
         api.headers.update({"Authorization": f"Bearer {token}"})
         yield api
 

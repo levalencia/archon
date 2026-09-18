@@ -20,7 +20,10 @@ def _settings(path) -> Settings:
 
 
 def _auth(client: TestClient, username: str) -> None:
-    response = client.post("/api/auth/register", json={"username": username, "password": "secret1"})
+    response = client.post(
+        "/api/auth/register",
+        json={"username": username, "password": "secret1", "email": f"{username}@example.com"},
+    )
     if response.status_code != 200:
         response = client.post(
             "/api/auth/login", json={"username": username, "password": "secret1"}

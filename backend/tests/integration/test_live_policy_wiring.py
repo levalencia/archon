@@ -41,7 +41,11 @@ def client(username: str = "live-user", provider=None) -> Iterator[TestClient]:
     with TestClient(app) as api:
         token = api.post(
             "/api/auth/register",
-            json={"username": username, "password": "valid-password-123"},
+            json={
+                "username": username,
+                "password": "valid-password-123",
+                "email": f"{username}@example.com",
+            },
         ).json()["access_token"]
         api.headers.update({"Authorization": f"Bearer {token}"})
         yield api
@@ -276,11 +280,19 @@ def test_approval_endpoint_enforces_owner_and_consumes_decision_once() -> None:
     with TestClient(app) as api:
         alice = api.post(
             "/api/auth/register",
-            json={"username": "approval-alice", "password": "valid-password-123"},
+            json={
+                "username": "approval-alice",
+                "password": "valid-password-123",
+                "email": "approval-alice@example.com",
+            },
         ).json()
         bob = api.post(
             "/api/auth/register",
-            json={"username": "approval-bob", "password": "valid-password-123"},
+            json={
+                "username": "approval-bob",
+                "password": "valid-password-123",
+                "email": "approval-bob@example.com",
+            },
         ).json()
         owner_context = RunContext(
             alice["user_id"],
@@ -360,7 +372,11 @@ def test_pending_receipt_can_be_decided_after_app_restart(tmp_path) -> None:
     with TestClient(create_app(settings)) as first:
         auth = first.post(
             "/api/auth/register",
-            json={"username": "restart-owner", "password": "valid-...-123"},
+            json={
+                "username": "restart-owner",
+                "password": "valid-...-123",
+                "email": "restart-owner@example.com",
+            },
         ).json()
         owner = RunContext(auth["user_id"], "conversation", run_id, "correlation")
         assert first.portal is not None
@@ -387,7 +403,11 @@ def test_concurrent_approval_endpoints_have_one_winner(tmp_path) -> None:
     with TestClient(create_app(settings)) as api:
         auth = api.post(
             "/api/auth/register",
-            json={"username": "race-owner", "password": "valid-...-123"},
+            json={
+                "username": "race-owner",
+                "password": "valid-...-123",
+                "email": "race-owner@example.com",
+            },
         ).json()
         run_id = "00000000-0000-4000-8000-000000000005"
         owner = RunContext(auth["user_id"], "conversation", run_id, "correlation")

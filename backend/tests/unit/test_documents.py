@@ -20,7 +20,12 @@ def client() -> TestClient:
     app = create_app(settings=settings)
     with TestClient(app) as c:
         response = c.post(
-            "/api/auth/register", json={"username": "document-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "document-user",
+                "password": "secret1",
+                "email": "document-user@example.com",
+            },
         )
         c.headers.update({"Authorization": f"Bearer {response.json()['access_token']}"})
         yield c

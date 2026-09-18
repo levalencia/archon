@@ -39,7 +39,7 @@ class TestAuth:
         store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path}/auth.db")
         await store.initialize()
         repository = AuthRepository(store, "test-secret")
-        await repository.register_user("testuser99", "password99")
+        await repository.register_user("testuser99", "password99", "testuser99@example.com")
         user = await repository.authenticate_user("testuser99", "password99")
         assert user is not None
         assert user["username"] == "testuser99"
@@ -51,7 +51,7 @@ class TestAuth:
         store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path}/auth.db")
         await store.initialize()
         repository = AuthRepository(store, "test-secret")
-        await repository.register_user("testuser98", "correct")
+        await repository.register_user("testuser98", "correct", "testuser98@example.com")
         user = await repository.authenticate_user("testuser98", "wrong")
         assert user is None
         await store.close()
@@ -76,9 +76,9 @@ class TestAuth:
         store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path}/auth.db")
         await store.initialize()
         repository = AuthRepository(store, "test-secret")
-        await repository.register_user("unique_user_1", "pass")
+        await repository.register_user("unique_user_1", "pass", "unique-1@example.com")
         with pytest.raises(ValueError, match="already exists"):
-            await repository.register_user("unique_user_1", "pass2")
+            await repository.register_user("unique_user_1", "pass2", "unique-2@example.com")
         await store.close()
 
 

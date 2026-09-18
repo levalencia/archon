@@ -388,7 +388,12 @@ def test_authenticated_sandbox_status_is_live_and_metadata_only(tmp_path: Path) 
     with TestClient(app) as api:
         assert api.get("/api/sandbox/status").status_code == 401
         token = api.post(
-            "/api/auth/register", json={"username": "sandbox-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "sandbox-user",
+                "password": "secret1",
+                "email": "sandbox-user@example.com",
+            },
         ).json()["access_token"]
         response = api.get("/api/sandbox/status", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200

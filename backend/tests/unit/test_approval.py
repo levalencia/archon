@@ -240,7 +240,11 @@ def _test_client() -> Iterator:
         with TestClient(create_app(Settings(llm_provider="mock", debug=True))) as api:
             token = api.post(
                 "/api/auth/register",
-                json={"username": "approval-user", "password": "secret123"},
+                json={
+                    "username": "approval-user",
+                    "password": "secret123",
+                    "email": "approval-user@example.com",
+                },
             ).json()["access_token"]
             api.headers.update({"Authorization": f"Bearer {token}"})
             yield api
