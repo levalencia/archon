@@ -1,9 +1,9 @@
 # Cogentrex Azure Deployment Plan
 
-Status: Infrastructure provisioned — application deployment pending
+Status: Development deployment verified — custom DNS pending
 Date: 2026-09-17
-Branch: `feat/azure-public-deployment`
-Source revision: `048706a7a9b4f29eecb631659b236ad5a672f2c6`
+Branch: `dev`
+Deployed revision: `7760fb8e2e25d915042f9e646dd544e80f8f86ff`
 Target subscription: `6331e1e6-713f-4b7a-8665-99dfd16207c5`
 Target resource group: `cogentrex`
 Preferred region: Sweden Central, subject to policy/quota/service checks
@@ -59,7 +59,7 @@ Rationale:
 - `dev.cogentrex.com`: development deployment after merge to `dev`.
 - `cogentrex.com`: production promotion after explicit approval.
 - Rich learning media installed and mounted read-only.
-- Initial infrastructure smoke uses deterministic mock mode.
+- Development runtime uses the approved Foundry model only after deterministic infrastructure and startup gates pass.
 - Approved development live provider: the existing Foundry AI Services account in Sweden Central, OpenAI-compatible endpoint `https://cogentrex.services.ai.azure.com/openai/v1`, deployment `DeepSeek-V4-Flash`.
 - Authentication uses the VM system-assigned Managed Identity and the `https://ai.azure.com/.default` scope; no provider API key is copied to GitHub, disk, logs, or Key Vault.
 - Public live access remains gated by rate, monetary-budget and abuse-control acceptance.
@@ -123,7 +123,7 @@ Rationale:
 - [x] Deployment approved.
 - [x] Azure infrastructure provisioned.
 - [x] GitHub federated managed identity and development environment configured.
-- [ ] Development deployment verified.
+- [x] Development deployment verified.
 - [ ] Production cutover approved and verified.
 
 ## 11. Validation proof
@@ -140,11 +140,20 @@ Rationale:
 - VM bootstrap via Azure Run Command: PASS (`cloud-init status: done`, Docker 29.8.1, Compose 5.5.1, Azure CLI 2.90.0).
 - VM managed identity live RBAC: AcrPull=1, Key Vault Secrets User=1, Cognitive Services OpenAI User=1.
 - GitHub UAMI live RBAC: Virtual Machine Contributor=1, AcrPush=1, Reader=1.
-- GitHub federated credential subject: `repo:levalencia/cogentrex:environment:development`; environment variable inventory configured without secrets.
-- Temporary development hostname: `https://20.91.141.190.sslip.io` (application not deployed yet).
+- GitHub federated credential subject: `repo:levalencia@6962857/cogentrex@1342041970:environment:development`; environment variable inventory configured without secrets.
+- Successful GitHub deployment run: `https://github.com/levalencia/cogentrex/actions/runs/35320456412`, exact SHA `7760fb8e2e25d915042f9e646dd544e80f8f86ff`; backend, frontend, image, deploy and public smoke jobs PASS.
+- Temporary development hostname: `https://20.91.141.190.sslip.io`; Let's Encrypt TLS, `/healthz`, `/readyz` and `/learn` return HTTP 200.
+- Auth live acceptance: registration HTTP 201, authenticated identity HTTP 200, and login remained HTTP 200 after a backend restart.
+- Foundry live-provider acceptance: `DeepSeek-V4-Flash` authenticated by VM Managed Identity completed governed calculator and datetime tool runs; post-roll-forward run completed with calculator result `861`.
+- Rich Visual Learning media: canonical 648,293,962-byte release installed; catalog/marker valid and 140 published files mounted read-only into the backend.
+- Sandbox live acceptance: runner preflight passed, safe Python execution returned `42`, network mode is `none`, root filesystem is read-only, and all capabilities are dropped.
+- Telemetry live acceptance: Log Analytics received AppRequests and AppDependencies, including successful DeepSeek chat and calculator/datetime tool spans; prompt/message content was not queried or recorded in this evidence.
+- Persistence acceptance: a user registered before backend restart successfully logged in after restart.
+- Rollback rehearsal: `7760fb8` rolled back to `575de11`, all internal/public health gates passed, then rolled forward to `7760fb8`; mandatory PostgreSQL backups were created before both transitions.
+- Explicit remaining limits: `dev.cogentrex.com` DNS/TLS is pending the GoDaddy A record; unauthenticated browser navigation correctly stops at sign-in; authenticated browser and signed-streaming acceptance were not exercised; open self-registration remains enabled on the development hostname.
 - Azure static deployment contracts: 35 PASS.
 - Focused backend deployment/provider/pricing contracts: 92 PASS.
 - Full backend suite: 1,815 PASS, 7 skipped.
 - Canonical unit gate: 775 PASS, 1,047 deselected, 66.83% coverage.
 - Frontend check, Vitest and production build: PASS.
-- Production DNS and `cogentrex.com` remain unchanged.
+- Production DNS and `cogentrex.com` remain unchanged. `dev.cogentrex.com` currently has no A record.

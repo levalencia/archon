@@ -151,11 +151,11 @@ This is an image startup smoke. It is not the seven-service Compose acceptance.
 
 The `deploy` job uses the protected GitHub environment `development`. Repository/environment variables identify the Azure tenant, subscription, resource group, VM, ACR, Key Vault, hostname, and smoke URL; no long-lived Azure credential secret is accepted. The VM retains the current Docker Compose isolation model, including the networkless seccomp-constrained sandbox.
 
-The presence of this workflow proves automation configuration only. A development deployment becomes accepted evidence only after Azure validation, a successful workflow run for the exact revision, public readiness, media and sandbox probes, and recorded rollback evidence.
+The workflow was observed deploying revision `7760fb8e2e25d915042f9e646dd544e80f8f86ff` successfully in [run 35320456412](https://github.com/levalencia/cogentrex/actions/runs/35320456412). Public HTTPS readiness, rich media, sandbox isolation and execution, Managed Identity DeepSeek tool use, telemetry, restart persistence, rollback and roll-forward were then verified independently. The temporary accepted endpoint is `https://20.91.141.190.sslip.io`; `dev.cogentrex.com` remains pending DNS and final TLS verification.
 
-## What CI does not do
+## What the CI-only workflow does not do
 
-The workflow does not:
+`.github/workflows/ci.yml` does not:
 
 - publish an image to GHCR or another registry;
 - deploy to Azure, Kubernetes, or a public environment;
@@ -166,7 +166,7 @@ The workflow does not:
 - execute provider-live acceptance;
 - upload coverage or Playwright reports as artifacts.
 
-The repository therefore has CI, not CD.
+The repository has CI plus a separate, observed development CD workflow. Production deployment remains intentionally unconfigured and unapproved.
 
 A workflow check blocks merging only when GitHub branch protection or a ruleset requires it. The YAML file itself does not enforce branch protection.
 
