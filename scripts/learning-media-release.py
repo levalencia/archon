@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -207,11 +208,16 @@ def validate_catalog(
     if not isinstance(packs, list) or len(packs) == 0:
         raise PackageError("Catalog must have a non-empty 'packs' list")
 
+    catalog_artifacts: dict[str, dict[str, Any]] = {}
     for pack in packs:
         artifacts = pack.get("artifacts")
         if not isinstance(artifacts, list) or len(artifacts) == 0:
             raise PackageError(f"Pack {pack.get('id', '?')!r} must have non-empty artifacts")
         for art in artifacts:
+            artifact_id = art.get("id")
+            if not isinstance(artifact_id, str) or artifact_id in catalog_artifacts:
+                raise PackageError("Catalog artifact IDs must be present and unique")
+            catalog_artifacts[artifact_id] = art
             file_path = art.get("file", "")
             _safe_relative_published(file_path, label=f"artifact {art.get('id', '?')}")
 
@@ -254,6 +260,27 @@ def validate_catalog(
                     raise PackageError(f"content_file {cf}: content_sha256 must be 64 hex chars")
                 if _sha256_file(cfp) != cf_sha:
                     raise PackageError(f"content_file checksum mismatch: {cf}")
+
+    approvals_path = library_root / "published" / "media-approvals.json"
+    if approvals_path.is_file():
+        try:
+            approvals = json.loads(approvals_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise PackageError("media approval ledger is invalid JSON") from error
+        if approvals.get("schema") != "cogentrex.media-approvals/v1" or not isinstance(
+            approvals.get("approvals"), list
+        ):
+            raise PackageError("media approval ledger schema is invalid")
+        for approval in approvals["approvals"]:
+            artifact_id = approval.get("artifact_id")
+            approved_sha = approval.get("sha256")
+            artifact = catalog_artifacts.get(artifact_id)
+            if artifact is None:
+                raise PackageError(f"approved artifact is absent from catalog: {artifact_id}")
+            if not isinstance(approved_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", approved_sha):
+                raise PackageError(f"approved artifact checksum is invalid: {artifact_id}")
+            if not hmac.compare_digest(str(artifact.get("sha256", "")), approved_sha):
+                raise PackageError(f"approved artifact checksum changed: {artifact_id}")
 
 
 # ---------------------------------------------------------------------------
