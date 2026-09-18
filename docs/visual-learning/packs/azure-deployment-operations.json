@@ -68,7 +68,7 @@
         "why_it_matters": "Rollback and evidence become ambiguous when a tag can point to different bytes over time. SHA-addressed images connect Git history to the runtime artifact."
       },
       "boundary": "Image immutability does not prove vulnerability-free dependencies, provenance signing, or runtime health after rollout.",
-      "sources": [".github/workflows/deploy-dev.yml", "Dockerfile", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "sources": [".github/workflows/deploy-dev.yml", "docs/CI-PIPELINES-AND-LOCAL-RUN.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
       "narration": "After merge, GitHub builds and smokes backend and frontend images, then publishes them to ACR under the merge SHA. The VM pulls those exact references, and rollback can name an earlier accepted SHA.",
       "scenario": "The latest tag changed after an incident began.",
       "options": ["Rollback to latest", "Rollback to the recorded accepted SHA", "Build an untracked local image", "Guess which digest was running"],
@@ -90,7 +90,7 @@
         "why_it_matters": "Long-lived CI secrets are difficult to rotate and easy to overexpose. Federation narrows both credential lifetime and the repository context allowed to request access."
       },
       "boundary": "OIDC authenticates the deployment workload; it does not make every Azure role least privilege or verify end-user identity.",
-      "sources": [".github/workflows/deploy-dev.yml", "infra/azure/main.bicep", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "sources": [".github/workflows/deploy-dev.yml", "docs/ARCHITECTURE-DIAGRAMS.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
       "narration": "The deployment job requests a GitHub OIDC assertion. Azure accepts it only for the configured repository and development environment, maps it to a UAMI, and evaluates RBAC for each operation.",
       "scenario": "A workflow from another branch presents an unmatched OIDC subject.",
       "options": ["Use a stored client secret", "Reject federation", "Grant subscription Owner", "Disable subject checking"],
@@ -112,7 +112,7 @@
         "why_it_matters": "Deployment authority and application authority have different purposes. Separate managed identities reduce blast radius and make each permission path explainable."
       },
       "boundary": "Managed identity does not remove the need for RBAC review, Key Vault rotation, or application-level authorization.",
-      "sources": ["scripts/azure/deploy-vm.sh", "backend/app/agents/azure_credential.py", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "sources": ["docs/ARCHITECTURE-DIAGRAMS.md", "docs/course/concepts/authentication.md", "docs/IMPLEMENTATION-EVIDENCE.md"],
       "narration": "The VM obtains tokens from Azure Managed Identity. Key Vault and Azure AI Services evaluate that runtime principal, keeping provider credentials outside Git, images, and ordinary environment disclosure.",
       "scenario": "The VM can reach Azure AI Services but lacks the required data-plane role.",
       "options": ["Add a hardcoded API key", "Fail and correct RBAC", "Disable authentication", "Return mock output"],
@@ -134,7 +134,7 @@
         "why_it_matters": "The chosen target minimizes architecture drift: the sandbox and service boundaries remain explainable instead of being replaced merely to claim a managed platform."
       },
       "boundary": "A single VM has a larger failure domain and does not provide autoscaling, multi-zone availability, or managed database operations.",
-      "sources": ["docker-compose.local.yml", "deploy/docker-compose.azure.yml", "scripts/azure/deploy-vm.sh"],
+      "sources": ["docs/ARCHITECTURE-DIAGRAMS.md", "deploy/docker-compose.azure.yml", "docs/CI-PIPELINES-AND-LOCAL-RUN.md"],
       "narration": "Azure deployment preserves the seven-service topology: Caddy reaches the internal gateway, the backend depends on PostgreSQL and Redis, telemetry flows through the Collector, and the sandbox remains separate.",
       "scenario": "A cloud platform option cannot preserve the required sandbox boundary without redesign.",
       "options": ["Remove sandbox isolation", "Choose the VM target and document the trade-off", "Claim the feature anyway", "Run tools in the API process"],
@@ -156,7 +156,7 @@
         "why_it_matters": "A public cloud endpoint increases exposure. Preserving the tested execution boundary is more important than adopting a platform that silently moves code into the API process."
       },
       "boundary": "Container isolation is not VM-grade hostile multi-tenant certification and still shares the VM kernel.",
-      "sources": ["deploy/docker-compose.azure.yml", "scripts/azure/deploy-vm.sh", "docs/course/concepts/execution-isolation-sandbox.md"],
+      "sources": ["deploy/docker-compose.azure.yml", "docs/IMPLEMENTATION-EVIDENCE.md", "docs/course/concepts/execution-isolation-sandbox.md"],
       "narration": "The Azure target does not weaken the local sandbox contract. The backend sends bounded frames over a private Unix socket to a networkless, read-only, capability-dropped runner with resource and cleanup controls.",
       "scenario": "A deployment accidentally gives the sandbox the default Docker network.",
       "options": ["Accept it because the VM has an NSG", "Fail deployment isolation checks", "Hide the network in docs", "Give the runner cloud credentials"],
@@ -178,7 +178,7 @@
         "why_it_matters": "Internal containers can be healthy while the real hostname is unavailable. External smoke closes the gap between machine state and user-reachable service."
       },
       "boundary": "A few successful smoke requests are not a load test, availability history, WAF, or production SLO.",
-      "sources": ["scripts/azure/deploy-vm.sh", ".github/workflows/deploy-dev.yml", "docs/IMPLEMENTATION-EVIDENCE.md"],
+      "sources": ["docs/CI-PIPELINES-AND-LOCAL-RUN.md", ".github/workflows/deploy-dev.yml", "docs/IMPLEMENTATION-EVIDENCE.md"],
       "narration": "Caddy serves dev.cogentrex.com with automated TLS. The workflow then probes health, readiness, and learning from outside the VM; only those checks convert a rollout into observed development deployment evidence.",
       "scenario": "Run Command exits successfully but the public readiness URL fails.",
       "options": ["Mark deployment successful", "Fail the smoke gate and investigate ingress/readiness", "Delete evidence", "Point DNS elsewhere silently"],
@@ -222,7 +222,7 @@
         "why_it_matters": "An immutable image is only useful when operators can select it, protect state, perform the transition, and prove the resulting service rather than trusting a manifest."
       },
       "boundary": "The rehearsal does not prove zero downtime, point-in-time recovery, off-site retention, regional failover, or an organization-approved RTO/RPO.",
-      "sources": ["scripts/azure/rollback-vm.sh", "scripts/azure/deploy-vm.sh", "docs/REMAINING-DEFERRED-GAPS.md"],
+      "sources": ["docs/DR-RUNBOOK.md", "docs/CI-PIPELINES-AND-LOCAL-RUN.md", "docs/REMAINING-DEFERRED-GAPS.md"],
       "narration": "Before rollout, Cogentrex creates a protected PostgreSQL backup. Operators can select the recorded previous SHA, rerun all gates, and then roll forward to the current SHA. Both directions were exercised in development.",
       "scenario": "The deployment image fails after a database migration begins.",
       "options": ["Pretend the old app is compatible", "Use backup and exact-SHA rollback procedures, then verify", "Delete the state file", "Retry indefinitely"],

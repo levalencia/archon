@@ -13851,18 +13851,14 @@
           "docs/course/concepts/ci.md",
           "docs/course/concepts/liveness-readiness.md",
           "docs/course/concepts/backup-restore.md",
+          "docs/course/concepts/authentication.md",
           "docs/course/concepts/execution-isolation-sandbox.md",
           "docs/course/concepts/tracing-opentelemetry.md",
-          "Dockerfile",
-          "docker-compose.local.yml",
-          "backend/app/agents/azure_credential.py",
           ".github/workflows/ci.yml",
           ".github/workflows/deploy-dev.yml",
-          "infra/azure/main.bicep",
           "deploy/docker-compose.azure.yml",
           "deploy/otel-collector.azure.yml",
-          "scripts/azure/deploy-vm.sh",
-          "scripts/azure/rollback-vm.sh"
+          "docs/DR-RUNBOOK.md"
         ],
         "artifacts": [
           "audio",
@@ -13874,7 +13870,7 @@
           "quiz",
           "report"
         ],
-        "source_count": 25
+        "source_count": 21
       }
     ],
     "promptbook_href": "https://github.com/levalencia/cogentrex/blob/main/docs/visual-learning/hermes-generation-promptbook.md",
