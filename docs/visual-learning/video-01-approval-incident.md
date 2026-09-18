@@ -12,6 +12,18 @@ Date identified: 2026-09-18
 - SHA-256: `0bec4e01bad0c7718a9afca3522f21f126edc3591bdbd1a8e5cab883790f1eeb`
 - Review status: revised Video 1; established production grammar; pronunciation correction for “main dot P Y”; strict/render/frame checks passed.
 
+## Additional learner-approved Wave 1 artifacts
+
+Luis subsequently confirmed that the previous Wave 1 renders for Videos 2–4 were also approved:
+
+| Artifact | Approved project | Duration | SHA-256 |
+|---|---|---:|---|
+| `code-first-video-02` | `video-02-fastapi-application-v2` | 679.766667 s | `9f3fd48aa9ac4ce15da6c5af14d9c28f4d67593d6d2515f021e52f3ded18c3e6` |
+| `code-first-video-03` | `video-03-request-to-runtime` | 552.000000 s | `0e967c80207073d83089251c7783ad6a80d0f9a6b92e62259ac164cf24e51c7c` |
+| `code-first-video-04` | `video-04-protocols-adapters-di` | 351.066667 s | `574b6eaad99880af0e784909c2168639f772a6be403b6372c69da74a7f80db49` |
+
+The architecture-first regeneration also replaced these three checksums. They must therefore be restored from the preserved approved projects and added to the fail-closed approval ledger. Videos 5–20 have no prior learner-approved revision and remain `review-ready`.
+
 ## Replacement that reached the public development environment
 
 - Project: `main-lifespan-composition-root`

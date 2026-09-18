@@ -1,0 +1,36 @@
+{
+  "schema": "cogentrex.media-approvals/v1",
+  "approved_by": "Luis Valencia",
+  "confirmed_at": "2026-09-18T00:00:00Z",
+  "artifacts": [
+    {
+      "artifact_id": "code-first-video-01",
+      "source_project": "video-01-main-lifespan-oriented-v3",
+      "sha256": "0bec4e01bad0c7718a9afca3522f21f126edc3591bdbd1a8e5cab883790f1eeb",
+      "duration_seconds": 461.466667
+    },
+    {
+      "artifact_id": "code-first-video-02",
+      "source_project": "video-02-fastapi-application-v2",
+      "sha256": "9f3fd48aa9ac4ce15da6c5af14d9c28f4d67593d6d2515f021e52f3ded18c3e6",
+      "duration_seconds": 679.766667
+    },
+    {
+      "artifact_id": "code-first-video-03",
+      "source_project": "video-03-request-to-runtime",
+      "sha256": "0e967c80207073d83089251c7783ad6a80d0f9a6b92e62259ac164cf24e51c7c",
+      "duration_seconds": 552.0
+    },
+    {
+      "artifact_id": "code-first-video-04",
+      "source_project": "video-04-protocols-adapters-di",
+      "sha256": "574b6eaad99880af0e784909c2168639f772a6be403b6372c69da74a7f80db49",
+      "duration_seconds": 351.066667
+    }
+  ],
+  "limitations": [
+    "Only Videos 1–4 are learner-approved.",
+    "Videos 5–20 and the Azure video remain review-ready until Luis reviews them.",
+    "A future candidate must use a distinct revision identity until explicitly approved."
+  ]
+}
