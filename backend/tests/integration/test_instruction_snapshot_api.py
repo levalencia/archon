@@ -10,7 +10,8 @@ from app.main import create_app
 
 def _register(client: TestClient, username: str) -> tuple[dict[str, str], str]:
     response = client.post(
-        "/api/auth/register", json={"username": username, "password": "secret123"}
+        "/api/auth/register",
+        json={"username": username, "password": "secret123", "email": f"{username}@example.com"},
     )
     assert response.status_code == 201, response.text
     body = response.json()

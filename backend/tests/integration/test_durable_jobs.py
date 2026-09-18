@@ -266,7 +266,10 @@ async def test_handler_self_cancellation_does_not_cancel_worker(queue_factory) -
 
 
 def _headers(client: TestClient, username: str) -> dict[str, str]:
-    response = client.post("/api/auth/register", json={"username": username, "password": "secret1"})
+    response = client.post(
+        "/api/auth/register",
+        json={"username": username, "password": "secret1", "email": f"{username}@example.com"},
+    )
     assert response.status_code == 201
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 

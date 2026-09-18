@@ -29,8 +29,8 @@ def test_learning_tutor_tables_are_not_part_of_current_orm_metadata() -> None:
 
 def test_database_store_requires_the_current_removal_migration_head() -> None:
     source = (ROOT / "backend/app/services/db_store.py").read_text(encoding="utf-8")
-    assert 'revisions != ("20260917_24",)' in source
-    assert "expected Alembic head 20260917_24" in source
+    assert 'revisions != ("20260918_25",)' in source
+    assert "expected Alembic head 20260918_25" in source
     assert "expected Alembic head 20260912_23" not in source
 
 

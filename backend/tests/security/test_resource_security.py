@@ -14,14 +14,17 @@ from app.services.artifacts import Artifact
 
 
 def headers(client: TestClient, username: str) -> dict[str, str]:
-    response = client.post("/api/auth/register", json={"username": username, "password": "secret1"})
+    response = client.post(
+        "/api/auth/register",
+        json={"username": username, "password": "secret1", "email": f"{username}@example.com"},
+    )
     assert response.status_code == 201
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
 @pytest.fixture
 def client() -> TestClient:
-    app = create_app(Settings(llm_provider="mock", debug=True))
+    app = create_app(Settings(llm_provider="mock", debug=True, admin_usernames=["admin"]))
     with TestClient(app) as api:
         yield api
 

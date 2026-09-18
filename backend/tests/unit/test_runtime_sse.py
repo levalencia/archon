@@ -35,7 +35,12 @@ def client(provider=None) -> Iterator[TestClient]:
     )
     with TestClient(app) as api:
         token = api.post(
-            "/api/auth/register", json={"username": "runtime-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "runtime-user",
+                "password": "secret1",
+                "email": "runtime-user@example.com",
+            },
         ).json()["access_token"]
         api.headers.update({"Authorization": f"Bearer {token}"})
         yield api

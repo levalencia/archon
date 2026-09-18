@@ -43,7 +43,7 @@ class ColumnContract(NamedTuple):
 # ---------------------------------------------------------------------------
 _KNOWN_LEGACY_SERVER_DEFAULTS: dict[str, dict[str, frozenset[str]]] = {
     "users": {
-        "email": frozenset({"''::character varying"}),
+        "email": frozenset({"''::character varying", "''"}),
         "is_admin": frozenset({"0"}),
     },
     "conversations": {
@@ -58,6 +58,10 @@ _KNOWN_LEGACY_SERVER_DEFAULTS: dict[str, dict[str, frozenset[str]]] = {
     "artifacts": {
         "version": frozenset({"1"}),
     },
+}
+
+_KNOWN_LEGACY_NULLABILITY: dict[str, dict[str, frozenset[bool]]] = {
+    "users": {"email": frozenset({False, True})},
 }
 
 
@@ -180,11 +184,15 @@ def _validate_legacy_table(inspector: Inspector, table_name: str) -> None:
         expected_timezone = expected.timezone if dialect_name == "postgresql" else None
         expected_type = (expected.family, expected.length, expected_timezone)
         actual_type = _type_contract(actual["type"], dialect_name)
-        if actual_type != expected_type or bool(actual["nullable"]) != expected.nullable:
+        actual_nullable = bool(actual["nullable"])
+        accepted_nullability = actual_nullable in _KNOWN_LEGACY_NULLABILITY.get(table_name, {}).get(
+            column_name, frozenset({expected.nullable})
+        )
+        if actual_type != expected_type or not accepted_nullability:
             raise RuntimeError(
                 f"legacy {table_name}.{column_name} type/nullability contract mismatch: "
                 f"expected={(expected_type, expected.nullable)!r} "
-                f"actual={(actual_type, bool(actual['nullable']))!r}"
+                f"actual={(actual_type, actual_nullable)!r}"
             )
         server_default = actual.get("default")
         generated_identity = (

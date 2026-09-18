@@ -1,9 +1,9 @@
 # Remaining Deferred Gaps
 
-**Current boundary:** Alembic head `20260917_24`. GitHub Actions is authoritative
-for exact-revision CI status. No public deployment is claimed.
+**Current boundary:** Alembic head `20260918_25`. GitHub Actions is authoritative
+for exact-revision CI/CD status. Azure development deployment is observed; production and Kubernetes remain deferred.
 
-Cogentrex is an evidence-rich **local Agent Reliability Workbench**. The omissions below are deliberate product and evidence boundaries, not hidden implementation promises. `Deferred` means outside the current capstone scope with no delivery date. A nearby file, manifest, test double, or local observation does not change that status.
+Cogentrex is a local-first Agent Reliability Workbench with a verified public Azure development environment. The omissions below are deliberate product and evidence boundaries, not hidden implementation promises. `Deferred` means outside the current capstone scope with no delivery date. A nearby file, manifest, test double, or development observation does not establish production readiness.
 
 ## How to use this register
 
@@ -16,7 +16,7 @@ For every gap, distinguish architecture artifacts from exercised capability. Sta
 | Distributed multi-node agent network | One signed evidence verifier plus a feature-flagged, depth-one local Team pilot with two read-only children; durable local jobs | Cross-node agent orchestration |
 | GPU/high-throughput serving | Provider adapters and bounded local runtime | Model-serving capacity or GPU operation |
 | Fine-tuning/training | RAG, skills, prompts, evaluations, reviewed revision candidates | Any model-weight training or promotion pipeline |
-| Public/cloud/Kubernetes deployment | Hardened loopback Compose; historical K8s/Helm artifacts | A working public or cloud deployment |
+| Production/Kubernetes deployment | Verified Azure VM + Compose development deployment; historical K8s/Helm artifacts | Production SLO/cutover or a working Kubernetes deployment |
 | Public anonymous sharing | Immutable scanned exports and authenticated recipient-bound grants | Anonymous Internet disclosure |
 | Autonomous unapproved production optimization | Drift reports and human-approved recommendation records | Automatic production mutation |
 | Organization-approved RTO/RPO and cloud recovery | Checksummed local backup/restore drill with measured observations | Adopted objectives, off-site/PITR/cloud topology, repeated drills and accountable owner |
@@ -88,11 +88,11 @@ The status would require a reproducible training run from an approved versioned 
 
 The current adaptation paths are easier to inspect, cite, revoke, and compare. Not claiming weight changes keeps the evidence chain understandable and avoids pretending that a tiny or synthetic dataset establishes general model improvement.
 
-## 4. Public, cloud, or Kubernetes deployment
+## 4. Production or Kubernetes deployment
 
 ### Why it is out of scope
 
-The selected and observed target is loopback-only local Compose. Historical Kubernetes and Helm files are design artifacts with placeholders; they are not a selected, hardened, or observed deployment. Public operation would add a materially different threat model, availability boundary, cost profile, and on-call obligation.
+The selected cloud development target is an Azure VM running hardened Compose behind Caddy/TLS. GitHub Actions publishes immutable SHA images to ACR and deploys through OIDC and VM Run Command. Historical Kubernetes and Helm files remain design artifacts; no Kubernetes cluster or production cutover is claimed. Production operation would add a materially different availability, support, cost, and on-call boundary.
 
 ### Architecture required
 
@@ -109,7 +109,7 @@ Required evidence includes a named non-local environment and immutable revision/
 
 ### Why omission strengthens the capstone
 
-The local target is reproducible, inexpensive, and safe to exercise destructively. Keeping `Deployed: No` makes the claim ladder credible and lets reviewers reproduce the strongest controls without trusting an inaccessible cloud environment.
+The local target is reproducible, inexpensive, and safe to exercise destructively. Keeping production and Kubernetes marked deferred preserves the claim ladder while allowing the separately evidenced Azure development deployment to be demonstrated.
 
 ## 5. Public anonymous sharing
 

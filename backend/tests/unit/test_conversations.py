@@ -18,7 +18,12 @@ def client() -> TestClient:
     app = create_app(settings=settings)
     with TestClient(app) as c:
         token = c.post(
-            "/api/auth/register", json={"username": "conversation-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "conversation-user",
+                "password": "secret1",
+                "email": "conversation-user@example.com",
+            },
         ).json()["access_token"]
         c.headers.update({"Authorization": f"Bearer {token}"})
         yield c

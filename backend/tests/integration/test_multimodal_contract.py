@@ -150,7 +150,11 @@ def test_sync_and_sse_validate_and_sanitize_images_before_provider(tmp_path) -> 
     with TestClient(app) as api:
         token = api.post(
             "/api/auth/register",
-            json={"username": "multimodal-user", "password": "secret1"},
+            json={
+                "username": "multimodal-user",
+                "password": "secret1",
+                "email": "multimodal-user@example.com",
+            },
         ).json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
         sync = api.post(

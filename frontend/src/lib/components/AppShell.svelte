@@ -1,29 +1,34 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { isAuthenticated, getUser, logout } from '$lib/auth';
+  import { isAuthenticated, getUser, logout, refreshCurrentUser, type AuthUser } from '$lib/auth';
   import { MessageSquare, LayoutDashboard, FileText, Shield, Settings, Brain, LogOut, Network } from 'lucide-svelte';
 
   let { children } = $props();
-  let user = $state<{ user_id: string; username: string } | null>(null);
+  let user = $state<AuthUser | null>(null);
 
-  onMount(() => {
+  onMount(async () => {
     if (!isAuthenticated()) {
       window.location.href = '/login';
       return;
     }
     user = getUser();
+    user = await refreshCurrentUser();
+    if (!user?.is_admin && $page.url.pathname.startsWith('/dashboard')) {
+      window.location.href = '/';
+    }
   });
 
   const navItems = [
     { href: '/', label: 'Chat', icon: MessageSquare },
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
     { href: '/documents', label: 'Documents', icon: FileText },
     { href: '/eval', label: 'Eval', icon: Shield },
     { href: '/memory', label: 'Memory', icon: Brain },
     { href: '/learn', label: 'Learn', icon: Network },
     { href: '/settings', label: 'Skills & Integrations', icon: Settings },
   ];
+  let visibleNavItems = $derived(navItems.filter((item) => !item.adminOnly || user?.is_admin));
 
   function isActive(href: string, pathname: string): boolean {
     return href === '/' ? pathname === '/' || pathname.startsWith('/chat/') : pathname.startsWith(href);
@@ -42,7 +47,7 @@
         <span><strong class="block text-sm text-[var(--text)]">Cogentrex</strong><small class="text-[var(--muted)]">Build agents you can explain.</small></span>
       </a>
       <nav class="flex-1 space-y-1 overflow-y-auto p-3">
-        {#each navItems as item}
+        {#each visibleNavItems as item}
           <a href={item.href} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm no-underline transition-colors {isActive(item.href, $page.url.pathname) ? 'bg-[var(--accent-glow)] text-[var(--accent)] shadow-[0_0_18px_var(--cogentrex-orange-glow)]' : 'text-[var(--secondary)] hover:bg-[var(--raised)] hover:text-[var(--text)]'}">
             <item.icon size={18}/><span>{item.label}</span>
           </a>
@@ -52,7 +57,7 @@
     </aside>
     <main class="min-w-0 flex-1 overflow-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">{@render children()}</main>
     <nav class="fixed inset-x-0 bottom-0 z-50 grid grid-cols-7 border-t border-[var(--border)] bg-[rgba(16,21,29,.98)] pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Mobile navigation">
-      {#each navItems as item}
+      {#each visibleNavItems as item}
         <a href={item.href} aria-label={item.label} aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined} class="flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-[9px] no-underline {isActive(item.href, $page.url.pathname) ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}">
           <item.icon size={19}/><span class="max-w-full truncate">{item.label === 'Skills & Integrations' ? 'Settings' : item.label}</span>
         </a>

@@ -34,6 +34,7 @@ from sqlalchemy import (
     func,
     select,
     text,
+    update,
 )
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
@@ -169,9 +170,25 @@ class UserRow(Base):
     __tablename__ = "users"
     id = Column(String(36), primary_key=True)
     username = Column(String(50), nullable=False, unique=True, index=True)
-    email = Column(String(320), nullable=False, default="")
+    email = Column(String(320), nullable=True, default=None)
     password_hash = Column(Text, nullable=False)
     is_admin = Column(Integer, nullable=False, default=0)
+
+
+Index(
+    "uq_users_email_normalized",
+    func.lower(UserRow.email),
+    unique=True,
+    postgresql_where=UserRow.email.is_not(None),
+    sqlite_where=UserRow.email.is_not(None),
+)
+Index(
+    "uq_users_single_admin",
+    UserRow.is_admin,
+    unique=True,
+    postgresql_where=UserRow.is_admin == 1,
+    sqlite_where=UserRow.is_admin == 1,
+)
 
 
 class DocumentRow(Base):
@@ -1182,8 +1199,8 @@ class DatabaseStore:
                 revisions = tuple(result.scalars())
             except Exception as exc:
                 raise RuntimeError("database schema is not managed by Alembic") from exc
-        if revisions != ("20260917_24",):
-            raise RuntimeError("database schema is not at expected Alembic head 20260917_24")
+        if revisions != ("20260918_25",):
+            raise RuntimeError("database schema is not at expected Alembic head 20260918_25")
         logger.info("database_schema_verified", alembic_revision=revisions[0])
 
     @property
@@ -1245,14 +1262,30 @@ class DatabaseStore:
     # --- Authentication ---
 
     async def create_user(
-        self, username: str, password_hash: str, email: str = "", *, is_admin: bool = False
+        self, username: str, password_hash: str, email: str, *, is_admin: bool = False
     ) -> dict:
+        normalized_email = email.strip().casefold()
+        if not normalized_email:
+            msg = "Email is required"
+            raise ValueError(msg)
         user_id = str(uuid.uuid4())
         async with self._session_factory() as session:
+            username_exists = await session.scalar(
+                select(func.count(UserRow.id)).where(UserRow.username == username)
+            )
+            if username_exists:
+                msg = f"Username '{username}' already exists"
+                raise ValueError(msg)
+            email_exists = await session.scalar(
+                select(func.count(UserRow.id)).where(func.lower(UserRow.email) == normalized_email)
+            )
+            if email_exists:
+                msg = "Email already exists"
+                raise ValueError(msg)
             row = UserRow(
                 id=user_id,
                 username=username,
-                email=email,
+                email=normalized_email,
                 password_hash=password_hash,
                 is_admin=int(is_admin),
             )
@@ -1261,9 +1294,14 @@ class DatabaseStore:
                 await session.commit()
             except IntegrityError as exc:
                 await session.rollback()
-                msg = f"Username '{username}' already exists"
+                msg = "Username or email already exists"
                 raise ValueError(msg) from exc
-        return {"user_id": user_id, "username": username, "is_admin": is_admin}
+        return {
+            "user_id": user_id,
+            "username": username,
+            "email": normalized_email,
+            "is_admin": is_admin,
+        }
 
     async def get_user_by_username(self, username: str) -> dict | None:
         async with self._session_factory() as session:
@@ -1275,6 +1313,30 @@ class DatabaseStore:
         async with self._session_factory() as session:
             row = await session.get(UserRow, user_id)
             return self._user_dict(row) if row is not None else None
+
+    async def promote_sole_admin(self, email: str) -> dict:
+        """Promote exactly one normalized email while preserving a one-admin invariant."""
+        normalized_email = email.strip().casefold()
+        async with self._session_factory() as session:
+            matches = (
+                await session.scalars(
+                    select(UserRow).where(func.lower(UserRow.email) == normalized_email)
+                )
+            ).all()
+            if len(matches) != 1:
+                msg = "Admin promotion requires exactly one user with the normalized email"
+                raise ValueError(msg)
+            target = matches[0]
+            await session.execute(update(UserRow).where(UserRow.is_admin == 1).values(is_admin=0))
+            await session.flush()
+            await session.execute(update(UserRow).where(UserRow.id == target.id).values(is_admin=1))
+            await session.commit()
+            return {
+                "user_id": target.id,
+                "username": target.username,
+                "email": target.email,
+                "is_admin": True,
+            }
 
     @staticmethod
     def _user_dict(row: UserRow) -> dict:

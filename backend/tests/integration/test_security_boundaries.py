@@ -62,7 +62,10 @@ def test_csrf_double_submit_for_cookie_authenticated_mutation(client: TestClient
 @pytest.mark.integration
 def test_bearer_auth_is_csrf_exempt_and_admin_claim_is_enforced(client: TestClient) -> None:
     client.cookies.set("access_token", "ambient-cookie")
-    admin = client.post("/api/auth/register", json={"username": "admin", "password": "secret1"})
+    admin = client.post(
+        "/api/auth/register",
+        json={"username": "admin", "password": "secret1", "email": "admin@example.com"},
+    )
     assert admin.status_code == 201
     response = client.put(
         "/api/admin/settings",
@@ -71,7 +74,10 @@ def test_bearer_auth_is_csrf_exempt_and_admin_claim_is_enforced(client: TestClie
     )
     assert response.status_code == 200
 
-    regular = client.post("/api/auth/register", json={"username": "regular", "password": "secret1"})
+    regular = client.post(
+        "/api/auth/register",
+        json={"username": "regular", "password": "secret1", "email": "regular@example.com"},
+    )
     assert regular.status_code == 201
     forbidden = client.put(
         "/api/admin/settings",
@@ -84,7 +90,8 @@ def test_bearer_auth_is_csrf_exempt_and_admin_claim_is_enforced(client: TestClie
 @pytest.mark.integration
 def test_api_key_auth_is_csrf_exempt(client: TestClient) -> None:
     registered = client.post(
-        "/api/auth/register", json={"username": "admin", "password": "secret1"}
+        "/api/auth/register",
+        json={"username": "admin", "password": "secret1", "email": "admin@example.com"},
     )
     api_key = client.post(
         "/api/auth/api-keys",

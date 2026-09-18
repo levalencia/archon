@@ -52,7 +52,8 @@ def client(tmp_path) -> Iterator[TestClient]:
     app = create_app(settings=settings)
     with TestClient(app) as c:
         token = c.post(
-            "/api/auth/register", json={"username": "chat-user", "password": "secret1"}
+            "/api/auth/register",
+            json={"username": "chat-user", "password": "secret1", "email": "chat-user@example.com"},
         ).json()["access_token"]
         c.headers.update({"Authorization": f"Bearer {token}"})
         yield c
@@ -72,7 +73,11 @@ def hybrid_client(tmp_path) -> Iterator[TestClient]:
     with TestClient(app) as c:
         token = c.post(
             "/api/auth/register",
-            json={"username": "hybrid-user", "password": "secret1"},
+            json={
+                "username": "hybrid-user",
+                "password": "secret1",
+                "email": "hybrid-user@example.com",
+            },
         ).json()["access_token"]
         c.headers.update({"Authorization": f"Bearer {token}"})
         yield c

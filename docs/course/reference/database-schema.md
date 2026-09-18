@@ -1,12 +1,12 @@
 # Database schema map
 
-> **Selected-schema boundary:** manually maintained from SQLAlchemy rows in [`db_store.py`](../../../backend/app/services/db_store.py) and Alembic revisions through head `20260917_24`. This is a non-exhaustive review aid, not executable DDL. ORM models, migrations, and the schema of a running database are three distinct evidence sources.
+> **Selected-schema boundary:** manually maintained from SQLAlchemy rows in [`db_store.py`](../../../backend/app/services/db_store.py) and Alembic revisions through head `20260918_25`. This is a non-exhaustive review aid, not executable DDL. ORM models, migrations, and the schema of a running database are three distinct evidence sources.
 
 ## Migration chain
 
-`20260826_01 approval_requests` → `02 memory_facts` → `03 run_ledger` → `04 run_checkpoints` → `05 durable_documents` → `06 durable_evaluations` → `07 run_parent_fk` → `08 mcp_inventory` → `09 effect_budget` → `10 context_snapshots` → `11 memory_key_fencing` → `12 run_exports_and_share_grants` → `13 durable_jobs_and_nonces` → `14 drift_and_candidates` → `15 skills_and_project_instructions` → `16 skill_discovery_context` → `17 capability_preferences` → `18 instruction_snapshots` → `19 mcp_transport_profiles` → `20 integrity_hardening` → `21 capability_provenance` → `22 core_table_reconciliation` → `23 learning_tutor` → `24 remove_learning_tutor`
+`20260826_01 approval_requests` → `02 memory_facts` → `03 run_ledger` → `04 run_checkpoints` → `05 durable_documents` → `06 durable_evaluations` → `07 run_parent_fk` → `08 mcp_inventory` → `09 effect_budget` → `10 context_snapshots` → `11 memory_key_fencing` → `12 run_exports_and_share_grants` → `13 durable_jobs_and_nonces` → `14 drift_and_candidates` → `15 skills_and_project_instructions` → `16 skill_discovery_context` → `17 capability_preferences` → `18 instruction_snapshots` → `19 mcp_transport_profiles` → `20 integrity_hardening` → `21 capability_provenance` → `22 core_table_reconciliation` → `23 learning_tutor` → `24 remove_learning_tutor` → `25 required_email_single_admin`
 
-See [`backend/alembic/versions`](../../../backend/alembic/versions/20260917_24_remove_learning_tutor.py). `DatabaseStore.initialize` calls `Base.metadata.create_all` only for SQLite test/development databases; PostgreSQL startup requires Alembic head.
+See [`backend/alembic/versions`](../../../backend/alembic/versions/20260918_25_required_email_single_admin.py). `DatabaseStore.initialize` calls `Base.metadata.create_all` only for SQLite test/development databases; PostgreSQL startup requires Alembic head.
 
 ### Forward-head core-table reconciliation (revision 22)
 
@@ -21,7 +21,7 @@ Migration `20260902_22` adopts or creates the six pre-Alembic core tables (`user
 
 | Table / ORM row | Purpose and principal columns | Important boundary |
 |---|---|---|
-| `users` / `UserRow` | `id`, unique `username`, `email`, `password_hash`, `is_admin` | Password plaintext must never be stored. |
+| `users` / `UserRow` | `id`, unique `username`, normalized unique nullable `email`, `password_hash`, `is_admin` | New registrations require email; legacy NULL emails remain valid. A partial unique index permits at most one admin. Password plaintext must never be stored. |
 | `api_keys` / `ApiKeyRow` | `id`, unique `key_hash`, `user_id`, `name` | Stores a hash, not the presented key. |
 | `conversations` / `ConversationRow` | `id`, `title`, `user_id`, timestamps, active flag | Ownership checks belong in repository/routes. |
 | `messages` / `MessageRow` | integer `id`, indexed `conversation_id`, `role`, `content`, timestamp | No database FK is declared here; content can be sensitive. |

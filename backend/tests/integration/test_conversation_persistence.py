@@ -20,7 +20,12 @@ def test_conversation_lifecycle_and_restart_persistence(tmp_path) -> None:
     app = create_app(settings, model_provider_factory=lambda _settings: provider)
     with TestClient(app) as client:
         registered = client.post(
-            "/api/auth/register", json={"username": "persistent-chat", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "persistent-chat",
+                "password": "secret1",
+                "email": "persistent-chat@example.com",
+            },
         )
         client.headers.update({"Authorization": f"Bearer {registered.json()['access_token']}"})
         created = client.post("/api/conversations", json={"title": "Persistent chat"})

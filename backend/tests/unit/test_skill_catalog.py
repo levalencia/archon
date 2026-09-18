@@ -156,7 +156,12 @@ def test_skill_search_merges_available_external_metadata_and_health_is_redacted(
     app = create_app(settings=settings)
     with TestClient(app) as client:
         auth = client.post(
-            "/api/auth/register", json={"username": "catalogadmin", "password": "Test-pass-123!"}
+            "/api/auth/register",
+            json={
+                "username": "catalogadmin",
+                "password": "Test-pass-123!",
+                "email": "catalogadmin@example.com",
+            },
         )
         client.headers.update({"Authorization": f"Bearer {auth.json()['access_token']}"})
         response = client.post("/api/skills/search", json={"query": "safe", "limit": 20})

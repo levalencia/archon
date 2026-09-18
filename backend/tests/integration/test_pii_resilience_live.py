@@ -32,7 +32,11 @@ def authenticated_client(
     with TestClient(app) as client:
         token = client.post(
             "/api/auth/register",
-            json={"username": f"user-{uuid.uuid4().hex}", "password": "secret1"},
+            json={
+                "username": f"user-{uuid.uuid4().hex}",
+                "password": "secret1",
+                "email": f"{f'user-{uuid.uuid4().hex}'}@example.com",
+            },
         ).json()["access_token"]
         client.headers.update({"Authorization": f"Bearer {token}"})
         client.database_path = database  # type: ignore[attr-defined]
@@ -171,7 +175,11 @@ def test_rate_limit_users_are_isolated(tmp_path) -> None:
 
         second = client.post(
             "/api/auth/register",
-            json={"username": f"other-{uuid.uuid4().hex}", "password": "secret1"},
+            json={
+                "username": f"other-{uuid.uuid4().hex}",
+                "password": "secret1",
+                "email": f"{f'other-{uuid.uuid4().hex}'}@example.com",
+            },
             headers={
                 key: value for key, value in first_headers.items() if key.lower() != "authorization"
             },
@@ -217,7 +225,12 @@ def test_sync_failure_opens_shared_breaker_and_sse_does_not_call_delegate(tmp_pa
     app = create_app(settings, model_provider_factory=lambda _settings: provider)
     with TestClient(app) as client:
         token = client.post(
-            "/api/auth/register", json={"username": "breaker-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "breaker-user",
+                "password": "secret1",
+                "email": "breaker-user@example.com",
+            },
         ).json()["access_token"]
         client.headers.update({"Authorization": f"Bearer {token}"})
         sync = client.post("/api/chat", json={"message": "prompt secret"})
@@ -249,6 +262,7 @@ def test_runtime_logs_are_redacted_owner_scoped_and_app_isolated(tmp_path, capsy
         llm_provider="mock",
         debug=True,
         database_url=f"sqlite+aiosqlite:///{tmp_path / 'logs-a.db'}",
+        admin_usernames=["admin"],
     )
     settings_b = Settings(
         llm_provider="mock",
@@ -262,16 +276,24 @@ def test_runtime_logs_are_redacted_owner_scoped_and_app_isolated(tmp_path, capsy
 
     with TestClient(app_a) as first, TestClient(app_b) as second:
         alice = first.post(
-            "/api/auth/register", json={"username": "alice", "password": "secret1"}
+            "/api/auth/register",
+            json={"username": "alice", "password": "secret1", "email": "alice@example.com"},
         ).json()
         bob = first.post(
-            "/api/auth/register", json={"username": "bob", "password": "secret1"}
+            "/api/auth/register",
+            json={"username": "bob", "password": "secret1", "email": "bob@example.com"},
         ).json()
         admin = first.post(
-            "/api/auth/register", json={"username": "admin", "password": "valid-password-123"}
+            "/api/auth/register",
+            json={
+                "username": "admin",
+                "password": "valid-password-123",
+                "email": "admin@example.com",
+            },
         ).json()
         other = second.post(
-            "/api/auth/register", json={"username": "other", "password": "secret1"}
+            "/api/auth/register",
+            json={"username": "other", "password": "secret1", "email": "other@example.com"},
         ).json()
         alice_headers = {"Authorization": f"Bearer {alice['access_token']}"}
         bob_headers = {"Authorization": f"Bearer {bob['access_token']}"}
@@ -315,10 +337,20 @@ def test_two_apps_use_their_own_provider_and_breaker(tmp_path) -> None:
     second_app = app("second", "second-provider")
     with TestClient(first_app) as first, TestClient(second_app) as second:
         first_auth = first.post(
-            "/api/auth/register", json={"username": "first-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "first-user",
+                "password": "secret1",
+                "email": "first-user@example.com",
+            },
         ).json()
         second_auth = second.post(
-            "/api/auth/register", json={"username": "second-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "second-user",
+                "password": "secret1",
+                "email": "second-user@example.com",
+            },
         ).json()
         first.headers["Authorization"] = f"Bearer {first_auth['access_token']}"
         second.headers["Authorization"] = f"Bearer {second_auth['access_token']}"

@@ -11,7 +11,7 @@
 - **Capability status:** `docs/implementation/CAPABILITY-ACCEPTANCE.yaml` is authoritative for per-dimension status.
 - **CI:** GitHub Actions is authoritative for the current branch and exact revision results.
 - **Runtime:** tool, token, time, and monetary limits are enforced by deterministic code paths.
-- **Deployment:** the verified target is local only. No public or cloud deployment is claimed.
+- **Deployment:** local Compose remains the reproducible baseline. The `dev` branch is also deployed to an Azure VM at `https://dev.cogentrex.com` through GitHub OIDC, immutable ACR images, readiness/sandbox/media gates, hosted telemetry, and a rehearsed rollback. This is development evidence, not a production/SLA claim.
 
 This ledger separates code presence, wiring, tests, direct observation, UI, and deployment. Historical acceptance records remain below for traceability; they do not override the current capability manifest.
 
@@ -49,7 +49,7 @@ Legend: **Yes**, **Partial**, **No**, **N/A**.
 
 ## Skills + Project Instructions (merged to main)
 
-The repository implements migrations `20260901_15` through `20260917_24`, ten
+The repository implements migrations `20260901_15` through `20260918_25`, ten
 owned bundled skills, immutable skill revisions and exact
 owner/project/revision bindings, approved project-instruction snapshots,
 metadata-first capability discovery, and one request-context preparation path

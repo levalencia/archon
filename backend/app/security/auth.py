@@ -49,9 +49,11 @@ class AuthRepository:
     def __init__(self, store: DatabaseStore, secret: str, admin_usernames: list[str] | None = None):
         self.store = store
         self.secret = secret
+        # Deprecated compatibility hook. Production defaults empty; deployments
+        # use the sole-admin bootstrap command instead.
         self.admin_usernames = set(admin_usernames or [])
 
-    async def register_user(self, username: str, password: str, email: str = "") -> dict:
+    async def register_user(self, username: str, password: str, email: str) -> dict:
         return await self.store.create_user(
             username,
             hash_password(password),
@@ -80,6 +82,7 @@ class AuthRepository:
         return {
             "user_id": user["user_id"],
             "username": user["username"],
+            "email": user["email"],
             "name": key_info["name"],
             "is_admin": user["is_admin"],
         }
@@ -167,6 +170,7 @@ async def get_current_user(
                 return {
                     "user_id": user["user_id"],
                     "username": user["username"],
+                    "email": user["email"],
                     "auth_method": "jwt",
                     "is_admin": user["is_admin"],
                 }

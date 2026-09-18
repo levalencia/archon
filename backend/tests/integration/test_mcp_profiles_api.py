@@ -28,7 +28,12 @@ def test_profiles_are_authenticated_and_never_expose_process_configuration(tmp_p
     with TestClient(app) as client:
         assert client.get("/api/mcp/profiles").status_code == 401
         registered = client.post(
-            "/api/auth/register", json={"username": "profile-user", "password": "secret1"}
+            "/api/auth/register",
+            json={
+                "username": "profile-user",
+                "password": "secret1",
+                "email": "profile-user@example.com",
+            },
         )
         token = registered.json()["access_token"]
         response = client.get("/api/mcp/profiles", headers={"Authorization": f"Bearer {token}"})

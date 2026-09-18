@@ -78,8 +78,8 @@ class TestMigrationHeadReference:
         for path in self.CURRENT_STATE_DOCS:
             content = path.read_text(encoding="utf-8")
             relpath = str(path.relative_to(ROOT))
-            assert "20260917_24" in content, (
-                f"{relpath} does not reference current migration head 20260917_24"
+            assert "20260918_25" in content, (
+                f"{relpath} does not reference current migration head 20260918_25"
             )
 
 
@@ -268,8 +268,8 @@ class TestDatabaseSchemaHead:
         schema = (ROOT / "docs" / "course" / "reference" / "database-schema.md").read_text(
             encoding="utf-8"
         )
-        assert "20260917_24" in schema, (
-            "database-schema.md does not reference current migration head 20260917_24"
+        assert "20260918_25" in schema, (
+            "database-schema.md does not reference current migration head 20260918_25"
         )
         assert "20260826_08" not in schema or "→" in schema.split("20260826_08")[1][:20], (
             "database-schema.md still references 08 as the head"
