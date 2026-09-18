@@ -454,11 +454,26 @@ def build(
             audio_source=media_root/pack_id/f"{pack_id}.mp3"
             video_source=media_root/pack_id/f"{pack_id}.mp4"
             if audio_source.is_file():
+                timed_audio=media_root/pack_id/f"{pack_id}.audio-script.json"
+                audio_captions=media_root/pack_id/f"{pack_id}.audio-captions.vtt"
+                if timed_audio.is_file():
+                    shutil.copyfile(timed_audio,audio_dir/"audio-script.json")
+                if audio_captions.is_file():
+                    shutil.copyfile(audio_captions,audio_dir/"captions.vtt")
                 target=audio_dir/f"{pack_id}.mp3"
                 shutil.copyfile(audio_source,target)
                 probe=_probe(target)
                 add(audio_id,"audio",audio_script["title"],target,audio_dir/"audio-script.json",float(probe["format"]["duration"]))
             if video_source.is_file():
+                timed_video=media_root/pack_id/f"{pack_id}.video-script.json"
+                timed_storyboard=media_root/pack_id/f"{pack_id}.video-storyboard.json"
+                video_captions=media_root/pack_id/f"{pack_id}.video-captions.vtt"
+                if timed_video.is_file():
+                    shutil.copyfile(timed_video,video_dir/"video-script.json")
+                if timed_storyboard.is_file():
+                    shutil.copyfile(timed_storyboard,video_dir/"storyboard.json")
+                if video_captions.is_file():
+                    shutil.copyfile(video_captions,video_dir/"captions.vtt")
                 target=video_dir/f"{pack_id}.mp4"
                 shutil.copyfile(video_source,target)
                 probe=_probe(target)

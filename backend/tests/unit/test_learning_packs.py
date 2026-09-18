@@ -163,6 +163,48 @@ def test_selective_build_preserves_unselected_catalog_packs(tmp_path: Path) -> N
     }
 
 
+def test_selective_build_preserves_timed_media_sidecars(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pack = "azure-deployment-operations"
+    builder.build(tmp_path, pack_ids=(pack,))
+    published = tmp_path / "published" / pack
+    media = tmp_path / "media" / pack
+    media.mkdir(parents=True)
+    (media / f"{pack}.mp3").write_bytes(b"audio")
+    (media / f"{pack}.mp4").write_bytes(b"video")
+
+    audio = json.loads((published / f"{pack}-audio" / "audio-script.json").read_text())
+    video = json.loads((published / f"{pack}-video" / "video-script.json").read_text())
+    storyboard = json.loads((published / f"{pack}-video" / "storyboard.json").read_text())
+    for payload in (audio, video):
+        for index, segment in enumerate(payload["segments"]):
+            segment["start_seconds"] = float(index)
+            segment["end_seconds"] = float(index + 1)
+    (media / f"{pack}.audio-script.json").write_text(json.dumps(audio))
+    (media / f"{pack}.video-script.json").write_text(json.dumps(video))
+    (media / f"{pack}.video-storyboard.json").write_text(json.dumps(storyboard))
+    (media / f"{pack}.audio-captions.vtt").write_text("WEBVTT\n\n")
+    (media / f"{pack}.video-captions.vtt").write_text("WEBVTT\n\n")
+    monkeypatch.setattr(
+        builder,
+        "_probe",
+        lambda _path: {"format": {"duration": "1.0"}},
+    )
+
+    builder.build(tmp_path, media.parent, pack_ids=(pack,))
+
+    rebuilt_audio = json.loads((published / f"{pack}-audio" / "audio-script.json").read_text())
+    rebuilt_video = json.loads((published / f"{pack}-video" / "video-script.json").read_text())
+    assert rebuilt_audio["segments"][0]["start_seconds"] == 0.0
+    assert rebuilt_video["segments"][0]["end_seconds"] == 1.0
+    assert (published / f"{pack}-audio" / "captions.vtt").is_file()
+    assert (published / f"{pack}-video" / "captions.vtt").is_file()
+    catalog = json.loads((tmp_path / "catalog.json").read_text())
+    azure = next(item for item in catalog["packs"] if item["id"] == pack)
+    assert {item["type"] for item in azure["artifacts"]} >= {"audio", "video"}
+
+
 def test_builder_refuses_nonempty_unowned_output(tmp_path: Path) -> None:
     (tmp_path / "unrelated.txt").write_text("keep")
     try:
